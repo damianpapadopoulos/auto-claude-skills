@@ -2,28 +2,25 @@
 set -euo pipefail
 
 # --- Claude Code Skill Activation Hook - Installer --------------
-# https://github.com/dkpapapadopoulos/auto-claude-skills
+# https://github.com/damianpapadopoulos/auto-claude-skills
 #
-# Installs skills, the hook script, and configures settings.json.
-# The hook uses regex as a fast pre-filter; Claude Code itself
-# handles ambiguous intent classification via the phase checkpoint.
+# Preferred install: /plugin install auto-claude-skills (inside Claude Code)
+# This script is a bootstrap fallback for manual installs
+# and handles downloading external skills either way.
+#
 # Safe to re-run (idempotent).
-#
-# Usage:
-#   git clone https://github.com/dkpapapadopoulos/auto-claude-skills.git
-#   cd auto-claude-skills
-#   ./install.sh
 # -----------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 HOOK_NAME="skill-activation-hook.sh"
-HOOK_SRC="$SCRIPT_DIR/$HOOK_NAME"
+HOOK_SRC="$SCRIPT_DIR/hooks/$HOOK_NAME"
 HOOK_DIR="$HOME/.claude/hooks"
 SKILLS_DIR="$HOME/.claude/skills"
 SETTINGS="$HOME/.claude/settings.json"
+PLUGIN_CACHE="$HOME/.claude/plugins/cache"
 
 echo "+==============================================+"
-echo "|  Claude Code Skill Activation Hook Installer |"
+echo "|  auto-claude-skills Installer                |"
 echo "+==============================================+"
 echo ""
 
@@ -40,77 +37,48 @@ fi
 
 if [ ! -f "$HOOK_SRC" ]; then
   echo "[!!] Hook script not found at $HOOK_SRC"
-  echo "   Run this from the repo root: cd claude-skill-hook && ./install.sh"
+  echo "    Run this from the repo root: cd auto-claude-skills && ./install.sh"
   exit 1
 fi
 
-# --- 1. Install skills ------------------------------------------
-echo " Installing skills to $SKILLS_DIR..."
-mkdir -p "$SKILLS_DIR"
+# --- Check if plugin system is available -------------------------
+PLUGIN_INSTALLED=false
+if [ -d "$PLUGIN_CACHE" ]; then
+  # Check if auto-claude-skills is already installed as a plugin
+  if find "$PLUGIN_CACHE" -path "*/auto-claude-skills/*/.claude-plugin/plugin.json" -print -quit 2>/dev/null | grep -q .; then
+    PLUGIN_INSTALLED=true
+  fi
+fi
 
-install_skill_from_repo() {
-  local repo_url="$1"
-  local repo_name="$2"
-  local skill_paths="$3"  # comma-separated paths inside the repo
+if [ "$PLUGIN_INSTALLED" = true ]; then
+  echo "[OK] auto-claude-skills is already installed as a plugin."
+  echo "    The hook is registered automatically via hooks/hooks.json."
+  echo ""
+  echo "    To update:  /plugin update auto-claude-skills"
+  echo "    To remove:  /plugin uninstall auto-claude-skills"
+  echo ""
+else
+  echo "Plugin install (recommended):"
+  echo "    Inside Claude Code, run:"
+  echo "    /plugin install auto-claude-skills"
+  echo ""
+  read -p "Install manually instead (legacy mode)? (y/N) " -n 1 -r
+  echo ""
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    echo ""
+    echo " Installing hook (legacy mode)..."
 
-  local tmp_dir
-  tmp_dir=$(mktemp -d)
-  trap "rm -rf $tmp_dir" RETURN
+    # --- Install hook script ---
+    mkdir -p "$HOOK_DIR"
+    cp "$HOOK_SRC" "$HOOK_DIR/$HOOK_NAME"
+    chmod +x "$HOOK_DIR/$HOOK_NAME"
+    echo "   [OK] $HOOK_NAME -> $HOOK_DIR/"
 
-  echo "   Cloning $repo_name..."
-  git clone --depth 1 --quiet "$repo_url" "$tmp_dir/$repo_name" 2>/dev/null
+    # --- Configure settings.json ---
+    HOOK_CMD="\$HOME/.claude/hooks/$HOOK_NAME"
 
-  IFS=',' read -ra PATHS <<< "$skill_paths"
-  for skill_path in "${PATHS[@]}"; do
-    skill_path=$(echo "$skill_path" | xargs)
-    local skill_name
-    skill_name=$(basename "$skill_path")
-
-    if [ -d "$tmp_dir/$repo_name/$skill_path" ] && [ -f "$tmp_dir/$repo_name/$skill_path/SKILL.md" ]; then
-      if [ -d "$SKILLS_DIR/$skill_name" ]; then
-        echo "   [--]  $skill_name (already installed)"
-      else
-        cp -r "$tmp_dir/$repo_name/$skill_path" "$SKILLS_DIR/$skill_name"
-        echo "   [OK] $skill_name"
-      fi
-    else
-      echo "   [!!]  $skill_name not found at $skill_path in $repo_name"
-    fi
-  done
-
-  rm -rf "$tmp_dir/$repo_name"
-}
-
-# Anthropic official skills
-install_skill_from_repo \
-  "https://github.com/anthropics/skills.git" \
-  "anthropic-skills" \
-  "skills/doc-coauthoring,skills/webapp-testing"
-
-# Security scanner from matteocervelli
-install_skill_from_repo \
-  "https://github.com/matteocervelli/llms.git" \
-  "cervelli-llms" \
-  ".claude/skills/security-scanner"
-
-echo ""
-
-# --- 2. Install hook --------------------------------------------
-echo " Installing hook to $HOOK_DIR..."
-mkdir -p "$HOOK_DIR"
-cp "$HOOK_SRC" "$HOOK_DIR/$HOOK_NAME"
-chmod +x "$HOOK_DIR/$HOOK_NAME"
-echo "   [OK] $HOOK_NAME"
-echo ""
-
-# --- 3. Configure settings.json ---------------------------------
-echo "  Configuring $SETTINGS..."
-
-HOOK_CMD="\$HOME/.claude/hooks/$HOOK_NAME"
-
-if [ ! -f "$SETTINGS" ]; then
-  # Create from scratch
-  cat > "$SETTINGS" << ENDJSON
+    if [ ! -f "$SETTINGS" ]; then
+      cat > "$SETTINGS" << ENDJSON
 {
   "hooks": {
     "UserPromptSubmit": [
@@ -126,19 +94,15 @@ if [ ! -f "$SETTINGS" ]; then
   }
 }
 ENDJSON
-  echo "   [OK] Created settings.json with hook"
-else
-  # Check if hook is already registered
-  if grep -q "$HOOK_NAME" "$SETTINGS" 2>/dev/null; then
-    echo "   [--]  Hook already registered in settings.json"
-  else
-    # Merge hook into existing settings
-    BACKUP="$SETTINGS.bak.$(date +%s)"
-    cp "$SETTINGS" "$BACKUP"
-    echo "    Backed up to $BACKUP"
+      echo "   [OK] Created settings.json with hook"
+    elif grep -q "$HOOK_NAME" "$SETTINGS" 2>/dev/null; then
+      echo "   [--] Hook already registered in settings.json"
+    else
+      BACKUP="$SETTINGS.bak.$(date +%s)"
+      cp "$SETTINGS" "$BACKUP"
+      echo "   Backed up to $BACKUP"
 
-    # Use jq to merge
-    HOOK_ENTRY=$(cat <<ENDJSON
+      HOOK_ENTRY=$(cat <<ENDJSON
 {
   "hooks": {
     "UserPromptSubmit": [
@@ -155,29 +119,91 @@ else
 }
 ENDJSON
 )
-    # If hooks.UserPromptSubmit exists, append to it; otherwise create it
-    if echo "$(cat "$SETTINGS")" | jq -e '.hooks.UserPromptSubmit' &>/dev/null; then
-      jq --arg cmd "$HOOK_CMD" '.hooks.UserPromptSubmit += [{"hooks":[{"type":"command","command":$cmd}]}]' "$SETTINGS" > "$SETTINGS.tmp"
-    else
-      echo "$HOOK_ENTRY" | jq -s '.[0] * .[1]' "$SETTINGS" - > "$SETTINGS.tmp"
+      if echo "$(cat "$SETTINGS")" | jq -e '.hooks.UserPromptSubmit' &>/dev/null; then
+        jq --arg cmd "$HOOK_CMD" '.hooks.UserPromptSubmit += [{"hooks":[{"type":"command","command":$cmd}]}]' "$SETTINGS" > "$SETTINGS.tmp"
+      else
+        echo "$HOOK_ENTRY" | jq -s '.[0] * .[1]' "$SETTINGS" - > "$SETTINGS.tmp"
+      fi
+      mv "$SETTINGS.tmp" "$SETTINGS"
+      echo "   [OK] Hook added to existing settings.json"
     fi
-    mv "$SETTINGS.tmp" "$SETTINGS"
-    echo "   [OK] Hook added to existing settings.json"
+    echo ""
+  else
+    echo "Skipping manual install."
+    echo ""
   fi
 fi
 
+# --- Download external skills ------------------------------------
+echo " Download external skills?"
+echo "   These are standalone skill repos that the hook routes to:"
+echo "   - doc-coauthoring (Anthropic)"
+echo "   - webapp-testing (Anthropic)"
+echo "   - security-scanner (matteocervelli)"
+echo ""
+read -p "Download now? (Y/n) " -n 1 -r
 echo ""
 
-# --- 4. Check for optional plugins -------------------------------
+if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+  echo ""
+  mkdir -p "$SKILLS_DIR"
+
+  install_skill_from_repo() {
+    local repo_url="$1"
+    local repo_name="$2"
+    local skill_paths="$3"
+
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    trap "rm -rf $tmp_dir" RETURN
+
+    echo "   Cloning $repo_name..."
+    git clone --depth 1 --quiet "$repo_url" "$tmp_dir/$repo_name" 2>/dev/null
+
+    IFS=',' read -ra PATHS <<< "$skill_paths"
+    for skill_path in "${PATHS[@]}"; do
+      skill_path=$(echo "$skill_path" | xargs)
+      local skill_name
+      skill_name=$(basename "$skill_path")
+
+      if [ -d "$tmp_dir/$repo_name/$skill_path" ] && [ -f "$tmp_dir/$repo_name/$skill_path/SKILL.md" ]; then
+        if [ -d "$SKILLS_DIR/$skill_name" ]; then
+          echo "   [--] $skill_name (already installed)"
+        else
+          cp -r "$tmp_dir/$repo_name/$skill_path" "$SKILLS_DIR/$skill_name"
+          echo "   [OK] $skill_name"
+        fi
+      else
+        echo "   [!!] $skill_name not found at $skill_path in $repo_name"
+      fi
+    done
+
+    rm -rf "$tmp_dir/$repo_name"
+  }
+
+  install_skill_from_repo \
+    "https://github.com/anthropics/skills.git" \
+    "anthropic-skills" \
+    "skills/doc-coauthoring,skills/webapp-testing"
+
+  install_skill_from_repo \
+    "https://github.com/matteocervelli/llms.git" \
+    "cervelli-llms" \
+    ".claude/skills/security-scanner"
+
+  echo ""
+fi
+
+# --- Check for recommended plugins ------------------------------
 echo " Checking for recommended plugins..."
 
-PLUGIN_CACHE="$HOME/.claude/plugins/cache/claude-plugins-official"
+OFFICIAL_CACHE="$HOME/.claude/plugins/cache/claude-plugins-official"
 MISSING_PLUGINS=""
 
 check_plugin() {
   local name="$1"
   local install_cmd="$2"
-  if [ -d "$PLUGIN_CACHE/$name" ]; then
+  if [ -d "$OFFICIAL_CACHE/$name" ]; then
     echo "   [OK] $name"
   else
     echo "   [!!] $name (not installed)"
@@ -194,19 +220,19 @@ check_plugin "pr-review-toolkit" "/plugin install pr-review-toolkit@claude-plugi
 
 echo ""
 
-# --- 5. Summary -------------------------------------------------
+# --- Summary -----------------------------------------------------
 echo "==============================================="
-echo "[OK] Installation complete!"
+echo "[OK] Done!"
 echo ""
-echo "Skills installed:"
-for d in "$SKILLS_DIR"/*/; do
-  [ -f "$d/SKILL.md" ] && echo "   - $(basename "$d")"
-done
-echo ""
-echo "Hook: $HOOK_DIR/$HOOK_NAME"
-echo ""
+if [ -d "$SKILLS_DIR" ]; then
+  echo "Skills installed:"
+  for d in "$SKILLS_DIR"/*/; do
+    [ -f "$d/SKILL.md" ] && echo "   - $(basename "$d")"
+  done
+  echo ""
+fi
 if [ -n "$MISSING_PLUGINS" ]; then
-  echo "[!!]  Missing plugins (optional but recommended)."
+  echo "[!!] Missing plugins (optional but recommended)."
   echo "   First add the marketplaces:"
   echo "   /plugin marketplace add anthropics/claude-plugins-official"
   echo "   /plugin marketplace add obra/superpowers-marketplace"
@@ -214,12 +240,6 @@ if [ -n "$MISSING_PLUGINS" ]; then
   echo "   Then install:"
   printf '%b' "$MISSING_PLUGINS"
   echo ""
-  echo "   These provide 15+ additional skills for the full"
-  echo "   design -> plan -> implement -> review -> ship pipeline."
-  echo "   The hook routes to the right phase; each skill chains internally."
-  echo ""
 fi
-echo "Next steps:"
-echo "  1. Restart Claude Code (exit and reopen)"
-echo "  2. Test: echo '{\"prompt\":\"check for security vulnerabilities\"}' | ~/.claude/hooks/$HOOK_NAME"
+echo "Next: restart Claude Code to apply changes."
 echo "==============================================="

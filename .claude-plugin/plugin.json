@@ -1,0 +1,10 @@
+{
+  "name": "auto-claude-skills",
+  "description": "Intelligent skill activation hook with phase-aware routing for the design-plan-implement-review-ship pipeline",
+  "version": "1.0.0",
+  "category": "development",
+  "author": {
+    "name": "Damian Papadopoulos"
+  },
+  "homepage": "https://github.com/damianpapadopoulos/auto-claude-skills"
+}

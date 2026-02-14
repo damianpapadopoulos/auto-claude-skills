@@ -1,10 +1,10 @@
-# Claude Code Skill Activation Hook
+# auto-claude-skills
 
-Forces Claude Code to **evaluate and activate relevant skills** before responding, with **phase-aware routing** that tracks where you are in the development pipeline.
+Intelligent skill activation hook for Claude Code with **phase-aware routing** across the design-plan-implement-review-ship pipeline.
 
 ## How it works
 
-The hook uses a **two-tier classification** system. Regex catches the obvious intents fast. For everything else, Claude itself is the classifier -- it already has full conversation context.
+The hook uses a **two-tier classification** system. Regex catches obvious intents fast. For everything else, Claude itself is the classifier -- it already has full conversation context.
 
 ```
 User prompt
@@ -13,7 +13,6 @@ User prompt
   |   Keywords match? --> pre-select skills + phase checkpoint
   |
   |-- Tier 2: FALLTHROUGH (dev-related but no keyword match)
-  |   Prompt mentions code/api/migration/etc?
   |   --> emit phase checkpoint only, 0 pre-selected skills
   |   --> Claude assesses intent from conversation context
   |
@@ -27,29 +26,49 @@ User prompt
   '-- User confirms, adjusts, or skips to a different phase
 ```
 
-On top of that, **cross-cutting overlays** (security, frontend, docs, meta, parallel) fire additively when their keywords appear.
-
-The pipeline is a guide, not a cage.
+Cross-cutting overlays (security, frontend, docs, meta, parallel) fire additively when their keywords appear.
 
 ## Quick start
 
+### Plugin install (recommended)
+
+Inside Claude Code:
+
+```
+/plugin install auto-claude-skills
+```
+
+Then optionally download external skills:
+
+```
+/setup
+```
+
+### Manual install (legacy)
+
 ```bash
-git clone https://github.com/dkpapapadopoulos/auto-claude-skills.git
+git clone https://github.com/damianpapadopoulos/auto-claude-skills.git
 cd auto-claude-skills
 ./install.sh
 ```
 
-Then restart Claude Code.
-
 ## What gets installed
+
+### Plugin install
 
 | Component | Location |
 |-----------|----------|
-| Hook script | `~/.claude/hooks/skill-activation-hook.sh` |
-| settings.json update | `~/.claude/settings.json` |
-| doc-coauthoring skill | `~/.claude/skills/doc-coauthoring/` |
-| webapp-testing skill | `~/.claude/skills/webapp-testing/` |
-| security-scanner skill | `~/.claude/skills/security-scanner/` |
+| Hook script | Managed by plugin system (`hooks/skill-activation-hook.sh`) |
+| Hook registration | Automatic via `hooks/hooks.json` |
+| Setup command | `/setup` — downloads external skills on demand |
+
+### External skills (optional, via `/setup` or `install.sh`)
+
+| Skill | Source |
+|-------|--------|
+| doc-coauthoring | `~/.claude/skills/doc-coauthoring/` |
+| webapp-testing | `~/.claude/skills/webapp-testing/` |
+| security-scanner | `~/.claude/skills/security-scanner/` |
 
 ## Recommended plugins
 
@@ -71,7 +90,7 @@ Then install the plugins:
 /plugin install pr-review-toolkit@claude-plugin-directory
 ```
 
-> **Note:** Some plugins also exist in the `anthropics/claude-code` marketplace. Either source works -- the hook detects them by their install path under `~/.claude/plugins/cache/claude-plugins-official/`.
+> These provide 15+ additional skills for the full pipeline. The hook detects them by their install path under `~/.claude/plugins/cache/claude-plugins-official/`.
 
 ## The development pipeline
 
@@ -92,7 +111,7 @@ DESIGN --> PLAN --> IMPLEMENT --> REVIEW --> SHIP
 | **SHIP** | verification-before-completion, finishing-a-development-branch | Merged/deployed |
 | **DEBUG** *(reactive)* | systematic-debugging, TDD | Fix verified -> return to interrupted phase |
 
-At every phase transition, Claude confirms with the user before proceeding. This matches Superpowers' core principle: ask first, build after.
+At every phase transition, Claude confirms with the user before proceeding.
 
 ## Routing examples
 
@@ -103,7 +122,6 @@ At every phase transition, Claude confirms with the user before proceeding. This
 | "continue the implementation" | Fast path: Plan Execution, 2 skills. Claude assesses IMPLEMENT. | "Starting task 1 of the plan using TDD..." |
 | "the email sender throws errors" | Fast path: Fix/Debug, 2 skills. Claude assesses DEBUG. | "Switching to systematic debugging. I'll return to the plan after." |
 | "all green, merge to main" | Fast path: Ship, 2 skills. Claude assesses SHIP. | "Running verification, then merge options." |
-| "ok what about the schema" | Fallthrough: dev-related, 0 skills. Claude checks context. | "We're mid-implementation. I'll continue with the schema task." |
 | "thanks for the help" | Silent exit. No output, no context cost. | *(normal response)* |
 
 ## Skill inventory (18 skills)
@@ -112,11 +130,11 @@ At every phase transition, Claude confirms with the user before proceeding. This
 
 | Phase | Skills | Priority |
 |-------|--------|----------|
-| **Fix / Debug** | systematic-debugging, TDD | 1st -- broken code is always immediate |
-| **Plan Execution** | subagent-driven-dev, executing-plans | 2nd -- explicit plan continuation |
-| **Build New** | brainstorming, TDD | 3rd -- most common intent |
-| **Review** | requesting-code-review, receiving-code-review | 4th -- only when nothing else matched |
-| **Ship / Complete** | verification, finishing-a-dev-branch | 5th -- requires explicit shipping verbs |
+| **Fix / Debug** | systematic-debugging, TDD | 1st |
+| **Plan Execution** | subagent-driven-dev, executing-plans | 2nd |
+| **Build New** | brainstorming, TDD | 3rd |
+| **Review** | requesting-code-review, receiving-code-review | 4th |
+| **Ship / Complete** | verification, finishing-a-dev-branch | 5th |
 
 ### Cross-cutting overlays
 
@@ -145,22 +163,20 @@ At every phase transition, Claude confirms with the user before proceeding. This
 | Fast path (simple match) | ~90ms | ~140 tokens |
 | Fast path (5 skills) | ~100ms | ~158 tokens + skill files |
 
-Each activated SKILL.md adds ~2-5k tokens. Zero subprocess overhead for regex matching (uses bash-native `[[ =~ ]]`).
-
 ## Prerequisites
 
 - [Claude Code](https://code.claude.com) CLI
 - `jq` -- `brew install jq` / `sudo apt install jq`
-- `git`
-
-## Known limitations
-
-- **Stateless hook**: Each prompt is routed independently. Phase awareness comes from Claude's conversation context, not hook state.
-- **Context cost**: ~2-5k tokens per activated SKILL.md file.
-- **Regex pre-filter**: Keyword-based, not semantic. Ambiguous prompts fall through to Claude's own assessment. Non-dev prompts exit silently.
+- `git` (for external skills download)
 
 ## Uninstalling
 
+Plugin install:
+```
+/plugin uninstall auto-claude-skills
+```
+
+Legacy install:
 ```bash
 ./uninstall.sh
 ```
