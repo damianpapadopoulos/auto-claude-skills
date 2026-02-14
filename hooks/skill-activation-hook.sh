@@ -206,14 +206,15 @@ if (( COUNT > 0 )); then
 
 Step 2 -- EVALUATE skills against your phase assessment.
 $(printf '%b' "$TABLE")
-For each: [name] YES/NO [reason]. Phase overrides keyword match."
+You MUST print a brief evaluation for each skill above. Format:
+  **Phase: [PHASE]** | [skill1] YES/NO, [skill2] YES/NO
+Example: **Phase: IMPLEMENT** | test-driven-development YES, claude-md-improver NO (not editing CLAUDE.md)
+This line is MANDATORY -- do not skip it."
 fi
 
 OUT+="
 
-Step 3 -- CONFIRM with user. State your phase and plan. Ask before proceeding.
-
-Step 4 -- ACTIVATE approved skills. Follow their internal chain."
+Step 3 -- State your plan and proceed. Keep it to 1-2 sentences."
 
 if [[ -n "$HINTS" ]]; then
   OUT+="\n$(printf '%b' "$HINTS")"
