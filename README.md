@@ -1,4 +1,4 @@
-# auto-claude-skills
+testest# auto-claude-skills
 
 Intelligent skill activation hook for Claude Code with **phase-aware routing** across the design-plan-implement-review-ship pipeline.
 
@@ -35,7 +35,8 @@ Cross-cutting overlays (security, frontend, docs, meta, parallel) fire additivel
 Inside Claude Code:
 
 ```
-/plugin install auto-claude-skills
+/plugin marketplace add damianpapadopoulos/auto-claude-skills-marketplace
+/plugin install auto-claude-skills@acsm
 ```
 
 Then optionally download external skills:
@@ -173,7 +174,7 @@ At every phase transition, Claude confirms with the user before proceeding.
 
 Plugin install:
 ```
-/plugin uninstall auto-claude-skills
+/plugin uninstall auto-claude-skills@acsm
 ```
 
 Legacy install:

@@ -1,6 +1,6 @@
 #!/bin/bash
 # --- Claude Code Skill Activation Hook v8 -----------------------
-# https://github.com/dkpapadopoulos/auto-claude-skills
+# https://github.com/damianpapadopoulos/auto-claude-skills
 #
 # Hybrid intent routing with phase-aware checkpoints.
 #
