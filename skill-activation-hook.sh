@@ -1,13 +1,17 @@
 #!/bin/bash
-# --- Claude Code Skill Activation Hook v7 -----------------------
-# https://github.com/dkpapapadopoulos/auto-claude-skills
+# --- Claude Code Skill Activation Hook v8 -----------------------
+# https://github.com/dkpapadopoulos/auto-claude-skills
 #
 # Hybrid intent routing with phase-aware checkpoints.
 #
-# The regex is a FAST PRE-FILTER, not the decision maker.
-# Claude Code (already running) makes the real intent assessment
+# DESIGN PRINCIPLE: The regex is a FAST PRE-FILTER, not the decision
+# maker. Claude Code (already running) makes the real intent assessment
 # via the phase checkpoint instruction injected into context.
 # No extra API call needed -- Claude IS the classifier.
+#
+# v8: Wider fallthrough net. In a Claude Code session, most prompts
+# are dev-related. Instead of allowlisting dev keywords, we blocklist
+# the few clearly non-dev patterns and let Claude assess everything else.
 #
 # Three layers: Primary Intent -> Cross-cutting Overlays -> Phase Check
 # The hook suggests; Claude decides; the user overrides.
@@ -21,7 +25,19 @@ PROMPT=$(cat 2>/dev/null | jq -r '.prompt // empty' 2>/dev/null) || true
 [[ "$PROMPT" =~ ^[[:space:]]/ ]] && exit 0
 (( ${#PROMPT} < 8 )) && exit 0
 
-P="${PROMPT,,}"
+P=$(printf '%s' "$PROMPT" | tr '[:upper:]' '[:lower:]')
+
+# --- Non-dev prompt filter (blocklist approach) ------------------
+# Exit early ONLY for prompts that are clearly not dev tasks.
+# Everything else gets the phase checkpoint so Claude can decide.
+if [[ "$P" =~ ^(hi|hello|hey|thanks|thank.you|good.(morning|afternoon|evening)|bye|goodbye|ok|okay|yes|no|sure|yep|nope|got.it|sounds.good|cool|nice|great|perfect|awesome|understood)([[:space:]!.,]+.{0,20})?$ ]]; then
+  # Allow short trailing words like "hello there", "hey claude", "thanks a lot"
+  # but not "hello can you fix the bug" (that's a real prompt)
+  TAIL="${P#*[[:space:]]}"
+  if [[ "$TAIL" == "$P" ]] || (( ${#TAIL} < 20 )); then
+    exit 0
+  fi
+fi
 
 # --- Skill path resolution ---------------------------------------
 SP_BASE="$HOME/.claude/plugins/cache/claude-plugins-official/superpowers"
@@ -52,37 +68,63 @@ skill_path() {
 # =================================================================
 # LAYER 1: PRIMARY INTENT (fast regex pre-filter)
 # Priority: Fix > Execute Plan > Build > Review > Ship
-# This is a suggestion -- Claude's phase assessment decides.
+# These are SUGGESTIONS -- Claude's phase assessment decides.
+# Broader patterns = fewer false negatives. Claude filters false positives.
 # =================================================================
 PRIMARY="" PLABEL=""
 
-if [[ -z "$PLABEL" && "$P" =~ (debug|bug|fix(es|ed|ing)?|broken|fail(ing|ure)|error|crash|wrong|unexpected|not.working|regression|issue.with|problem.with|doesn.t.work|won.t.(start|run|compile|build)) ]]; then
+# --- Fix / Debug ---
+if [[ -z "$PLABEL" && "$P" =~ (debug|bug|fix|broken|fail|error|crash|wrong|unexpected|not.work|regression|issue|problem|doesn.t|won.t|can.t|stuck|hang|freeze|timeout|leak|corrupt|invalid|missing) ]]; then
   PRIMARY="systematic-debugging test-driven-development"
   PLABEL="Fix / Debug"
 fi
 
-if [[ -z "$PLABEL" && "$P" =~ (execute.*(plan|tasks)|run.the.plan|implement.the.plan|implement.*(rest|remaining).*(plan|tasks)|continue.*(plan|implementation|from.yesterday|where)|follow.the.plan|pick.up.where|resume|next.task) ]]; then
+# --- Plan Execution ---
+if [[ -z "$PLABEL" && "$P" =~ (execute.*plan|run.the.plan|implement.the.plan|implement.*(rest|remaining)|continue|follow.the.plan|pick.up|resume|next.task|next.step|carry.on|keep.going|where.were.we|what.s.next) ]]; then
   PRIMARY="subagent-driven-development executing-plans"
   PLABEL="Plan Execution"
 fi
 
-if [[ -z "$PLABEL" && "$P" =~ (build|create|implement|develop|scaffold|init|bootstrap|brainstorm|design|architect|strateg|scope|outline|approach|set.?up.*(project|app|system|service|api|server|module)|add.*(feature|endpoint|module|component|page|route|handler)|write.*(code|function|class|module|test|script)|how.(should|would|could).(we|i)) ]]; then
+# --- Build / Create ---
+if [[ -z "$PLABEL" && "$P" =~ (build|create|implement|develop|scaffold|init|bootstrap|brainstorm|design|architect|strateg|scope|outline|approach|add|write|make|generate|set.?up|install|configure|wire.up|connect|integrate|extend|new|start|introduce|enable|support|how.(should|would|could)) ]]; then
   PRIMARY="brainstorming test-driven-development"
   PLABEL="Build New"
 fi
 
-if [[ -z "$PLABEL" && "$P" =~ (review|pull.?request|code.?review|check.(this|my|the).(code|changes|diff)|refactor|clean.?up|code.?quality|lint|smell|tech.?debt) ]]; then
-  PRIMARY="requesting-code-review receiving-code-review"
-  PLABEL="Review"
+# --- Modify / Update ---
+if [[ -z "$PLABEL" && "$P" =~ (update|change|modify|edit|alter|adjust|tweak|move|rename|replace|swap|switch|convert|transform|migrate|upgrade|downgrade|bump|patch|optimize|improve|enhance|speed.up|performance|refactor|restructure|reorganize|simplify|consolidate|extract|inline|split|combine) ]]; then
+  PRIMARY="brainstorming test-driven-development"
+  PLABEL="Modify / Update"
 fi
-if [[ -z "$PLABEL" && "$P" =~ (^|[^a-z])pr($|[^a-z]) ]]; then
+
+# --- Remove / Clean ---
+if [[ -z "$PLABEL" && "$P" =~ (remove|delete|drop|clean|prune|strip|deprecate|disable|turn.off|get.rid|eliminate|unused|dead.code) ]]; then
+  PRIMARY="brainstorming test-driven-development"
+  PLABEL="Remove / Clean"
+fi
+
+# --- Review ---
+if [[ -z "$PLABEL" && "$P" =~ (review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|smell|tech.?debt|(^|[^a-z])pr($|[^a-z])) ]]; then
   PRIMARY="requesting-code-review receiving-code-review"
   PLABEL="Review"
 fi
 
-if [[ -z "$PLABEL" && "$P" =~ (ship|merge|deploy|push.to.(main|prod|master)|pr.ready|ready.to.(merge|deploy|ship)|wrap.?up|all.(done|good|green|passing)|lgtm|looks.good.*(ship|merge|deploy)) ]]; then
+# --- Ship / Complete ---
+if [[ -z "$PLABEL" && "$P" =~ (ship|merge|deploy|push|release|tag|publish|pr.ready|ready.to|wrap.?up|all.(done|good|green|passing)|lgtm|finalize|complete|finish) ]]; then
   PRIMARY="verification-before-completion finishing-a-development-branch"
   PLABEL="Ship / Complete"
+fi
+
+# --- Investigate / Understand ---
+if [[ -z "$PLABEL" && "$P" =~ (explain|understand|what.is|what.does|how.does|where.is|find|search|look.at|show.me|trace|investigate|analyze|profile|benchmark|measure|count|list|summarize|describe|walk.me|dig.into) ]]; then
+  PRIMARY="systematic-debugging"
+  PLABEL="Investigate"
+fi
+
+# --- Run / Test ---
+if [[ -z "$PLABEL" && "$P" =~ (run|test|execute|verify|validate|check|ensure|confirm|try|attempt|evaluate|assert|expect|coverage|pass|green) ]]; then
+  PRIMARY="test-driven-development"
+  PLABEL="Run / Test"
 fi
 
 # =================================================================
@@ -96,7 +138,7 @@ fi
 if [[ "$P" =~ (^|[^a-z])(ui|frontend|component|layout|style|css|tailwind|responsive|dashboard|landing.?page|mockup|wireframe)($|[^a-z]) ]]; then
   OVERLAY+=" frontend-design webapp-testing"; OLABEL+="Frontend "
 fi
-if [[ "$P" =~ (proposal|spec[^a-z]|rfc|write.?up|technical.?doc|architecture.?doc) ]]; then
+if [[ "$P" =~ (proposal|spec[^a-z]|rfc|write.?up|technical.?doc|architecture.?doc|documentation) ]]; then
   OVERLAY+=" doc-coauthoring"; OLABEL+="Docs "
 fi
 if [[ "$P" =~ (claude\.md|claude.md|\.claude|skill|hook|mcp|plugin) ]]; then
@@ -131,17 +173,11 @@ for skill in $ALL_SKILLS; do
   ((COUNT++))
 done
 
-# --- FALLTHROUGH: no regex match ---------------------------------
-# If keywords missed but prompt looks dev-related, still emit the
-# phase checkpoint so Claude can assess intent itself.
-# Claude IS the LLM -- no extra API call needed.
-if [[ $COUNT -eq 0 && -z "$HINTS" ]]; then
-  if [[ "$P" =~ (code|test|api|function|class|module|file|repo|branch|commit|database|server|endpoint|config|docker|package|dependency|library|service|feature|task|ticket|sprint|release|version|migration|schema|model|component|route|controller|middleware|plan|ready|done|looks.good|approved|go.ahead|proceed|next.step|move.on) ]]; then
-    PLABEL="(no keyword match)"
-  else
-    exit 0
-  fi
-fi
+# --- FALLTHROUGH: always emit phase checkpoint -------------------
+# v8: We already filtered non-dev prompts above. If we got here,
+# the prompt is likely dev-related. Always emit the phase checkpoint
+# so Claude can self-assess intent, even with 0 skill matches.
+[[ -z "$PLABEL" ]] && PLABEL="(Claude: assess intent)"
 
 OLABEL="${OLABEL% }"
 
