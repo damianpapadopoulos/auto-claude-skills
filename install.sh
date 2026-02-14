@@ -212,11 +212,11 @@ check_plugin() {
 }
 
 check_plugin "superpowers" "/plugin install superpowers@superpowers-marketplace"
-check_plugin "frontend-design" "/plugin install frontend-design@claude-plugin-directory"
-check_plugin "claude-code-setup" "/plugin install claude-code-setup@claude-plugin-directory"
-check_plugin "claude-md-management" "/plugin install claude-md-management@claude-plugin-directory"
-check_plugin "ralph-loop" "/plugin install ralph-loop@claude-plugin-directory"
-check_plugin "pr-review-toolkit" "/plugin install pr-review-toolkit@claude-plugin-directory"
+check_plugin "frontend-design" "/plugin install frontend-design@claude-plugins-official"
+check_plugin "claude-code-setup" "/plugin install claude-code-setup@claude-plugins-official"
+check_plugin "claude-md-management" "/plugin install claude-md-management@claude-plugins-official"
+check_plugin "ralph-loop" "/plugin install ralph-loop@claude-plugins-official"
+check_plugin "pr-review-toolkit" "/plugin install pr-review-toolkit@claude-plugins-official"
 
 echo ""
 

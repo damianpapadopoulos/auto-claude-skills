@@ -59,7 +59,8 @@ cd auto-claude-skills
 
 | Component | Location |
 |-----------|----------|
-| Hook script | Managed by plugin system (`hooks/skill-activation-hook.sh`) |
+| Skill activation hook | `hooks/skill-activation-hook.sh` — runs on every prompt (`UserPromptSubmit`) |
+| Manifest fixer hook | `hooks/fix-plugin-manifests.sh` — runs on startup (`SessionStart`), strips invalid keys from cached plugin manifests |
 | Hook registration | Automatic via `hooks/hooks.json` |
 | Setup command | `/setup` — downloads external skills on demand |
 
@@ -84,11 +85,11 @@ Then install the plugins:
 
 ```
 /plugin install superpowers@superpowers-marketplace
-/plugin install frontend-design@claude-plugin-directory
-/plugin install claude-code-setup@claude-plugin-directory
-/plugin install claude-md-management@claude-plugin-directory
-/plugin install ralph-loop@claude-plugin-directory
-/plugin install pr-review-toolkit@claude-plugin-directory
+/plugin install frontend-design@claude-plugins-official
+/plugin install claude-code-setup@claude-plugins-official
+/plugin install claude-md-management@claude-plugins-official
+/plugin install ralph-loop@claude-plugins-official
+/plugin install pr-review-toolkit@claude-plugins-official
 ```
 
 > These provide 15+ additional skills for the full pipeline. The hook detects them by their install path under `~/.claude/plugins/cache/claude-plugins-official/`.
