@@ -22,7 +22,7 @@ PROMPT=$(cat 2>/dev/null | jq -r '.prompt // empty' 2>/dev/null) || true
 
 # --- Early exits -------------------------------------------------
 [[ -z "$PROMPT" ]] && exit 0
-[[ "$PROMPT" =~ ^[[:space:]]/ ]] && exit 0
+[[ "$PROMPT" =~ ^[[:space:]]*/  ]] && exit 0
 (( ${#PROMPT} < 8 )) && exit 0
 
 P=$(printf '%s' "$PROMPT" | tr '[:upper:]' '[:lower:]')
