@@ -1,4 +1,4 @@
-testest# auto-claude-skills
+# auto-claude-skills
 
 Intelligent skill activation hook for Claude Code with **phase-aware routing** across the design-plan-implement-review-ship pipeline.
 
