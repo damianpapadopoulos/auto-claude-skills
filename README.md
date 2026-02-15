@@ -230,6 +230,16 @@ Create `~/.claude/skill-config.json` to customize behavior:
 - `max_suggestions` — cap on total skills per prompt (default 3)
 - `verbosity` — `"minimal"` | `"normal"` | `"verbose"`
 
+### Priority guide
+
+Within each role, higher priority wins when multiple skills match the same prompt:
+
+| Role | Skills (highest priority first) |
+|------|-------------------------------|
+| Process | systematic-debugging (50) > writing-plans (40) > brainstorming (30) > code-review (25) > TDD (20) > executing-plans (15) |
+| Workflow | verification (20) > finishing-branch (19) > parallel-agents (15) > worktrees (14) |
+| Domain | frontend/security/docs (15) > webapp-testing/automation (12) > claude-md (10) |
+
 ### Merge order
 
 static fallback -> dynamic discovery -> starter pack triggers -> user config overrides

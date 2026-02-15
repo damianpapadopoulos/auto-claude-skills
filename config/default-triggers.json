@@ -10,7 +10,7 @@
         "(explain|understand|what.is|what.does|how.does|where.is|find|search|look.at|show.me|trace|investigate|analyze|profile|benchmark|measure|count|list|summarize|describe|walk.me|dig.into)"
       ],
       "trigger_mode": "regex",
-      "priority": 10,
+      "priority": 50,
       "precedes": [],
       "requires": [],
       "description": "Structured debugging: reproduce, hypothesise, isolate, fix, verify. Returns to the current phase after resolution."
@@ -20,17 +20,13 @@
       "role": "process",
       "phase": "IMPLEMENT",
       "triggers": [
-        "(debug|bug|fix|broken|fail|error|crash|wrong|unexpected|not.work|regression|issue|problem|doesn.t|won.t|can.t|stuck|hang|freeze|timeout|leak|corrupt|invalid|missing)",
-        "(build|create|implement|develop|scaffold|init|bootstrap|brainstorm|design|architect|strateg|scope|outline|approach|add|write|make|generate|set.?up|install|configure|wire.up|connect|integrate|extend|new|start|introduce|enable|support|how.(should|would|could))",
-        "(update|change|modify|edit|alter|adjust|tweak|move|rename|replace|swap|switch|convert|transform|migrate|upgrade|downgrade|bump|patch|optimize|improve|enhance|speed.up|performance|refactor|restructure|reorganize|simplify|consolidate|extract|inline|split|combine)",
-        "(remove|delete|drop|clean|prune|strip|deprecate|disable|turn.off|get.rid|eliminate|unused|dead.code)",
-        "(run|test|execute|verify|validate|check|ensure|confirm|try|attempt|evaluate|assert|expect|coverage|pass|green)"
+        "(test|tdd|run.tests|execute.tests|verify|validate|coverage|pass|green|assert|expect|spec)"
       ],
       "trigger_mode": "regex",
       "priority": 20,
       "precedes": [],
       "requires": [],
-      "description": "Write failing test first, then implement until green. Applied during Fix, Build, Modify, Remove, and Run/Test intents."
+      "description": "Write failing test first, then implement until green. Primary only for explicit test requests; other phases invoke TDD via skill chaining."
     },
     {
       "name": "brainstorming",
@@ -92,7 +88,7 @@
         "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|smell|tech.?debt|(^|[^a-z])pr($|[^a-z]))"
       ],
       "trigger_mode": "regex",
-      "priority": 50,
+      "priority": 25,
       "precedes": [],
       "requires": [],
       "description": "Prepare and request a code review: summarise changes, highlight risks, open a PR."
@@ -105,7 +101,7 @@
         "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|smell|tech.?debt|(^|[^a-z])pr($|[^a-z]))"
       ],
       "trigger_mode": "regex",
-      "priority": 51,
+      "priority": 24,
       "precedes": [],
       "requires": [],
       "description": "Process incoming review feedback: address comments, push fixes, re-request review."
@@ -117,7 +113,7 @@
         "(ship|merge|deploy|push|release|tag|publish|pr.ready|ready.to|wrap.?up|all.(done|good|green|passing)|lgtm|finalize|complete|finish)"
       ],
       "trigger_mode": "regex",
-      "priority": 60,
+      "priority": 20,
       "precedes": ["finishing-a-development-branch"],
       "requires": [],
       "description": "Final verification checklist before shipping: tests pass, lint clean, no TODOs, docs updated."
@@ -129,7 +125,7 @@
         "(ship|merge|deploy|push|release|tag|publish|pr.ready|ready.to|wrap.?up|all.(done|good|green|passing)|lgtm|finalize|complete|finish)"
       ],
       "trigger_mode": "regex",
-      "priority": 61,
+      "priority": 19,
       "precedes": [],
       "requires": ["verification-before-completion"],
       "description": "Branch cleanup and merge: squash commits, update changelog, merge to main."
@@ -141,7 +137,7 @@
         "(parallel|concurrent|multiple.*(failure|bug|issue|error|test)|independent.*(task|failure|bug|issue|test)|worktree)"
       ],
       "trigger_mode": "regex",
-      "priority": 70,
+      "priority": 15,
       "precedes": [],
       "requires": [],
       "description": "Fan out independent tasks to parallel sub-agents and collect results."
@@ -153,7 +149,7 @@
         "(parallel|concurrent|multiple.*(failure|bug|issue|error|test)|independent.*(task|failure|bug|issue|test)|worktree)"
       ],
       "trigger_mode": "regex",
-      "priority": 71,
+      "priority": 14,
       "precedes": [],
       "requires": [],
       "description": "Use git worktrees to enable parallel work on multiple branches without stashing."
@@ -165,7 +161,7 @@
         "(claude\\.md|claude.md|\\.claude|skill|hook|mcp|plugin)"
       ],
       "trigger_mode": "regex",
-      "priority": 100,
+      "priority": 15,
       "precedes": [],
       "requires": [],
       "description": "Author and maintain Claude Code skill files (SKILL.md). Meta-overlay for Claude tooling prompts."
@@ -177,7 +173,7 @@
         "(^|[^a-z])(ui|frontend|component|layout|style|css|tailwind|responsive|dashboard|landing.?page|mockup|wireframe)($|[^a-z])"
       ],
       "trigger_mode": "regex",
-      "priority": 101,
+      "priority": 15,
       "precedes": [],
       "requires": [],
       "description": "UI/UX design guidance: component structure, responsive layout, styling, and visual prototyping."
@@ -189,7 +185,7 @@
         "(secur(e|ity)|vulnerab|owasp|pentest|attack|exploit|compliance|hipaa|gdpr|encrypt|auth(entication|orization)|inject|xss|csrf|sanitiz|supply.?chain)"
       ],
       "trigger_mode": "regex",
-      "priority": 102,
+      "priority": 15,
       "precedes": [],
       "requires": [],
       "description": "Security analysis overlay: scan for vulnerabilities, OWASP risks, compliance issues, and supply-chain threats."
@@ -201,7 +197,7 @@
         "(^|[^a-z])(ui|frontend|component|layout|style|css|tailwind|responsive|dashboard|landing.?page|mockup|wireframe)($|[^a-z])"
       ],
       "trigger_mode": "regex",
-      "priority": 103,
+      "priority": 12,
       "precedes": [],
       "requires": [],
       "description": "Web application testing: browser automation, accessibility checks, visual regression, and E2E flows."
@@ -213,7 +209,7 @@
         "(proposal|spec[^a-z]|rfc|write.?up|technical.?doc|architecture.?doc|documentation)"
       ],
       "trigger_mode": "regex",
-      "priority": 104,
+      "priority": 15,
       "precedes": [],
       "requires": [],
       "description": "Co-author technical documents: proposals, specs, RFCs, and architecture docs."
@@ -225,7 +221,7 @@
         "(claude\\.md|claude.md|\\.claude|skill|hook|mcp|plugin)"
       ],
       "trigger_mode": "regex",
-      "priority": 105,
+      "priority": 12,
       "precedes": [],
       "requires": [],
       "description": "Recommend Claude Code automation setups: hooks, MCP servers, plugins, and workflow optimisations."
@@ -237,7 +233,7 @@
         "(claude\\.md|claude.md|\\.claude|skill|hook|mcp|plugin)"
       ],
       "trigger_mode": "regex",
-      "priority": 106,
+      "priority": 10,
       "precedes": [],
       "requires": [],
       "description": "Improve CLAUDE.md project files: structure, clarity, and completeness of project instructions."
