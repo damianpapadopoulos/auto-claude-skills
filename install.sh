@@ -12,9 +12,13 @@ set -euo pipefail
 # -----------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-HOOK_NAME="skill-activation-hook.sh"
-HOOK_SRC="$SCRIPT_DIR/hooks/$HOOK_NAME"
+SESSION_HOOK="session-start-hook.sh"
+ACTIVATION_HOOK="skill-activation-hook.sh"
+SESSION_SRC="$SCRIPT_DIR/hooks/$SESSION_HOOK"
+ACTIVATION_SRC="$SCRIPT_DIR/hooks/$ACTIVATION_HOOK"
+CONFIG_DIR_SRC="$SCRIPT_DIR/config"
 HOOK_DIR="$HOME/.claude/hooks"
+CONFIG_DIR="$HOME/.claude/hooks/config"
 SKILLS_DIR="$HOME/.claude/skills"
 SETTINGS="$HOME/.claude/settings.json"
 PLUGIN_CACHE="$HOME/.claude/plugins/cache"
@@ -35,11 +39,13 @@ if ! command -v git &>/dev/null; then
   exit 1
 fi
 
-if [ ! -f "$HOOK_SRC" ]; then
-  echo "[!!] Hook script not found at $HOOK_SRC"
-  echo "    Run this from the repo root: cd auto-claude-skills && ./install.sh"
-  exit 1
-fi
+for required in "$SESSION_SRC" "$ACTIVATION_SRC" "$CONFIG_DIR_SRC/default-triggers.json" "$CONFIG_DIR_SRC/fallback-registry.json"; do
+  if [ ! -f "$required" ]; then
+    echo "[!!] Required file not found: $required"
+    echo "    Run this from the repo root: cd auto-claude-skills && ./install.sh"
+    exit 1
+  fi
+done
 
 # --- Check if plugin system is available -------------------------
 PLUGIN_INSTALLED=false
@@ -66,27 +72,48 @@ else
   echo ""
   if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo ""
-    echo " Installing hook (legacy mode)..."
+    echo " Installing hooks (legacy mode)..."
 
-    # --- Install hook script ---
+    # --- Install hook scripts ---
     mkdir -p "$HOOK_DIR"
-    cp "$HOOK_SRC" "$HOOK_DIR/$HOOK_NAME"
-    chmod +x "$HOOK_DIR/$HOOK_NAME"
-    echo "   [OK] $HOOK_NAME -> $HOOK_DIR/"
+    cp "$SESSION_SRC" "$HOOK_DIR/$SESSION_HOOK"
+    chmod +x "$HOOK_DIR/$SESSION_HOOK"
+    echo "   [OK] $SESSION_HOOK -> $HOOK_DIR/"
+
+    cp "$ACTIVATION_SRC" "$HOOK_DIR/$ACTIVATION_HOOK"
+    chmod +x "$HOOK_DIR/$ACTIVATION_HOOK"
+    echo "   [OK] $ACTIVATION_HOOK -> $HOOK_DIR/"
+
+    # --- Install config files ---
+    mkdir -p "$CONFIG_DIR"
+    cp "$CONFIG_DIR_SRC/default-triggers.json" "$CONFIG_DIR/"
+    cp "$CONFIG_DIR_SRC/fallback-registry.json" "$CONFIG_DIR/"
+    echo "   [OK] config/{default-triggers,fallback-registry}.json -> $CONFIG_DIR/"
 
     # --- Configure settings.json ---
-    HOOK_CMD="\$HOME/.claude/hooks/$HOOK_NAME"
+    SESSION_CMD="\$HOME/.claude/hooks/$SESSION_HOOK"
+    ACTIVATION_CMD="\$HOME/.claude/hooks/$ACTIVATION_HOOK"
 
     if [ ! -f "$SETTINGS" ]; then
       cat > "$SETTINGS" << ENDJSON
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$SESSION_CMD"
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "$HOOK_CMD"
+            "command": "$ACTIVATION_CMD"
           }
         ]
       }
@@ -94,38 +121,35 @@ else
   }
 }
 ENDJSON
-      echo "   [OK] Created settings.json with hook"
-    elif grep -q "$HOOK_NAME" "$SETTINGS" 2>/dev/null; then
-      echo "   [--] Hook already registered in settings.json"
+      echo "   [OK] Created settings.json with both hooks"
+    elif grep -q "$SESSION_HOOK" "$SETTINGS" 2>/dev/null && grep -q "$ACTIVATION_HOOK" "$SETTINGS" 2>/dev/null; then
+      echo "   [--] Both hooks already registered in settings.json"
     else
       BACKUP="$SETTINGS.bak.$(date +%s)"
       cp "$SETTINGS" "$BACKUP"
       echo "   Backed up to $BACKUP"
 
-      HOOK_ENTRY=$(cat <<ENDJSON
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOOK_CMD"
-          }
-        ]
-      }
-    ]
-  }
-}
-ENDJSON
-)
-      if echo "$(cat "$SETTINGS")" | jq -e '.hooks.UserPromptSubmit' &>/dev/null; then
-        jq --arg cmd "$HOOK_CMD" '.hooks.UserPromptSubmit += [{"hooks":[{"type":"command","command":$cmd}]}]' "$SETTINGS" > "$SETTINGS.tmp"
-      else
-        echo "$HOOK_ENTRY" | jq -s '.[0] * .[1]' "$SETTINGS" - > "$SETTINGS.tmp"
+      # Add SessionStart hook if missing
+      if ! grep -q "$SESSION_HOOK" "$SETTINGS" 2>/dev/null; then
+        if jq -e '.hooks.SessionStart' "$SETTINGS" &>/dev/null; then
+          jq --arg cmd "$SESSION_CMD" '.hooks.SessionStart += [{"hooks":[{"type":"command","command":$cmd}]}]' "$SETTINGS" > "$SETTINGS.tmp"
+        else
+          jq --arg cmd "$SESSION_CMD" '.hooks.SessionStart = [{"hooks":[{"type":"command","command":$cmd}]}]' "$SETTINGS" > "$SETTINGS.tmp"
+        fi
+        mv "$SETTINGS.tmp" "$SETTINGS"
+        echo "   [OK] SessionStart hook added to settings.json"
       fi
-      mv "$SETTINGS.tmp" "$SETTINGS"
-      echo "   [OK] Hook added to existing settings.json"
+
+      # Add UserPromptSubmit hook if missing
+      if ! grep -q "$ACTIVATION_HOOK" "$SETTINGS" 2>/dev/null; then
+        if jq -e '.hooks.UserPromptSubmit' "$SETTINGS" &>/dev/null; then
+          jq --arg cmd "$ACTIVATION_CMD" '.hooks.UserPromptSubmit += [{"hooks":[{"type":"command","command":$cmd}]}]' "$SETTINGS" > "$SETTINGS.tmp"
+        else
+          jq --arg cmd "$ACTIVATION_CMD" '.hooks.UserPromptSubmit = [{"hooks":[{"type":"command","command":$cmd}]}]' "$SETTINGS" > "$SETTINGS.tmp"
+        fi
+        mv "$SETTINGS.tmp" "$SETTINGS"
+        echo "   [OK] UserPromptSubmit hook added to settings.json"
+      fi
     fi
     echo ""
   else
