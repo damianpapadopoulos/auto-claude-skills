@@ -1,0 +1,271 @@
+{
+  "version": "2.0.0",
+  "skills": [
+    {
+      "name": "systematic-debugging",
+      "role": "process",
+      "phase": "DEBUG",
+      "triggers": [
+        "(debug|bug|fix|broken|fail|error|crash|wrong|unexpected|not.work|regression|issue|problem|doesn.t|won.t|can.t|stuck|hang|freeze|timeout|leak|corrupt|invalid|missing)",
+        "(explain|understand|what.is|what.does|how.does|where.is|find|search|look.at|show.me|trace|investigate|analyze|profile|benchmark|measure|count|list|summarize|describe|walk.me|dig.into)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 10,
+      "precedes": [],
+      "requires": [],
+      "description": "Structured debugging: reproduce, hypothesise, isolate, fix, verify. Returns to the current phase after resolution."
+    },
+    {
+      "name": "test-driven-development",
+      "role": "process",
+      "phase": "IMPLEMENT",
+      "triggers": [
+        "(debug|bug|fix|broken|fail|error|crash|wrong|unexpected|not.work|regression|issue|problem|doesn.t|won.t|can.t|stuck|hang|freeze|timeout|leak|corrupt|invalid|missing)",
+        "(build|create|implement|develop|scaffold|init|bootstrap|brainstorm|design|architect|strateg|scope|outline|approach|add|write|make|generate|set.?up|install|configure|wire.up|connect|integrate|extend|new|start|introduce|enable|support|how.(should|would|could))",
+        "(update|change|modify|edit|alter|adjust|tweak|move|rename|replace|swap|switch|convert|transform|migrate|upgrade|downgrade|bump|patch|optimize|improve|enhance|speed.up|performance|refactor|restructure|reorganize|simplify|consolidate|extract|inline|split|combine)",
+        "(remove|delete|drop|clean|prune|strip|deprecate|disable|turn.off|get.rid|eliminate|unused|dead.code)",
+        "(run|test|execute|verify|validate|check|ensure|confirm|try|attempt|evaluate|assert|expect|coverage|pass|green)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 20,
+      "precedes": [],
+      "requires": [],
+      "description": "Write failing test first, then implement until green. Applied during Fix, Build, Modify, Remove, and Run/Test intents."
+    },
+    {
+      "name": "brainstorming",
+      "role": "process",
+      "phase": "DESIGN",
+      "triggers": [
+        "(build|create|implement|develop|scaffold|init|bootstrap|brainstorm|design|architect|strateg|scope|outline|approach|add|write|make|generate|set.?up|install|configure|wire.up|connect|integrate|extend|new|start|introduce|enable|support|how.(should|would|could))",
+        "(update|change|modify|edit|alter|adjust|tweak|move|rename|replace|swap|switch|convert|transform|migrate|upgrade|downgrade|bump|patch|optimize|improve|enhance|speed.up|performance|refactor|restructure|reorganize|simplify|consolidate|extract|inline|split|combine)",
+        "(remove|delete|drop|clean|prune|strip|deprecate|disable|turn.off|get.rid|eliminate|unused|dead.code)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 30,
+      "precedes": ["writing-plans"],
+      "requires": [],
+      "description": "Ask clarifying questions, explore options, and get user approval before planning. Activated for Build, Modify, and Remove intents."
+    },
+    {
+      "name": "writing-plans",
+      "role": "process",
+      "phase": "PLAN",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 40,
+      "precedes": ["executing-plans"],
+      "requires": ["brainstorming"],
+      "description": "Break work into discrete tasks and confirm the plan with the user before execution begins."
+    },
+    {
+      "name": "executing-plans",
+      "role": "process",
+      "phase": "IMPLEMENT",
+      "triggers": [
+        "(execute.*plan|run.the.plan|implement.the.plan|implement.*(rest|remaining)|continue|follow.the.plan|pick.up|resume|next.task|next.step|carry.on|keep.going|where.were.we|what.s.next)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 15,
+      "precedes": [],
+      "requires": ["writing-plans"],
+      "description": "Step-by-step execution of an approved plan. Triggered by explicit plan-continuation language."
+    },
+    {
+      "name": "subagent-driven-development",
+      "role": "process",
+      "phase": "IMPLEMENT",
+      "triggers": [
+        "(execute.*plan|run.the.plan|implement.the.plan|implement.*(rest|remaining)|continue|follow.the.plan|pick.up|resume|next.task|next.step|carry.on|keep.going|where.were.we|what.s.next)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 14,
+      "precedes": [],
+      "requires": [],
+      "description": "Delegate plan tasks to sub-agents for parallel implementation. Co-triggered with executing-plans."
+    },
+    {
+      "name": "requesting-code-review",
+      "role": "process",
+      "phase": "REVIEW",
+      "triggers": [
+        "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|smell|tech.?debt|(^|[^a-z])pr($|[^a-z]))"
+      ],
+      "trigger_mode": "regex",
+      "priority": 50,
+      "precedes": [],
+      "requires": [],
+      "description": "Prepare and request a code review: summarise changes, highlight risks, open a PR."
+    },
+    {
+      "name": "receiving-code-review",
+      "role": "process",
+      "phase": "REVIEW",
+      "triggers": [
+        "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|smell|tech.?debt|(^|[^a-z])pr($|[^a-z]))"
+      ],
+      "trigger_mode": "regex",
+      "priority": 51,
+      "precedes": [],
+      "requires": [],
+      "description": "Process incoming review feedback: address comments, push fixes, re-request review."
+    },
+    {
+      "name": "verification-before-completion",
+      "role": "workflow",
+      "triggers": [
+        "(ship|merge|deploy|push|release|tag|publish|pr.ready|ready.to|wrap.?up|all.(done|good|green|passing)|lgtm|finalize|complete|finish)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 60,
+      "precedes": ["finishing-a-development-branch"],
+      "requires": [],
+      "description": "Final verification checklist before shipping: tests pass, lint clean, no TODOs, docs updated."
+    },
+    {
+      "name": "finishing-a-development-branch",
+      "role": "workflow",
+      "triggers": [
+        "(ship|merge|deploy|push|release|tag|publish|pr.ready|ready.to|wrap.?up|all.(done|good|green|passing)|lgtm|finalize|complete|finish)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 61,
+      "precedes": [],
+      "requires": ["verification-before-completion"],
+      "description": "Branch cleanup and merge: squash commits, update changelog, merge to main."
+    },
+    {
+      "name": "dispatching-parallel-agents",
+      "role": "workflow",
+      "triggers": [
+        "(parallel|concurrent|multiple.*(failure|bug|issue|error|test)|independent.*(task|failure|bug|issue|test)|worktree)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 70,
+      "precedes": [],
+      "requires": [],
+      "description": "Fan out independent tasks to parallel sub-agents and collect results."
+    },
+    {
+      "name": "using-git-worktrees",
+      "role": "workflow",
+      "triggers": [
+        "(parallel|concurrent|multiple.*(failure|bug|issue|error|test)|independent.*(task|failure|bug|issue|test)|worktree)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 71,
+      "precedes": [],
+      "requires": [],
+      "description": "Use git worktrees to enable parallel work on multiple branches without stashing."
+    },
+    {
+      "name": "writing-skills",
+      "role": "domain",
+      "triggers": [
+        "(claude\\.md|claude.md|\\.claude|skill|hook|mcp|plugin)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 100,
+      "precedes": [],
+      "requires": [],
+      "description": "Author and maintain Claude Code skill files (SKILL.md). Meta-overlay for Claude tooling prompts."
+    },
+    {
+      "name": "frontend-design",
+      "role": "domain",
+      "triggers": [
+        "(^|[^a-z])(ui|frontend|component|layout|style|css|tailwind|responsive|dashboard|landing.?page|mockup|wireframe)($|[^a-z])"
+      ],
+      "trigger_mode": "regex",
+      "priority": 101,
+      "precedes": [],
+      "requires": [],
+      "description": "UI/UX design guidance: component structure, responsive layout, styling, and visual prototyping."
+    },
+    {
+      "name": "security-scanner",
+      "role": "domain",
+      "triggers": [
+        "(secur(e|ity)|vulnerab|owasp|pentest|attack|exploit|compliance|hipaa|gdpr|encrypt|auth(entication|orization)|inject|xss|csrf|sanitiz|supply.?chain)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 102,
+      "precedes": [],
+      "requires": [],
+      "description": "Security analysis overlay: scan for vulnerabilities, OWASP risks, compliance issues, and supply-chain threats."
+    },
+    {
+      "name": "webapp-testing",
+      "role": "domain",
+      "triggers": [
+        "(^|[^a-z])(ui|frontend|component|layout|style|css|tailwind|responsive|dashboard|landing.?page|mockup|wireframe)($|[^a-z])"
+      ],
+      "trigger_mode": "regex",
+      "priority": 103,
+      "precedes": [],
+      "requires": [],
+      "description": "Web application testing: browser automation, accessibility checks, visual regression, and E2E flows."
+    },
+    {
+      "name": "doc-coauthoring",
+      "role": "domain",
+      "triggers": [
+        "(proposal|spec[^a-z]|rfc|write.?up|technical.?doc|architecture.?doc|documentation)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 104,
+      "precedes": [],
+      "requires": [],
+      "description": "Co-author technical documents: proposals, specs, RFCs, and architecture docs."
+    },
+    {
+      "name": "claude-automation-recommender",
+      "role": "domain",
+      "triggers": [
+        "(claude\\.md|claude.md|\\.claude|skill|hook|mcp|plugin)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 105,
+      "precedes": [],
+      "requires": [],
+      "description": "Recommend Claude Code automation setups: hooks, MCP servers, plugins, and workflow optimisations."
+    },
+    {
+      "name": "claude-md-improver",
+      "role": "domain",
+      "triggers": [
+        "(claude\\.md|claude.md|\\.claude|skill|hook|mcp|plugin)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 106,
+      "precedes": [],
+      "requires": [],
+      "description": "Improve CLAUDE.md project files: structure, clarity, and completeness of project instructions."
+    }
+  ],
+  "methodology_hints": [
+    {
+      "name": "ralph-loop",
+      "triggers": [
+        "(migrate|refactor.all|fix.all|batch|overnight|autonom|iterate|keep.(going|trying|fixing)|until.*(pass|work|complet|succeed)|make.*tests?.pass|run.*until|loop|coverage|greenfield)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "RALPH LOOP: Consider /ralph-loop for autonomous iteration."
+    },
+    {
+      "name": "pr-review",
+      "triggers": [
+        "(review|pull.?request|code.?review|(^|[^a-z])pr($|[^a-z]))"
+      ],
+      "trigger_mode": "regex",
+      "hint": "PR REVIEW: Consider /pr-review for structured review."
+    }
+  ],
+  "blocklist_patterns": [
+    {
+      "pattern": "^(hi|hello|hey|thanks|thank.you|good.(morning|afternoon|evening)|bye|goodbye|ok|okay|yes|no|sure|yep|nope|got.it|sounds.good|cool|nice|great|perfect|awesome|understood)([[:space:]!.,]+.{0,20})?$",
+      "description": "Greeting or short acknowledgement -- not a dev task. Allow short trailing words but not full sentences.",
+      "max_tail_length": 20
+    }
+  ]
+}

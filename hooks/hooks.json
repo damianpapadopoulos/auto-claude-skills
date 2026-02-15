@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/fix-plugin-manifests.sh",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start-hook.sh",
             "timeout": 10
           }
         ]

@@ -1,18 +1,18 @@
-# auto-claude-skills
+# auto-claude-skills v2.0
 
-Intelligent skill activation hook for Claude Code with **phase-aware routing** across the design-plan-implement-review-ship pipeline.
+Intelligent skill activation hook for Claude Code with **config-driven routing** and **role-based orchestration** across the design-plan-implement-review-ship pipeline.
 
 ## How it works
 
-The hook uses a **two-tier classification** system. Regex catches obvious intents fast. For everything else, Claude itself is the classifier -- it already has full conversation context.
+The hook uses a **three-tier classification** system powered by a dynamic skill registry. Trigger patterns are defined in config, not hardcoded. Claude itself is the final classifier — it already has full conversation context.
 
 ```
 User prompt
   |
-  |-- Tier 1: FAST PATH (regex, <100ms)
-  |   Keywords match? --> pre-select skills + phase checkpoint
+  |-- Tier 1: FAST PATH (registry trigger match, <100ms)
+  |   Triggers match? --> pre-select skills + phase checkpoint
   |
-  |-- Tier 2: FALLTHROUGH (dev-related but no keyword match)
+  |-- Tier 2: FALLTHROUGH (dev-related but no trigger match)
   |   --> emit phase checkpoint only, 0 pre-selected skills
   |   --> Claude assesses intent from conversation context
   |
@@ -26,7 +26,7 @@ User prompt
   '-- User confirms, adjusts, or skips to a different phase
 ```
 
-Cross-cutting overlays (security, frontend, docs, meta, parallel) fire additively when their keywords appear.
+Matched skills are grouped by role — a **process** skill drives the phase, **domain** skills inform it, and **workflow** skills fire independently when their moment arrives.
 
 ## Quick start
 
@@ -60,8 +60,11 @@ cd auto-claude-skills
 | Component | Location |
 |-----------|----------|
 | Skill activation hook | `hooks/skill-activation-hook.sh` — runs on every prompt (`UserPromptSubmit`) |
+| Session start hook | `hooks/session-start-hook.sh` — builds the skill registry at startup (`SessionStart`) |
 | Manifest fixer hook | `hooks/fix-plugin-manifests.sh` — runs on startup (`SessionStart`), strips invalid keys from cached plugin manifests |
 | Hook registration | Automatic via `hooks/hooks.json` |
+| Default triggers | `config/default-triggers.json` — curated trigger patterns for all skills |
+| Fallback registry | `config/fallback-registry.json` — static fallback for degraded environments |
 | Setup command | `/setup` — downloads external skills on demand |
 
 ### External skills (optional, via `/setup` or `install.sh`)
@@ -71,6 +74,63 @@ cd auto-claude-skills
 | doc-coauthoring | `~/.claude/skills/doc-coauthoring/` |
 | webapp-testing | `~/.claude/skills/webapp-testing/` |
 | security-scanner | `~/.claude/skills/security-scanner/` |
+
+## Architecture
+
+```
+SessionStart:
+  session-start-hook.sh scans three sources:
+    1. ~/.claude/plugins/cache/*/     (installed plugins)
+    2. ~/.claude/skills/*/SKILL.md    (user-installed skills)
+    3. Built-in defaults              (shipped with auto-claude-skills)
+  --> builds ~/.claude/.skill-registry-cache.json
+
+UserPromptSubmit:
+  skill-activation-hook.sh reads the cached registry
+  --> matches prompt against trigger patterns
+  --> scores and ranks matches (exact +3, partial +1, phase-aligned +2)
+  --> caps by role (1 process, 2 domain, 1 workflow)
+  --> emits context with invocation hints
+
+Fallback:
+  If registry cache is missing or corrupt, falls back to
+  config/fallback-registry.json (bundled static registry)
+```
+
+The registry is built once at session start and cached. The routing engine reads the cache on every prompt — no re-scanning, no external API calls.
+
+## Skill roles
+
+Skills are classified into three roles that determine how they compose:
+
+| Role | Behavior | Cap | Examples |
+|------|----------|-----|---------|
+| **Process** | Drives the current phase. One active at a time. Selected by phase + trigger match. | 1 | brainstorming, writing-plans, TDD, systematic-debugging |
+| **Domain** | Specialized knowledge. Active alongside any process skill. Phase-independent. | 2 | frontend-design, security-scanner, doc-coauthoring |
+| **Workflow** | Lifecycle actions. Triggered by specific moments. Standalone. | 1 | finishing-a-dev-branch, dispatching-parallel-agents |
+
+Maximum 3 skills suggested per prompt (configurable).
+
+### How roles compose
+
+Process skills drive. Domain skills inform. Workflow skills stand alone.
+
+When multiple roles match, the context output shows their relationship:
+
+```
+SKILL ACTIVATION (3 skills | Build Dashboard)
+
+Process: brainstorming -> Skill(superpowers:brainstorming)
+  INFORMED BY: frontend-design -> Skill(frontend-design:frontend-design)
+  INFORMED BY: security-scanner -> Read ~/.claude/skills/security-scanner/SKILL.md
+
+Evaluate: **Phase: DESIGN** | brainstorming YES/NO, frontend-design YES/NO, security-scanner YES/NO
+```
+
+Composition keywords:
+- `INFORMED BY` — domain skill provides context within the process skill's workflow
+- `THEN` — sequential process skill handoff (e.g., brainstorming THEN writing-plans)
+- `WITH` — co-active skills in the same phase
 
 ## Recommended plugins
 
@@ -92,7 +152,7 @@ Then install the plugins:
 /plugin install pr-review-toolkit@claude-plugins-official
 ```
 
-> These provide 15+ additional skills for the full pipeline. The hook detects them by their install path under `~/.claude/plugins/cache/claude-plugins-official/`.
+> These provide 15+ additional skills for the full pipeline. The registry discovers them automatically from `~/.claude/plugins/cache/`.
 
 ## The development pipeline
 
@@ -126,34 +186,87 @@ At every phase transition, Claude confirms with the user before proceeding.
 | "all green, merge to main" | Fast path: Ship, 2 skills. Claude assesses SHIP. | "Running verification, then merge options." |
 | "thanks for the help" | Silent exit. No output, no context cost. | *(normal response)* |
 
-## Skill inventory (18 skills)
+## User configuration
 
-### Primary intent (regex pre-filter)
+All configuration is optional. No config file = full curated experience.
 
-| Phase | Skills | Priority |
-|-------|--------|----------|
-| **Fix / Debug** | systematic-debugging, TDD | 1st |
-| **Plan Execution** | subagent-driven-dev, executing-plans | 2nd |
-| **Build New** | brainstorming, TDD | 3rd |
-| **Review** | requesting-code-review, receiving-code-review | 4th |
-| **Ship / Complete** | verification, finishing-a-dev-branch | 5th |
+Create `~/.claude/skill-config.json` to customize behavior:
 
-### Cross-cutting overlays
+```json
+{
+  "overrides": {
+    "brainstorming": {
+      "triggers": ["+prototype", "+spike", "-design"],
+      "enabled": true
+    },
+    "security-scanner": {
+      "enabled": false
+    }
+  },
+  "custom_skills": [
+    {
+      "name": "my-team-conventions",
+      "role": "domain",
+      "invoke": "Read ~/.claude/skills/team-conventions/SKILL.md",
+      "triggers": ["review", "refactor", "new file"],
+      "description": "Team-specific coding standards"
+    }
+  ],
+  "settings": {
+    "max_suggestions": 3,
+    "verbosity": "normal"
+  }
+}
+```
 
-| Overlay | Skills | Triggers |
-|---------|--------|----------|
-| Security | security-scanner | secure, vulnerability, OWASP, HIPAA, XSS |
-| Frontend | frontend-design, webapp-testing | UI, frontend, dashboard, CSS |
-| Documentation | doc-coauthoring | proposal, spec, RFC |
-| Meta | claude-automation-recommender, claude-md-improver, writing-skills | CLAUDE.md, skill, hook, MCP |
-| Parallel | dispatching-parallel-agents, using-git-worktrees | parallel, multiple failures, independent |
+### Trigger override syntax
 
-### Methodology hints (if plugins installed)
+- `"+keyword"` — add to existing defaults
+- `"-keyword"` — remove from defaults
+- `"keyword"` (no prefix) — replace all defaults
 
-| Plugin | When suggested |
-|--------|--------------|
-| Ralph Loop | migrate, batch, overnight, iterate, "until tests pass" |
-| PR Review Toolkit | review, PR, pull request |
+### Settings
+
+- `max_suggestions` — cap on total skills per prompt (default 3)
+- `verbosity` — `"minimal"` | `"normal"` | `"verbose"`
+
+### Merge order
+
+static fallback -> dynamic discovery -> starter pack triggers -> user config overrides
+
+## Testing
+
+83 tests across 4 test files, no dependencies beyond bash and jq:
+
+```bash
+bash tests/run-tests.sh
+```
+
+| Test file | What it validates |
+|-----------|------------------|
+| `tests/test-registry.sh` | Registry build from all sources, caching, fallback, user config |
+| `tests/test-routing.sh` | Prompt-to-skill matching, scoring, role caps, graceful degradation |
+| `tests/test-context.sh` | Context injection format (zero/compact/full), JSON validity |
+| `tests/test-install.sh` | File presence, JSON validity, hook registration |
+
+Tests are isolated — each creates a temp directory with mock plugin caches. No dependency on actual installed skills.
+
+## File listing
+
+| File | Purpose |
+|------|---------|
+| `hooks/skill-activation-hook.sh` | Routing engine — reads registry, matches prompts |
+| `hooks/session-start-hook.sh` | Registry builder + health check |
+| `hooks/fix-plugin-manifests.sh` | Strips invalid keys from cached plugin manifests |
+| `hooks/hooks.json` | Hook registration |
+| `config/default-triggers.json` | Curated trigger patterns for all skills |
+| `config/fallback-registry.json` | Static fallback for degraded environments |
+| `tests/run-tests.sh` | Test runner |
+| `tests/test-registry.sh` | Registry build tests |
+| `tests/test-routing.sh` | Prompt-to-skill matching tests |
+| `tests/test-context.sh` | Context injection format tests |
+| `tests/test-install.sh` | Install/uninstall tests |
+| `tests/test-helpers.sh` | Shared test utilities |
 
 ## Performance
 
