@@ -1,0 +1,73 @@
+{
+  "version": "2.0.0-fallback",
+  "description": "Static fallback registry for degraded environments (no jq, missing plugin dirs)",
+  "warnings": [
+    "Using static fallback registry — dynamic discovery unavailable"
+  ],
+  "skills": [
+    {
+      "name": "brainstorming",
+      "role": "Explore ideas, ask clarifying questions, get design approval before building",
+      "invoke": "Skill(superpowers:brainstorming)",
+      "phase": "DESIGN",
+      "triggers": ["brainstorm", "design", "architect", "scope", "outline", "approach", "how should"],
+      "priority": 10
+    },
+    {
+      "name": "writing-plans",
+      "role": "Break work into structured tasks and confirm the plan before execution",
+      "invoke": "Skill(superpowers:writing-plans)",
+      "phase": "PLAN",
+      "triggers": ["plan", "break down", "task list", "steps", "outline tasks", "spec"],
+      "priority": 20
+    },
+    {
+      "name": "executing-plans",
+      "role": "Systematically implement a confirmed plan, task by task",
+      "invoke": "Skill(superpowers:executing-plans)",
+      "phase": "IMPLEMENT",
+      "triggers": ["execute plan", "implement plan", "follow the plan", "next task", "continue", "pick up"],
+      "priority": 30
+    },
+    {
+      "name": "test-driven-development",
+      "role": "Write tests first, then implement to make them pass",
+      "invoke": "Skill(superpowers:test-driven-development)",
+      "phase": "IMPLEMENT",
+      "triggers": ["tdd", "test first", "write tests", "test driven", "red green refactor"],
+      "priority": 31
+    },
+    {
+      "name": "systematic-debugging",
+      "role": "Methodically isolate and fix bugs using structured investigation",
+      "invoke": "Skill(superpowers:systematic-debugging)",
+      "phase": "DEBUG",
+      "triggers": ["debug", "bug", "fix", "broken", "error", "crash", "failing", "not working", "regression"],
+      "priority": 5
+    },
+    {
+      "name": "requesting-code-review",
+      "role": "Prepare and request a structured code review",
+      "invoke": "Skill(superpowers:requesting-code-review)",
+      "phase": "REVIEW",
+      "triggers": ["review", "code review", "pull request", "pr", "check changes", "diff"],
+      "priority": 40
+    },
+    {
+      "name": "verification-before-completion",
+      "role": "Run final checks before declaring work complete",
+      "invoke": "Skill(superpowers:verification-before-completion)",
+      "phase": "SHIP",
+      "triggers": ["verify", "final check", "ready to ship", "all green", "all passing", "lgtm"],
+      "priority": 50
+    },
+    {
+      "name": "finishing-a-development-branch",
+      "role": "Clean up, squash, and prepare a branch for merge",
+      "invoke": "Skill(superpowers:finishing-a-development-branch)",
+      "phase": "SHIP",
+      "triggers": ["finish", "ship", "merge", "wrap up", "finalize", "complete branch", "push"],
+      "priority": 51
+    }
+  ]
+}
