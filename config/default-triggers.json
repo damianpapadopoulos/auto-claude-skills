@@ -20,7 +20,7 @@
       "role": "process",
       "phase": "IMPLEMENT",
       "triggers": [
-        "(test|tdd|run.tests|execute.tests|verify|validate|coverage|pass|green|assert|expect|spec)"
+        "(test|tdd|run.tests|execute.tests|verify|validate|coverage|pass|green|assert|expect|spec|ensure.*pass|check.*(test|coverage|green))"
       ],
       "trigger_mode": "regex",
       "priority": 20,
