@@ -247,6 +247,46 @@ test_health_check_output() {
 }
 
 # ---------------------------------------------------------------------------
+# 8. Discovers agent team user skills
+# ---------------------------------------------------------------------------
+test_discovers_agent_team_skills() {
+    echo "-- test: discovers agent team user skills --"
+    setup_test_env
+
+    # Create mock user skills for agent team skills
+    mkdir -p "${HOME}/.claude/skills/agent-team-execution"
+    printf '---\nname: agent-team-execution\n---\n' > \
+        "${HOME}/.claude/skills/agent-team-execution/SKILL.md"
+    mkdir -p "${HOME}/.claude/skills/agent-team-review"
+    printf '---\nname: agent-team-review\n---\n' > \
+        "${HOME}/.claude/skills/agent-team-review/SKILL.md"
+    mkdir -p "${HOME}/.claude/skills/design-debate"
+    printf '---\nname: design-debate\n---\n' > \
+        "${HOME}/.claude/skills/design-debate/SKILL.md"
+
+    local output
+    output="$(run_hook)"
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    assert_file_exists "cache file created" "$cache_file"
+    assert_json_valid "cache file is valid JSON" "$cache_file"
+
+    local ate_available
+    ate_available=$(jq -r '.skills[] | select(.name == "agent-team-execution") | .available' "$cache_file")
+    assert_equals "agent-team-execution available" "true" "$ate_available"
+
+    local atr_available
+    atr_available=$(jq -r '.skills[] | select(.name == "agent-team-review") | .available' "$cache_file")
+    assert_equals "agent-team-review available" "true" "$atr_available"
+
+    local dd_available
+    dd_available=$(jq -r '.skills[] | select(.name == "design-debate") | .available' "$cache_file")
+    assert_equals "design-debate available" "true" "$dd_available"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_empty_env_produces_fallback
@@ -256,5 +296,6 @@ test_discovers_official_plugins
 test_missing_dirs_no_crash
 test_user_config_disables_skill
 test_health_check_output
+test_discovers_agent_team_skills
 
 print_summary
