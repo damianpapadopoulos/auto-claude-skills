@@ -237,7 +237,7 @@ Within each role, higher priority wins when multiple skills match the same promp
 | Role | Skills (highest priority first) |
 |------|-------------------------------|
 | Process | systematic-debugging (50) > writing-plans (40) > brainstorming (30) > code-review (25) > TDD (20) > executing-plans (15) |
-| Workflow | verification (20) > finishing-branch (19) > parallel-agents (15) > worktrees (14) |
+| Workflow | verification (20) > finishing-branch (19) > agent-team-review (17) > agent-team-execution (16) > parallel-agents (15) > worktrees (14) |
 | Domain | frontend/security/docs (15) > webapp-testing/automation (12) > claude-md (10) |
 
 ### Merge order
@@ -246,7 +246,7 @@ static fallback -> dynamic discovery -> starter pack triggers -> user config ove
 
 ## Testing
 
-83 tests across 4 test files, no dependencies beyond bash and jq:
+95 tests across 4 test files, no dependencies beyond bash and jq:
 
 ```bash
 bash tests/run-tests.sh
@@ -269,6 +269,7 @@ Tests are isolated — each creates a temp directory with mock plugin caches. No
 | `hooks/session-start-hook.sh` | Registry builder + health check |
 | `hooks/fix-plugin-manifests.sh` | Strips invalid keys from cached plugin manifests |
 | `hooks/hooks.json` | Hook registration |
+| `hooks/teammate-idle-guard.sh` | Conditional heartbeat for agent team teammates |
 | `config/default-triggers.json` | Curated trigger patterns for all skills |
 | `config/fallback-registry.json` | Static fallback for degraded environments |
 | `tests/run-tests.sh` | Test runner |
@@ -301,9 +302,9 @@ cozempic init
 
 Zero conflicts with auto-claude-skills — they use different hook events. See [docs/integrations/agent-teams-and-cozempic.md](docs/integrations/agent-teams-and-cozempic.md) for details.
 
-### Agent teams (future)
+### Agent teams (experimental)
 
-Native Claude Code agent teams support is stubbed in `default-triggers.json` (disabled). When agent teams exit experimental status and the compaction bug ([#23620](https://github.com/anthropics/claude-code/issues/23620)) is fixed, the `agent-team-execution` skill can be activated. See [docs/integrations/agent-teams-and-cozempic.md](docs/integrations/agent-teams-and-cozempic.md) for the activation checklist.
+Three skills for team-based workflows: `design-debate` (MAD pattern for DESIGN), `agent-team-execution` (specialist delegation for IMPLEMENT), and `agent-team-review` (parallel review for REVIEW). Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in settings. See [docs/integrations/agent-teams-and-cozempic.md](docs/integrations/agent-teams-and-cozempic.md) for details.
 
 ## Prerequisites
 

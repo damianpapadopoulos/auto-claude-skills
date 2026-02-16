@@ -1,7 +1,7 @@
 # Agent Teams & Cozempic Integration
 
 **Date**: 2026-02-16
-**Status**: Path A active, Path B deferred
+**Status**: Both paths active
 **Prerequisites tracking**: See [Activation Checklist](#path-b-activation-checklist) below
 
 ## Overview
@@ -9,7 +9,7 @@
 Two complementary integration paths for multi-agent workflows:
 
 - **Path A** — Cozempic as infrastructure (active now, zero code changes)
-- **Path B** — Agent team routing in auto-claude-skills (deferred, stubs in place)
+- **Path B** — Agent team routing in auto-claude-skills (active, three skills deployed)
 
 ## Path A: Cozempic Integration
 
@@ -88,83 +88,47 @@ PreCompact:
 
 ---
 
-## Path B: Agent Team Routing (Deferred)
+## Path B: Agent Team Routing (Active)
 
-### What it would do
+### What it does
 
-When a plan has 3+ independent tasks, the routing engine could suggest team-based execution instead of sequential subagent dispatch. This means:
+When a plan has 3+ independent tasks, the routing engine suggests team-based execution. Three new skills provide the team workflow:
 
-- A new process skill (or skill variant) for team-based execution
-- Trigger patterns that detect parallelizable work
-- Context output that suggests `TeamCreate` + teammate spawning instead of `Task()` subagents
+| Skill | Phase | Role | Purpose |
+|-------|-------|------|---------|
+| `design-debate` | DESIGN | domain | MAD pattern with architect, critic, pragmatist (opt-in escalation) |
+| `agent-team-execution` | IMPLEMENT | workflow | File-disjoint specialist delegation for parallel implementation |
+| `agent-team-review` | REVIEW | workflow | Multi-perspective parallel review (security, quality, spec) |
 
-### Why it's deferred
-
-Three prerequisites must be met:
-
-1. **Agent teams exit experimental status** — currently requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
-2. **Context compaction bug gets a native fix** — GitHub issue [#23620](https://github.com/anthropics/claude-code/issues/23620) causes lead agents to forget teammates after compaction. No native recovery mechanism exists.
-3. **Superpowers updates coordination skills for teams** — the three coordination skills (dispatching-parallel-agents, subagent-driven-development, executing-plans) are marked as orphaned in the latest Superpowers version (e16d611eee14). GitHub issue [obra/superpowers#429](https://github.com/obra/superpowers/issues/429) tracks team support.
-
-### Architecture when activated
+### Skill locations
 
 ```
-UserPromptSubmit:
-  skill-activation-hook.sh detects plan with independent tasks
-  --> suggests "agent-team-execution" skill (role: workflow)
-  --> context output includes team formation hints
-
-The skill itself would:
-  1. Evaluate plan tasks for independence (no shared files, no sequential deps)
-  2. TeamCreate with descriptive team name
-  3. Spawn teammates via Task tool with team_name parameter
-  4. Use shared TaskCreate/TaskUpdate for coordination
-  5. Monitor via TaskList, steer via SendMessage
-  6. TeamDelete on completion
+~/.claude/skills/design-debate/SKILL.md
+~/.claude/skills/agent-team-execution/SKILL.md
+~/.claude/skills/agent-team-review/SKILL.md
 ```
 
-### What's in place now
+These are user-installed skills discovered by the registry builder at SessionStart.
 
-**Registry stub** in `config/default-triggers.json`:
+### TeammateIdle guard
 
-```json
-{
-  "name": "agent-team-execution",
-  "role": "workflow",
-  "phase": "IMPLEMENT",
-  "triggers": ["agent.team", "team.execute", "parallel.team", "swarm"],
-  "priority": 16,
-  "requires": ["writing-plans"],
-  "description": "Team-based parallel execution for plans with independent tasks",
-  "enabled": false,
-  "_deferred": {
-    "reason": "Waiting for agent teams to exit experimental status",
-    "tracking": [
-      "https://github.com/anthropics/claude-code/issues/23620",
-      "https://github.com/obra/superpowers/issues/429"
-    ],
-    "activate_when": "all three prerequisites met — see docs/integrations/agent-teams-and-cozempic.md"
-  }
-}
-```
+The `teammate-idle-guard.sh` hook prevents false-positive idle nudges. It checks `~/.claude/tasks/{team}/*.json` for in-progress tasks owned by the idle teammate before nudging.
 
-This entry is:
-- **Discovered** by the registry builder (appears in cache)
-- **Disabled** by default (`enabled: false`)
-- **Activatable** by user config override: `{"overrides": {"agent-team-execution": {"enabled": true}}}`
-- **Self-documenting** via `_deferred` metadata
+Wired automatically at SessionStart via `session-start-hook.sh`.
 
-### Path B activation checklist
+### Activation checklist
 
-When prerequisites are met, activation requires:
-
-- [ ] Set `"enabled": true` in default-triggers.json for `agent-team-execution`
-- [ ] Create the skill itself — either as a Superpowers skill (preferred, if [#429](https://github.com/obra/superpowers/issues/429) lands) or as a user skill in `~/.claude/skills/agent-team-execution/SKILL.md`
-- [ ] Update `session-start-hook.sh` to discover team-related skills (if Superpowers adds them)
-- [ ] Add team-specific triggers to the default set (plan-aware patterns)
-- [ ] Add tests in `tests/test-routing.sh` for team skill selection
-- [ ] Update README with team execution section
-- [ ] Consider adding cozempic as a recommended companion (guards against residual compaction issues)
+- [x] Set `"enabled": true` in default-triggers.json for `agent-team-execution`
+- [x] Create `agent-team-execution` skill at `~/.claude/skills/agent-team-execution/SKILL.md`
+- [x] Create `agent-team-review` skill at `~/.claude/skills/agent-team-review/SKILL.md`
+- [x] Create `design-debate` skill at `~/.claude/skills/design-debate/SKILL.md`
+- [x] Add `agent-team-review` and `design-debate` to default-triggers.json
+- [x] Add TeammateIdle guard hook (`hooks/teammate-idle-guard.sh`)
+- [x] Wire TeammateIdle hook at SessionStart
+- [x] Add cozempic auto-install at SessionStart
+- [x] Add routing tests for new skills
+- [x] Add registry discovery tests
+- [x] Update README and setup docs
 
 ### Agent teams reference
 

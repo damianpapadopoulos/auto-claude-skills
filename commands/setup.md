@@ -6,6 +6,15 @@ Download the recommended external skills that the auto-claude-skills hook routes
 
 Clone each of the following skill repositories into `~/.claude/skills/`:
 
+### 0. Cozempic (context protection)
+
+```bash
+pip install cozempic
+cozempic init
+```
+
+If pip is not available, skip this step. Cozempic provides optional context protection for long sessions and agent team workflows.
+
 ### 1. doc-coauthoring (Anthropic)
 
 ```bash
