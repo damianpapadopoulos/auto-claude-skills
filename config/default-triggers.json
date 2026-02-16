@@ -243,22 +243,39 @@
       "role": "workflow",
       "phase": "IMPLEMENT",
       "triggers": [
-        "(agent.team|team.execute|parallel.team|swarm)"
+        "(agent.team|team.execute|parallel.team|swarm|execute.*plan|run.the.plan|implement.the.plan|implement.*(rest|remaining)|continue|follow.the.plan|pick.up|resume|next.task|next.step|carry.on|keep.going|where.were.we|what.s.next)"
       ],
       "trigger_mode": "regex",
       "priority": 16,
       "precedes": [],
       "requires": ["writing-plans"],
-      "enabled": false,
-      "description": "Team-based parallel execution for plans with independent tasks. Deferred until agent teams exit experimental status.",
-      "_deferred": {
-        "reason": "Waiting for agent teams to exit experimental status",
-        "tracking": [
-          "https://github.com/anthropics/claude-code/issues/23620",
-          "https://github.com/obra/superpowers/issues/429"
-        ],
-        "activate_when": "All three prerequisites met — see docs/integrations/agent-teams-and-cozempic.md"
-      }
+      "description": "Team-based parallel execution for plans with 3+ independent tasks. Lead assigns file-disjoint specialist groups."
+    },
+    {
+      "name": "agent-team-review",
+      "role": "workflow",
+      "phase": "REVIEW",
+      "triggers": [
+        "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|tech.?debt|(^|[^a-z])pr($|[^a-z]))"
+      ],
+      "trigger_mode": "regex",
+      "priority": 17,
+      "precedes": [],
+      "requires": [],
+      "description": "Multi-perspective parallel code review with specialist reviewers (security, quality, spec compliance)."
+    },
+    {
+      "name": "design-debate",
+      "role": "domain",
+      "phase": "DESIGN",
+      "triggers": [
+        "(build|create|implement|develop|scaffold|brainstorm|design|architect|strateg|scope|outline|approach|add|write|make|generate|set.?up|install|configure|integrate|extend|new|start)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 14,
+      "precedes": [],
+      "requires": [],
+      "description": "Multi-Agent Debate for complex designs. Spawns architect, critic, and pragmatist for collaborative design exploration."
     }
   ],
   "methodology_hints": [
