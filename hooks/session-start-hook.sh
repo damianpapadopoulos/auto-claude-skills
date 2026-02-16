@@ -68,7 +68,7 @@ if [ -n "${SP_SKILLS_DIR}" ] && [ -d "${SP_SKILLS_DIR}" ]; then
     for skill_md in "${SP_SKILLS_DIR}"/*/SKILL.md; do
         [ -f "${skill_md}" ] || continue
         skill_name="$(basename "$(dirname "${skill_md}")")"
-        SP_DISCOVERED="${SP_DISCOVERED}${skill_name}|Read ${skill_md}
+        SP_DISCOVERED="${SP_DISCOVERED}${skill_name}|Skill(superpowers:${skill_name})
 "
     done
 fi
@@ -101,7 +101,7 @@ if [ -d "${USER_SKILLS_DIR}" ]; then
     for skill_md in "${USER_SKILLS_DIR}"/*/SKILL.md; do
         [ -f "${skill_md}" ] || continue
         skill_name="$(basename "$(dirname "${skill_md}")")"
-        USER_DISCOVERED="${USER_DISCOVERED}${skill_name}|Read ${skill_md}
+        USER_DISCOVERED="${USER_DISCOVERED}${skill_name}|Skill(${skill_name})
 "
     done
 fi

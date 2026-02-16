@@ -85,11 +85,10 @@ test_discovers_superpowers_skills() {
     brainstorm_available="$(jq -r '.skills[] | select(.name == "brainstorming") | .available' "${cache_file}" 2>/dev/null)"
     assert_equals "brainstorming is available" "true" "${brainstorm_available}"
 
-    # invoke path should reference the SKILL.md
+    # invoke path should use Skill() format for superpowers skills
     local brainstorm_invoke
     brainstorm_invoke="$(jq -r '.skills[] | select(.name == "brainstorming") | .invoke' "${cache_file}" 2>/dev/null)"
-    assert_contains "brainstorming invoke has Read" "Read " "${brainstorm_invoke}"
-    assert_contains "brainstorming invoke has SKILL.md" "SKILL.md" "${brainstorm_invoke}"
+    assert_equals "brainstorming invoke uses Skill()" "Skill(superpowers:brainstorming)" "${brainstorm_invoke}"
 
     # Health check output
     assert_contains "health check in output" "skill registry built" "${output}"
@@ -126,7 +125,7 @@ test_discovers_user_skills() {
 
     local custom_invoke
     custom_invoke="$(jq -r '.skills[] | select(.name == "my-custom-skill") | .invoke' "${cache_file}" 2>/dev/null)"
-    assert_contains "user skill invoke has Read" "Read " "${custom_invoke}"
+    assert_equals "user skill invoke uses Skill()" "Skill(my-custom-skill)" "${custom_invoke}"
 
     teardown_test_env
 }

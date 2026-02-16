@@ -207,7 +207,7 @@ Create `~/.claude/skill-config.json` to customize behavior:
     {
       "name": "my-team-conventions",
       "role": "domain",
-      "invoke": "Read ~/.claude/skills/team-conventions/SKILL.md",
+      "invoke": "Skill(my-team-conventions)",
       "triggers": ["review", "refactor", "new file"],
       "description": "Team-specific coding standards"
     }

@@ -46,7 +46,7 @@ install_registry() {
       ],
       "trigger_mode": "regex",
       "priority": 10,
-      "invoke": "Read /mock/skills/systematic-debugging/SKILL.md",
+      "invoke": "Skill(superpowers:systematic-debugging)",
       "available": true,
       "enabled": true
     },
@@ -60,7 +60,7 @@ install_registry() {
       ],
       "trigger_mode": "regex",
       "priority": 20,
-      "invoke": "Read /mock/skills/test-driven-development/SKILL.md",
+      "invoke": "Skill(superpowers:test-driven-development)",
       "available": true,
       "enabled": true
     },
@@ -73,7 +73,7 @@ install_registry() {
       ],
       "trigger_mode": "regex",
       "priority": 30,
-      "invoke": "Read /mock/skills/brainstorming/SKILL.md",
+      "invoke": "Skill(superpowers:brainstorming)",
       "available": true,
       "enabled": true
     },
@@ -86,7 +86,7 @@ install_registry() {
       ],
       "trigger_mode": "regex",
       "priority": 15,
-      "invoke": "Read /mock/skills/executing-plans/SKILL.md",
+      "invoke": "Skill(superpowers:executing-plans)",
       "available": true,
       "enabled": true
     },
@@ -99,7 +99,7 @@ install_registry() {
       ],
       "trigger_mode": "regex",
       "priority": 14,
-      "invoke": "Read /mock/skills/subagent-driven-development/SKILL.md",
+      "invoke": "Skill(superpowers:subagent-driven-development)",
       "available": true,
       "enabled": true
     },
@@ -112,7 +112,7 @@ install_registry() {
       ],
       "trigger_mode": "regex",
       "priority": 50,
-      "invoke": "Read /mock/skills/requesting-code-review/SKILL.md",
+      "invoke": "Skill(superpowers:requesting-code-review)",
       "available": true,
       "enabled": true
     },
@@ -125,7 +125,7 @@ install_registry() {
       ],
       "trigger_mode": "regex",
       "priority": 51,
-      "invoke": "Read /mock/skills/receiving-code-review/SKILL.md",
+      "invoke": "Skill(superpowers:receiving-code-review)",
       "available": true,
       "enabled": true
     },
@@ -137,7 +137,7 @@ install_registry() {
       ],
       "trigger_mode": "regex",
       "priority": 60,
-      "invoke": "Read /mock/skills/verification-before-completion/SKILL.md",
+      "invoke": "Skill(superpowers:verification-before-completion)",
       "available": true,
       "enabled": true
     },
@@ -149,7 +149,7 @@ install_registry() {
       ],
       "trigger_mode": "regex",
       "priority": 61,
-      "invoke": "Read /mock/skills/finishing-a-development-branch/SKILL.md",
+      "invoke": "Skill(superpowers:finishing-a-development-branch)",
       "available": true,
       "enabled": true
     },
@@ -161,7 +161,7 @@ install_registry() {
       ],
       "trigger_mode": "regex",
       "priority": 102,
-      "invoke": "Read /mock/skills/security-scanner/SKILL.md",
+      "invoke": "Skill(security-scanner)",
       "available": true,
       "enabled": true
     },
@@ -186,7 +186,7 @@ install_registry() {
       ],
       "trigger_mode": "regex",
       "priority": 5,
-      "invoke": "Read /mock/skills/disabled-skill/SKILL.md",
+      "invoke": "Skill(mock:disabled-skill)",
       "available": true,
       "enabled": false
     }
