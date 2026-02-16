@@ -8,7 +8,9 @@ TEAMMATE=$(printf '%s' "$INPUT" | jq -r '.teammate_name // empty' 2>/dev/null)
 TEAM=$(printf '%s' "$INPUT" | jq -r '.team_name // empty' 2>/dev/null)
 
 # No teammate info = allow idle
-[ -z "$TEAMMATE" ] || [ -z "$TEAM" ] && exit 0
+if [ -z "$TEAMMATE" ] || [ -z "$TEAM" ]; then
+    exit 0
+fi
 
 TASKS_DIR="${HOME}/.claude/tasks/${TEAM}"
 
