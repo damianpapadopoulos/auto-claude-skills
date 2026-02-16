@@ -189,6 +189,45 @@ install_registry() {
       "invoke": "Skill(mock:disabled-skill)",
       "available": true,
       "enabled": false
+    },
+    {
+      "name": "agent-team-execution",
+      "role": "workflow",
+      "phase": "IMPLEMENT",
+      "triggers": [
+        "(agent.team|team.execute|parallel.team|swarm|execute.*plan|run.the.plan|implement.the.plan|implement.*(rest|remaining)|continue|follow.the.plan|pick.up|resume|next.task|next.step|carry.on|keep.going|where.were.we|what.s.next)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 16,
+      "invoke": "Skill(agent-team-execution)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "agent-team-review",
+      "role": "workflow",
+      "phase": "REVIEW",
+      "triggers": [
+        "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|tech.?debt|(^|[^a-z])pr($|[^a-z]))"
+      ],
+      "trigger_mode": "regex",
+      "priority": 17,
+      "invoke": "Skill(agent-team-review)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "design-debate",
+      "role": "domain",
+      "phase": "DESIGN",
+      "triggers": [
+        "(build|create|implement|develop|scaffold|brainstorm|design|architect|strateg|scope|outline|approach|add|write|make|generate|set.?up|install|configure|integrate|extend|new|start)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 14,
+      "invoke": "Skill(design-debate)",
+      "available": true,
+      "enabled": true
     }
   ],
   "methodology_hints": [
@@ -500,6 +539,56 @@ test_methodology_hints() {
     teardown_test_env
 }
 
+# ---------------------------------------------------------------------------
+# 15. Agent team execution matches plan prompts
+# ---------------------------------------------------------------------------
+test_agent_team_execution_matches() {
+    echo "-- test: agent team execution matches plan prompts --"
+    setup_test_env
+    install_registry
+
+    local output context
+    output="$(run_hook "let's use agent teams to execute the plan")"
+    context="$(extract_context "$output")"
+    assert_contains "agent team matches" "agent-team-execution" "$context"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# 16. Design-debate appears as INFORMED BY domain skill
+# ---------------------------------------------------------------------------
+test_design_debate_as_domain() {
+    echo "-- test: design-debate appears as INFORMED BY --"
+    setup_test_env
+    install_registry
+
+    local output context
+    output="$(run_hook "build a new authentication system")"
+    context="$(extract_context "$output")"
+    # brainstorming is process (higher priority), design-debate is domain
+    assert_contains "has brainstorming" "brainstorming" "$context"
+    assert_contains "has INFORMED BY design-debate" "design-debate" "$context"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# 17. Agent team review matches review prompts
+# ---------------------------------------------------------------------------
+test_agent_team_review_matches() {
+    echo "-- test: agent team review matches review prompts --"
+    setup_test_env
+    install_registry
+
+    local output context
+    output="$(run_hook "review the code changes for this PR")"
+    context="$(extract_context "$output")"
+    assert_contains "agent-team-review matches" "agent-team-review" "$context"
+
+    teardown_test_env
+}
+
 test_teammate_idle_guard() {
     echo "-- test: teammate idle guard --"
     setup_test_env
@@ -554,6 +643,9 @@ test_missing_registry_fallback
 test_output_valid_json
 test_zero_matches_phase_checkpoint
 test_methodology_hints
+test_agent_team_execution_matches
+test_design_debate_as_domain
+test_agent_team_review_matches
 test_teammate_idle_guard
 
 print_summary
