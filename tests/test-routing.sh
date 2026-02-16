@@ -500,6 +500,43 @@ test_methodology_hints() {
     teardown_test_env
 }
 
+test_teammate_idle_guard() {
+    echo "-- test: teammate idle guard --"
+    setup_test_env
+
+    local guard="${PROJECT_ROOT}/hooks/teammate-idle-guard.sh"
+
+    # Test 1: No tasks dir = exit 0
+    local exit_code
+    printf '{"teammate_name":"worker","team_name":"test-team"}' | bash "$guard" 2>/dev/null
+    exit_code=$?
+    assert_equals "no tasks dir allows idle" "0" "$exit_code"
+
+    # Test 2: Has in_progress task = exit 2
+    mkdir -p "${HOME}/.claude/tasks/test-team"
+    printf '{"subject":"Fix auth","status":"in_progress","owner":"worker"}' \
+        > "${HOME}/.claude/tasks/test-team/1.json"
+    printf '{"teammate_name":"worker","team_name":"test-team"}' | bash "$guard" 2>/dev/null
+    exit_code=$?
+    assert_equals "unfinished task blocks idle" "2" "$exit_code"
+
+    # Test 3: All tasks completed = exit 0
+    printf '{"subject":"Fix auth","status":"completed","owner":"worker"}' \
+        > "${HOME}/.claude/tasks/test-team/1.json"
+    printf '{"teammate_name":"worker","team_name":"test-team"}' | bash "$guard" 2>/dev/null
+    exit_code=$?
+    assert_equals "completed tasks allow idle" "0" "$exit_code"
+
+    # Test 4: Different owner's in_progress task = exit 0
+    printf '{"subject":"Fix auth","status":"in_progress","owner":"other-worker"}' \
+        > "${HOME}/.claude/tasks/test-team/1.json"
+    printf '{"teammate_name":"worker","team_name":"test-team"}' | bash "$guard" 2>/dev/null
+    exit_code=$?
+    assert_equals "other owner tasks allow idle" "0" "$exit_code"
+
+    teardown_test_env
+}
+
 # ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
@@ -517,5 +554,6 @@ test_missing_registry_fallback
 test_output_valid_json
 test_zero_matches_phase_checkpoint
 test_methodology_hints
+test_teammate_idle_guard
 
 print_summary
