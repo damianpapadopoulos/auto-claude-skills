@@ -288,6 +288,23 @@ Tests are isolated — each creates a temp directory with mock plugin caches. No
 | Fast path (simple match) | ~90ms | ~140 tokens |
 | Fast path (5 skills) | ~100ms | ~158 tokens + skill files |
 
+## Companion tools
+
+### Cozempic (recommended for long sessions)
+
+[Cozempic](https://github.com/Ruya-AI/cozempic) prevents context bloat from killing sessions that use subagents or agent teams. It checkpoints team/subagent state and protects it from compaction pruning.
+
+```bash
+pip install cozempic
+cozempic init
+```
+
+Zero conflicts with auto-claude-skills — they use different hook events. See [docs/integrations/agent-teams-and-cozempic.md](docs/integrations/agent-teams-and-cozempic.md) for details.
+
+### Agent teams (future)
+
+Native Claude Code agent teams support is stubbed in `default-triggers.json` (disabled). When agent teams exit experimental status and the compaction bug ([#23620](https://github.com/anthropics/claude-code/issues/23620)) is fixed, the `agent-team-execution` skill can be activated. See [docs/integrations/agent-teams-and-cozempic.md](docs/integrations/agent-teams-and-cozempic.md) for the activation checklist.
+
 ## Prerequisites
 
 - [Claude Code](https://code.claude.com) CLI

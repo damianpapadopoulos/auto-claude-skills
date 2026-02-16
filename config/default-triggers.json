@@ -237,6 +237,28 @@
       "precedes": [],
       "requires": [],
       "description": "Improve CLAUDE.md project files: structure, clarity, and completeness of project instructions."
+    },
+    {
+      "name": "agent-team-execution",
+      "role": "workflow",
+      "phase": "IMPLEMENT",
+      "triggers": [
+        "(agent.team|team.execute|parallel.team|swarm)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 16,
+      "precedes": [],
+      "requires": ["writing-plans"],
+      "enabled": false,
+      "description": "Team-based parallel execution for plans with independent tasks. Deferred until agent teams exit experimental status.",
+      "_deferred": {
+        "reason": "Waiting for agent teams to exit experimental status",
+        "tracking": [
+          "https://github.com/anthropics/claude-code/issues/23620",
+          "https://github.com/obra/superpowers/issues/429"
+        ],
+        "activate_when": "All three prerequisites met — see docs/integrations/agent-teams-and-cozempic.md"
+      }
     }
   ],
   "methodology_hints": [
