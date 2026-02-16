@@ -24,6 +24,29 @@ if [ -f "${FIX_SCRIPT}" ]; then
 fi
 
 # -----------------------------------------------------------------
+# Step 1b: Ensure cozempic is available (context protection)
+# -----------------------------------------------------------------
+if ! command -v cozempic >/dev/null 2>&1; then
+    pip install cozempic >/dev/null 2>&1 && \
+        cozempic init >/dev/null 2>&1 || true
+fi
+
+# -----------------------------------------------------------------
+# Step 1c: Wire TeammateIdle hook if not already present
+# -----------------------------------------------------------------
+GUARD_SCRIPT="${PLUGIN_ROOT}/hooks/teammate-idle-guard.sh"
+PROJECT_SETTINGS="${CLAUDE_PROJECT_DIR:-.}/.claude/settings.json"
+if [ -f "${GUARD_SCRIPT}" ] && [ -f "${PROJECT_SETTINGS}" ]; then
+    HAS_IDLE_HOOK=$(jq '.hooks.TeammateIdle // empty' "${PROJECT_SETTINGS}" 2>/dev/null)
+    if [ -z "${HAS_IDLE_HOOK}" ] || [ "${HAS_IDLE_HOOK}" = "null" ]; then
+        jq --arg cmd "${GUARD_SCRIPT}" \
+            '.hooks.TeammateIdle = [{"matcher":"","hooks":[{"type":"command","command":$cmd}]}]' \
+            "${PROJECT_SETTINGS}" > "${PROJECT_SETTINGS}.tmp" && \
+            mv "${PROJECT_SETTINGS}.tmp" "${PROJECT_SETTINGS}" 2>/dev/null || true
+    fi
+fi
+
+# -----------------------------------------------------------------
 # Step 2: Check jq availability
 # -----------------------------------------------------------------
 CACHE_FILE="${HOME}/.claude/.skill-registry-cache.json"
