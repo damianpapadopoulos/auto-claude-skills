@@ -255,13 +255,13 @@ test_discovers_agent_team_skills() {
 
     # Create mock user skills for agent team skills
     mkdir -p "${HOME}/.claude/skills/agent-team-execution"
-    printf '---\nname: agent-team-execution\n---\n' > \
+    printf '%s\n' '---' 'name: agent-team-execution' '---' > \
         "${HOME}/.claude/skills/agent-team-execution/SKILL.md"
     mkdir -p "${HOME}/.claude/skills/agent-team-review"
-    printf '---\nname: agent-team-review\n---\n' > \
+    printf '%s\n' '---' 'name: agent-team-review' '---' > \
         "${HOME}/.claude/skills/agent-team-review/SKILL.md"
     mkdir -p "${HOME}/.claude/skills/design-debate"
-    printf '---\nname: design-debate\n---\n' > \
+    printf '%s\n' '---' 'name: design-debate' '---' > \
         "${HOME}/.claude/skills/design-debate/SKILL.md"
 
     local output
