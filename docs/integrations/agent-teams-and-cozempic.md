@@ -114,7 +114,7 @@ These are user-installed skills discovered by the registry builder at SessionSta
 
 The `teammate-idle-guard.sh` hook prevents false-positive idle nudges. It checks `~/.claude/tasks/{team}/*.json` for in-progress tasks owned by the idle teammate before nudging.
 
-Wired automatically at SessionStart via `session-start-hook.sh`.
+Registered in `hooks/hooks.json` (plugin-level), so it activates automatically when the plugin is installed.
 
 ### Activation checklist
 

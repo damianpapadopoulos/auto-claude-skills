@@ -1,1 +1,5 @@
+.idea/
+.claude/settings.json
+.claude/settings.local.json
+docs/plans/
 docs/session-backups/
