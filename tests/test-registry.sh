@@ -44,7 +44,7 @@ test_empty_env_produces_fallback() {
     # Should have a version field
     local version
     version="$(jq -r '.version' "${cache_file}" 2>/dev/null)"
-    assert_contains "registry has version" "2.0" "${version}"
+    assert_contains "registry has version" "3.0" "${version}"
 
     # Should have skills array
     local skill_count

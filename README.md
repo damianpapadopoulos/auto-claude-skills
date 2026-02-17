@@ -1,6 +1,13 @@
-# auto-claude-skills v2.0
+# auto-claude-skills v3.0
 
-Intelligent skill activation hook for Claude Code with **config-driven routing** and **role-based orchestration** across the design-plan-implement-review-ship pipeline.
+Intelligent skill activation hook for Claude Code with **config-driven routing**, **role-based orchestration**, and **agent team support** across the design-plan-implement-review-ship pipeline.
+
+## What's new in v3.0
+
+- **Agent team skills** — three new skills for multi-agent workflows: `design-debate` (MAD pattern for complex DESIGN decisions), `agent-team-execution` (file-disjoint specialist delegation for IMPLEMENT), `agent-team-review` (multi-perspective parallel REVIEW)
+- **Cozempic auto-install** — session-start-hook.sh installs cozempic automatically for context protection during team sessions
+- **Conditional heartbeat** — `teammate-idle-guard.sh` hook only nudges teammates with unfinished tasks, not legitimately idle ones
+- **TeammateIdle hook wiring** — automatic hook registration at SessionStart for projects with `.claude/settings.json`
 
 ## How it works
 
@@ -166,10 +173,10 @@ DESIGN --> PLAN --> IMPLEMENT --> REVIEW --> SHIP
 
 | Phase | Skills activated | Transition to next |
 |-------|-----------------|-------------------|
-| **DESIGN** | brainstorming -> *chains to writing-plans* | Design approved by user |
+| **DESIGN** | brainstorming -> *chains to writing-plans*; design-debate (opt-in MAD escalation) | Design approved by user |
 | **PLAN** | writing-plans -> *chains to execution* | Plan saved to docs/plans/ |
-| **IMPLEMENT** | subagent-driven-development, executing-plans, TDD | All tasks complete, tests passing |
-| **REVIEW** | requesting-code-review, receiving-code-review | Review approved |
+| **IMPLEMENT** | subagent-driven-development, executing-plans, TDD; agent-team-execution (3+ independent tasks) | All tasks complete, tests passing |
+| **REVIEW** | requesting-code-review, receiving-code-review; agent-team-review (5+ files changed) | Review approved |
 | **SHIP** | verification-before-completion, finishing-a-development-branch | Merged/deployed |
 | **DEBUG** *(reactive)* | systematic-debugging, TDD | Fix verified -> return to interrupted phase |
 

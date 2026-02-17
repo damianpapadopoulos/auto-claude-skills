@@ -35,7 +35,7 @@ install_registry() {
     mkdir -p "$(dirname "${cache_file}")"
     cat > "${cache_file}" <<'REGISTRY'
 {
-  "version": "2.0.0",
+  "version": "3.0.0",
   "skills": [
     {
       "name": "systematic-debugging",
