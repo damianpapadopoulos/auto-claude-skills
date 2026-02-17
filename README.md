@@ -7,7 +7,7 @@ Intelligent skill activation hook for Claude Code with **config-driven routing**
 - **Agent team skills** — three new skills for multi-agent workflows: `design-debate` (MAD pattern for complex DESIGN decisions), `agent-team-execution` (file-disjoint specialist delegation for IMPLEMENT), `agent-team-review` (multi-perspective parallel REVIEW)
 - **Cozempic auto-install** — session-start-hook.sh installs cozempic automatically for context protection during team sessions
 - **Conditional heartbeat** — `teammate-idle-guard.sh` hook only nudges teammates with unfinished tasks, not legitimately idle ones
-- **TeammateIdle hook wiring** — automatic hook registration at SessionStart for projects with `.claude/settings.json`
+- **TeammateIdle hook** — registered in `hooks/hooks.json` for automatic activation on plugin install
 
 ## How it works
 
@@ -37,8 +37,6 @@ Matched skills are grouped by role — a **process** skill drives the phase, **d
 
 ## Quick start
 
-### Plugin install (recommended)
-
 Inside Claude Code:
 
 ```
@@ -50,14 +48,6 @@ Then optionally download external skills:
 
 ```
 /setup
-```
-
-### Manual install (legacy)
-
-```bash
-git clone https://github.com/damianpapadopoulos/auto-claude-skills.git
-cd auto-claude-skills
-./install.sh
 ```
 
 ## What gets installed
@@ -74,7 +64,7 @@ cd auto-claude-skills
 | Fallback registry | `config/fallback-registry.json` — static fallback for degraded environments |
 | Setup command | `/setup` — downloads external skills on demand |
 
-### External skills (optional, via `/setup` or `install.sh`)
+### External skills (optional, via `/setup`)
 
 | Skill | Source |
 |-------|--------|
@@ -264,7 +254,7 @@ bash tests/run-tests.sh
 | `tests/test-registry.sh` | Registry build from all sources, caching, fallback, user config |
 | `tests/test-routing.sh` | Prompt-to-skill matching, scoring, role caps, graceful degradation |
 | `tests/test-context.sh` | Context injection format (zero/compact/full), JSON validity |
-| `tests/test-install.sh` | File presence, JSON validity, hook registration |
+| `tests/test-install.sh` | Plugin structure validation |
 
 Tests are isolated — each creates a temp directory with mock plugin caches. No dependency on actual installed skills.
 
@@ -283,7 +273,7 @@ Tests are isolated — each creates a temp directory with mock plugin caches. No
 | `tests/test-registry.sh` | Registry build tests |
 | `tests/test-routing.sh` | Prompt-to-skill matching tests |
 | `tests/test-context.sh` | Context injection format tests |
-| `tests/test-install.sh` | Install/uninstall tests |
+| `tests/test-install.sh` | Plugin structure validation |
 | `tests/test-helpers.sh` | Shared test utilities |
 
 ## Performance
@@ -321,12 +311,6 @@ Three skills for team-based workflows: `design-debate` (MAD pattern for DESIGN),
 
 ## Uninstalling
 
-Plugin install:
 ```
 /plugin uninstall auto-claude-skills@acsm
-```
-
-Legacy install:
-```bash
-./uninstall.sh
 ```
