@@ -42,13 +42,22 @@ CACHE_FILE="${HOME}/.claude/.skill-registry-cache.json"
 mkdir -p "$(dirname "${CACHE_FILE}")"
 
 if ! command -v jq >/dev/null 2>&1; then
+    # Try to install jq (best-effort)
+    if command -v brew >/dev/null 2>&1; then
+        brew install --quiet jq 2>/dev/null || true
+    elif command -v apt-get >/dev/null 2>&1; then
+        sudo apt-get install -y -qq jq 2>/dev/null || true
+    fi
+fi
+
+if ! command -v jq >/dev/null 2>&1; then
     FALLBACK="${PLUGIN_ROOT}/config/fallback-registry.json"
     if [ -f "${FALLBACK}" ]; then
         cp "${FALLBACK}" "${CACHE_FILE}"
     else
         printf '{"version":"3.0.0-fallback","warnings":["jq not available, no fallback found"],"skills":[]}\n' > "${CACHE_FILE}"
     fi
-    MSG="SessionStart: skill registry built (0 skills from 0 sources, 1 warnings)"
+    MSG="SessionStart: jq not found -- skill routing disabled. Install jq: brew install jq (macOS) or apt install jq (Linux)"
     printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "${MSG}"
     exit 0
 fi
@@ -121,12 +130,17 @@ fi
 
 # -----------------------------------------------------------------
 # Step 5: Discover user-installed skills
+# Skip any that share a name with plugin-bundled skills (avoid dupes)
 # -----------------------------------------------------------------
 USER_DISCOVERED=""
 if [ -d "${USER_SKILLS_DIR}" ]; then
     for skill_md in "${USER_SKILLS_DIR}"/*/SKILL.md; do
         [ -f "${skill_md}" ] || continue
         skill_name="$(basename "$(dirname "${skill_md}")")"
+        # Skip if already discovered as a plugin-bundled skill
+        if printf '%s' "${PLUGIN_DISCOVERED}" | grep -q "^${skill_name}|"; then
+            continue
+        fi
         USER_DISCOVERED="${USER_DISCOVERED}${skill_name}|Skill(${skill_name})
 "
     done
