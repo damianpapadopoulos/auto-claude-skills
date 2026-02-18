@@ -7,6 +7,10 @@
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start-hook.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "cozempic guard --daemon 2>/dev/null || true"
           }
         ]
       }
@@ -18,6 +22,46 @@
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/skill-activation-hook.sh",
             "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cozempic checkpoint 2>/dev/null || true"
+          }
+        ]
+      },
+      {
+        "matcher": "TaskCreate|TaskUpdate",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cozempic checkpoint 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cozempic checkpoint 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cozempic checkpoint 2>/dev/null || true"
           }
         ]
       }

@@ -116,7 +116,28 @@ assert_contains \
     "teammate-idle-guard.sh" \
     "${HOOKS_CONTENT}"
 
-# Test 8: Bundled skills exist
+# Test 8: hooks.json registers all required hook events
+for event in SessionStart UserPromptSubmit PostToolUse PreCompact Stop TeammateIdle; do
+    if printf '%s' "${HOOKS_CONTENT}" | jq -e ".hooks.${event}" >/dev/null 2>&1; then
+        _record_pass "hooks.json registers ${event} event"
+    else
+        _record_fail "hooks.json registers ${event} event" \
+            "event not found in hooks.json"
+    fi
+done
+
+# Verify cozempic checkpoint hooks are present
+assert_contains \
+    "hooks.json includes cozempic checkpoint" \
+    "cozempic checkpoint" \
+    "${HOOKS_CONTENT}"
+
+assert_contains \
+    "hooks.json includes cozempic guard" \
+    "cozempic guard" \
+    "${HOOKS_CONTENT}"
+
+# Test 9: Bundled skills exist
 for skill_name in agent-team-execution agent-team-review design-debate; do
     assert_file_exists \
         "skills/${skill_name}/SKILL.md exists" \
