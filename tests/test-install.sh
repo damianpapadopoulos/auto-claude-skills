@@ -98,7 +98,32 @@ assert_contains \
     "skill-activation-hook.sh" \
     "${HOOKS_CONTENT}"
 
-# Test 7: .claude-plugin/plugin.json exists and is valid JSON
+# Test 7: hooks/teammate-idle-guard.sh exists and is executable
+assert_file_exists \
+    "hooks/teammate-idle-guard.sh exists" \
+    "${PLUGIN_ROOT}/hooks/teammate-idle-guard.sh"
+
+if [ -x "${PLUGIN_ROOT}/hooks/teammate-idle-guard.sh" ]; then
+    _record_pass "hooks/teammate-idle-guard.sh is executable"
+else
+    _record_fail "hooks/teammate-idle-guard.sh is executable" \
+        "file is not executable"
+fi
+
+# Verify hooks.json references teammate-idle-guard.sh
+assert_contains \
+    "hooks.json references teammate-idle-guard.sh" \
+    "teammate-idle-guard.sh" \
+    "${HOOKS_CONTENT}"
+
+# Test 8: Bundled skills exist
+for skill_name in agent-team-execution agent-team-review design-debate; do
+    assert_file_exists \
+        "skills/${skill_name}/SKILL.md exists" \
+        "${PLUGIN_ROOT}/skills/${skill_name}/SKILL.md"
+done
+
+# Test 9: .claude-plugin/plugin.json exists and is valid JSON
 assert_file_exists \
     ".claude-plugin/plugin.json exists" \
     "${PLUGIN_ROOT}/.claude-plugin/plugin.json"

@@ -102,13 +102,15 @@ When a plan has 3+ independent tasks, the routing engine suggests team-based exe
 
 ### Skill locations
 
+Bundled with the plugin at `skills/`:
+
 ```
-~/.claude/skills/design-debate/SKILL.md
-~/.claude/skills/agent-team-execution/SKILL.md
-~/.claude/skills/agent-team-review/SKILL.md
+skills/design-debate/SKILL.md
+skills/agent-team-execution/SKILL.md
+skills/agent-team-review/SKILL.md
 ```
 
-These are user-installed skills discovered by the registry builder at SessionStart.
+Discovered automatically by the registry builder at SessionStart (Step 4b).
 
 ### TeammateIdle guard
 

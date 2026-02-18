@@ -2,12 +2,20 @@
 
 Intelligent skill activation hook for Claude Code with **config-driven routing**, **role-based orchestration**, and **agent team support** across the design-plan-implement-review-ship pipeline.
 
-## What's new in v3.0
+## Quick start
 
-- **Agent team skills** — three new skills for multi-agent workflows: `design-debate` (MAD pattern for complex DESIGN decisions), `agent-team-execution` (file-disjoint specialist delegation for IMPLEMENT), `agent-team-review` (multi-perspective parallel REVIEW)
-- **Cozempic auto-install** — session-start-hook.sh installs cozempic automatically for context protection during team sessions
-- **Conditional heartbeat** — `teammate-idle-guard.sh` hook only nudges teammates with unfinished tasks, not legitimately idle ones
-- **TeammateIdle hook** — registered in `hooks/hooks.json` for automatic activation on plugin install
+Inside Claude Code:
+
+```
+/plugin marketplace add damianpapadopoulos/auto-claude-skills-marketplace
+/plugin install auto-claude-skills@acsm
+```
+
+Then run the interactive setup to configure agent teams and download external skills:
+
+```
+/setup
+```
 
 ## How it works
 
@@ -35,63 +43,65 @@ User prompt
 
 Matched skills are grouped by role — a **process** skill drives the phase, **domain** skills inform it, and **workflow** skills fire independently when their moment arrives.
 
-## Quick start
-
-Inside Claude Code:
-
-```
-/plugin marketplace add damianpapadopoulos/auto-claude-skills-marketplace
-/plugin install auto-claude-skills@acsm
-```
-
-Then optionally download external skills:
-
-```
-/setup
-```
-
 ## What gets installed
 
-### Plugin install
+### Plugin install (automatic)
 
-| Component | Location |
-|-----------|----------|
-| Skill activation hook | `hooks/skill-activation-hook.sh` — runs on every prompt (`UserPromptSubmit`) |
-| Session start hook | `hooks/session-start-hook.sh` — builds the skill registry at startup (`SessionStart`) |
-| Manifest fixer hook | `hooks/fix-plugin-manifests.sh` — runs on startup (`SessionStart`), strips invalid keys from cached plugin manifests |
-| Hook registration | Automatic via `hooks/hooks.json` |
-| Default triggers | `config/default-triggers.json` — curated trigger patterns for all skills |
-| Fallback registry | `config/fallback-registry.json` — static fallback for degraded environments |
-| Setup command | `/setup` — downloads external skills on demand |
+| Component | Path | Purpose |
+|-----------|------|---------|
+| Skill activation hook | `hooks/skill-activation-hook.sh` | Routes prompts to skills (`UserPromptSubmit`) |
+| Session start hook | `hooks/session-start-hook.sh` | Builds skill registry, auto-installs cozempic (`SessionStart`) |
+| Manifest fixer | `hooks/fix-plugin-manifests.sh` | Strips invalid keys from cached plugin manifests |
+| TeammateIdle guard | `hooks/teammate-idle-guard.sh` | Conditional heartbeat for agent team teammates |
+| Hook registration | `hooks/hooks.json` | Automatic hook wiring |
+| Default triggers | `config/default-triggers.json` | Curated trigger patterns for all skills |
+| Fallback registry | `config/fallback-registry.json` | Static fallback when jq is unavailable |
+| Setup command | `commands/setup.md` | Interactive setup via `/setup` |
+
+### Bundled skills
+
+| Skill | Phase | Purpose |
+|-------|-------|---------|
+| `agent-team-execution` | IMPLEMENT | File-disjoint specialist delegation for parallel implementation |
+| `agent-team-review` | REVIEW | Multi-perspective parallel review (security, quality, spec) |
+| `design-debate` | DESIGN | Multi-Agent Debate with architect, critic, and pragmatist |
+
+These are discovered automatically from `skills/` at session start. No manual installation needed.
 
 ### External skills (optional, via `/setup`)
 
 | Skill | Source |
 |-------|--------|
-| doc-coauthoring | `~/.claude/skills/doc-coauthoring/` |
-| webapp-testing | `~/.claude/skills/webapp-testing/` |
-| security-scanner | `~/.claude/skills/security-scanner/` |
+| doc-coauthoring | [anthropics/skills](https://github.com/anthropics/skills) |
+| webapp-testing | [anthropics/skills](https://github.com/anthropics/skills) |
+| security-scanner | [matteocervelli/llms](https://github.com/matteocervelli/llms) |
 
 ## Architecture
 
 ```
 SessionStart:
-  session-start-hook.sh scans three sources:
-    1. ~/.claude/plugins/cache/*/     (installed plugins)
-    2. ~/.claude/skills/*/SKILL.md    (user-installed skills)
-    3. Built-in defaults              (shipped with auto-claude-skills)
+  session-start-hook.sh scans four sources:
+    1. ~/.claude/plugins/cache/*/superpowers/*/skills/   (superpowers plugin)
+    2. ~/.claude/plugins/cache/*/                        (other official plugins)
+    3. ${PLUGIN_ROOT}/skills/                            (bundled skills)
+    4. ~/.claude/skills/*/SKILL.md                       (user-installed skills)
+  --> merges with config/default-triggers.json
   --> builds ~/.claude/.skill-registry-cache.json
 
 UserPromptSubmit:
   skill-activation-hook.sh reads the cached registry
   --> matches prompt against trigger patterns
-  --> scores and ranks matches (exact +3, partial +1, phase-aligned +2)
+  --> scores and ranks matches (word-boundary +3, substring +1)
   --> caps by role (1 process, 2 domain, 1 workflow)
   --> emits context with invocation hints
 
+TeammateIdle:
+  teammate-idle-guard.sh checks for unfinished tasks
+  --> nudge if teammate owns in_progress tasks, allow idle otherwise
+
 Fallback:
-  If registry cache is missing or corrupt, falls back to
-  config/fallback-registry.json (bundled static registry)
+  If jq is missing, attempts auto-install via brew/apt.
+  If still unavailable, falls back to config/fallback-registry.json.
 ```
 
 The registry is built once at session start and cached. The routing engine reads the cache on every prompt — no re-scanning, no external API calls.
@@ -102,9 +112,9 @@ Skills are classified into three roles that determine how they compose:
 
 | Role | Behavior | Cap | Examples |
 |------|----------|-----|---------|
-| **Process** | Drives the current phase. One active at a time. Selected by phase + trigger match. | 1 | brainstorming, writing-plans, TDD, systematic-debugging |
-| **Domain** | Specialized knowledge. Active alongside any process skill. Phase-independent. | 2 | frontend-design, security-scanner, doc-coauthoring |
-| **Workflow** | Lifecycle actions. Triggered by specific moments. Standalone. | 1 | finishing-a-dev-branch, dispatching-parallel-agents |
+| **Process** | Drives the current phase. One active at a time. | 1 | brainstorming, writing-plans, TDD, systematic-debugging |
+| **Domain** | Specialized knowledge. Active alongside any process skill. | 2 | frontend-design, security-scanner, doc-coauthoring |
+| **Workflow** | Lifecycle actions. Triggered by specific moments. | 1 | finishing-a-dev-branch, agent-team-execution |
 
 Maximum 3 skills suggested per prompt (configurable).
 
@@ -112,33 +122,39 @@ Maximum 3 skills suggested per prompt (configurable).
 
 Process skills drive. Domain skills inform. Workflow skills stand alone.
 
-When multiple roles match, the context output shows their relationship:
-
 ```
 SKILL ACTIVATION (3 skills | Build Dashboard)
 
 Process: brainstorming -> Skill(superpowers:brainstorming)
   INFORMED BY: frontend-design -> Skill(frontend-design:frontend-design)
-  INFORMED BY: security-scanner -> Read ~/.claude/skills/security-scanner/SKILL.md
+  INFORMED BY: security-scanner -> Skill(security-scanner)
 
 Evaluate: **Phase: DESIGN** | brainstorming YES/NO, frontend-design YES/NO, security-scanner YES/NO
 ```
 
-Composition keywords:
-- `INFORMED BY` — domain skill provides context within the process skill's workflow
-- `THEN` — sequential process skill handoff (e.g., brainstorming THEN writing-plans)
-- `WITH` — co-active skills in the same phase
+## The development pipeline
+
+```
+DESIGN --> PLAN --> IMPLEMENT --> REVIEW --> SHIP
+                       ^
+                     DEBUG (reactive -- can interrupt any phase)
+```
+
+| Phase | Skills activated | Transition |
+|-------|-----------------|------------|
+| **DESIGN** | brainstorming, design-debate (opt-in MAD) | Design approved |
+| **PLAN** | writing-plans | Plan saved to docs/plans/ |
+| **IMPLEMENT** | subagent-driven-development, executing-plans, TDD; agent-team-execution (3+ tasks) | All tasks complete |
+| **REVIEW** | requesting-code-review, receiving-code-review; agent-team-review (5+ files) | Review approved |
+| **SHIP** | verification-before-completion, finishing-a-development-branch | Merged/deployed |
+| **DEBUG** | systematic-debugging, TDD | Fix verified, return to prior phase |
 
 ## Recommended plugins
-
-First add the marketplaces:
 
 ```
 /plugin marketplace add anthropics/claude-plugins-official
 /plugin marketplace add obra/superpowers-marketplace
 ```
-
-Then install the plugins:
 
 ```
 /plugin install superpowers@superpowers-marketplace
@@ -149,45 +165,13 @@ Then install the plugins:
 /plugin install pr-review-toolkit@claude-plugins-official
 ```
 
-> These provide 15+ additional skills for the full pipeline. The registry discovers them automatically from `~/.claude/plugins/cache/`.
-
-## The development pipeline
-
-The phase checkpoint maps to Superpowers' designed sequence:
-
-```
-DESIGN --> PLAN --> IMPLEMENT --> REVIEW --> SHIP
-                       ^
-                     DEBUG (reactive -- can interrupt any phase)
-```
-
-| Phase | Skills activated | Transition to next |
-|-------|-----------------|-------------------|
-| **DESIGN** | brainstorming -> *chains to writing-plans*; design-debate (opt-in MAD escalation) | Design approved by user |
-| **PLAN** | writing-plans -> *chains to execution* | Plan saved to docs/plans/ |
-| **IMPLEMENT** | subagent-driven-development, executing-plans, TDD; agent-team-execution (3+ independent tasks) | All tasks complete, tests passing |
-| **REVIEW** | requesting-code-review, receiving-code-review; agent-team-review (5+ files changed) | Review approved |
-| **SHIP** | verification-before-completion, finishing-a-development-branch | Merged/deployed |
-| **DEBUG** *(reactive)* | systematic-debugging, TDD | Fix verified -> return to interrupted phase |
-
-At every phase transition, Claude confirms with the user before proceeding.
-
-## Routing examples
-
-| You say | What happens | Claude says |
-|---------|-------------|-------------|
-| "build a login system" | Fast path: Build New, 2 skills. Claude assesses DESIGN. | "I'll start by brainstorming the design. Let me ask some questions..." |
-| "looks good, plan it out" | Fallthrough: dev-related, 0 skills. Claude assesses PLAN. | "I'll create an implementation plan. Ready to proceed?" |
-| "continue the implementation" | Fast path: Plan Execution, 2 skills. Claude assesses IMPLEMENT. | "Starting task 1 of the plan using TDD..." |
-| "the email sender throws errors" | Fast path: Fix/Debug, 2 skills. Claude assesses DEBUG. | "Switching to systematic debugging. I'll return to the plan after." |
-| "all green, merge to main" | Fast path: Ship, 2 skills. Claude assesses SHIP. | "Running verification, then merge options." |
-| "thanks for the help" | Silent exit. No output, no context cost. | *(normal response)* |
+These provide 15+ additional skills. The registry discovers them automatically.
 
 ## User configuration
 
 All configuration is optional. No config file = full curated experience.
 
-Create `~/.claude/skill-config.json` to customize behavior:
+Create `~/.claude/skill-config.json` to customize:
 
 ```json
 {
@@ -222,28 +206,7 @@ Create `~/.claude/skill-config.json` to customize behavior:
 - `"-keyword"` — remove from defaults
 - `"keyword"` (no prefix) — replace all defaults
 
-### Settings
-
-- `max_suggestions` — cap on total skills per prompt (default 3)
-- `verbosity` — `"minimal"` | `"normal"` | `"verbose"`
-
-### Priority guide
-
-Within each role, higher priority wins when multiple skills match the same prompt:
-
-| Role | Skills (highest priority first) |
-|------|-------------------------------|
-| Process | systematic-debugging (50) > writing-plans (40) > brainstorming (30) > code-review (25) > TDD (20) > executing-plans (15) |
-| Workflow | verification (20) > finishing-branch (19) > agent-team-review (17) > agent-team-execution (16) > parallel-agents (15) > worktrees (14) |
-| Domain | frontend/security/docs (15) > webapp-testing/automation (12) > claude-md (10) |
-
-### Merge order
-
-static fallback -> dynamic discovery -> starter pack triggers -> user config overrides
-
 ## Testing
-
-95 tests across 4 test files, no dependencies beyond bash and jq:
 
 ```bash
 bash tests/run-tests.sh
@@ -251,30 +214,52 @@ bash tests/run-tests.sh
 
 | Test file | What it validates |
 |-----------|------------------|
-| `tests/test-registry.sh` | Registry build from all sources, caching, fallback, user config |
-| `tests/test-routing.sh` | Prompt-to-skill matching, scoring, role caps, graceful degradation |
-| `tests/test-context.sh` | Context injection format (zero/compact/full), JSON validity |
-| `tests/test-install.sh` | Plugin structure validation |
+| `test-registry.sh` | Registry build from all sources, caching, fallback, user config |
+| `test-routing.sh` | Prompt-to-skill matching, scoring, role caps, degradation |
+| `test-context.sh` | Context injection format, JSON validity |
+| `test-install.sh` | Plugin structure: hooks, configs, bundled skills |
 
-Tests are isolated — each creates a temp directory with mock plugin caches. No dependency on actual installed skills.
+Tests are isolated — each creates a temp directory with mock plugin caches.
 
 ## File listing
 
-| File | Purpose |
-|------|---------|
-| `hooks/skill-activation-hook.sh` | Routing engine — reads registry, matches prompts |
-| `hooks/session-start-hook.sh` | Registry builder + health check |
-| `hooks/fix-plugin-manifests.sh` | Strips invalid keys from cached plugin manifests |
-| `hooks/hooks.json` | Hook registration |
-| `hooks/teammate-idle-guard.sh` | Conditional heartbeat for agent team teammates |
-| `config/default-triggers.json` | Curated trigger patterns for all skills |
-| `config/fallback-registry.json` | Static fallback for degraded environments |
-| `tests/run-tests.sh` | Test runner |
-| `tests/test-registry.sh` | Registry build tests |
-| `tests/test-routing.sh` | Prompt-to-skill matching tests |
-| `tests/test-context.sh` | Context injection format tests |
-| `tests/test-install.sh` | Plugin structure validation |
-| `tests/test-helpers.sh` | Shared test utilities |
+```
+auto-claude-skills/
+├── .claude-plugin/
+│   └── plugin.json              # Plugin metadata
+├── commands/
+│   └── setup.md                 # /setup command (agent teams opt-in, external skills)
+├── config/
+│   ├── default-triggers.json    # Trigger patterns, roles, priorities for all skills
+│   └── fallback-registry.json   # Static fallback when jq is unavailable
+├── hooks/
+│   ├── hooks.json               # Hook registration (SessionStart, UserPromptSubmit, TeammateIdle)
+│   ├── session-start-hook.sh    # Registry builder, cozempic/jq auto-install
+│   ├── skill-activation-hook.sh # Routing engine
+│   ├── fix-plugin-manifests.sh  # Plugin manifest cleanup
+│   └── teammate-idle-guard.sh   # Conditional teammate heartbeat
+├── skills/
+│   ├── agent-team-execution/    # Parallel specialist teams (Lead/Specialist/Reviewer)
+│   │   ├── SKILL.md
+│   │   ├── lead-prompt.md
+│   │   ├── specialist-prompt.md
+│   │   ├── reviewer-prompt.md
+│   │   └── shared-contracts-template.md
+│   ├── agent-team-review/       # Multi-perspective parallel code review
+│   │   └── SKILL.md
+│   └── design-debate/           # Multi-Agent Debate for design decisions
+│       └── SKILL.md
+├── tests/
+│   ├── run-tests.sh
+│   ├── test-helpers.sh
+│   ├── test-registry.sh
+│   ├── test-routing.sh
+│   ├── test-context.sh
+│   └── test-install.sh
+└── docs/
+    └── integrations/
+        └── agent-teams-and-cozempic.md
+```
 
 ## Performance
 
@@ -286,28 +271,11 @@ Tests are isolated — each creates a temp directory with mock plugin caches. No
 | Fast path (simple match) | ~90ms | ~140 tokens |
 | Fast path (5 skills) | ~100ms | ~158 tokens + skill files |
 
-## Companion tools
-
-### Cozempic (recommended for long sessions)
-
-[Cozempic](https://github.com/Ruya-AI/cozempic) prevents context bloat from killing sessions that use subagents or agent teams. It checkpoints team/subagent state and protects it from compaction pruning.
-
-```bash
-pip install cozempic
-cozempic init
-```
-
-Zero conflicts with auto-claude-skills — they use different hook events. See [docs/integrations/agent-teams-and-cozempic.md](docs/integrations/agent-teams-and-cozempic.md) for details.
-
-### Agent teams (experimental)
-
-Three skills for team-based workflows: `design-debate` (MAD pattern for DESIGN), `agent-team-execution` (specialist delegation for IMPLEMENT), and `agent-team-review` (parallel review for REVIEW). Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in settings. See [docs/integrations/agent-teams-and-cozempic.md](docs/integrations/agent-teams-and-cozempic.md) for details.
-
 ## Prerequisites
 
 - [Claude Code](https://code.claude.com) CLI
-- `jq` -- `brew install jq` / `sudo apt install jq`
-- `git` (for external skills download)
+- `jq` — auto-installed via brew/apt if missing; manual: `brew install jq` / `sudo apt install jq`
+- `git` (optional, for external skills via `/setup`)
 
 ## Uninstalling
 
