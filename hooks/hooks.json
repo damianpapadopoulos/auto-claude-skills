@@ -10,7 +10,7 @@
           },
           {
             "type": "command",
-            "command": "cozempic guard --daemon 2>/dev/null || true"
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/cozempic-wrapper.sh guard --daemon"
           }
         ]
       }
@@ -32,7 +32,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cozempic checkpoint 2>/dev/null || true"
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/cozempic-wrapper.sh checkpoint"
           }
         ]
       },
@@ -41,7 +41,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cozempic checkpoint 2>/dev/null || true"
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/cozempic-wrapper.sh checkpoint"
           }
         ]
       }
@@ -51,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cozempic checkpoint 2>/dev/null || true"
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/cozempic-wrapper.sh checkpoint"
           }
         ]
       }
@@ -61,7 +61,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cozempic checkpoint 2>/dev/null || true"
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/cozempic-wrapper.sh checkpoint"
           }
         ]
       }

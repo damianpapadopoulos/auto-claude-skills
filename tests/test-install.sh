@@ -126,16 +126,28 @@ for event in SessionStart UserPromptSubmit PostToolUse PreCompact Stop TeammateI
     fi
 done
 
-# Verify cozempic checkpoint hooks are present
+# Verify cozempic wrapper hooks are present
 assert_contains \
-    "hooks.json includes cozempic checkpoint" \
-    "cozempic checkpoint" \
+    "hooks.json uses cozempic-wrapper.sh for checkpoint" \
+    "cozempic-wrapper.sh checkpoint" \
     "${HOOKS_CONTENT}"
 
 assert_contains \
-    "hooks.json includes cozempic guard" \
-    "cozempic guard" \
+    "hooks.json uses cozempic-wrapper.sh for guard" \
+    "cozempic-wrapper.sh guard" \
     "${HOOKS_CONTENT}"
+
+# Test: cozempic-wrapper.sh exists and is executable
+assert_file_exists \
+    "hooks/cozempic-wrapper.sh exists" \
+    "${PLUGIN_ROOT}/hooks/cozempic-wrapper.sh"
+
+if [ -x "${PLUGIN_ROOT}/hooks/cozempic-wrapper.sh" ]; then
+    _record_pass "hooks/cozempic-wrapper.sh is executable"
+else
+    _record_fail "hooks/cozempic-wrapper.sh is executable" \
+        "file is not executable"
+fi
 
 # Test 9: Bundled skills exist
 for skill_name in agent-team-execution agent-team-review design-debate; do
