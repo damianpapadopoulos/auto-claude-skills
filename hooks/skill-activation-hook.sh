@@ -14,6 +14,11 @@ set -uo pipefail
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 
+# jq is required for registry-based routing
+if ! command -v jq >/dev/null 2>&1; then
+  exit 0
+fi
+
 PROMPT=$(cat 2>/dev/null | jq -r '.prompt // empty' 2>/dev/null) || true
 
 # =================================================================

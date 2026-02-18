@@ -27,8 +27,12 @@ fi
 # Step 1b: Ensure cozempic is available (context protection)
 # -----------------------------------------------------------------
 if ! command -v cozempic >/dev/null 2>&1; then
-    pip install cozempic >/dev/null 2>&1 && \
-        cozempic init >/dev/null 2>&1 || true
+    python3 -m pip install --quiet cozempic 2>/dev/null || true
+    # Expand PATH to find newly installed binary
+    for _p in "$HOME/.local/bin" "$HOME/Library/Python"/*/bin; do
+        [ -x "$_p/cozempic" ] && export PATH="$_p:$PATH" && break
+    done
+    command -v cozempic >/dev/null 2>&1 && cozempic init >/dev/null 2>&1 || true
 fi
 
 # -----------------------------------------------------------------

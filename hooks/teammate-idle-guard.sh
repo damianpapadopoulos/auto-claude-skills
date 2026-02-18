@@ -3,6 +3,11 @@
 # Checks if the idle teammate has unfinished tasks before nudging.
 # Exit 0 = allow idle. Exit 2 = nudge (stderr fed back to teammate).
 
+# jq is required to parse teammate/task data
+if ! command -v jq >/dev/null 2>&1; then
+    exit 0
+fi
+
 INPUT=$(cat)
 TEAMMATE=$(printf '%s' "$INPUT" | jq -r '.teammate_name // empty' 2>/dev/null)
 TEAM=$(printf '%s' "$INPUT" | jq -r '.team_name // empty' 2>/dev/null)
