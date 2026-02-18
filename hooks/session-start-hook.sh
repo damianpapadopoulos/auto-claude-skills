@@ -102,6 +102,20 @@ if [ -d "${PLUGIN_CACHE}/claude-code-setup" ]; then
 fi
 
 # -----------------------------------------------------------------
+# Step 4b: Discover skills bundled with this plugin
+# -----------------------------------------------------------------
+PLUGIN_SKILLS_DIR="${PLUGIN_ROOT}/skills"
+PLUGIN_DISCOVERED=""
+if [ -d "${PLUGIN_SKILLS_DIR}" ]; then
+    for skill_md in "${PLUGIN_SKILLS_DIR}"/*/SKILL.md; do
+        [ -f "${skill_md}" ] || continue
+        skill_name="$(basename "$(dirname "${skill_md}")")"
+        PLUGIN_DISCOVERED="${PLUGIN_DISCOVERED}${skill_name}|Skill(auto-claude-skills:${skill_name})
+"
+    done
+fi
+
+# -----------------------------------------------------------------
 # Step 5: Discover user-installed skills
 # -----------------------------------------------------------------
 USER_DISCOVERED=""
@@ -117,12 +131,13 @@ fi
 # -----------------------------------------------------------------
 # Combine all discovered skills into one list
 # -----------------------------------------------------------------
-ALL_DISCOVERED="${SP_DISCOVERED}${OFFICIAL_DISCOVERED}${USER_DISCOVERED}"
+ALL_DISCOVERED="${SP_DISCOVERED}${OFFICIAL_DISCOVERED}${PLUGIN_DISCOVERED}${USER_DISCOVERED}"
 
 # Count sources
 SOURCE_COUNT=0
 if [ -n "${SP_DISCOVERED}" ]; then SOURCE_COUNT=$((SOURCE_COUNT + 1)); fi
 if [ -n "${OFFICIAL_DISCOVERED}" ]; then SOURCE_COUNT=$((SOURCE_COUNT + 1)); fi
+if [ -n "${PLUGIN_DISCOVERED}" ]; then SOURCE_COUNT=$((SOURCE_COUNT + 1)); fi
 if [ -n "${USER_DISCOVERED}" ]; then SOURCE_COUNT=$((SOURCE_COUNT + 1)); fi
 
 # -----------------------------------------------------------------
