@@ -37,7 +37,7 @@ install_context_registry() {
     mkdir -p "$(dirname "${cache_file}")"
     cat > "${cache_file}" <<'REGISTRY'
 {
-  "version": "3.0.0",
+  "version": "3.1.0",
   "skills": [
     {
       "name": "systematic-debugging",

@@ -55,7 +55,7 @@ if ! command -v jq >/dev/null 2>&1; then
     if [ -f "${FALLBACK}" ]; then
         cp "${FALLBACK}" "${CACHE_FILE}"
     else
-        printf '{"version":"3.0.0-fallback","warnings":["jq not available, no fallback found"],"skills":[]}\n' > "${CACHE_FILE}"
+        printf '{"version":"3.1.0-fallback","warnings":["jq not available, no fallback found"],"skills":[]}\n' > "${CACHE_FILE}"
     fi
     MSG="SessionStart: jq not found -- skill routing disabled. Install jq: brew install jq (macOS) or apt install jq (Linux)"
     printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "${MSG}"
@@ -318,7 +318,7 @@ SKILL_COUNT="$(printf '%s' "${SKILLS_JSON}" | jq 'length' 2>/dev/null)" || SKILL
 WARNING_COUNT="$(printf '%s' "${WARNINGS}" | jq 'length' 2>/dev/null)" || WARNING_COUNT=0
 
 REGISTRY="$(jq -n \
-    --arg version "3.0.0" \
+    --arg version "3.1.0" \
     --argjson skills "${SKILLS_JSON}" \
     --argjson methodology_hints "${METHODOLOGY_HINTS}" \
     --argjson warnings "${WARNINGS}" \
