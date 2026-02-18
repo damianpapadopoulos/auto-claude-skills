@@ -336,9 +336,57 @@ REGISTRY="$(jq -n \
 printf '%s\n' "${REGISTRY}" > "${CACHE_FILE}"
 
 # -----------------------------------------------------------------
-# Step 11: Emit health check
+# Step 11: Detect missing companion plugins and features
 # -----------------------------------------------------------------
-MSG="SessionStart: skill registry built (${SKILL_COUNT} skills from ${SOURCE_COUNT} sources, ${WARNING_COUNT} warnings)"
+MISSING_PLUGINS=""
+MISSING_COUNT=0
+
+# Check companion plugins
+for _plugin in superpowers frontend-design claude-md-management pr-review-toolkit; do
+    _found=0
+    case "${_plugin}" in
+        superpowers)
+            if [ -d "${HOME}/.claude/plugins/cache/claude-plugins-official/superpowers" ] || \
+               [ -d "${HOME}/.claude/plugins/cache/superpowers-marketplace/superpowers" ]; then
+                _found=1
+            fi
+            ;;
+        *)
+            [ -d "${HOME}/.claude/plugins/cache/claude-plugins-official/${_plugin}" ] && _found=1
+            ;;
+    esac
+    if [ "${_found}" -eq 0 ]; then
+        if [ -n "${MISSING_PLUGINS}" ]; then
+            MISSING_PLUGINS="${MISSING_PLUGINS}, ${_plugin}"
+        else
+            MISSING_PLUGINS="${_plugin}"
+        fi
+        MISSING_COUNT=$((MISSING_COUNT + 1))
+    fi
+done
+
+# Check agent teams
+AGENT_TEAMS_MISSING=0
+if [ -f "${HOME}/.claude/settings.json" ]; then
+    _at_val="$(jq -r '.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS // ""' "${HOME}/.claude/settings.json" 2>/dev/null)"
+    [ "${_at_val}" != "1" ] && AGENT_TEAMS_MISSING=1
+else
+    AGENT_TEAMS_MISSING=1
+fi
+
+# Build setup hints
+SETUP_HINTS=""
+if [ "${MISSING_COUNT}" -gt 0 ]; then
+    SETUP_HINTS="\\nTip: ${MISSING_COUNT} companion plugin(s) not installed (${MISSING_PLUGINS}). Run /setup to install."
+fi
+if [ "${AGENT_TEAMS_MISSING}" -eq 1 ]; then
+    SETUP_HINTS="${SETUP_HINTS}\\nTip: Agent teams not enabled. Run /setup to configure."
+fi
+
+# -----------------------------------------------------------------
+# Step 12: Emit health check
+# -----------------------------------------------------------------
+MSG="SessionStart: skill registry built (${SKILL_COUNT} skills from ${SOURCE_COUNT} sources, ${WARNING_COUNT} warnings)${SETUP_HINTS}"
 printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "${MSG}"
 
 exit 0
