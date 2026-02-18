@@ -10,7 +10,7 @@ A [Claude Code](https://code.claude.com) plugin that automatically activates the
 /setup
 ```
 
-The `/setup` command configures agent teams and optionally installs external skills.
+The `/setup` command walks you through installing companion plugins, enabling agent teams, and downloading external skills.
 
 ## What it does
 
@@ -49,22 +49,6 @@ Up to 3 skills are suggested per prompt. Process skills drive, domain skills inf
 | `agent-team-execution` | Parallel implementation with specialist agent teams |
 | `agent-team-review` | Multi-perspective code review (security, quality, spec) |
 | `design-debate` | Multi-Agent Debate with architect, critic, and pragmatist |
-
-## Recommended plugins
-
-The plugin auto-discovers skills from any installed plugin. These are good companions:
-
-```
-/plugin marketplace add anthropics/claude-plugins-official
-/plugin marketplace add obra/superpowers-marketplace
-```
-
-```
-/plugin install superpowers@superpowers-marketplace
-/plugin install frontend-design@claude-plugins-official
-/plugin install claude-md-management@claude-plugins-official
-/plugin install pr-review-toolkit@claude-plugins-official
-```
 
 ## Configuration
 

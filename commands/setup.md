@@ -1,10 +1,37 @@
-# Setup External Skills
+# Setup
 
-Download the recommended external skills that the auto-claude-skills hook routes to. These are skills not bundled with any plugin and must be cloned separately.
+Configure auto-claude-skills: install recommended companion plugins, enable agent teams, and download external skills.
 
 ## Instructions
 
-### 0. Agent Teams (recommended)
+### 0. Recommended plugins
+
+**Ask the user:** "Would you like to install recommended companion plugins? These provide 15+ additional skills that the routing engine discovers automatically."
+
+Present the following plugins. For each one, check if it's already installed by looking for its directory in `~/.claude/plugins/cache/`. Skip any that are already present.
+
+**Marketplaces** (needed first):
+```bash
+claude plugin marketplace add anthropics/claude-plugins-official
+claude plugin marketplace add obra/superpowers-marketplace
+```
+
+**Plugins:**
+| Plugin | Source | What it adds |
+|--------|--------|-------------|
+| superpowers | superpowers-marketplace | brainstorming, TDD, debugging, planning, code review, and more |
+| frontend-design | claude-plugins-official | High-quality frontend interface design |
+| claude-md-management | claude-plugins-official | CLAUDE.md auditing and maintenance |
+| pr-review-toolkit | claude-plugins-official | Structured PR review with specialist agents |
+
+For each plugin the user wants, run:
+```bash
+claude plugin install <plugin-name>@<marketplace>
+```
+
+If the user declines, skip this step entirely.
+
+### 1. Agent Teams (recommended)
 
 This plugin includes skills that use collaborative agent teams (agent-team-execution, agent-team-review, design-debate). These require the experimental agent teams feature to be enabled.
 
@@ -19,7 +46,7 @@ jq '.env["CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"] = "1"' ~/.claude/settings.json 
 
 If the setting already exists, skip this step and inform the user it's already enabled.
 
-### 1. Cozempic (context protection)
+### 2. Cozempic (context protection)
 
 ```bash
 pip install cozempic
@@ -28,7 +55,7 @@ cozempic init
 
 If pip is not available, skip this step. Cozempic provides optional context protection for long sessions and agent team workflows.
 
-### 2. doc-coauthoring (Anthropic)
+### 3. doc-coauthoring (Anthropic)
 
 ```bash
 git clone --depth 1 https://github.com/anthropics/skills.git /tmp/anthropic-skills
@@ -36,7 +63,7 @@ cp -r /tmp/anthropic-skills/skills/doc-coauthoring ~/.claude/skills/doc-coauthor
 rm -rf /tmp/anthropic-skills
 ```
 
-### 3. webapp-testing (Anthropic)
+### 4. webapp-testing (Anthropic)
 
 ```bash
 git clone --depth 1 https://github.com/anthropics/skills.git /tmp/anthropic-skills
@@ -44,7 +71,7 @@ cp -r /tmp/anthropic-skills/skills/webapp-testing ~/.claude/skills/webapp-testin
 rm -rf /tmp/anthropic-skills
 ```
 
-### 4. security-scanner (matteocervelli)
+### 5. security-scanner (matteocervelli)
 
 ```bash
 git clone --depth 1 https://github.com/matteocervelli/llms.git /tmp/cervelli-llms
@@ -54,9 +81,10 @@ rm -rf /tmp/cervelli-llms
 
 ## Execution
 
-Run each step in order. For step 0, use AskUserQuestion to get the user's preference before modifying settings. For steps 1-4, if a skill directory already exists at the target path, skip it.
+Run each step in order. For steps 0 and 1, use AskUserQuestion to get the user's preference before taking action. For steps 2-5, if a skill directory already exists at the target path, skip it.
 
 After setup, confirm what was configured:
+- Companion plugins: which were installed or skipped
 - Agent teams: enabled or skipped
 - Cozempic: installed or skipped
 - `~/.claude/skills/doc-coauthoring/SKILL.md` exists
