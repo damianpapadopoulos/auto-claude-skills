@@ -156,7 +156,7 @@ for skill_name in agent-team-execution agent-team-review design-debate; do
         "${PLUGIN_ROOT}/skills/${skill_name}/SKILL.md"
 done
 
-# Test 9: .claude-plugin/plugin.json exists and is valid JSON
+# Test 10: .claude-plugin/plugin.json exists and is valid JSON
 assert_file_exists \
     ".claude-plugin/plugin.json exists" \
     "${PLUGIN_ROOT}/.claude-plugin/plugin.json"

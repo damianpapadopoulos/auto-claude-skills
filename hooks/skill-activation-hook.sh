@@ -68,7 +68,11 @@ fi
 MAX_SUGGESTIONS=3
 USER_CONFIG="${HOME}/.claude/skill-config.json"
 if [[ -f "$USER_CONFIG" ]] && jq empty "$USER_CONFIG" >/dev/null 2>&1; then
-  MAX_SUGGESTIONS="$(jq -r '.settings.max_suggestions // .max_suggestions // 3' "$USER_CONFIG" 2>/dev/null)"
+  _ms="$(jq -r '.settings.max_suggestions // .max_suggestions // 3' "$USER_CONFIG" 2>/dev/null)"
+  # Validate as positive integer; fall back to 3
+  if [[ "$_ms" =~ ^[1-9][0-9]*$ ]]; then
+    MAX_SUGGESTIONS="$_ms"
+  fi
 fi
 
 # =================================================================

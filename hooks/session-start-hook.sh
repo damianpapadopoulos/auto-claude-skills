@@ -77,7 +77,7 @@ USER_CONFIG="${HOME}/.claude/skill-config.json"
 # -----------------------------------------------------------------
 SP_SKILLS_DIR=""
 if [ -d "${SP_BASE}" ]; then
-    SP_VERSION="$(ls -1 "${SP_BASE}" 2>/dev/null | sort -V | tail -1)"
+    SP_VERSION="$(ls -1 "${SP_BASE}" 2>/dev/null | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)"
     if [ -n "${SP_VERSION}" ]; then
         SP_SKILLS_DIR="${SP_BASE}/${SP_VERSION}/skills"
     fi
