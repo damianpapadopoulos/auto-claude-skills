@@ -269,7 +269,8 @@ if [ -f "${USER_CONFIG}" ] && jq empty "${USER_CONFIG}" >/dev/null 2>&1; then
         if [ -n "${trigger_overrides}" ]; then
             # Collect plain triggers (replace-all) separately to apply in one batch
             replace_triggers=""
-            for trigger in ${trigger_overrides}; do
+            while IFS= read -r trigger; do
+                [ -z "${trigger}" ] && continue
                 case "${trigger}" in
                     +*)
                         # Add trigger
@@ -295,7 +296,9 @@ ${trigger}"
                         fi
                         ;;
                 esac
-            done
+            done <<TEOF
+${trigger_overrides}
+TEOF
             # Apply all plain triggers as a single replacement
             if [ -n "${replace_triggers}" ]; then
                 replace_json="$(printf '%s\n' "${replace_triggers}" | jq -R . | jq -s .)"

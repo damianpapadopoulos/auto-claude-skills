@@ -6,8 +6,7 @@
       "role": "process",
       "phase": "DEBUG",
       "triggers": [
-        "(debug|bug|fix|broken|fail|error|crash|wrong|unexpected|not.work|regression|issue|problem|doesn.t|won.t|can.t|stuck|hang|freeze|timeout|leak|corrupt|invalid|missing)",
-        "(explain|understand|what.is|what.does|how.does|where.is|find|search|look.at|show.me|trace|investigate|analyze|profile|benchmark|measure|count|list|summarize|describe|walk.me|dig.into)"
+        "(debug|bug|fix|broken|fail|error|crash|wrong|unexpected|not.work|regression|issue|problem|doesn.t|won.t|can.t|stuck|hang|freeze|timeout|leak|corrupt|invalid|missing)"
       ],
       "trigger_mode": "regex",
       "priority": 50,
@@ -62,7 +61,7 @@
         "(execute.*plan|run.the.plan|implement.the.plan|implement.*(rest|remaining)|continue|follow.the.plan|pick.up|resume|next.task|next.step|carry.on|keep.going|where.were.we|what.s.next)"
       ],
       "trigger_mode": "regex",
-      "priority": 15,
+      "priority": 35,
       "precedes": [],
       "requires": ["writing-plans"],
       "description": "Step-by-step execution of an approved plan. Triggered by explicit plan-continuation language."
@@ -71,9 +70,7 @@
       "name": "subagent-driven-development",
       "role": "process",
       "phase": "IMPLEMENT",
-      "triggers": [
-        "(execute.*plan|run.the.plan|implement.the.plan|implement.*(rest|remaining)|continue|follow.the.plan|pick.up|resume|next.task|next.step|carry.on|keep.going|where.were.we|what.s.next)"
-      ],
+      "triggers": [],
       "trigger_mode": "regex",
       "priority": 14,
       "precedes": [],
@@ -97,9 +94,7 @@
       "name": "receiving-code-review",
       "role": "process",
       "phase": "REVIEW",
-      "triggers": [
-        "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|smell|tech.?debt|(^|[^a-z])pr($|[^a-z]))"
-      ],
+      "triggers": [],
       "trigger_mode": "regex",
       "priority": 24,
       "precedes": [],
@@ -121,9 +116,7 @@
     {
       "name": "finishing-a-development-branch",
       "role": "workflow",
-      "triggers": [
-        "(ship|merge|deploy|push|release|tag|publish|pr.ready|ready.to|wrap.?up|all.(done|good|green|passing)|lgtm|finalize|complete|finish)"
-      ],
+      "triggers": [],
       "trigger_mode": "regex",
       "priority": 19,
       "precedes": [],
@@ -145,9 +138,7 @@
     {
       "name": "using-git-worktrees",
       "role": "workflow",
-      "triggers": [
-        "(parallel|concurrent|multiple.*(failure|bug|issue|error|test)|independent.*(task|failure|bug|issue|test)|worktree)"
-      ],
+      "triggers": [],
       "trigger_mode": "regex",
       "priority": 14,
       "precedes": [],

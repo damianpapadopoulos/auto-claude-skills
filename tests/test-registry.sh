@@ -180,7 +180,7 @@ test_missing_dirs_no_crash() {
     rm -rf "${HOME}/.claude/skills"
 
     local exit_code=0
-    run_hook || exit_code=$?
+    run_hook >/dev/null || exit_code=$?
 
     assert_equals "hook exits cleanly" "0" "${exit_code}"
 

@@ -70,30 +70,33 @@ After all reviewers report findings:
 
 ## Communication Contract
 
+All messages use plain text via SendMessage. No structured JSON.
+
 ### Reviewer → Lead: Individual Finding
 
-```json
-{
-  "type": "review_finding",
-  "severity": "blocking | warning | suggestion",
-  "file": "src/auth.ts",
-  "line": 42,
-  "category": "security | quality | spec",
-  "description": "SQL injection via unsanitized input",
-  "suggestion": "Use parameterized queries"
-}
+```
+FINDING: [blocking | warning | suggestion]
+File: src/auth.ts:42
+Category: security | quality | spec
+Issue: SQL injection via unsanitized input
+Suggestion: Use parameterized queries
 ```
 
 ### Lead → User: Review Summary
 
-```json
-{
-  "type": "review_summary",
-  "blocking": [],
-  "warnings": [],
-  "suggestions": [],
-  "verdict": "blocking_issues | clean | suggestions_only"
-}
+```
+REVIEW SUMMARY
+
+Blocking:
+- (list issues or "none")
+
+Warnings:
+- (list issues or "none")
+
+Suggestions:
+- (list issues or "none")
+
+Verdict: blocking_issues | clean | suggestions_only
 ```
 
 ## Reviewer Spawn Templates
@@ -125,7 +128,7 @@ Task tool (general-purpose):
 
     ## Rules
     - Read-only: do NOT modify any files
-    - Report each finding using the review_finding JSON schema
+    - Report each finding using the plain-text FINDING format
     - Send all findings to the lead via SendMessage
     - Be specific: include file path, line number, and remediation
 ```
@@ -158,7 +161,7 @@ Task tool (general-purpose):
 
     ## Rules
     - Read-only: do NOT modify any files
-    - Report each finding using the review_finding JSON schema
+    - Report each finding using the plain-text FINDING format
     - Send all findings to the lead via SendMessage
     - Distinguish between blocking issues and suggestions
 ```
@@ -189,7 +192,7 @@ Task tool (general-purpose):
 
     ## Rules
     - Read-only: do NOT modify any files
-    - Report each finding using the review_finding JSON schema
+    - Report each finding using the plain-text FINDING format
     - Send all findings to the lead via SendMessage
     - Flag both missing features AND unplanned additions
 ```

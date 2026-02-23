@@ -71,17 +71,14 @@ The brainstorming skill should consider escalating when it detects:
 
 ## Communication Contract
 
-All inter-agent messages MUST use this JSON schema in SendMessage content:
+All inter-agent messages use plain text via SendMessage. No structured JSON.
 
-```json
-{
-  "type": "design_position",
-  "stance": "propose | critique | evaluate",
-  "position": "Use event sourcing for audit trail",
-  "reasoning": "Provides immutable history, enables replay, fits compliance requirements",
-  "risks": ["complexity", "learning curve", "storage growth"],
-  "confidence": "high | medium | low"
-}
+```
+POSITION: [propose | critique | evaluate]
+Stance: Use event sourcing for audit trail
+Reasoning: Provides immutable history, enables replay, fits compliance requirements
+Risks: complexity, learning curve, storage growth
+Confidence: high | medium | low
 ```
 
 ## Spawn Prompts
@@ -94,7 +91,7 @@ Context: {problem_statement}
 Constraints: {constraints}
 Options explored: {options}
 
-Propose your recommended architecture using the design_position JSON schema. Be specific about components, data flow, and integration points.
+Propose your recommended architecture using the plain-text POSITION format. Be specific about components, data flow, and integration points.
 ```
 
 ### Critic
@@ -104,7 +101,7 @@ You are the critic in a design debate. Your job is to attack assumptions, find b
 Context: {problem_statement}
 Architect's proposal: {architect_position}
 
-Challenge the proposal using the design_position JSON schema. Focus on: hidden assumptions, failure modes, scaling issues, maintenance burden, and alternative approaches.
+Challenge the proposal using the plain-text POSITION format. Focus on: hidden assumptions, failure modes, scaling issues, maintenance burden, and alternative approaches.
 ```
 
 ### Pragmatist
@@ -115,7 +112,7 @@ Context: {problem_statement}
 Architect's proposal: {architect_position}
 Critic's challenges: {critic_position}
 
-Evaluate using the design_position JSON schema. Focus on: implementation timeline, team skill requirements, YAGNI violations, incremental delivery options, and operational complexity.
+Evaluate using the plain-text POSITION format. Focus on: implementation timeline, team skill requirements, YAGNI violations, incremental delivery options, and operational complexity.
 ```
 
 ## Output
