@@ -336,6 +336,8 @@ fi
 # Step 9: Build final registry JSON
 # -----------------------------------------------------------------
 SKILL_COUNT="$(printf '%s' "${SKILLS_JSON}" | jq 'length' 2>/dev/null)" || SKILL_COUNT=0
+AVAILABLE_COUNT="$(printf '%s' "${SKILLS_JSON}" | jq '[.[] | select(.available == true)] | length' 2>/dev/null)" || AVAILABLE_COUNT=0
+UNAVAILABLE_COUNT=$((SKILL_COUNT - AVAILABLE_COUNT))
 WARNING_COUNT="$(printf '%s' "${WARNINGS}" | jq 'length' 2>/dev/null)" || WARNING_COUNT=0
 
 REGISTRY="$(jq -n \
@@ -363,7 +365,7 @@ MISSING_PLUGINS=""
 MISSING_COUNT=0
 
 # Check companion plugins
-for _plugin in superpowers frontend-design claude-md-management pr-review-toolkit; do
+for _plugin in superpowers frontend-design claude-md-management pr-review-toolkit claude-code-setup; do
     _found=0
     case "${_plugin}" in
         superpowers)
@@ -400,6 +402,9 @@ SETUP_HINTS=""
 if [ "${MISSING_COUNT}" -gt 0 ]; then
     SETUP_HINTS="\\nTip: ${MISSING_COUNT} companion plugin(s) not installed (${MISSING_PLUGINS}). Run /setup to install."
 fi
+if [ "${UNAVAILABLE_COUNT}" -gt 0 ] && [ "${MISSING_COUNT}" -eq 0 ]; then
+    SETUP_HINTS="\\nTip: ${UNAVAILABLE_COUNT} skill(s) unavailable (missing plugins or user skills). Run /setup to install."
+fi
 if [ "${AGENT_TEAMS_MISSING}" -eq 1 ]; then
     SETUP_HINTS="${SETUP_HINTS}\\nTip: Agent teams not enabled. Run /setup to configure."
 fi
@@ -407,7 +412,7 @@ fi
 # -----------------------------------------------------------------
 # Step 12: Emit health check
 # -----------------------------------------------------------------
-MSG="SessionStart: skill registry built (${SKILL_COUNT} skills from ${SOURCE_COUNT} sources, ${WARNING_COUNT} warnings)${SETUP_HINTS}"
+MSG="SessionStart: skill registry built (${SKILL_COUNT} skills, ${AVAILABLE_COUNT} available, from ${SOURCE_COUNT} sources, ${WARNING_COUNT} warnings)${SETUP_HINTS}"
 printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' \
     "$(printf '%s' "${MSG}" | jq -Rs .)"
 

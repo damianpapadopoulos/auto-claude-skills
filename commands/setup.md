@@ -22,6 +22,7 @@ claude plugin marketplace add obra/superpowers-marketplace
 | superpowers | superpowers-marketplace | brainstorming, TDD, debugging, planning, code review, and more |
 | frontend-design | claude-plugins-official | High-quality frontend interface design |
 | claude-md-management | claude-plugins-official | CLAUDE.md auditing and maintenance |
+| claude-code-setup | claude-plugins-official | Claude Code automation recommendations |
 | pr-review-toolkit | claude-plugins-official | Structured PR review with specialist agents |
 
 For each plugin the user wants, run:
@@ -55,23 +56,18 @@ cozempic init
 
 If pip is not available, skip this step. Cozempic provides optional context protection for long sessions and agent team workflows.
 
-### 3. doc-coauthoring (Anthropic)
+### 3. Anthropic skills (doc-coauthoring, webapp-testing)
+
+Clone the Anthropic skills repo once and copy both skills:
 
 ```bash
 git clone --depth 1 https://github.com/anthropics/skills.git /tmp/anthropic-skills
 cp -r /tmp/anthropic-skills/skills/doc-coauthoring ~/.claude/skills/doc-coauthoring
-rm -rf /tmp/anthropic-skills
-```
-
-### 4. webapp-testing (Anthropic)
-
-```bash
-git clone --depth 1 https://github.com/anthropics/skills.git /tmp/anthropic-skills
 cp -r /tmp/anthropic-skills/skills/webapp-testing ~/.claude/skills/webapp-testing
 rm -rf /tmp/anthropic-skills
 ```
 
-### 5. security-scanner (matteocervelli)
+### 4. security-scanner (matteocervelli)
 
 ```bash
 git clone --depth 1 https://github.com/matteocervelli/llms.git /tmp/cervelli-llms
@@ -81,7 +77,7 @@ rm -rf /tmp/cervelli-llms
 
 ## Execution
 
-Run each step in order. For steps 0 and 1, use AskUserQuestion to get the user's preference before taking action. For steps 2-5, if a skill directory already exists at the target path, skip it.
+Run each step in order. For steps 0 and 1, use AskUserQuestion to get the user's preference before taking action. For steps 2-4, if a skill directory already exists at the target path, skip it.
 
 After setup, confirm what was configured:
 - Companion plugins: which were installed or skipped
