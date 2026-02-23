@@ -265,6 +265,8 @@ if [ -f "${USER_CONFIG}" ] && jq empty "${USER_CONFIG}" >/dev/null 2>&1; then
         # Check for trigger overrides
         trigger_overrides="$(jq -r --arg n "${skill_name}" '.overrides[$n].triggers // empty | .[]' "${USER_CONFIG}" 2>/dev/null)" || true
         if [ -n "${trigger_overrides}" ]; then
+            # Collect plain triggers (replace-all) separately to apply in one batch
+            replace_triggers=""
             for trigger in ${trigger_overrides}; do
                 case "${trigger}" in
                     +*)
@@ -282,13 +284,23 @@ if [ -f "${USER_CONFIG}" ] && jq empty "${USER_CONFIG}" >/dev/null 2>&1; then
                         ')"
                         ;;
                     *)
-                        # Replace triggers entirely
-                        SKILLS_JSON="$(printf '%s' "${SKILLS_JSON}" | jq --arg n "${skill_name}" --arg t "${trigger}" '
-                            [.[] | if .name == $n then .triggers = [$t] else . end]
-                        ')"
+                        # Collect plain triggers for batch replacement
+                        if [ -z "${replace_triggers}" ]; then
+                            replace_triggers="${trigger}"
+                        else
+                            replace_triggers="${replace_triggers}
+${trigger}"
+                        fi
                         ;;
                 esac
             done
+            # Apply all plain triggers as a single replacement
+            if [ -n "${replace_triggers}" ]; then
+                replace_json="$(printf '%s\n' "${replace_triggers}" | jq -R . | jq -s .)"
+                SKILLS_JSON="$(printf '%s' "${SKILLS_JSON}" | jq --arg n "${skill_name}" --argjson t "${replace_json}" '
+                    [.[] | if .name == $n then .triggers = $t else . end]
+                ')"
+            fi
         fi
     done
 
@@ -387,6 +399,7 @@ fi
 # Step 12: Emit health check
 # -----------------------------------------------------------------
 MSG="SessionStart: skill registry built (${SKILL_COUNT} skills from ${SOURCE_COUNT} sources, ${WARNING_COUNT} warnings)${SETUP_HINTS}"
-printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "${MSG}"
+printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' \
+    "$(printf '%s' "${MSG}" | jq -Rs .)"
 
 exit 0

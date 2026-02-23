@@ -118,13 +118,13 @@ while IFS= read -r skill_json; do
 
       if [[ "$prefix_len" -gt 0 ]]; then
         char_before="${P:$((prefix_len - 1)):1}"
-        if [[ "$char_before" =~ [a-z] ]]; then
+        if [[ "$char_before" =~ [a-z0-9_-] ]]; then
           is_word_boundary=0
         fi
       fi
       if [[ "$after_pos" -lt "${#P}" ]]; then
         char_after="${P:${after_pos}:1}"
-        if [[ "$char_after" =~ [a-z] ]]; then
+        if [[ "$char_after" =~ [a-z0-9_-] ]]; then
           is_word_boundary=0
         fi
       fi

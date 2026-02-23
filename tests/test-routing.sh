@@ -18,7 +18,7 @@ echo "=== test-routing.sh ==="
 # ---------------------------------------------------------------------------
 run_hook() {
     local prompt="$1"
-    printf '{"prompt":"%s"}' "${prompt}" | \
+    jq -n --arg p "${prompt}" '{"prompt":$p}' | \
         CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
         bash "${HOOK}" 2>/dev/null
 }
