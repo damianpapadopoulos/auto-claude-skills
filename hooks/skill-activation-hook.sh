@@ -66,11 +66,9 @@ fi
 # LOAD USER SETTINGS
 # =================================================================
 MAX_SUGGESTIONS=3
-VERBOSITY="normal"
 USER_CONFIG="${HOME}/.claude/skill-config.json"
 if [[ -f "$USER_CONFIG" ]] && jq empty "$USER_CONFIG" >/dev/null 2>&1; then
-  MAX_SUGGESTIONS="$(jq -r '.max_suggestions // 3' "$USER_CONFIG" 2>/dev/null)"
-  VERBOSITY="$(jq -r '.verbosity // "normal"' "$USER_CONFIG" 2>/dev/null)"
+  MAX_SUGGESTIONS="$(jq -r '.settings.max_suggestions // .max_suggestions // 3' "$USER_CONFIG" 2>/dev/null)"
 fi
 
 # =================================================================
@@ -151,7 +149,7 @@ ${SCORED_SKILLS}
 EOF
 
 # Sort by score descending
-SORTED="$(printf '%s' "$RESULTS" | grep -v '^$' | sort -t'|' -k1 -rn)"
+SORTED="$(printf '%s' "$RESULTS" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
 
 # =================================================================
 # SELECT BY ROLE CAPS

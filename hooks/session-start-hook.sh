@@ -45,7 +45,7 @@ if ! command -v jq >/dev/null 2>&1; then
     # Try to install jq (best-effort)
     if command -v brew >/dev/null 2>&1; then
         brew install --quiet jq 2>/dev/null || true
-    elif command -v apt-get >/dev/null 2>&1; then
+    elif command -v apt-get >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
         sudo apt-get install -y -qq jq 2>/dev/null || true
     fi
 fi
@@ -216,14 +216,15 @@ fi
 
 # Add discovered skills not in defaults (custom/user skills).
 # Pipe to tmp file to avoid subshell variable scoping issues.
+CUSTOMS_TMP="$(mktemp "${CACHE_FILE}.customs.XXXXXX")" 2>/dev/null || CUSTOMS_TMP="${CACHE_FILE}.customs.$$"
 printf '%s' "${ALL_DISCOVERED}" | while IFS='|' read -r sname spath; do
     [ -z "${sname}" ] && continue
     if ! is_in_defaults "${sname}"; then
         printf '%s|%s\n' "${sname}" "${spath}"
     fi
-done > "${CACHE_FILE}.customs.tmp" 2>/dev/null || true
+done > "${CUSTOMS_TMP}" 2>/dev/null || true
 
-if [ -f "${CACHE_FILE}.customs.tmp" ]; then
+if [ -f "${CUSTOMS_TMP}" ] && [ -s "${CUSTOMS_TMP}" ]; then
     while IFS='|' read -r sname spath; do
         [ -z "${sname}" ] && continue
         custom_skill="$(jq -n --arg name "${sname}" --arg invoke "${spath}" '{
@@ -240,9 +241,9 @@ if [ -f "${CACHE_FILE}.customs.tmp" ]; then
             enabled: true
         }')"
         SKILLS_JSON="$(printf '%s' "${SKILLS_JSON}" | jq --argjson s "${custom_skill}" '. + [$s]')"
-    done < "${CACHE_FILE}.customs.tmp"
-    rm -f "${CACHE_FILE}.customs.tmp"
+    done < "${CUSTOMS_TMP}"
 fi
+rm -f "${CUSTOMS_TMP}"
 
 # -----------------------------------------------------------------
 # Step 7: Apply user config overrides
