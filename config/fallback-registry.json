@@ -80,6 +80,7 @@
     {
       "name": "verification-before-completion",
       "role": "workflow",
+      "phase": "SHIP",
       "triggers": ["verify", "final check", "ready to ship", "all green", "all passing", "lgtm"],
       "trigger_mode": "regex",
       "priority": 50,
@@ -91,6 +92,7 @@
     {
       "name": "finishing-a-development-branch",
       "role": "workflow",
+      "phase": "SHIP",
       "triggers": ["finish", "ship", "merge", "wrap up", "finalize", "complete branch", "push"],
       "trigger_mode": "regex",
       "priority": 51,

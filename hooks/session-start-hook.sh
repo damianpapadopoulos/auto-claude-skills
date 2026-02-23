@@ -57,6 +57,7 @@ if ! command -v jq >/dev/null 2>&1; then
     else
         printf '{"version":"3.1.0-fallback","warnings":["jq not available, no fallback found"],"skills":[]}\n' > "${CACHE_FILE}"
     fi
+    # NOTE: jq unavailable on this path; MSG must remain a simple ASCII string (no quotes or backslashes)
     MSG="SessionStart: jq not found -- skill routing disabled. Install jq: brew install jq (macOS) or apt install jq (Linux)"
     printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "${MSG}"
     exit 0
@@ -297,9 +298,13 @@ ${trigger}"
             # Apply all plain triggers as a single replacement
             if [ -n "${replace_triggers}" ]; then
                 replace_json="$(printf '%s\n' "${replace_triggers}" | jq -R . | jq -s .)"
-                SKILLS_JSON="$(printf '%s' "${SKILLS_JSON}" | jq --arg n "${skill_name}" --argjson t "${replace_json}" '
-                    [.[] | if .name == $n then .triggers = $t else . end]
-                ')"
+                if [ -n "${replace_json}" ] && printf '%s' "${replace_json}" | jq empty >/dev/null 2>&1; then
+                    SKILLS_JSON="$(printf '%s' "${SKILLS_JSON}" | jq --arg n "${skill_name}" --argjson t "${replace_json}" '
+                        [.[] | if .name == $n then .triggers = $t else . end]
+                    ')"
+                else
+                    WARNINGS="$(printf '%s' "${WARNINGS}" | jq --arg w "Failed to parse trigger overrides for ${skill_name}" '. + [$w]')"
+                fi
             fi
         fi
     done
