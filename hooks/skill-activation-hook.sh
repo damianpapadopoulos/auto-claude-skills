@@ -505,8 +505,12 @@ Step 1 -- ASSESS PHASE. Check conversation context:
 
 Step 2 -- EVALUATE skills against your phase assessment."
 
-  # Build skill lines with orchestration
+  # Build grouped skill lines (process-first ordering)
   EVAL_SKILLS=""
+  _FULL_PROCESS_LINE=""
+  _FULL_DOMAIN_LINES=""
+  _FULL_WORKFLOW_LINES=""
+  _FULL_STANDALONE_LINES=""
 
   while IFS='|' read -r score name role invoke phase; do
     [[ -z "$name" ]] && continue
@@ -518,20 +522,22 @@ Step 2 -- EVALUATE skills against your phase assessment."
 
     if [[ -n "$PROCESS_SKILL" ]]; then
       case "$role" in
-        process)  OUT+="
+        process)  _FULL_PROCESS_LINE="
 Process: ${name} -> ${invoke}" ;;
-        domain)   OUT+="
+        domain)   _FULL_DOMAIN_LINES="${_FULL_DOMAIN_LINES}
   Domain: ${name} -> ${invoke}" ;;
-        workflow) OUT+="
+        workflow) _FULL_WORKFLOW_LINES="${_FULL_WORKFLOW_LINES}
 Workflow: ${name} -> ${invoke}" ;;
       esac
     else
-      OUT+="
+      _FULL_STANDALONE_LINES="${_FULL_STANDALONE_LINES}
 ${name} -> ${invoke}"
     fi
   done <<EOF
 ${SELECTED}
 EOF
+
+  OUT+="${_FULL_PROCESS_LINE}${_FULL_DOMAIN_LINES}${_FULL_WORKFLOW_LINES}${_FULL_STANDALONE_LINES}"
 
   # Append overflow domain skills
   while IFS='|' read -r oname oinvoke; do

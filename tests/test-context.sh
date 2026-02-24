@@ -316,6 +316,36 @@ test_output_valid_json_multi_match() {
 }
 
 # ---------------------------------------------------------------------------
+# 7. Full format lists Process: before Domain:
+# ---------------------------------------------------------------------------
+test_full_format_process_first() {
+    echo "-- test: full format lists Process before Domain --"
+    setup_test_env
+    install_context_registry
+
+    local output context
+    output="$(run_hook "build a secure frontend dashboard component with csrf protection")"
+    context="$(extract_context "${output}")"
+
+    # Process: line should appear before any Domain: line
+    local process_pos domain_pos
+    process_pos="$(printf '%s' "${context}" | grep -n 'Process:' | head -1 | cut -d: -f1)"
+    domain_pos="$(printf '%s' "${context}" | grep -n 'Domain:' | head -1 | cut -d: -f1)"
+
+    if [[ -n "$process_pos" ]] && [[ -n "$domain_pos" ]]; then
+        if [[ "$process_pos" -lt "$domain_pos" ]]; then
+            _record_pass "Process: appears before Domain:"
+        else
+            _record_fail "Process: appears before Domain:" "Process at line ${process_pos}, Domain at line ${domain_pos}"
+        fi
+    else
+        _record_fail "Process: appears before Domain:" "Missing Process: or Domain: line"
+    fi
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_zero_skills_minimal_output
@@ -326,5 +356,6 @@ test_invocation_hints_present
 test_output_valid_json_zero_match
 test_output_valid_json_single_match
 test_output_valid_json_multi_match
+test_full_format_process_first
 
 print_summary
