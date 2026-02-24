@@ -22,18 +22,26 @@ fi
 PROMPT=$(cat 2>/dev/null | jq -r '.prompt // empty' 2>/dev/null) || true
 
 # =================================================================
-# EARLY EXITS (preserved from v1)
+# EARLY EXITS
 # =================================================================
 [[ -z "$PROMPT" ]] && exit 0
-[[ "$PROMPT" =~ ^[[:space:]]*/  ]] && exit 0
-(( ${#PROMPT} < 8 )) && exit 0
+# Skip slash commands — these are handled by the Skill tool directly
+[[ "$PROMPT" =~ ^[[:space:]]*/ ]] && exit 0
+(( ${#PROMPT} < 5 )) && exit 0
 
 P=$(printf '%s' "$PROMPT" | tr '[:upper:]' '[:lower:]')
 
 # =================================================================
-# BLOCKLIST (preserved from v1 for backwards compatibility)
+# BLOCKLIST — skip greetings / acknowledgements
 # =================================================================
-if [[ "$P" =~ ^(hi|hello|hey|thanks|thank.you|good.(morning|afternoon|evening)|bye|goodbye|ok|okay|yes|no|sure|yep|nope|got.it|sounds.good|cool|nice|great|perfect|awesome|understood)([[:space:]!.,]+.{0,20})?$ ]]; then
+# User-configurable via .greeting_blocklist in skill-config.json (regex string).
+# Falls back to a built-in default covering common greetings and acks.
+_BLOCKLIST=""
+if [[ -f "${HOME}/.claude/skill-config.json" ]]; then
+  _BLOCKLIST="$(jq -r '.greeting_blocklist // empty' "${HOME}/.claude/skill-config.json" 2>/dev/null)"
+fi
+[[ -z "$_BLOCKLIST" ]] && _BLOCKLIST='^(hi|hello|hey|thanks|thank.you|good.(morning|afternoon|evening)|bye|goodbye|ok|okay|yes|no|sure|yep|nope|got.it|sounds.good|cool|nice|great|perfect|awesome|understood)([[:space:]!.,]+.{0,20})?$'
+if [[ "$P" =~ $_BLOCKLIST ]]; then
   TAIL="${P#*[[:space:]]}"
   if [[ "$TAIL" == "$P" ]] || (( ${#TAIL} < 20 )); then
     exit 0
@@ -175,24 +183,26 @@ EOF
 SORTED="$(printf '%s' "$RESULTS" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
 
 # =================================================================
-# SELECT BY ROLE CAPS
+# SELECT BY ROLE CAPS (single pass)
 # =================================================================
-# Max 1 process, up to 2 domain, max 1 workflow, total <= max_suggestions
-# INVARIANT: If any process skill matched, it gets a reserved slot.
+# Max 1 process, up to 2 domain, max 1 workflow, total <= max_suggestions.
+# INVARIANT: The highest-ranked process skill always gets a reserved slot
+# (it is selected in the first pass and other roles fill remaining slots).
 SELECTED=""
 OVERFLOW_DOMAIN=""
+OVERFLOW_WORKFLOW=""
 PROCESS_COUNT=0
 DOMAIN_COUNT=0
 WORKFLOW_COUNT=0
 TOTAL_COUNT=0
 
-# Pre-select: find the highest-ranked process skill and reserve a slot
-RESERVED_PROCESS=""
+# Pass 1: reserve the top process skill (if any)
+RESERVED_PROCESS_NAME=""
 while IFS='|' read -r score name role invoke phase; do
   [[ -z "$name" ]] && continue
   if [[ "$role" == "process" ]]; then
-    RESERVED_PROCESS="${score}|${name}|${role}|${invoke}|${phase}"
-    SELECTED="${RESERVED_PROCESS}
+    RESERVED_PROCESS_NAME="$name"
+    SELECTED="${score}|${name}|${role}|${invoke}|${phase}
 "
     PROCESS_COUNT=1
     TOTAL_COUNT=1
@@ -202,24 +212,20 @@ done <<EOF
 ${SORTED}
 EOF
 
-# Fill remaining slots from SORTED, skipping the reserved process skill
+# Pass 2: fill remaining slots, skipping the reserved process skill by name
 while IFS='|' read -r score name role invoke phase; do
   [[ -z "$name" ]] && continue
 
-  # Skip the already-reserved process skill
-  if [[ -n "$RESERVED_PROCESS" ]] && [[ "$role" == "process" ]] && [[ "$RESERVED_PROCESS" == "${score}|${name}|${role}|${invoke}|${phase}" ]]; then
-    continue
-  fi
-
   case "$role" in
     process)
+      # Skip reserved process skill; cap additional process skills at 0
+      [[ "$name" == "$RESERVED_PROCESS_NAME" ]] && continue
       [[ "$PROCESS_COUNT" -ge 1 ]] && continue
       [[ "$TOTAL_COUNT" -ge "$MAX_SUGGESTIONS" ]] && continue
       PROCESS_COUNT=$((PROCESS_COUNT + 1))
       ;;
     domain)
       if [[ "$DOMAIN_COUNT" -ge 2 ]] || [[ "$TOTAL_COUNT" -ge "$MAX_SUGGESTIONS" ]]; then
-        # Track overflow domain skills — still relevant, just didn't fit
         OVERFLOW_DOMAIN="${OVERFLOW_DOMAIN}${name}|${invoke}
 "
         continue
@@ -227,8 +233,11 @@ while IFS='|' read -r score name role invoke phase; do
       DOMAIN_COUNT=$((DOMAIN_COUNT + 1))
       ;;
     workflow)
-      [[ "$WORKFLOW_COUNT" -ge 1 ]] && continue
-      [[ "$TOTAL_COUNT" -ge "$MAX_SUGGESTIONS" ]] && continue
+      if [[ "$WORKFLOW_COUNT" -ge 1 ]] || [[ "$TOTAL_COUNT" -ge "$MAX_SUGGESTIONS" ]]; then
+        OVERFLOW_WORKFLOW="${OVERFLOW_WORKFLOW}${name}|${invoke}
+"
+        continue
+      fi
       WORKFLOW_COUNT=$((WORKFLOW_COUNT + 1))
       ;;
   esac
@@ -443,15 +452,18 @@ EOF
 
   SKILL_LINES="${_SL_PROCESS}${_SL_DOMAIN}${_SL_WORKFLOW}${_SL_STANDALONE}"
 
-  # Overflow domain skills (relevant but didn't fit in top suggestions)
-  while IFS='|' read -r oname oinvoke; do
-    [[ -z "$oname" ]] && continue
-    SKILL_LINES="${SKILL_LINES}
+  # Overflow skills (relevant but didn't fit in top suggestions)
+  for _overflow_var in OVERFLOW_DOMAIN OVERFLOW_WORKFLOW; do
+    _overflow_val="${!_overflow_var}"
+    while IFS='|' read -r oname oinvoke; do
+      [[ -z "$oname" ]] && continue
+      SKILL_LINES="${SKILL_LINES}
   Also relevant: ${oname} -> ${oinvoke}"
-    EVAL_SKILLS="${EVAL_SKILLS}, ${oname} YES/NO"
-  done <<EOF
-${OVERFLOW_DOMAIN}
+      EVAL_SKILLS="${EVAL_SKILLS}, ${oname} YES/NO"
+    done <<EOF
+${_overflow_val}
 EOF
+  done
 fi
 
 # Domain invocation instruction (shared)
