@@ -361,6 +361,107 @@ if [ -f "${DEFAULT_TRIGGERS}" ]; then
 fi
 
 # -----------------------------------------------------------------
+# Step 8c: Auto-discover unknown plugins from all marketplaces
+# -----------------------------------------------------------------
+# Build list of curated plugin names for exclusion
+CURATED_NAMES="$(printf '%s' "${PLUGINS_JSON}" | jq -r '.[].name' 2>/dev/null)"
+# Also exclude plugins we already handle as skill sources
+KNOWN_NAMES="${CURATED_NAMES}
+superpowers
+frontend-design
+claude-md-management
+claude-code-setup
+pr-review-toolkit
+ralph-loop
+auto-claude-skills"
+
+for _mkt_dir in "${HOME}/.claude/plugins/cache"/*/; do
+    [ -d "${_mkt_dir}" ] || continue
+    for _plugin_dir in "${_mkt_dir}"*/; do
+        [ -d "${_plugin_dir}" ] || continue
+        _pname="$(basename "${_plugin_dir}")"
+
+        # Skip known/curated plugins
+        _skip=0
+        while IFS= read -r _kn; do
+            [ -z "${_kn}" ] && continue
+            if [ "${_kn}" = "${_pname}" ]; then
+                _skip=1
+                break
+            fi
+        done <<KNEOF
+${KNOWN_NAMES}
+KNEOF
+        [ "${_skip}" -eq 1 ] && continue
+
+        # Look for plugin.json — may be directly in plugin dir or in a version subdir
+        _pjson=""
+        _plugin_root=""
+        if [ -f "${_plugin_dir}.claude-plugin/plugin.json" ]; then
+            _pjson="${_plugin_dir}.claude-plugin/plugin.json"
+            _plugin_root="${_plugin_dir}"
+        else
+            for _vdir in "${_plugin_dir}"*/; do
+                [ -d "${_vdir}" ] || continue
+                if [ -f "${_vdir}.claude-plugin/plugin.json" ]; then
+                    _pjson="${_vdir}.claude-plugin/plugin.json"
+                    _plugin_root="${_vdir}"
+                    break
+                fi
+            done
+        fi
+        [ -z "${_pjson}" ] && continue
+
+        # Scan for skills
+        _skills="[]"
+        if [ -d "${_plugin_root}skills" ]; then
+            for _smd in "${_plugin_root}skills"/*/SKILL.md; do
+                [ -f "${_smd}" ] || continue
+                _sname="$(basename "$(dirname "${_smd}")")"
+                _skills="$(printf '%s' "${_skills}" | jq --arg s "${_sname}" '. + [$s]')"
+            done
+        fi
+
+        # Scan for commands
+        _commands="[]"
+        if [ -d "${_plugin_root}commands" ]; then
+            for _cmd in "${_plugin_root}commands"/*.md; do
+                [ -f "${_cmd}" ] || continue
+                _cname="/$(basename "${_cmd}" .md)"
+                _commands="$(printf '%s' "${_commands}" | jq --arg c "${_cname}" '. + [$c]')"
+            done
+        fi
+
+        # Scan for agents
+        _agents="[]"
+        if [ -d "${_plugin_root}agents" ]; then
+            for _agent in "${_plugin_root}agents"/*.md; do
+                [ -f "${_agent}" ] || continue
+                _aname="$(basename "${_agent}" .md)"
+                _agents="$(printf '%s' "${_agents}" | jq --arg a "${_aname}" '. + [$a]')"
+            done
+        fi
+
+        # Build plugin entry
+        _entry="$(jq -n \
+            --arg name "${_pname}" \
+            --arg source "auto-discovered" \
+            --argjson skills "${_skills}" \
+            --argjson commands "${_commands}" \
+            --argjson agents "${_agents}" \
+            '{
+                name: $name,
+                source: $source,
+                provides: {commands: $commands, skills: $skills, agents: $agents, hooks: []},
+                phase_fit: ["*"],
+                description: "Auto-discovered plugin",
+                available: true
+            }')"
+        PLUGINS_JSON="$(printf '%s' "${PLUGINS_JSON}" | jq --argjson p "${_entry}" '. + [$p]')"
+    done
+done
+
+# -----------------------------------------------------------------
 # Step 9: Build final registry JSON
 # -----------------------------------------------------------------
 SKILL_COUNT="$(printf '%s' "${SKILLS_JSON}" | jq 'length' 2>/dev/null)" || SKILL_COUNT=0

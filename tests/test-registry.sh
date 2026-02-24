@@ -371,6 +371,48 @@ test_discovers_curated_plugins() {
     teardown_test_env
 }
 
+test_auto_discovers_unknown_plugins() {
+    echo "-- test: auto-discovers unknown plugins --"
+    setup_test_env
+
+    # Create a mock unknown plugin with skills and commands
+    local unknown_dir="${HOME}/.claude/plugins/cache/community-marketplace/my-unknown-plugin/1.0.0"
+    mkdir -p "${unknown_dir}/skills/custom-lint"
+    printf '---\nname: custom-lint\ndescription: Custom lint rules\n---\n# Custom Lint\n' > \
+        "${unknown_dir}/skills/custom-lint/SKILL.md"
+    mkdir -p "${unknown_dir}/commands"
+    printf '# Run Lint\n' > "${unknown_dir}/commands/lint.md"
+    mkdir -p "${unknown_dir}/.claude-plugin"
+    printf '{"name":"my-unknown-plugin","version":"1.0.0"}\n' > "${unknown_dir}/.claude-plugin/plugin.json"
+
+    local output
+    output="$(run_hook)"
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    assert_json_valid "cache file is valid JSON" "${cache_file}"
+
+    # Unknown plugin should appear in plugins array
+    local up_name
+    up_name="$(jq -r '.plugins[] | select(.name == "my-unknown-plugin") | .name' "${cache_file}" 2>/dev/null)"
+    assert_equals "unknown plugin discovered" "my-unknown-plugin" "${up_name}"
+
+    local up_available
+    up_available="$(jq -r '.plugins[] | select(.name == "my-unknown-plugin") | .available' "${cache_file}" 2>/dev/null)"
+    assert_equals "unknown plugin is available" "true" "${up_available}"
+
+    # Should detect the skill
+    local up_skills
+    up_skills="$(jq -r '.plugins[] | select(.name == "my-unknown-plugin") | .provides.skills[0]' "${cache_file}" 2>/dev/null)"
+    assert_equals "unknown plugin skill detected" "custom-lint" "${up_skills}"
+
+    # Should detect the command
+    local up_commands
+    up_commands="$(jq -r '.plugins[] | select(.name == "my-unknown-plugin") | .provides.commands[0]' "${cache_file}" 2>/dev/null)"
+    assert_equals "unknown plugin command detected" "/lint" "${up_commands}"
+
+    teardown_test_env
+}
+
 # ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
@@ -385,5 +427,6 @@ test_discovers_agent_team_skills
 test_default_triggers_has_plugins_section
 test_default_triggers_has_phase_compositions
 test_discovers_curated_plugins
+test_auto_discovers_unknown_plugins
 
 print_summary
