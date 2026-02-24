@@ -371,5 +371,109 @@
       "phase_fit": ["DESIGN"],
       "description": "Skill eval/improvement loop with benchmarking"
     }
-  ]
+  ],
+  "phase_compositions": {
+    "DESIGN": {
+      "driver": "brainstorming",
+      "parallel": [
+        {
+          "plugin": "feature-dev",
+          "use": "agents:code-explorer",
+          "when": "installed",
+          "purpose": "Parallel codebase exploration while brainstorming clarifies intent"
+        }
+      ],
+      "hints": [
+        {
+          "plugin": "feature-dev",
+          "text": "Consider /feature-dev for agent-parallel feature development",
+          "when": "installed"
+        },
+        {
+          "plugin": "skill-creator",
+          "text": "Consider Skill(skill-creator) to eval/benchmark skill quality",
+          "when": "installed AND prompt matches skill"
+        },
+        {
+          "plugin": "hookify",
+          "text": "Consider /hookify to create behavior rules",
+          "when": "installed AND prompt matches (prevent|block|guard|rule)"
+        }
+      ]
+    },
+    "PLAN": {
+      "driver": "writing-plans",
+      "parallel": [],
+      "hints": []
+    },
+    "IMPLEMENT": {
+      "driver": "executing-plans",
+      "parallel": [
+        {
+          "plugin": "security-guidance",
+          "use": "hooks:PreToolUse",
+          "when": "installed",
+          "purpose": "Passive write-time security guard (always active, no explicit invocation)"
+        }
+      ],
+      "hints": []
+    },
+    "REVIEW": {
+      "driver": "requesting-code-review",
+      "parallel": [
+        {
+          "plugin": "code-review",
+          "use": "commands:/code-review",
+          "when": "installed",
+          "purpose": "Run 5 parallel review agents and post findings to GitHub PR"
+        },
+        {
+          "plugin": "code-simplifier",
+          "use": "agents:code-simplifier",
+          "when": "installed",
+          "purpose": "Post-review simplification pass for clarity"
+        }
+      ],
+      "hints": [
+        {
+          "plugin": "code-review",
+          "text": "Consider /code-review for automated multi-agent PR review",
+          "when": "installed"
+        }
+      ]
+    },
+    "SHIP": {
+      "driver": "verification-before-completion",
+      "sequence": [
+        {
+          "plugin": "commit-commands",
+          "use": "commands:/commit",
+          "when": "installed",
+          "purpose": "Execute structured commit after verification passes"
+        },
+        {
+          "step": "finishing-a-development-branch",
+          "purpose": "Branch cleanup, merge, or PR creation"
+        },
+        {
+          "plugin": "commit-commands",
+          "use": "commands:/commit-push-pr",
+          "when": "installed AND user chooses PR option",
+          "purpose": "Automated branch-to-PR flow"
+        }
+      ],
+      "hints": [
+        {
+          "plugin": "commit-commands",
+          "text": "Consider /commit-push-pr for automated branch-to-PR workflow",
+          "when": "installed"
+        }
+      ]
+    },
+    "DEBUG": {
+      "driver": "systematic-debugging",
+      "parallel": [],
+      "hints": []
+    }
+  }
 }

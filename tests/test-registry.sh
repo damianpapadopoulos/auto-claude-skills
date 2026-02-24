@@ -304,6 +304,38 @@ test_default_triggers_has_plugins_section() {
     teardown_test_env
 }
 
+test_default_triggers_has_phase_compositions() {
+    echo "-- test: default-triggers has phase_compositions --"
+    setup_test_env
+
+    local phases
+    phases="$(jq '.phase_compositions | keys[]' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null | sort)"
+
+    assert_contains "has DESIGN phase" "DESIGN" "${phases}"
+    assert_contains "has PLAN phase" "PLAN" "${phases}"
+    assert_contains "has IMPLEMENT phase" "IMPLEMENT" "${phases}"
+    assert_contains "has REVIEW phase" "REVIEW" "${phases}"
+    assert_contains "has SHIP phase" "SHIP" "${phases}"
+    assert_contains "has DEBUG phase" "DEBUG" "${phases}"
+
+    # Each phase must have a driver field
+    local driver_count
+    driver_count="$(jq '[.phase_compositions | to_entries[] | select(.value.driver)] | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+    assert_equals "all 6 phases have drivers" "6" "${driver_count}"
+
+    # REVIEW should have parallel entries
+    local review_parallel
+    review_parallel="$(jq '.phase_compositions.REVIEW.parallel | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+    assert_equals "REVIEW has 2 parallel entries" "2" "${review_parallel}"
+
+    # SHIP should have sequence entries
+    local ship_sequence
+    ship_sequence="$(jq '.phase_compositions.SHIP.sequence | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+    assert_equals "SHIP has 3 sequence entries" "3" "${ship_sequence}"
+
+    teardown_test_env
+}
+
 # ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
@@ -316,5 +348,6 @@ test_user_config_disables_skill
 test_health_check_output
 test_discovers_agent_team_skills
 test_default_triggers_has_plugins_section
+test_default_triggers_has_phase_compositions
 
 print_summary
