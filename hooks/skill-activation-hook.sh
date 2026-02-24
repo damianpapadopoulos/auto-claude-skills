@@ -84,97 +84,87 @@ fi
 # Score formula: trigger_score (30 for word-boundary, 10 for substring) + priority
 # We use jq to extract skill data, then bash for regex matching.
 
-# Extract skills array as line-delimited JSON objects (one per skill)
-SCORED_SKILLS="$(printf '%s' "$REGISTRY" | jq -c '
-  [.skills[] | select(.available == true and .enabled == true)][]
+# Single jq call extracts all enabled skills (replaces ~80 per-skill jq forks with 1).
+# Format: name<US>name_lower<US>role<US>priority<US>invoke<US>phase<US>triggers
+# US (\x1f) as field separator (non-whitespace, so empty fields survive IFS splitting).
+# SOH (\x01) as intra-field trigger delimiter.
+DELIM=$'\x01'
+FS=$'\x1f'
+SKILL_DATA="$(printf '%s' "$REGISTRY" | jq -r '
+  [.skills[] | select(.available == true and .enabled == true)] | .[] |
+  (.name + "\u001f" + (.name | ascii_downcase) + "\u001f" + .role + "\u001f" +
+   (.priority // 0 | tostring) + "\u001f" + (.invoke // "SKIP") + "\u001f" +
+   (.phase // "") + "\u001f" + ((.triggers // []) | join("\u0001")))
 ' 2>/dev/null)"
 
-# L3: Pre-pass — collect skill names that appear as whole words in the prompt
-# Uses newline-delimited list + boundary checks to avoid prefix/substring false positives
-SKILL_NAME_MATCHES=""
-while IFS= read -r _sj; do
-  [[ -z "$_sj" ]] && continue
-  _sn="$(printf '%s' "$_sj" | jq -r '.name')"
-  _sn_lower="$(printf '%s' "$_sn" | tr '[:upper:]' '[:lower:]')"
-  # Check if skill name appears with word boundaries in the lowercased prompt
-  # Word boundaries for kebab-case names: start/end of string, or non-[a-z0-9-] character
-  if [[ "$P" =~ (^|[^a-z0-9-])${_sn_lower}($|[^a-z0-9-]) ]]; then
-    SKILL_NAME_MATCHES="${SKILL_NAME_MATCHES}
-${_sn}
-"
-  fi
-done <<EOF
-${SCORED_SKILLS}
-EOF
-
-# Score each skill
+# Score each skill (name-boost check merged into the same loop — no separate pre-pass)
 RESULTS=""
-while IFS= read -r skill_json; do
-  [[ -z "$skill_json" ]] && continue
+while IFS="$FS" read -r skill_name skill_name_lower skill_role skill_priority skill_invoke skill_phase triggers_joined; do
+  [[ -z "$skill_name" ]] && continue
 
-  # Extract all fields in one jq call (reduces 5 forks to 1 per skill)
-  read -r skill_name skill_role skill_priority skill_invoke skill_phase <<FIELDS
-$(printf '%s' "$skill_json" | jq -r '[.name, .role, (.priority // 0 | tostring), (.invoke // "SKIP"), (.phase // "")] | @tsv')
-FIELDS
-
-  trigger_count="$(printf '%s' "$skill_json" | jq '.triggers // [] | length')"
-  trigger_score=0
-
-  ti=0
-  while [[ "$ti" -lt "$trigger_count" ]]; do
-    trigger="$(printf '%s' "$skill_json" | jq -r "(.triggers // [])[${ti}]")"
-    ti=$((ti + 1))
-
-    # Test regex against lowercased prompt
-    if [[ "$P" =~ $trigger ]]; then
-      matched="${BASH_REMATCH[0]}"
-      # Word-boundary heuristic: check chars before/after match
-      # Use substring removal to find match position
-      prefix="${P%%"$matched"*}"
-      prefix_len="${#prefix}"
-      after_pos=$((prefix_len + ${#matched}))
-      is_word_boundary=1
-
-      if [[ "$prefix_len" -gt 0 ]]; then
-        char_before="${P:$((prefix_len - 1)):1}"
-        if [[ "$char_before" =~ [a-z0-9_.-] ]]; then
-          is_word_boundary=0
-        fi
-      fi
-      if [[ "$after_pos" -lt "${#P}" ]]; then
-        char_after="${P:${after_pos}:1}"
-        if [[ "$char_after" =~ [a-z0-9_.-] ]]; then
-          is_word_boundary=0
-        fi
-      fi
-
-      if [[ "$is_word_boundary" -eq 1 ]]; then
-        this_score=30
-      else
-        this_score=10
-      fi
-
-      if [[ "$this_score" -gt "$trigger_score" ]]; then
-        trigger_score="$this_score"
-      fi
-    fi
-  done
-
-  # L3: Apply skill-name-mention boost (+100) and allow through even with zero trigger_score
+  # Name boost: check if skill name appears as whole word in prompt
+  # Word boundaries for kebab-case names: start/end of string, or non-[a-z0-9-] character
   name_boost=0
-  if [[ "$SKILL_NAME_MATCHES" == *"
-${skill_name}
-"* ]]; then
+  if [[ "$P" =~ (^|[^a-z0-9-])${skill_name_lower}($|[^a-z0-9-]) ]]; then
     name_boost=100
   fi
 
+  # Score triggers (iterate using string splitting — no per-trigger jq fork)
+  trigger_score=0
+  if [[ -n "$triggers_joined" ]]; then
+    _remaining="$triggers_joined"
+    while [[ -n "$_remaining" ]]; do
+      if [[ "$_remaining" == *"${DELIM}"* ]]; then
+        trigger="${_remaining%%${DELIM}*}"
+        _remaining="${_remaining#*${DELIM}}"
+      else
+        trigger="$_remaining"
+        _remaining=""
+      fi
+      [[ -z "$trigger" ]] && continue
+
+      # Test regex against lowercased prompt
+      if [[ "$P" =~ $trigger ]]; then
+        matched="${BASH_REMATCH[0]}"
+        # Word-boundary heuristic: check chars before/after match
+        prefix="${P%%"$matched"*}"
+        prefix_len="${#prefix}"
+        after_pos=$((prefix_len + ${#matched}))
+        is_word_boundary=1
+
+        if [[ "$prefix_len" -gt 0 ]]; then
+          char_before="${P:$((prefix_len - 1)):1}"
+          if [[ "$char_before" =~ [a-z0-9_.-] ]]; then
+            is_word_boundary=0
+          fi
+        fi
+        if [[ "$after_pos" -lt "${#P}" ]]; then
+          char_after="${P:${after_pos}:1}"
+          if [[ "$char_after" =~ [a-z0-9_.-] ]]; then
+            is_word_boundary=0
+          fi
+        fi
+
+        if [[ "$is_word_boundary" -eq 1 ]]; then
+          this_score=30
+        else
+          this_score=10
+        fi
+        if [[ "$this_score" -gt "$trigger_score" ]]; then
+          trigger_score="$this_score"
+        fi
+      fi
+    done
+  fi
+
+  # Apply skill-name-mention boost (+100) and allow through even with zero trigger_score
   if [[ "$trigger_score" -gt 0 ]] || [[ "$name_boost" -gt 0 ]]; then
     final_score=$((trigger_score + skill_priority + name_boost))
     RESULTS="${RESULTS}${final_score}|${skill_name}|${skill_role}|${skill_invoke}|${skill_phase}
 "
   fi
 done <<EOF
-${SCORED_SKILLS}
+${SKILL_DATA}
 EOF
 
 # Sort by score descending
@@ -324,32 +314,43 @@ fi
 # =================================================================
 # METHODOLOGY HINTS
 # =================================================================
+# Single jq call extracts all hint data (replaces ~9 per-hint jq forks with 1)
 HINTS=""
-HINT_COUNT="$(printf '%s' "$REGISTRY" | jq '.methodology_hints // [] | length' 2>/dev/null)" || HINT_COUNT=0
-hi=0
-while [[ "$hi" -lt "$HINT_COUNT" ]]; do
-  hint_triggers="$(printf '%s' "$REGISTRY" | jq -r ".methodology_hints[${hi}].triggers[]" 2>/dev/null)"
-  hint_text="$(printf '%s' "$REGISTRY" | jq -r ".methodology_hints[${hi}].hint" 2>/dev/null)"
-  hint_skill="$(printf '%s' "$REGISTRY" | jq -r ".methodology_hints[${hi}].skill // empty" 2>/dev/null)"
+HINTS_DATA="$(printf '%s' "$REGISTRY" | jq -r '
+  .methodology_hints // [] | .[] |
+  ((.skill // "") + "\u001f" + .hint + "\u001f" + ((.triggers // []) | join("\u0001")))
+' 2>/dev/null)"
 
-  # L1b: Suppress hint if its associated skill is already selected
+while IFS="$FS" read -r hint_skill hint_text hint_triggers_joined; do
+  [[ -z "$hint_text" ]] && continue
+
+  # Suppress hint if its associated skill is already selected
   if [[ -n "$hint_skill" ]] && printf '%s' "$SELECTED" | grep -q "|${hint_skill}|"; then
-    hi=$((hi + 1))
     continue
   fi
 
-  while IFS= read -r htrigger; do
-    [[ -z "$htrigger" ]] && continue
-    if [[ "$P" =~ $htrigger ]]; then
-      HINTS="${HINTS}
+  # Test hint triggers against prompt
+  if [[ -n "$hint_triggers_joined" ]]; then
+    _remaining="$hint_triggers_joined"
+    while [[ -n "$_remaining" ]]; do
+      if [[ "$_remaining" == *"${DELIM}"* ]]; then
+        htrigger="${_remaining%%${DELIM}*}"
+        _remaining="${_remaining#*${DELIM}}"
+      else
+        htrigger="$_remaining"
+        _remaining=""
+      fi
+      [[ -z "$htrigger" ]] && continue
+      if [[ "$P" =~ $htrigger ]]; then
+        HINTS="${HINTS}
 - ${hint_text}"
-      break
-    fi
-  done <<HEOF
-${hint_triggers}
-HEOF
-  hi=$((hi + 1))
-done
+        break
+      fi
+    done
+  fi
+done <<EOF
+${HINTS_DATA}
+EOF
 
 # =================================================================
 # PHASE COMPOSITION: PARALLEL / SEQUENCE / HINTS
@@ -360,64 +361,39 @@ COMPOSITION_HINTS=""
 # Determine the current phase from selected skills (use PRIMARY_PHASE)
 CURRENT_PHASE="$PRIMARY_PHASE"
 
-# Look up phase composition if registry has it and a phase was determined
+# Single jq call computes all composition output (replaces ~20-30 per-entry jq forks with 1)
 if [[ -n "$CURRENT_PHASE" ]]; then
-    _pc="$(printf '%s' "$REGISTRY" | jq -c --arg ph "$CURRENT_PHASE" '.phase_compositions[$ph] // empty' 2>/dev/null)"
-    if [[ -n "$_pc" ]]; then
-        # Emit PARALLEL lines for available plugins
-        _par_count="$(printf '%s' "$_pc" | jq '.parallel // [] | length' 2>/dev/null)" || _par_count=0
-        _pi=0
-        while [[ "$_pi" -lt "$_par_count" ]]; do
-            _plugin="$(printf '%s' "$_pc" | jq -r ".parallel[${_pi}].plugin" 2>/dev/null)"
-            _use="$(printf '%s' "$_pc" | jq -r ".parallel[${_pi}].use" 2>/dev/null)"
-            _purpose="$(printf '%s' "$_pc" | jq -r ".parallel[${_pi}].purpose" 2>/dev/null)"
+  _comp_output="$(printf '%s' "$REGISTRY" | jq -r --arg ph "$CURRENT_PHASE" '
+    [.plugins // [] | .[] | select(.available == true) | .name] as $avail |
+    .phase_compositions[$ph] // empty |
+    (
+      (.parallel // [] | .[] |
+        select(.plugin as $p | $avail | any(. == $p)) |
+        "LINE:  PARALLEL: \(.use) -> \(.purpose) [\(.plugin)]"),
+      (.sequence // [] | .[] |
+        if .plugin then
+          select(.plugin as $p | $avail | any(. == $p)) |
+          "LINE:  SEQUENCE: \(.use // .step) -> \(.purpose) [\(.plugin)]"
+        else
+          "LINE:  SEQUENCE: \(.step) -> \(.purpose)"
+        end),
+      (.hints // [] | .[] |
+        select(.plugin as $p | $avail | any(. == $p)) |
+        "HINT:\(.text)")
+    )
+  ' 2>/dev/null)"
 
-            # Check if plugin is available
-            _pavail="$(printf '%s' "$REGISTRY" | jq -r --arg pn "$_plugin" '.plugins // [] | .[] | select(.name == $pn) | .available' 2>/dev/null)"
-            if [[ "$_pavail" == "true" ]]; then
-                COMPOSITION_LINES="${COMPOSITION_LINES}
-  PARALLEL: ${_use} -> ${_purpose} [${_plugin}]"
-            fi
-            _pi=$((_pi + 1))
-        done
-
-        # Emit SEQUENCE lines (SHIP phase)
-        _seq_count="$(printf '%s' "$_pc" | jq '.sequence // [] | length' 2>/dev/null)" || _seq_count=0
-        _si=0
-        while [[ "$_si" -lt "$_seq_count" ]]; do
-            _plugin="$(printf '%s' "$_pc" | jq -r ".sequence[${_si}].plugin // empty" 2>/dev/null)"
-            _step="$(printf '%s' "$_pc" | jq -r ".sequence[${_si}].step // empty" 2>/dev/null)"
-            _use="$(printf '%s' "$_pc" | jq -r ".sequence[${_si}].use // empty" 2>/dev/null)"
-            _purpose="$(printf '%s' "$_pc" | jq -r ".sequence[${_si}].purpose" 2>/dev/null)"
-
-            if [[ -n "$_plugin" ]]; then
-                _pavail="$(printf '%s' "$REGISTRY" | jq -r --arg pn "$_plugin" '.plugins // [] | .[] | select(.name == $pn) | .available' 2>/dev/null)"
-                if [[ "$_pavail" == "true" ]]; then
-                    COMPOSITION_LINES="${COMPOSITION_LINES}
-  SEQUENCE: ${_use} -> ${_purpose} [${_plugin}]"
-                fi
-            elif [[ -n "$_step" ]]; then
-                COMPOSITION_LINES="${COMPOSITION_LINES}
-  SEQUENCE: ${_step} -> ${_purpose}"
-            fi
-            _si=$((_si + 1))
-        done
-
-        # Collect composition hints for available plugins
-        _hint_count="$(printf '%s' "$_pc" | jq '.hints // [] | length' 2>/dev/null)" || _hint_count=0
-        _hi=0
-        while [[ "$_hi" -lt "$_hint_count" ]]; do
-            _plugin="$(printf '%s' "$_pc" | jq -r ".hints[${_hi}].plugin" 2>/dev/null)"
-            _text="$(printf '%s' "$_pc" | jq -r ".hints[${_hi}].text" 2>/dev/null)"
-
-            _pavail="$(printf '%s' "$REGISTRY" | jq -r --arg pn "$_plugin" '.plugins // [] | .[] | select(.name == $pn) | .available' 2>/dev/null)"
-            if [[ "$_pavail" == "true" ]]; then
-                COMPOSITION_HINTS="${COMPOSITION_HINTS}
-- ${_text}"
-            fi
-            _hi=$((_hi + 1))
-        done
-    fi
+  while IFS= read -r _cline; do
+    [[ -z "$_cline" ]] && continue
+    case "$_cline" in
+      LINE:*)  COMPOSITION_LINES="${COMPOSITION_LINES}
+${_cline#LINE:}" ;;
+      HINT:*)  COMPOSITION_HINTS="${COMPOSITION_HINTS}
+- ${_cline#HINT:}" ;;
+    esac
+  done <<EOF
+${_comp_output}
+EOF
 fi
 
 # =================================================================
