@@ -265,9 +265,9 @@ Output stays under ~40 lines. Only available plugins appear.
 SKILL ACTIVATION (2 skills | Review + Domain)
 
 Process: requesting-code-review -> Skill(superpowers:requesting-code-review)
-  INFORMED BY: security-scanner -> Skill(security-scanner)
-  PARALLEL: /code-review -> 5 parallel review agents, posts to GitHub PR [code-review]
-  PARALLEL: code-simplifier agent -> post-review clarity pass [code-simplifier]
+  Domain: security-scanner -> Skill(security-scanner)
+  PARALLEL: commands:/code-review -> Run 5 parallel review agents and post findings to GitHub PR [code-review]
+  PARALLEL: agents:code-simplifier -> Post-review simplification pass for clarity [code-simplifier]
 
 Evaluate: **Phase: [REVIEW]** | requesting-code-review YES/NO, security-scanner YES/NO
 - Consider /code-review for automated multi-agent PR review

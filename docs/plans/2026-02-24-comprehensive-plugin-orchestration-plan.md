@@ -412,11 +412,11 @@ if [ -f "${DEFAULT_TRIGGERS}" ]; then
 fi
 ```
 
-Then modify Step 9 to include plugins in the registry:
+Then modify Step 9 (line 343-354) to include plugins in the registry. **Keep version as `"3.1.0"` for now** — Task 9 bumps it to `"4.0.0"` in a single coordinated change:
 
 ```bash
 REGISTRY="$(jq -n \
-    --arg version "4.0.0" \
+    --arg version "3.1.0" \
     --argjson skills "${SKILLS_JSON}" \
     --argjson plugins "${PLUGINS_JSON}" \
     --argjson methodology_hints "${METHODOLOGY_HINTS}" \
@@ -654,7 +654,7 @@ if [ -f "${DEFAULT_TRIGGERS}" ]; then
 fi
 
 REGISTRY="$(jq -n \
-    --arg version "4.0.0" \
+    --arg version "3.1.0" \
     --argjson skills "${SKILLS_JSON}" \
     --argjson plugins "${PLUGINS_JSON}" \
     --argjson phase_compositions "${PHASE_COMPOSITIONS}" \
@@ -670,6 +670,8 @@ REGISTRY="$(jq -n \
     }'
 )"
 ```
+
+**Note:** Version stays `"3.1.0"` here — Task 9 bumps all version strings to `"4.0.0"` in a single coordinated change.
 
 **Step 4: Run test to verify it passes**
 
@@ -727,11 +729,17 @@ for _plugin in superpowers frontend-design claude-md-management pr-review-toolki
 
 Update the health check message in Step 12 to include plugin counts:
 
+Add after the existing `WARNING_COUNT` computation (before Step 12's `MSG`):
+
 ```bash
 PLUGIN_COUNT="$(printf '%s' "${PLUGINS_JSON}" | jq 'length' 2>/dev/null)" || PLUGIN_COUNT=0
 PLUGIN_AVAILABLE="$(printf '%s' "${PLUGINS_JSON}" | jq '[.[] | select(.available == true)] | length' 2>/dev/null)" || PLUGIN_AVAILABLE=0
+```
 
-MSG="SessionStart: skill registry built (${SKILL_COUNT} skills from ${SOURCE_COUNT} sources, ${PLUGIN_COUNT} plugins (${PLUGIN_AVAILABLE} available), ${WARNING_COUNT} warnings)${SETUP_HINTS}"
+Then update the `MSG` at line 415 to include plugin counts (keeping the existing skill counts):
+
+```bash
+MSG="SessionStart: skill registry built (${SKILL_COUNT} skills, ${AVAILABLE_COUNT} available, from ${SOURCE_COUNT} sources, ${PLUGIN_COUNT} plugins (${PLUGIN_AVAILABLE} installed), ${WARNING_COUNT} warnings)${SETUP_HINTS}"
 ```
 
 **Step 4: Run test to verify it passes**
@@ -803,7 +811,23 @@ test_no_parallel_when_plugin_unavailable() {
 }
 ```
 
-Also add an `install_registry_v4` helper that includes the `plugins` and `phase_compositions` sections in the test registry, with `code-review` and `commit-commands` marked as `available: true`.
+Also add an `install_registry_v4` helper that includes the `plugins` and `phase_compositions` sections in the test registry, with `code-review` and `commit-commands` marked as `available: true`. The helper must follow the same pattern as the existing `install_registry` at test-routing.sh:33 — write a complete JSON block to `${HOME}/.claude/.skill-registry-cache.json`. Include all the existing skills from `install_registry` plus add:
+
+```json
+  "plugins": [
+    {"name": "code-review", "source": "claude-plugins-official", "provides": {"commands": ["/code-review"], "skills": [], "agents": [], "hooks": []}, "phase_fit": ["REVIEW"], "description": "5 parallel review agents", "available": true},
+    {"name": "code-simplifier", "source": "claude-plugins-official", "provides": {"commands": [], "skills": [], "agents": ["code-simplifier"], "hooks": []}, "phase_fit": ["REVIEW"], "description": "Post-review clarity pass", "available": true},
+    {"name": "commit-commands", "source": "claude-plugins-official", "provides": {"commands": ["/commit", "/commit-push-pr"], "skills": [], "agents": [], "hooks": []}, "phase_fit": ["SHIP"], "description": "Commit workflows", "available": true}
+  ],
+  "phase_compositions": {
+    "DESIGN": {"driver": "brainstorming", "parallel": [], "hints": []},
+    "PLAN": {"driver": "writing-plans", "parallel": [], "hints": []},
+    "IMPLEMENT": {"driver": "executing-plans", "parallel": [], "hints": []},
+    "REVIEW": {"driver": "requesting-code-review", "parallel": [{"plugin": "code-review", "use": "commands:/code-review", "when": "installed", "purpose": "5 parallel review agents, posts to GitHub PR"}, {"plugin": "code-simplifier", "use": "agents:code-simplifier", "when": "installed", "purpose": "Post-review simplification pass"}], "hints": [{"plugin": "code-review", "text": "Consider /code-review for automated multi-agent PR review", "when": "installed"}]},
+    "SHIP": {"driver": "verification-before-completion", "sequence": [{"plugin": "commit-commands", "use": "commands:/commit", "when": "installed", "purpose": "Execute structured commit after verification passes"}, {"step": "finishing-a-development-branch", "purpose": "Branch cleanup, merge, or PR"}, {"plugin": "commit-commands", "use": "commands:/commit-push-pr", "when": "installed AND user chooses PR option", "purpose": "Automated branch-to-PR flow"}], "hints": [{"plugin": "commit-commands", "text": "Consider /commit-push-pr for automated branch-to-PR workflow", "when": "installed"}]},
+    "DEBUG": {"driver": "systematic-debugging", "parallel": [], "hints": []}
+  }
+```
 
 **Step 2: Run test to verify it fails**
 
@@ -812,7 +836,14 @@ Expected: FAIL — no PARALLEL/SEQUENCE lines in output
 
 **Step 3: Add composition output to skill-activation-hook.sh**
 
-After the methodology hints section (around line 287) and before the output build section, add:
+**IMPORTANT codebase notes for this task:**
+- The routing engine uses `Domain:` label (NOT `INFORMED BY:`) — see line 328
+- There is an `OVERFLOW_DOMAIN` block at lines 342-352 (1-2 format) and 421-429 (3+ format) with "Also relevant:" lines
+- There is a domain invocation instruction at lines 371-375 (1-2) and 439-443 (3+)
+- Composition lines must be injected at line 340 (after `${STANDALONE_LINES}` but BEFORE the overflow block)
+- Composition hints must be appended alongside methodology hints at lines 446-450
+
+After the methodology hints section (line 289) and before the output build section (line 293), add:
 
 ```bash
 # =================================================================
@@ -896,20 +927,36 @@ fi
 
 Then in the output build section, inject `COMPOSITION_LINES` after the skill lines (process/domain/workflow) and append `COMPOSITION_HINTS` alongside methodology hints.
 
-For the 1-2 skills format, insert after `${WORKFLOW_LINES}${STANDALONE_LINES}`:
-```bash
-OUT+="${PROCESS_LINE}${DOMAIN_LINES}${WORKFLOW_LINES}${STANDALONE_LINES}${COMPOSITION_LINES}"
-```
+**Injection points in the output build section (line 293+):**
 
-For the 3+ skills format, insert after the skill loop and before the evaluation instruction.
+For the **1-2 skills** format (line 302-375):
+- Insert `${COMPOSITION_LINES}` at line 340 — change from:
+  `OUT+="${PROCESS_LINE}${DOMAIN_LINES}${WORKFLOW_LINES}${STANDALONE_LINES}"`
+  to:
+  `OUT+="${PROCESS_LINE}${DOMAIN_LINES}${WORKFLOW_LINES}${STANDALONE_LINES}${COMPOSITION_LINES}"`
+- Note: the OVERFLOW_DOMAIN block (lines 342-352) and domain invocation instruction (lines 371-375) remain untouched after this.
 
-Append composition hints alongside methodology hints at the end:
-```bash
-if [[ -n "$HINTS" ]] || [[ -n "$COMPOSITION_HINTS" ]]; then
-  OUT+="
-${HINTS}${COMPOSITION_HINTS}"
-fi
-```
+For the **3+ skills** format (line 377-443):
+- Insert `${COMPOSITION_LINES}` after the overflow block (line 429) and before the evaluation instruction (line 431). Add:
+  ```bash
+  OUT+="${COMPOSITION_LINES}"
+  ```
+
+For **methodology hints + composition hints** (line 446-450):
+- Change from:
+  ```bash
+  if [[ -n "$HINTS" ]]; then
+    OUT+="
+  ${HINTS}"
+  fi
+  ```
+  to:
+  ```bash
+  if [[ -n "$HINTS" ]] || [[ -n "$COMPOSITION_HINTS" ]]; then
+    OUT+="
+  ${HINTS}${COMPOSITION_HINTS}"
+  fi
+  ```
 
 **Step 4: Run test to verify it passes**
 
@@ -932,24 +979,17 @@ git commit -m "feat: emit PARALLEL/SEQUENCE lines from phase compositions"
 
 **Step 1: Write the failing test**
 
-Add to `tests/test-install.sh`:
+Add to `tests/test-install.sh` before `print_summary`. **Note:** test-install.sh does NOT use `setup_test_env`/`teardown_test_env` — it validates files using `${PLUGIN_ROOT}` directly:
 
 ```bash
-test_fallback_has_plugins() {
-    echo "-- test: fallback registry has plugins section --"
+# Test: fallback registry has plugins and phase_compositions sections
+FALLBACK="${PLUGIN_ROOT}/config/fallback-registry.json"
 
-    local fallback="${PROJECT_ROOT}/config/fallback-registry.json"
-    assert_file_exists "fallback registry exists" "${fallback}"
-    assert_json_valid "fallback registry is valid JSON" "${fallback}"
+has_plugins="$(jq 'has("plugins")' "${FALLBACK}" 2>/dev/null)"
+assert_equals "fallback has plugins key" "true" "${has_plugins}"
 
-    local has_plugins
-    has_plugins="$(jq 'has("plugins")' "${fallback}" 2>/dev/null)"
-    assert_equals "fallback has plugins key" "true" "${has_plugins}"
-
-    local has_pc
-    has_pc="$(jq 'has("phase_compositions")' "${fallback}" 2>/dev/null)"
-    assert_equals "fallback has phase_compositions key" "true" "${has_pc}"
-}
+has_pc="$(jq 'has("phase_compositions")' "${FALLBACK}" 2>/dev/null)"
+assert_equals "fallback has phase_compositions key" "true" "${has_pc}"
 ```
 
 **Step 2: Run test to verify it fails**
