@@ -1052,6 +1052,82 @@ BADREG
 }
 
 # ---------------------------------------------------------------------------
+# 27. Phase composition uses process phase, not domain phase
+# ---------------------------------------------------------------------------
+test_phase_uses_process_precedence() {
+    echo "-- test: phase composition uses process phase precedence --"
+    setup_test_env
+    install_registry_v4
+
+    # "build a secure frontend dashboard" triggers:
+    #   brainstorming (process, phase=DESIGN, prio 30),
+    #   security-scanner (domain, no phase, prio 102),
+    #   frontend-design (domain, no phase, prio 101)
+    # Phase should be DESIGN (from process), not any domain phase
+    local output context
+    output="$(run_hook "build a secure frontend dashboard component with csrf protection")"
+    context="$(extract_context "${output}")"
+
+    # The DESIGN phase composition has a PARALLEL line for feature-dev plugin
+    assert_contains "phase composition uses DESIGN" "PARALLEL:" "${context}"
+    assert_contains "phase composition mentions feature-dev" "feature-dev" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# 28. Compact Evaluate phase uses process phase
+# ---------------------------------------------------------------------------
+test_eval_phase_uses_process() {
+    echo "-- test: compact Evaluate phase uses process phase --"
+    setup_test_env
+
+    # Use a minimal registry with just 1 process + 1 domain to stay in compact format
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'PHASEREG'
+{
+  "version": "test",
+  "skills": [
+    {
+      "name": "brainstorming",
+      "role": "process",
+      "phase": "DESIGN",
+      "triggers": ["(build|create)"],
+      "priority": 30,
+      "invoke": "Skill(superpowers:brainstorming)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "security-scanner",
+      "role": "domain",
+      "phase": "IMPLEMENT",
+      "triggers": ["(secur(e|ity)|encrypt)"],
+      "priority": 102,
+      "invoke": "Skill(security-scanner)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "methodology_hints": [],
+  "phase_compositions": {}
+}
+PHASEREG
+
+    # 2 skills -> compact format with Evaluate line
+    # security-scanner has phase=IMPLEMENT, brainstorming has phase=DESIGN
+    # Process phase (DESIGN) should win
+    local output context
+    output="$(run_hook "build a secure authentication service with encryption")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "Evaluate uses DESIGN phase" "Phase: [DESIGN]" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_debug_prompt_matches
@@ -1081,5 +1157,7 @@ test_ship_emits_sequence_lines
 test_no_parallel_when_plugin_unavailable
 test_process_slot_reserved
 test_missing_triggers_handled
+test_phase_uses_process_precedence
+test_eval_phase_uses_process
 
 print_summary

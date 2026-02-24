@@ -281,6 +281,39 @@ EOF
 [[ "$HAS_WORKFLOW" -eq 1 ]] && PLABEL="${PLABEL} + Workflow"
 
 # =================================================================
+# PRIMARY PHASE (process > workflow > domain > first non-empty)
+# =================================================================
+PRIMARY_PHASE=""
+_PHASE_PROCESS=""
+_PHASE_WORKFLOW=""
+_PHASE_DOMAIN=""
+_PHASE_FIRST=""
+
+while IFS='|' read -r score name role invoke phase; do
+  [[ -z "$name" ]] && continue
+  if [[ -n "$phase" ]] && [[ -z "$_PHASE_FIRST" ]]; then
+    _PHASE_FIRST="$phase"
+  fi
+  case "$role" in
+    process)  [[ -z "$_PHASE_PROCESS" ]] && _PHASE_PROCESS="$phase" ;;
+    workflow) [[ -z "$_PHASE_WORKFLOW" ]] && _PHASE_WORKFLOW="$phase" ;;
+    domain)   [[ -z "$_PHASE_DOMAIN" ]] && _PHASE_DOMAIN="$phase" ;;
+  esac
+done <<EOF
+${SELECTED}
+EOF
+
+if [[ -n "$_PHASE_PROCESS" ]]; then
+  PRIMARY_PHASE="$_PHASE_PROCESS"
+elif [[ -n "$_PHASE_WORKFLOW" ]]; then
+  PRIMARY_PHASE="$_PHASE_WORKFLOW"
+elif [[ -n "$_PHASE_DOMAIN" ]]; then
+  PRIMARY_PHASE="$_PHASE_DOMAIN"
+else
+  PRIMARY_PHASE="$_PHASE_FIRST"
+fi
+
+# =================================================================
 # METHODOLOGY HINTS
 # =================================================================
 HINTS=""
@@ -316,17 +349,8 @@ done
 COMPOSITION_LINES=""
 COMPOSITION_HINTS=""
 
-# Determine the current phase from selected skills
-CURRENT_PHASE=""
-while IFS='|' read -r score name role invoke phase; do
-    [[ -z "$name" ]] && continue
-    if [[ -n "$phase" ]]; then
-        CURRENT_PHASE="$phase"
-        break
-    fi
-done <<EOF
-${SELECTED}
-EOF
+# Determine the current phase from selected skills (use PRIMARY_PHASE)
+CURRENT_PHASE="$PRIMARY_PHASE"
 
 # Look up phase composition if registry has it and a phase was determined
 if [[ -n "$CURRENT_PHASE" ]]; then
@@ -451,17 +475,8 @@ ${OVERFLOW_DOMAIN}
 EOF
   OUT+="${OVERFLOW_LINES}"
 
-  # Get phase from process skill or first skill
-  EVAL_PHASE=""
-  while IFS='|' read -r score name role invoke phase; do
-    [[ -z "$name" ]] && continue
-    if [[ -n "$phase" ]]; then
-      EVAL_PHASE="$phase"
-      break
-    fi
-  done <<EOF
-${SELECTED}
-EOF
+  # Phase from process skill (with precedence)
+  EVAL_PHASE="$PRIMARY_PHASE"
   [[ -z "$EVAL_PHASE" ]] && EVAL_PHASE="IMPLEMENT"
 
   OUT+="
