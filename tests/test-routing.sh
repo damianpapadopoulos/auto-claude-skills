@@ -261,6 +261,205 @@ install_registry() {
 REGISTRY
 }
 
+# Helper: install a v4 skill registry cache with plugins and phase_compositions
+install_registry_v4() {
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'REGISTRY_V4'
+{
+  "version": "4.0.0",
+  "skills": [
+    {
+      "name": "systematic-debugging",
+      "role": "process",
+      "phase": "DEBUG",
+      "triggers": ["(debug|bug|broken|crash|regression|not.work|error|fail|hang|freeze|timeout|leak|corrupt|unexpected|wrong)"],
+      "trigger_mode": "regex",
+      "priority": 10,
+      "invoke": "Skill(superpowers:systematic-debugging)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "test-driven-development",
+      "role": "process",
+      "phase": "IMPLEMENT",
+      "triggers": ["(build|create|implement|add|write|make)", "(run|test|execute|verify|validate|check|coverage)"],
+      "trigger_mode": "regex",
+      "priority": 20,
+      "invoke": "Skill(superpowers:test-driven-development)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "brainstorming",
+      "role": "process",
+      "phase": "DESIGN",
+      "triggers": ["(build|create|implement|develop|scaffold|init|bootstrap|brainstorm|design|architect|strateg|scope|outline|approach|generate|set.?up|wire.up|connect|integrate|extend|new|start|introduce|enable|support|how.(should|would|could))"],
+      "trigger_mode": "regex",
+      "priority": 30,
+      "invoke": "Skill(superpowers:brainstorming)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "executing-plans",
+      "role": "process",
+      "phase": "IMPLEMENT",
+      "triggers": ["(execute.*plan|run.the.plan|implement.the.plan|continue|follow.the.plan|resume|next.task|next.step)"],
+      "trigger_mode": "regex",
+      "priority": 15,
+      "invoke": "Skill(superpowers:executing-plans)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "subagent-driven-development",
+      "role": "process",
+      "phase": "IMPLEMENT",
+      "triggers": ["(execute.*plan|run.the.plan|implement.the.plan|continue|follow.the.plan|resume|next.task|next.step)"],
+      "trigger_mode": "regex",
+      "priority": 14,
+      "invoke": "Skill(superpowers:subagent-driven-development)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "requesting-code-review",
+      "role": "process",
+      "phase": "REVIEW",
+      "triggers": ["(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|tech.?debt|(^|[^a-z])pr($|[^a-z]))"],
+      "trigger_mode": "regex",
+      "priority": 51,
+      "invoke": "Skill(superpowers:requesting-code-review)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "receiving-code-review",
+      "role": "process",
+      "phase": "REVIEW",
+      "triggers": ["(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|tech.?debt|(^|[^a-z])pr($|[^a-z]))"],
+      "trigger_mode": "regex",
+      "priority": 50,
+      "invoke": "Skill(superpowers:receiving-code-review)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "verification-before-completion",
+      "role": "workflow",
+      "phase": "SHIP",
+      "triggers": ["(ship|merge|deploy|push|release|tag|publish|pr.ready|ready.to|wrap.?up|finalize|complete|finish)"],
+      "trigger_mode": "regex",
+      "priority": 60,
+      "invoke": "Skill(superpowers:verification-before-completion)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "finishing-a-development-branch",
+      "role": "workflow",
+      "phase": "SHIP",
+      "triggers": ["(ship|merge|deploy|push|release|tag|publish|pr.ready|ready.to|wrap.?up|finalize|complete|finish)"],
+      "trigger_mode": "regex",
+      "priority": 61,
+      "invoke": "Skill(superpowers:finishing-a-development-branch)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "security-scanner",
+      "role": "domain",
+      "triggers": ["(secur(e|ity)|vulnerab|owasp|pentest|attack|exploit|encrypt|inject|xss|csrf)"],
+      "trigger_mode": "regex",
+      "priority": 102,
+      "invoke": "Skill(security-scanner)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "frontend-design",
+      "role": "domain",
+      "triggers": ["(^|[^a-z])(ui|frontend|component|layout|style|css|tailwind|responsive|dashboard)($|[^a-z])"],
+      "trigger_mode": "regex",
+      "priority": 101,
+      "invoke": "Call Skill(frontend-design:frontend-design)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "disabled-skill",
+      "role": "process",
+      "phase": "DEBUG",
+      "triggers": ["(debug|bug|fix)"],
+      "trigger_mode": "regex",
+      "priority": 5,
+      "invoke": "Skill(mock:disabled-skill)",
+      "available": true,
+      "enabled": false
+    },
+    {
+      "name": "agent-team-execution",
+      "role": "workflow",
+      "phase": "IMPLEMENT",
+      "triggers": ["(agent.team|team.execute|parallel.team|swarm|fan.out|specialist|multi.agent)"],
+      "trigger_mode": "regex",
+      "priority": 16,
+      "invoke": "Skill(agent-team-execution)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "agent-team-review",
+      "role": "workflow",
+      "phase": "REVIEW",
+      "triggers": ["(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|tech.?debt|(^|[^a-z])pr($|[^a-z]))"],
+      "trigger_mode": "regex",
+      "priority": 17,
+      "invoke": "Skill(agent-team-review)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "design-debate",
+      "role": "domain",
+      "phase": "DESIGN",
+      "triggers": ["(build|create|implement|develop|scaffold|brainstorm|design|architect|strateg|scope|outline|approach|generate|set.?up|integrate|extend|new|start)"],
+      "trigger_mode": "regex",
+      "priority": 14,
+      "invoke": "Skill(design-debate)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "plugins": [
+    {"name": "code-review", "source": "claude-plugins-official", "provides": {"commands": ["/code-review"], "skills": [], "agents": [], "hooks": []}, "phase_fit": ["REVIEW"], "description": "5 parallel review agents", "available": true},
+    {"name": "code-simplifier", "source": "claude-plugins-official", "provides": {"commands": [], "skills": [], "agents": ["code-simplifier"], "hooks": []}, "phase_fit": ["REVIEW"], "description": "Post-review clarity pass", "available": true},
+    {"name": "commit-commands", "source": "claude-plugins-official", "provides": {"commands": ["/commit", "/commit-push-pr"], "skills": [], "agents": [], "hooks": []}, "phase_fit": ["SHIP"], "description": "Commit workflows", "available": true},
+    {"name": "security-guidance", "source": "claude-plugins-official", "provides": {"commands": [], "skills": [], "agents": [], "hooks": ["PreToolUse:security-patterns"]}, "phase_fit": ["*"], "description": "Write-time security blocker", "available": true},
+    {"name": "feature-dev", "source": "claude-plugins-official", "provides": {"commands": ["/feature-dev"], "skills": [], "agents": ["code-explorer", "code-architect", "code-reviewer"], "hooks": []}, "phase_fit": ["DESIGN", "IMPLEMENT", "REVIEW"], "description": "Full feature pipeline", "available": true}
+  ],
+  "phase_compositions": {
+    "DESIGN": {"driver": "brainstorming", "parallel": [{"plugin": "feature-dev", "use": "agents:code-explorer", "when": "installed", "purpose": "Parallel codebase exploration while brainstorming"}], "hints": [{"plugin": "feature-dev", "text": "Consider /feature-dev for agent-parallel feature development", "when": "installed"}]},
+    "PLAN": {"driver": "writing-plans", "parallel": [], "hints": []},
+    "IMPLEMENT": {"driver": "executing-plans", "parallel": [{"plugin": "security-guidance", "use": "hooks:PreToolUse", "when": "installed", "purpose": "Passive write-time security guard"}], "hints": []},
+    "REVIEW": {"driver": "requesting-code-review", "parallel": [{"plugin": "code-review", "use": "commands:/code-review", "when": "installed", "purpose": "5 parallel review agents, posts to GitHub PR"}, {"plugin": "code-simplifier", "use": "agents:code-simplifier", "when": "installed", "purpose": "Post-review simplification pass"}], "hints": [{"plugin": "code-review", "text": "Consider /code-review for automated multi-agent PR review", "when": "installed"}]},
+    "SHIP": {"driver": "verification-before-completion", "sequence": [{"plugin": "commit-commands", "use": "commands:/commit", "when": "installed", "purpose": "Execute structured commit after verification passes"}, {"step": "finishing-a-development-branch", "purpose": "Branch cleanup, merge, or PR"}, {"plugin": "commit-commands", "use": "commands:/commit-push-pr", "when": "installed AND user chooses PR option", "purpose": "Automated branch-to-PR flow"}], "hints": [{"plugin": "commit-commands", "text": "Consider /commit-push-pr for automated branch-to-PR workflow", "when": "installed"}]},
+    "DEBUG": {"driver": "systematic-debugging", "parallel": [], "hints": []}
+  },
+  "methodology_hints": [
+    {"name": "ralph-loop", "triggers": ["(migrate|refactor.all|fix.all|batch|overnight|autonom|iterate|keep.(going|trying|fixing))"], "trigger_mode": "regex", "hint": "RALPH LOOP: Consider /ralph-loop for autonomous iteration."},
+    {"name": "pr-review", "triggers": ["(review|pull.?request|code.?review|(^|[^a-z])pr($|[^a-z]))"], "trigger_mode": "regex", "hint": "PR REVIEW: Consider /pr-review for structured review.", "skill": "requesting-code-review"}
+  ],
+  "blocklist_patterns": [
+    {"pattern": "^(hi|hello|hey|thanks|thank.you|good.(morning|afternoon|evening)|bye|goodbye|ok|okay|yes|no|sure|yep|nope|got.it|sounds.good|cool|nice|great|perfect|awesome|understood)([[:space:]!.,]+.{0,20})?$", "description": "Greeting or short acknowledgement", "max_tail_length": 20}
+  ],
+  "warnings": []
+}
+REGISTRY_V4
+}
+
 # ---------------------------------------------------------------------------
 # 1. Debug prompt matches systematic-debugging
 # ---------------------------------------------------------------------------
@@ -720,6 +919,59 @@ test_teammate_idle_guard() {
 }
 
 # ---------------------------------------------------------------------------
+# 23. Review phase emits PARALLEL lines (v4 registry)
+# ---------------------------------------------------------------------------
+test_review_emits_parallel_lines() {
+    echo "-- test: review phase emits PARALLEL lines --"
+    setup_test_env
+    install_registry_v4
+
+    local output context
+    output="$(run_hook "please review the code changes in this pull request")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "review has PARALLEL line" "PARALLEL:" "${context}"
+    assert_contains "review mentions code-review" "code-review" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# 24. Ship phase emits SEQUENCE lines (v4 registry)
+# ---------------------------------------------------------------------------
+test_ship_emits_sequence_lines() {
+    echo "-- test: ship phase emits SEQUENCE lines --"
+    setup_test_env
+    install_registry_v4
+
+    local output context
+    output="$(run_hook "let's ship this and merge the branch to main")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "ship has SEQUENCE line" "SEQUENCE:" "${context}"
+    assert_contains "ship mentions commit" "commit" "$(printf '%s' "${context}" | tr '[:upper:]' '[:lower:]')"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# 25. No PARALLEL when plugin unavailable (v3 registry)
+# ---------------------------------------------------------------------------
+test_no_parallel_when_plugin_unavailable() {
+    echo "-- test: no PARALLEL when plugin unavailable --"
+    setup_test_env
+    install_registry  # v3 registry, no plugins
+
+    local output context
+    output="$(run_hook "please review the code changes in this pull request")"
+    context="$(extract_context "${output}")"
+
+    assert_not_contains "no PARALLEL without plugins" "PARALLEL:" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_debug_prompt_matches
@@ -744,5 +996,8 @@ test_skill_name_mention_boost
 test_domain_invocation_instruction
 test_overflow_domain_shown
 test_teammate_idle_guard
+test_review_emits_parallel_lines
+test_ship_emits_sequence_lines
+test_no_parallel_when_plugin_unavailable
 
 print_summary
