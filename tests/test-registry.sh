@@ -371,6 +371,23 @@ test_discovers_curated_plugins() {
     teardown_test_env
 }
 
+test_registry_includes_phase_compositions() {
+    echo "-- test: registry cache includes phase_compositions --"
+    setup_test_env
+
+    local output
+    output="$(run_hook)"
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    assert_json_valid "cache file is valid JSON" "${cache_file}"
+
+    local pc_keys
+    pc_keys="$(jq '.phase_compositions | keys | length' "${cache_file}" 2>/dev/null)"
+    assert_equals "phase_compositions has 6 phases" "6" "${pc_keys}"
+
+    teardown_test_env
+}
+
 test_auto_discovers_unknown_plugins() {
     echo "-- test: auto-discovers unknown plugins --"
     setup_test_env
@@ -427,6 +444,7 @@ test_discovers_agent_team_skills
 test_default_triggers_has_plugins_section
 test_default_triggers_has_phase_compositions
 test_discovers_curated_plugins
+test_registry_includes_phase_compositions
 test_auto_discovers_unknown_plugins
 
 print_summary

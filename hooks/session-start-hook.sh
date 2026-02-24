@@ -332,6 +332,12 @@ if [ -f "${DEFAULT_TRIGGERS}" ]; then
     METHODOLOGY_HINTS="$(jq '.methodology_hints // []' "${DEFAULT_TRIGGERS}" 2>/dev/null)" || METHODOLOGY_HINTS="[]"
 fi
 
+# Extract phase_compositions from default-triggers.json
+PHASE_COMPOSITIONS="{}"
+if [ -f "${DEFAULT_TRIGGERS}" ]; then
+    PHASE_COMPOSITIONS="$(jq '.phase_compositions // {}' "${DEFAULT_TRIGGERS}" 2>/dev/null)" || PHASE_COMPOSITIONS="{}"
+fi
+
 # -----------------------------------------------------------------
 # Step 8b: Discover curated plugins from default-triggers.json
 # -----------------------------------------------------------------
@@ -473,12 +479,14 @@ REGISTRY="$(jq -n \
     --arg version "3.2.0" \
     --argjson skills "${SKILLS_JSON}" \
     --argjson plugins "${PLUGINS_JSON}" \
+    --argjson phase_compositions "${PHASE_COMPOSITIONS}" \
     --argjson methodology_hints "${METHODOLOGY_HINTS}" \
     --argjson warnings "${WARNINGS}" \
     '{
         version: $version,
         skills: $skills,
         plugins: $plugins,
+        phase_compositions: $phase_compositions,
         methodology_hints: $methodology_hints,
         warnings: $warnings
     }'
