@@ -493,8 +493,13 @@ Evaluate: **Phase: [${EVAL_PHASE}]** | ${EVAL_SKILLS}"
 
   # Add domain invocation instruction when domain skills are present
   if [[ "$DOMAIN_COUNT" -gt 0 ]] || [[ -n "$OVERFLOW_DOMAIN" ]]; then
-    OUT+="
+    if [[ -n "$PROCESS_SKILL" ]]; then
+      OUT+="
 Domain skills evaluated YES: invoke them (before, during, or after the process skill) -- do not just note them."
+    else
+      OUT+="
+Domain skills evaluated YES: invoke them -- do not just note them."
+    fi
   fi
 
 else
@@ -568,8 +573,13 @@ Step 3 -- State your plan and proceed. Keep it to 1-2 sentences."
 
   # Add domain invocation instruction when domain skills are present
   if [[ "$DOMAIN_COUNT" -gt 0 ]] || [[ -n "$OVERFLOW_DOMAIN" ]]; then
-    OUT+="
+    if [[ -n "$PROCESS_SKILL" ]]; then
+      OUT+="
 Domain skills evaluated YES: invoke them (before, during, or after the process skill) -- do not just note them."
+    else
+      OUT+="
+Domain skills evaluated YES: invoke them -- do not just note them."
+    fi
   fi
 fi
 

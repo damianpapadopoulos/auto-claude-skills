@@ -1228,6 +1228,55 @@ DOTREG
 }
 
 # ---------------------------------------------------------------------------
+# 30. Domain instruction wording without process skill
+# ---------------------------------------------------------------------------
+test_domain_instruction_no_process() {
+    echo "-- test: domain instruction wording without process --"
+    setup_test_env
+
+    # Custom registry: only domain skills, no process skills
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'DOMREG'
+{
+  "version": "test",
+  "skills": [
+    {
+      "name": "security-scanner",
+      "role": "domain",
+      "triggers": ["(secur(e|ity)|vulnerab)"],
+      "priority": 102,
+      "invoke": "Skill(security-scanner)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "frontend-design",
+      "role": "domain",
+      "triggers": ["(frontend|dashboard|component)"],
+      "priority": 101,
+      "invoke": "Skill(frontend-design)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "methodology_hints": [],
+  "phase_compositions": {}
+}
+DOMREG
+
+    local output context
+    output="$(run_hook "build a secure frontend dashboard component")"
+    context="$(extract_context "${output}")"
+
+    # Should have domain invocation instruction but NOT mention "the process skill"
+    assert_contains "has domain invocation instruction" "invoke them" "${context}"
+    assert_not_contains "no process skill reference" "the process skill" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_debug_prompt_matches
@@ -1261,5 +1310,6 @@ test_phase_uses_process_precedence
 test_eval_phase_uses_process
 test_name_boost_boundary_aware
 test_trigger_boundary_excludes_dot
+test_domain_instruction_no_process
 
 print_summary
