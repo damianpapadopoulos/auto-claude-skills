@@ -155,6 +155,14 @@ install_context_registry() {
     }
   ],
   "methodology_hints": [],
+  "phase_guide": {
+    "DESIGN":    "brainstorming (ask questions, get approval)",
+    "PLAN":      "writing-plans (break into tasks, confirm before execution)",
+    "IMPLEMENT": "executing-plans or subagent-driven-development + TDD",
+    "REVIEW":    "requesting-code-review",
+    "SHIP":      "verification-before-completion + finishing-a-development-branch",
+    "DEBUG":     "systematic-debugging, then return to current phase"
+  },
   "blocklist_patterns": [
     {
       "pattern": "^(hi|hello|hey|thanks|thank.you|good.(morning|afternoon|evening)|bye|goodbye|ok|okay|yes|no|sure|yep|nope|got.it|sounds.good|cool|nice|great|perfect|awesome|understood)([[:space:]!.,]+.{0,20})?$",

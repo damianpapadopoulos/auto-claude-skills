@@ -233,10 +233,10 @@
       "phase": "IMPLEMENT",
       "triggers": [
         "(agent.team|team.execute|parallel.team|swarm|fan.out|specialist|multi.agent)",
-        "(execute.*plan|run.the.plan|implement.the.plan|implement.*(rest|remaining)|continue|follow.the.plan|pick.up|resume|next.task|next.step|carry.on|keep.going|where.were.we|what.s.next)"
+        "(execute.*plan|run.the.plan|implement.the.plan|implement.*(rest|remaining)|follow.the.plan|pick.up|resume)"
       ],
       "trigger_mode": "regex",
-      "priority": 16,
+      "priority": 22,
       "precedes": [],
       "requires": ["writing-plans"],
       "description": "Team-based parallel execution for plans with 3+ independent tasks. Auto-offered alongside executing-plans when plan has 3+ file-disjoint groups."
@@ -246,10 +246,11 @@
       "role": "workflow",
       "phase": "REVIEW",
       "triggers": [
-        "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|tech.?debt|(^|[^a-z])pr($|[^a-z]))"
+        "(team.review|multi.*(perspective|reviewer|agent).*(review|check)|thorough.*review|comprehensive.*review|full.*review)",
+        "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|(^|[^a-z])pr($|[^a-z]))"
       ],
       "trigger_mode": "regex",
-      "priority": 17,
+      "priority": 20,
       "precedes": [],
       "requires": [],
       "description": "Multi-perspective parallel code review with specialist reviewers (security, quality, spec compliance)."
@@ -259,10 +260,10 @@
       "role": "domain",
       "phase": "DESIGN",
       "triggers": [
-        "(build|create|implement|develop|scaffold|brainstorm|design|architect|strateg|scope|outline|approach|generate|set.?up|integrate|extend|new|start)"
+        "(brainstorm|design|architect|strateg|scope|outline|approach|trade.?off|debate|compare.*(option|approach|design)|weigh.*(option|approach)|pro.*con|alternative)"
       ],
       "trigger_mode": "regex",
-      "priority": 14,
+      "priority": 18,
       "precedes": [],
       "requires": [],
       "description": "Multi-Agent Debate for complex designs. Spawns architect, critic, and pragmatist for collaborative design exploration."
