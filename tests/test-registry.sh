@@ -336,6 +336,41 @@ test_default_triggers_has_phase_compositions() {
     teardown_test_env
 }
 
+test_discovers_curated_plugins() {
+    echo "-- test: discovers curated plugins --"
+    setup_test_env
+
+    # Create mock plugin directories for curated plugins
+    local plugin_base="${HOME}/.claude/plugins/cache/claude-plugins-official"
+    mkdir -p "${plugin_base}/commit-commands"
+    mkdir -p "${plugin_base}/feature-dev"
+    mkdir -p "${plugin_base}/code-review"
+
+    local output
+    output="$(run_hook)"
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    assert_file_exists "cache file created" "${cache_file}"
+    assert_json_valid "cache file is valid JSON" "${cache_file}"
+
+    # commit-commands should be in plugins array and marked available
+    local cc_available
+    cc_available="$(jq -r '.plugins[] | select(.name == "commit-commands") | .available' "${cache_file}" 2>/dev/null)"
+    assert_equals "commit-commands is available" "true" "${cc_available}"
+
+    # feature-dev should be available
+    local fd_available
+    fd_available="$(jq -r '.plugins[] | select(.name == "feature-dev") | .available' "${cache_file}" 2>/dev/null)"
+    assert_equals "feature-dev is available" "true" "${fd_available}"
+
+    # security-guidance should exist but be unavailable (not installed)
+    local sg_available
+    sg_available="$(jq -r '.plugins[] | select(.name == "security-guidance") | .available' "${cache_file}" 2>/dev/null)"
+    assert_equals "security-guidance is unavailable" "false" "${sg_available}"
+
+    teardown_test_env
+}
+
 # ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
@@ -349,5 +384,6 @@ test_health_check_output
 test_discovers_agent_team_skills
 test_default_triggers_has_plugins_section
 test_default_triggers_has_phase_compositions
+test_discovers_curated_plugins
 
 print_summary

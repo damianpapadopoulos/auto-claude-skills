@@ -333,6 +333,34 @@ if [ -f "${DEFAULT_TRIGGERS}" ]; then
 fi
 
 # -----------------------------------------------------------------
+# Step 8b: Discover curated plugins from default-triggers.json
+# -----------------------------------------------------------------
+PLUGINS_JSON="[]"
+if [ -f "${DEFAULT_TRIGGERS}" ]; then
+    CURATED_COUNT="$(jq '.plugins // [] | length' "${DEFAULT_TRIGGERS}" 2>/dev/null)" || CURATED_COUNT=0
+    pi=0
+    while [ "${pi}" -lt "${CURATED_COUNT}" ]; do
+        plugin_name="$(jq -r ".plugins[${pi}].name" "${DEFAULT_TRIGGERS}")"
+        plugin_json="$(jq ".plugins[${pi}]" "${DEFAULT_TRIGGERS}")"
+
+        # Check if installed in any marketplace cache dir
+        _installed=false
+        for _mkt_dir in "${HOME}/.claude/plugins/cache"/*/; do
+            [ -d "${_mkt_dir}" ] || continue
+            if [ -d "${_mkt_dir}${plugin_name}" ]; then
+                _installed=true
+                break
+            fi
+        done
+
+        plugin_json="$(printf '%s' "${plugin_json}" | jq --argjson avail "${_installed}" '. + {available: $avail}')"
+        PLUGINS_JSON="$(printf '%s' "${PLUGINS_JSON}" | jq --argjson p "${plugin_json}" '. + [$p]')"
+
+        pi=$((pi + 1))
+    done
+fi
+
+# -----------------------------------------------------------------
 # Step 9: Build final registry JSON
 # -----------------------------------------------------------------
 SKILL_COUNT="$(printf '%s' "${SKILLS_JSON}" | jq 'length' 2>/dev/null)" || SKILL_COUNT=0
@@ -343,11 +371,13 @@ WARNING_COUNT="$(printf '%s' "${WARNINGS}" | jq 'length' 2>/dev/null)" || WARNIN
 REGISTRY="$(jq -n \
     --arg version "3.2.0" \
     --argjson skills "${SKILLS_JSON}" \
+    --argjson plugins "${PLUGINS_JSON}" \
     --argjson methodology_hints "${METHODOLOGY_HINTS}" \
     --argjson warnings "${WARNINGS}" \
     '{
         version: $version,
         skills: $skills,
+        plugins: $plugins,
         methodology_hints: $methodology_hints,
         warnings: $warnings
     }'
