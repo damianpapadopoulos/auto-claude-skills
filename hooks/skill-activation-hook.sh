@@ -110,11 +110,30 @@ RESULTS=""
 while IFS="$FS" read -r skill_name skill_name_lower skill_role skill_priority skill_invoke skill_phase triggers_joined; do
   [[ -z "$skill_name" ]] && continue
 
-  # Name boost: check if skill name appears as whole word in prompt
-  # Word boundaries for kebab-case names: start/end of string, or non-[a-z0-9-] character
+  # Name boost: full name match (100) or hyphen-segment match (40).
+  # Full: "frontend-design" as whole word in prompt -> 100
+  # Segment: "frontend" as whole word (segment of "frontend-design") -> 40
   name_boost=0
   if [[ "$P" =~ (^|[^a-z0-9-])${skill_name_lower}($|[^a-z0-9-]) ]]; then
     name_boost=100
+  elif [[ "$skill_name_lower" == *-* ]]; then
+    _seg_remaining="$skill_name_lower"
+    while [[ -n "$_seg_remaining" ]]; do
+      if [[ "$_seg_remaining" == *-* ]]; then
+        _seg="${_seg_remaining%%-*}"
+        _seg_remaining="${_seg_remaining#*-}"
+      else
+        _seg="$_seg_remaining"
+        _seg_remaining=""
+      fi
+      # Skip segments shorter than 6 chars to avoid false positives on
+      # common words like "test", "code", "plan" that are also trigger words
+      [[ "${#_seg}" -lt 6 ]] && continue
+      if [[ "$P" =~ (^|[^a-z0-9])${_seg}($|[^a-z0-9]) ]]; then
+        name_boost=40
+        break
+      fi
+    done
   fi
 
   # Score triggers (iterate using string splitting — no per-trigger jq fork)
@@ -499,15 +518,17 @@ Evaluate: **Phase: [${EVAL_PHASE}]** | ${EVAL_SKILLS}${DOMAIN_HINT}"
 
 else
   # --- full format (3+ skills) ---
+  # Build phase guide from registry (falls back to a minimal default)
+  _PHASE_GUIDE="$(printf '%s' "$REGISTRY" | jq -r '
+    .phase_guide // empty | to_entries | sort_by(.key) |
+    .[] | "  " + .key + (" " * ((10 - (.key | length)) | if . < 0 then 0 else . end)) + " -> " + .value
+  ' 2>/dev/null)"
+  [[ -z "$_PHASE_GUIDE" ]] && _PHASE_GUIDE="  (no phase guide available — assess intent from context)"
+
   OUT="SKILL ACTIVATION (${TOTAL_COUNT} skills | ${PLABEL})
 
 Step 1 -- ASSESS PHASE. Check conversation context:
-  DESIGN    -> brainstorming (ask questions, get approval)
-  PLAN      -> writing-plans (break into tasks, confirm before execution)
-  IMPLEMENT -> executing-plans or subagent-driven-development + TDD (offer agent-team-execution for 3+ independent tasks)
-  REVIEW    -> requesting-code-review
-  SHIP      -> verification-before-completion + finishing-a-development-branch
-  DEBUG     -> systematic-debugging, then return to current phase
+${_PHASE_GUIDE}
 
 Step 2 -- EVALUATE skills against your phase assessment.${SKILL_LINES}${COMPOSITION_LINES}
 You MUST print a brief evaluation for each skill above. Format:
