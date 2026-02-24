@@ -424,36 +424,37 @@ KNEOF
 done
 
 # -----------------------------------------------------------------
-# Step 9: Build final registry JSON
+# Step 9+10: Build final registry JSON, extract stats, and cache
 # -----------------------------------------------------------------
-SKILL_COUNT="$(printf '%s' "${SKILLS_JSON}" | jq 'length' 2>/dev/null)" || SKILL_COUNT=0
-AVAILABLE_COUNT="$(printf '%s' "${SKILLS_JSON}" | jq '[.[] | select(.available == true)] | length' 2>/dev/null)" || AVAILABLE_COUNT=0
-UNAVAILABLE_COUNT=$((SKILL_COUNT - AVAILABLE_COUNT))
-WARNING_COUNT="$(printf '%s' "${WARNINGS}" | jq 'length' 2>/dev/null)" || WARNING_COUNT=0
-
-REGISTRY="$(jq -n \
+RESULT="$(jq -n \
     --arg version "4.0.0" \
     --argjson skills "${SKILLS_JSON}" \
     --argjson plugins "${PLUGINS_JSON}" \
-    --argjson phase_compositions "${PHASE_COMPOSITIONS}" \
-    --argjson phase_guide "${PHASE_GUIDE}" \
-    --argjson methodology_hints "${METHODOLOGY_HINTS}" \
+    --argjson pc "${PHASE_COMPOSITIONS}" \
+    --argjson pg "${PHASE_GUIDE}" \
+    --argjson mh "${METHODOLOGY_HINTS}" \
     --argjson warnings "${WARNINGS}" \
     '{
-        version: $version,
-        skills: $skills,
-        plugins: $plugins,
-        phase_compositions: $phase_compositions,
-        phase_guide: $phase_guide,
-        methodology_hints: $methodology_hints,
-        warnings: $warnings
-    }'
-)"
+        registry: {version:$version, skills:$skills, plugins:$plugins,
+                   phase_compositions:$pc, phase_guide:$pg,
+                   methodology_hints:$mh, warnings:$warnings},
+        stats: {
+            skill_count: ($skills | length),
+            available: ([$skills[] | select(.available)] | length),
+            warning_count: ($warnings | length),
+            plugin_count: ($plugins | length),
+            plugin_available: ([$plugins[] | select(.available)] | length)
+        }
+    }')"
 
-# -----------------------------------------------------------------
-# Step 10: Cache to ~/.claude/.skill-registry-cache.json
-# -----------------------------------------------------------------
-printf '%s\n' "${REGISTRY}" > "${CACHE_FILE}"
+# Write registry to cache (strip the stats wrapper)
+printf '%s' "${RESULT}" | jq '.registry' > "${CACHE_FILE}"
+
+# Extract stats for health message
+read -r SKILL_COUNT AVAILABLE_COUNT WARNING_COUNT PLUGIN_COUNT PLUGIN_AVAILABLE <<EOF
+$(printf '%s' "${RESULT}" | jq -r '.stats | "\(.skill_count) \(.available) \(.warning_count) \(.plugin_count) \(.plugin_available)"')
+EOF
+UNAVAILABLE_COUNT=$((SKILL_COUNT - AVAILABLE_COUNT))
 
 # -----------------------------------------------------------------
 # Step 11: Detect missing companion plugins and features
@@ -509,9 +510,6 @@ fi
 # -----------------------------------------------------------------
 # Step 12: Emit health check
 # -----------------------------------------------------------------
-PLUGIN_COUNT="$(printf '%s' "${PLUGINS_JSON}" | jq 'length' 2>/dev/null)" || PLUGIN_COUNT=0
-PLUGIN_AVAILABLE="$(printf '%s' "${PLUGINS_JSON}" | jq '[.[] | select(.available == true)] | length' 2>/dev/null)" || PLUGIN_AVAILABLE=0
-
 MSG="SessionStart: skill registry built (${SKILL_COUNT} skills, ${AVAILABLE_COUNT} available, from ${SOURCE_COUNT} sources, ${PLUGIN_COUNT} plugins (${PLUGIN_AVAILABLE} installed), ${WARNING_COUNT} warnings)${SETUP_HINTS}"
 printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' \
     "$(printf '%s' "${MSG}" | jq -Rs .)"
