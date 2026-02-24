@@ -37,7 +37,7 @@ install_context_registry() {
     mkdir -p "$(dirname "${cache_file}")"
     cat > "${cache_file}" <<'REGISTRY'
 {
-  "version": "3.1.0",
+  "version": "3.2.0",
   "skills": [
     {
       "name": "systematic-debugging",
@@ -209,10 +209,10 @@ test_single_skill_compact_format() {
 }
 
 # ---------------------------------------------------------------------------
-# 3. Process + domain -> INFORMED BY
+# 3. Process + domain -> Domain:
 # ---------------------------------------------------------------------------
 test_process_domain_informed_by() {
-    echo "-- test: process + domain -> INFORMED BY --"
+    echo "-- test: process + domain -> Domain: --"
     setup_test_env
     install_context_registry
 
@@ -222,7 +222,7 @@ test_process_domain_informed_by() {
     local context
     context="$(extract_context "${output}")"
 
-    assert_contains "process+domain has INFORMED BY" "INFORMED BY" "${context}"
+    assert_contains "process+domain has Domain:" "Domain:" "${context}"
     assert_contains "process+domain has Process:" "Process:" "${context}"
 
     teardown_test_env
