@@ -106,18 +106,17 @@ RESULTS=""
 while IFS= read -r skill_json; do
   [[ -z "$skill_json" ]] && continue
 
-  skill_name="$(printf '%s' "$skill_json" | jq -r '.name')"
-  skill_role="$(printf '%s' "$skill_json" | jq -r '.role')"
-  skill_priority="$(printf '%s' "$skill_json" | jq -r '.priority // 0')"
-  skill_invoke="$(printf '%s' "$skill_json" | jq -r '.invoke // "SKIP"')"
-  skill_phase="$(printf '%s' "$skill_json" | jq -r '.phase // ""')"
+  # Extract all fields in one jq call (reduces 5 forks to 1 per skill)
+  read -r skill_name skill_role skill_priority skill_invoke skill_phase <<FIELDS
+$(printf '%s' "$skill_json" | jq -r '[.name, .role, (.priority // 0 | tostring), (.invoke // "SKIP"), (.phase // "")] | @tsv')
+FIELDS
 
-  trigger_count="$(printf '%s' "$skill_json" | jq '.triggers | length')"
+  trigger_count="$(printf '%s' "$skill_json" | jq '.triggers // [] | length')"
   trigger_score=0
 
   ti=0
   while [[ "$ti" -lt "$trigger_count" ]]; do
-    trigger="$(printf '%s' "$skill_json" | jq -r ".triggers[${ti}]")"
+    trigger="$(printf '%s' "$skill_json" | jq -r "(.triggers // [])[${ti}]")"
     ti=$((ti + 1))
 
     # Test regex against lowercased prompt

@@ -995,6 +995,63 @@ test_process_slot_reserved() {
 }
 
 # ---------------------------------------------------------------------------
+# 26.5. Malformed skill entry (missing triggers) does not break hook
+# ---------------------------------------------------------------------------
+test_missing_triggers_handled() {
+    echo "-- test: missing triggers handled gracefully --"
+    setup_test_env
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'BADREG'
+{
+  "version": "test",
+  "skills": [
+    {
+      "name": "good-skill",
+      "role": "process",
+      "phase": "DEBUG",
+      "triggers": ["(debug|bug)"],
+      "priority": 10,
+      "invoke": "Skill(mock:good-skill)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "no-triggers-skill",
+      "role": "domain",
+      "priority": 50,
+      "invoke": "Skill(mock:no-triggers)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "null-triggers-skill",
+      "role": "domain",
+      "triggers": null,
+      "priority": 50,
+      "invoke": "Skill(mock:null-triggers)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "methodology_hints": [],
+  "phase_compositions": {}
+}
+BADREG
+
+    local exit_code=0
+    local output context
+    output="$(run_hook "debug this broken module")" || exit_code=$?
+
+    assert_equals "hook exits cleanly with malformed skills" "0" "${exit_code}"
+    context="$(extract_context "${output}")"
+    assert_contains "good skill still selected" "good-skill" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_debug_prompt_matches
@@ -1023,5 +1080,6 @@ test_review_emits_parallel_lines
 test_ship_emits_sequence_lines
 test_no_parallel_when_plugin_unavailable
 test_process_slot_reserved
+test_missing_triggers_handled
 
 print_summary
