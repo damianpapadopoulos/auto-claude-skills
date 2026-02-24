@@ -168,88 +168,76 @@ if [ -n "${USER_DISCOVERED}" ]; then SOURCE_COUNT=$((SOURCE_COUNT + 1)); fi
 # -----------------------------------------------------------------
 # Step 6: Merge discovered skills with default-triggers.json
 # -----------------------------------------------------------------
-# Helper: check if a skill name is in the discovered list, return invoke path
-lookup_discovered() {
-    local name="$1"
-    local line
-    # Use printf to avoid issues with echo -n
-    printf '%s' "${ALL_DISCOVERED}" | while IFS='|' read -r sname spath; do
-        if [ "${sname}" = "${name}" ]; then
-            printf '%s' "${spath}"
-            return 0
-        fi
-    done
-}
-
-# Helper: check if a skill name exists in the defaults
-is_in_defaults() {
-    local name="$1"
-    if [ -n "${DEFAULT_JSON}" ]; then
-        printf '%s' "${DEFAULT_JSON}" | jq -e --arg n "${name}" '.skills[] | select(.name == $n)' >/dev/null 2>&1
-        return $?
-    fi
-    return 1
-}
-
-# Build skills JSON array using jq
-# Start with default skills, overlay discovered paths
-SKILLS_JSON="[]"
-
-if [ -n "${DEFAULT_JSON}" ]; then
-    # Process each default skill
-    SKILL_COUNT="$(printf '%s' "${DEFAULT_JSON}" | jq '.skills | length')"
-    i=0
-    while [ "${i}" -lt "${SKILL_COUNT}" ]; do
-        skill_name="$(printf '%s' "${DEFAULT_JSON}" | jq -r ".skills[${i}].name")"
-        skill_json="$(printf '%s' "${DEFAULT_JSON}" | jq ".skills[${i}]")"
-
-        # Look up discovered invoke path
-        invoke_path=""
-        invoke_path="$(lookup_discovered "${skill_name}")"
-
-        if [ -n "${invoke_path}" ]; then
-            # Discovered: add invoke path and mark available
-            skill_json="$(printf '%s' "${skill_json}" | jq --arg inv "${invoke_path}" '. + {invoke: $inv, available: true, enabled: true}')"
-        else
-            # Not discovered: mark unavailable
-            skill_json="$(printf '%s' "${skill_json}" | jq '. + {available: false, enabled: true}')"
-        fi
-
-        SKILLS_JSON="$(printf '%s' "${SKILLS_JSON}" | jq --argjson s "${skill_json}" '. + [$s]')"
-        i=$((i + 1))
-    done
+# Build invoke map from ALL_DISCOVERED as a JSON object {"name":"invoke_path",...}
+# Single jq call instead of per-skill lookups
+if [ -n "${ALL_DISCOVERED}" ]; then
+    INVOKE_MAP="$(printf '%s' "${ALL_DISCOVERED}" | while IFS='|' read -r _n _p; do
+        [ -z "${_n}" ] && continue
+        printf '%s\n%s\n' "${_n}" "${_p}"
+    done | jq -Rn '[inputs] | [range(0; length; 2) as $i | {(.[($i)]): .[($i)+1]}] | add // {}')"
+else
+    INVOKE_MAP="{}"
 fi
 
-# Add discovered skills not in defaults (custom/user skills).
-# Pipe to tmp file to avoid subshell variable scoping issues.
-CUSTOMS_TMP="$(mktemp "${CACHE_FILE}.customs.XXXXXX")" 2>/dev/null || CUSTOMS_TMP="${CACHE_FILE}.customs.$$"
+# Merge defaults + invoke map in a SINGLE jq call (replaces ~80 forks)
+if [ -n "${DEFAULT_JSON}" ]; then
+    SKILLS_JSON="$(printf '%s' "${DEFAULT_JSON}" | jq --argjson imap "${INVOKE_MAP}" '
+        [.skills[] | . + (
+            if $imap[.name] then
+                {invoke: $imap[.name], available: true, enabled: true}
+            else
+                {available: false, enabled: true}
+            end
+        )]
+    ')"
+else
+    SKILLS_JSON="[]"
+fi
+
+# Extract default skill names once for custom-skill detection
+DEFAULT_NAMES=""
+if [ -n "${DEFAULT_JSON}" ]; then
+    DEFAULT_NAMES="$(printf '%s' "${DEFAULT_JSON}" | jq -r '.skills[].name')"
+fi
+
+# Collect custom skills (discovered but not in defaults) and batch-append
+# Build newline-delimited name|path pairs, then create all custom entries in one jq call
+CUSTOMS_INPUT=""
 printf '%s' "${ALL_DISCOVERED}" | while IFS='|' read -r sname spath; do
     [ -z "${sname}" ] && continue
-    if ! is_in_defaults "${sname}"; then
-        printf '%s|%s\n' "${sname}" "${spath}"
+    # Check if name is in defaults using bash string matching
+    _found=0
+    while IFS= read -r _dn; do
+        [ -z "${_dn}" ] && continue
+        if [ "${_dn}" = "${sname}" ]; then
+            _found=1
+            break
+        fi
+    done <<DNAMES
+${DEFAULT_NAMES}
+DNAMES
+    if [ "${_found}" -eq 0 ]; then
+        printf '%s\n%s\n' "${sname}" "${spath}"
     fi
-done > "${CUSTOMS_TMP}" 2>/dev/null || true
+done > "${CACHE_FILE}.customs.$$" 2>/dev/null || true
 
-if [ -f "${CUSTOMS_TMP}" ] && [ -s "${CUSTOMS_TMP}" ]; then
-    while IFS='|' read -r sname spath; do
-        [ -z "${sname}" ] && continue
-        custom_skill="$(jq -n --arg name "${sname}" --arg invoke "${spath}" '{
-            name: $name,
-            role: "domain",
-            triggers: [],
-            trigger_mode: "regex",
-            priority: 200,
-            precedes: [],
-            requires: [],
-            description: "User-installed skill",
-            invoke: $invoke,
-            available: true,
-            enabled: true
-        }')"
-        SKILLS_JSON="$(printf '%s' "${SKILLS_JSON}" | jq --argjson s "${custom_skill}" '. + [$s]')"
-    done < "${CUSTOMS_TMP}"
+if [ -f "${CACHE_FILE}.customs.$$" ] && [ -s "${CACHE_FILE}.customs.$$" ]; then
+    CUSTOMS_JSON="$(jq -Rn '[inputs] | [range(0; length; 2) as $i | {
+        name: .[($i)],
+        role: "domain",
+        triggers: [],
+        trigger_mode: "regex",
+        priority: 200,
+        precedes: [],
+        requires: [],
+        description: "User-installed skill",
+        invoke: .[($i)+1],
+        available: true,
+        enabled: true
+    }]' < "${CACHE_FILE}.customs.$$")"
+    SKILLS_JSON="$(printf '%s' "${SKILLS_JSON}" | jq --argjson c "${CUSTOMS_JSON}" '. + $c')"
 fi
-rm -f "${CUSTOMS_TMP}"
+rm -f "${CACHE_FILE}.customs.$$"
 
 # -----------------------------------------------------------------
 # Step 7: Apply user config overrides
