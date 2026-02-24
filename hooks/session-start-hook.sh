@@ -240,82 +240,32 @@ fi
 rm -f "${CACHE_FILE}.customs.$$"
 
 # -----------------------------------------------------------------
-# Step 7: Apply user config overrides
+# Step 7: Apply user config overrides (single jq call)
 # -----------------------------------------------------------------
 WARNINGS="[]"
 
 if [ -f "${USER_CONFIG}" ] && jq empty "${USER_CONFIG}" >/dev/null 2>&1; then
-    # Process overrides
-    override_keys="$(jq -r '.overrides // {} | keys[]' "${USER_CONFIG}" 2>/dev/null)" || true
-    for skill_name in ${override_keys}; do
-        [ -z "${skill_name}" ] && continue
-
-        # Check if enabled: false
-        has_enabled="$(jq -r --arg n "${skill_name}" 'if .overrides[$n] | has("enabled") then .overrides[$n].enabled | tostring else "unset" end' "${USER_CONFIG}" 2>/dev/null)"
-        if [ "${has_enabled}" = "false" ]; then
-            SKILLS_JSON="$(printf '%s' "${SKILLS_JSON}" | jq --arg n "${skill_name}" '
-                [.[] | if .name == $n then .enabled = false else . end]
-            ')"
-        fi
-
-        # Check for trigger overrides
-        trigger_overrides="$(jq -r --arg n "${skill_name}" '.overrides[$n].triggers // empty | .[]' "${USER_CONFIG}" 2>/dev/null)" || true
-        if [ -n "${trigger_overrides}" ]; then
-            # Collect plain triggers (replace-all) separately to apply in one batch
-            replace_triggers=""
-            while IFS= read -r trigger; do
-                [ -z "${trigger}" ] && continue
-                case "${trigger}" in
-                    +*)
-                        # Add trigger
-                        new_trigger="${trigger#+}"
-                        SKILLS_JSON="$(printf '%s' "${SKILLS_JSON}" | jq --arg n "${skill_name}" --arg t "${new_trigger}" '
-                            [.[] | if .name == $n then .triggers += [$t] else . end]
-                        ')"
-                        ;;
-                    -*)
-                        # Remove trigger
-                        rem_trigger="${trigger#-}"
-                        SKILLS_JSON="$(printf '%s' "${SKILLS_JSON}" | jq --arg n "${skill_name}" --arg t "${rem_trigger}" '
-                            [.[] | if .name == $n then .triggers = [.triggers[] | select(. != $t)] else . end]
-                        ')"
-                        ;;
-                    *)
-                        # Collect plain triggers for batch replacement
-                        if [ -z "${replace_triggers}" ]; then
-                            replace_triggers="${trigger}"
-                        else
-                            replace_triggers="${replace_triggers}
-${trigger}"
-                        fi
-                        ;;
-                esac
-            done <<TEOF
-${trigger_overrides}
-TEOF
-            # Apply all plain triggers as a single replacement
-            if [ -n "${replace_triggers}" ]; then
-                replace_json="$(printf '%s\n' "${replace_triggers}" | jq -R . | jq -s .)"
-                if [ -n "${replace_json}" ] && printf '%s' "${replace_json}" | jq empty >/dev/null 2>&1; then
-                    SKILLS_JSON="$(printf '%s' "${SKILLS_JSON}" | jq --arg n "${skill_name}" --argjson t "${replace_json}" '
-                        [.[] | if .name == $n then .triggers = $t else . end]
-                    ')"
-                else
-                    WARNINGS="$(printf '%s' "${WARNINGS}" | jq --arg w "Failed to parse trigger overrides for ${skill_name}" '. + [$w]')"
-                fi
-            fi
-        fi
-    done
-
-    # Process custom_skills additions
-    custom_count="$(jq '.custom_skills // [] | length' "${USER_CONFIG}" 2>/dev/null)" || custom_count=0
-    ci=0
-    while [ "${ci}" -lt "${custom_count}" ]; do
-        custom_skill="$(jq ".custom_skills[${ci}]" "${USER_CONFIG}")"
-        custom_skill="$(printf '%s' "${custom_skill}" | jq '. + {available: true, enabled: true}')"
-        SKILLS_JSON="$(printf '%s' "${SKILLS_JSON}" | jq --argjson s "${custom_skill}" '. + [$s]')"
-        ci=$((ci + 1))
-    done
+    USER_CONFIG_JSON="$(cat "${USER_CONFIG}")"
+    SKILLS_JSON="$(printf '%s' "${SKILLS_JSON}" | jq --argjson cfg "$(printf '%s' "${USER_CONFIG_JSON}")" '
+        # Process overrides
+        ($cfg.overrides // {}) as $overrides |
+        [.[] | . as $skill |
+            if $overrides[$skill.name] then
+                ($overrides[$skill.name]) as $ovr |
+                (if $ovr | has("enabled") then {enabled: $ovr.enabled} else {} end) as $enable |
+                (if $ovr.triggers then
+                    ($ovr.triggers | map(select(startswith("+"))) | map(ltrimstr("+"))) as $add |
+                    ($ovr.triggers | map(select(startswith("-"))) | map(ltrimstr("-"))) as $rem |
+                    ($ovr.triggers | map(select((startswith("+") or startswith("-")) | not))) as $replace |
+                    if ($replace | length) > 0 then {triggers: $replace}
+                    else {triggers: ((.triggers + $add) | [.[] | select(. as $t | $rem | any(. == $t) | not)])}
+                    end
+                else {} end) as $trigs |
+                . + $enable + $trigs
+            else . end
+        ] +
+        [($cfg.custom_skills // [])[] | . + {available: true, enabled: true}]
+    ')"
 fi
 
 # -----------------------------------------------------------------
