@@ -1,5 +1,5 @@
 {
-  "version": "3.2.0-fallback",
+  "version": "4.0.0-fallback",
   "description": "Static fallback registry for degraded environments (no jq, missing plugin dirs)",
   "warnings": [
     "Using static fallback registry — dynamic discovery unavailable"
@@ -101,5 +101,14 @@
       "enabled": true,
       "description": "Clean up, squash, and prepare a branch for merge"
     }
-  ]
+  ],
+  "plugins": [],
+  "phase_compositions": {
+    "DESIGN": {"driver": "brainstorming", "parallel": [], "hints": []},
+    "PLAN": {"driver": "writing-plans", "parallel": [], "hints": []},
+    "IMPLEMENT": {"driver": "executing-plans", "parallel": [], "hints": []},
+    "REVIEW": {"driver": "requesting-code-review", "parallel": [], "hints": []},
+    "SHIP": {"driver": "verification-before-completion", "sequence": [], "hints": []},
+    "DEBUG": {"driver": "systematic-debugging", "parallel": [], "hints": []}
+  }
 }

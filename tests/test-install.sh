@@ -165,6 +165,17 @@ assert_json_valid \
     ".claude-plugin/plugin.json is valid JSON" \
     "${PLUGIN_ROOT}/.claude-plugin/plugin.json"
 
+# Test: fallback registry has plugins and phase_compositions sections
+echo "-- test: fallback has plugins key --"
+FALLBACK="${PLUGIN_ROOT}/config/fallback-registry.json"
+
+has_plugins="$(jq 'has("plugins")' "${FALLBACK}" 2>/dev/null)"
+assert_equals "fallback has plugins key" "true" "${has_plugins}"
+
+echo "-- test: fallback has phase_compositions key --"
+has_pc="$(jq 'has("phase_compositions")' "${FALLBACK}" 2>/dev/null)"
+assert_equals "fallback has phase_compositions key" "true" "${has_pc}"
+
 # ---------------------------------------------------------------------------
 # Print summary and exit with appropriate code
 # ---------------------------------------------------------------------------
