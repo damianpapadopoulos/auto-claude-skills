@@ -104,22 +104,22 @@ fi
 # -----------------------------------------------------------------
 # Step 4: Discover official plugin skills
 # -----------------------------------------------------------------
+# Official plugin directory -> skill-name|invoke-path mapping
+# Format: dir_name|skill_name|plugin:skill_invoke (one per line)
+OFFICIAL_PLUGIN_MAP="frontend-design|frontend-design|frontend-design:frontend-design
+claude-md-management|claude-md-improver|claude-md-management:claude-md-improver
+claude-code-setup|claude-automation-recommender|claude-code-setup:claude-automation-recommender"
+
 OFFICIAL_DISCOVERED=""
-
-if [ -d "${PLUGIN_CACHE}/frontend-design" ]; then
-    OFFICIAL_DISCOVERED="${OFFICIAL_DISCOVERED}frontend-design|Call Skill(frontend-design:frontend-design)
+while IFS='|' read -r _dir _skill _invoke; do
+    [ -z "${_dir}" ] && continue
+    if [ -d "${PLUGIN_CACHE}/${_dir}" ]; then
+        OFFICIAL_DISCOVERED="${OFFICIAL_DISCOVERED}${_skill}|Call Skill(${_invoke})
 "
-fi
-
-if [ -d "${PLUGIN_CACHE}/claude-md-management" ]; then
-    OFFICIAL_DISCOVERED="${OFFICIAL_DISCOVERED}claude-md-improver|Call Skill(claude-md-management:claude-md-improver)
-"
-fi
-
-if [ -d "${PLUGIN_CACHE}/claude-code-setup" ]; then
-    OFFICIAL_DISCOVERED="${OFFICIAL_DISCOVERED}claude-automation-recommender|Call Skill(claude-code-setup:claude-automation-recommender)
-"
-fi
+    fi
+done <<OPEOF
+${OFFICIAL_PLUGIN_MAP}
+OPEOF
 
 # -----------------------------------------------------------------
 # Step 4b: Discover skills bundled with this plugin
