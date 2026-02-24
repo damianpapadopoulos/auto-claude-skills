@@ -398,25 +398,17 @@ fi
 # BUILD ORCHESTRATED CONTEXT OUTPUT
 # =================================================================
 
-if [[ "$TOTAL_COUNT" -eq 0 ]]; then
-  # --- 0 skills matched ---
-  OUT="SKILL ACTIVATION (0 skills | phase checkpoint only)
+# =================================================================
+# BUILD SKILL LINES + EVAL LIST (shared across compact and full formats)
+# =================================================================
+SKILL_LINES=""
+EVAL_SKILLS=""
 
-Phase: assess current phase (DESIGN/PLAN/IMPLEMENT/REVIEW/SHIP/DEBUG)
-and consider whether any installed skill applies."
-
-elif [[ "$TOTAL_COUNT" -le 2 ]]; then
-  # --- 1-2 skills (compact format) ---
-  OUT="SKILL ACTIVATION (${TOTAL_COUNT} skills | ${PLABEL})"
-  OUT+="
-"
-
-  # Build skill lines
-  PROCESS_LINE=""
-  DOMAIN_LINES=""
-  WORKFLOW_LINES=""
-  STANDALONE_LINES=""
-  EVAL_SKILLS=""
+if [[ "$TOTAL_COUNT" -gt 0 ]]; then
+  _SL_PROCESS=""
+  _SL_DOMAIN=""
+  _SL_WORKFLOW=""
+  _SL_STANDALONE=""
 
   while IFS='|' read -r score name role invoke phase; do
     [[ -z "$name" ]] && continue
@@ -428,59 +420,68 @@ elif [[ "$TOTAL_COUNT" -le 2 ]]; then
 
     if [[ -n "$PROCESS_SKILL" ]]; then
       case "$role" in
-        process)  PROCESS_LINE="
+        process)  _SL_PROCESS="
 Process: ${name} -> ${invoke}" ;;
-        domain)   DOMAIN_LINES="${DOMAIN_LINES}
+        domain)   _SL_DOMAIN="${_SL_DOMAIN}
   Domain: ${name} -> ${invoke}" ;;
-        workflow) WORKFLOW_LINES="${WORKFLOW_LINES}
+        workflow) _SL_WORKFLOW="${_SL_WORKFLOW}
 Workflow: ${name} -> ${invoke}" ;;
       esac
     else
-      STANDALONE_LINES="${STANDALONE_LINES}
+      _SL_STANDALONE="${_SL_STANDALONE}
 ${name} -> ${invoke}"
     fi
   done <<EOF
 ${SELECTED}
 EOF
 
-  OUT+="${PROCESS_LINE}${DOMAIN_LINES}${WORKFLOW_LINES}${STANDALONE_LINES}${COMPOSITION_LINES}"
+  SKILL_LINES="${_SL_PROCESS}${_SL_DOMAIN}${_SL_WORKFLOW}${_SL_STANDALONE}"
 
-  # Append overflow domain skills (relevant but didn't fit in top suggestions)
-  OVERFLOW_LINES=""
+  # Overflow domain skills (relevant but didn't fit in top suggestions)
   while IFS='|' read -r oname oinvoke; do
     [[ -z "$oname" ]] && continue
-    OVERFLOW_LINES="${OVERFLOW_LINES}
+    SKILL_LINES="${SKILL_LINES}
   Also relevant: ${oname} -> ${oinvoke}"
     EVAL_SKILLS="${EVAL_SKILLS}, ${oname} YES/NO"
   done <<EOF
 ${OVERFLOW_DOMAIN}
 EOF
-  OUT+="${OVERFLOW_LINES}"
+fi
 
-  # Phase from process skill (with precedence)
+# Domain invocation instruction (shared)
+DOMAIN_HINT=""
+if [[ "$DOMAIN_COUNT" -gt 0 ]] || [[ -n "$OVERFLOW_DOMAIN" ]]; then
+  if [[ -n "$PROCESS_SKILL" ]]; then
+    DOMAIN_HINT="
+Domain skills evaluated YES: invoke them (before, during, or after the process skill) -- do not just note them."
+  else
+    DOMAIN_HINT="
+Domain skills evaluated YES: invoke them -- do not just note them."
+  fi
+fi
+
+# =================================================================
+# FORMAT OUTPUT (only the wrapper text differs between compact/full)
+# =================================================================
+if [[ "$TOTAL_COUNT" -eq 0 ]]; then
+  OUT="SKILL ACTIVATION (0 skills | phase checkpoint only)
+
+Phase: assess current phase (DESIGN/PLAN/IMPLEMENT/REVIEW/SHIP/DEBUG)
+and consider whether any installed skill applies."
+
+elif [[ "$TOTAL_COUNT" -le 2 ]]; then
+  # --- compact format ---
   EVAL_PHASE="$PRIMARY_PHASE"
   [[ -z "$EVAL_PHASE" ]] && EVAL_PHASE="IMPLEMENT"
 
-  OUT+="
+  OUT="SKILL ACTIVATION (${TOTAL_COUNT} skills | ${PLABEL})
+${SKILL_LINES}${COMPOSITION_LINES}
 
-Evaluate: **Phase: [${EVAL_PHASE}]** | ${EVAL_SKILLS}"
-
-  # Add domain invocation instruction when domain skills are present
-  if [[ "$DOMAIN_COUNT" -gt 0 ]] || [[ -n "$OVERFLOW_DOMAIN" ]]; then
-    if [[ -n "$PROCESS_SKILL" ]]; then
-      OUT+="
-Domain skills evaluated YES: invoke them (before, during, or after the process skill) -- do not just note them."
-    else
-      OUT+="
-Domain skills evaluated YES: invoke them -- do not just note them."
-    fi
-  fi
+Evaluate: **Phase: [${EVAL_PHASE}]** | ${EVAL_SKILLS}${DOMAIN_HINT}"
 
 else
-  # --- 3+ skills (full format) ---
-  OUT="SKILL ACTIVATION (${TOTAL_COUNT} skills | ${PLABEL})"
-
-  OUT+="
+  # --- full format (3+ skills) ---
+  OUT="SKILL ACTIVATION (${TOTAL_COUNT} skills | ${PLABEL})
 
 Step 1 -- ASSESS PHASE. Check conversation context:
   DESIGN    -> brainstorming (ask questions, get approval)
@@ -490,71 +491,13 @@ Step 1 -- ASSESS PHASE. Check conversation context:
   SHIP      -> verification-before-completion + finishing-a-development-branch
   DEBUG     -> systematic-debugging, then return to current phase
 
-Step 2 -- EVALUATE skills against your phase assessment."
-
-  # Build grouped skill lines (process-first ordering)
-  EVAL_SKILLS=""
-  _FULL_PROCESS_LINE=""
-  _FULL_DOMAIN_LINES=""
-  _FULL_WORKFLOW_LINES=""
-  _FULL_STANDALONE_LINES=""
-
-  while IFS='|' read -r score name role invoke phase; do
-    [[ -z "$name" ]] && continue
-    if [[ -n "$EVAL_SKILLS" ]]; then
-      EVAL_SKILLS="${EVAL_SKILLS}, ${name} YES/NO"
-    else
-      EVAL_SKILLS="${name} YES/NO"
-    fi
-
-    if [[ -n "$PROCESS_SKILL" ]]; then
-      case "$role" in
-        process)  _FULL_PROCESS_LINE="
-Process: ${name} -> ${invoke}" ;;
-        domain)   _FULL_DOMAIN_LINES="${_FULL_DOMAIN_LINES}
-  Domain: ${name} -> ${invoke}" ;;
-        workflow) _FULL_WORKFLOW_LINES="${_FULL_WORKFLOW_LINES}
-Workflow: ${name} -> ${invoke}" ;;
-      esac
-    else
-      _FULL_STANDALONE_LINES="${_FULL_STANDALONE_LINES}
-${name} -> ${invoke}"
-    fi
-  done <<EOF
-${SELECTED}
-EOF
-
-  OUT+="${_FULL_PROCESS_LINE}${_FULL_DOMAIN_LINES}${_FULL_WORKFLOW_LINES}${_FULL_STANDALONE_LINES}"
-
-  # Append overflow domain skills
-  while IFS='|' read -r oname oinvoke; do
-    [[ -z "$oname" ]] && continue
-    OUT+="
-  Also relevant: ${oname} -> ${oinvoke}"
-    EVAL_SKILLS="${EVAL_SKILLS}, ${oname} YES/NO"
-  done <<EOF
-${OVERFLOW_DOMAIN}
-EOF
-  OUT+="${COMPOSITION_LINES}"
-
-  OUT+="
+Step 2 -- EVALUATE skills against your phase assessment.${SKILL_LINES}${COMPOSITION_LINES}
 You MUST print a brief evaluation for each skill above. Format:
   **Phase: [PHASE]** | [skill1] YES/NO, [skill2] YES/NO
 Example: **Phase: IMPLEMENT** | test-driven-development YES, claude-md-improver NO (not editing CLAUDE.md)
 This line is MANDATORY -- do not skip it.
 
-Step 3 -- State your plan and proceed. Keep it to 1-2 sentences."
-
-  # Add domain invocation instruction when domain skills are present
-  if [[ "$DOMAIN_COUNT" -gt 0 ]] || [[ -n "$OVERFLOW_DOMAIN" ]]; then
-    if [[ -n "$PROCESS_SKILL" ]]; then
-      OUT+="
-Domain skills evaluated YES: invoke them (before, during, or after the process skill) -- do not just note them."
-    else
-      OUT+="
-Domain skills evaluated YES: invoke them -- do not just note them."
-    fi
-  fi
+Step 3 -- State your plan and proceed. Keep it to 1-2 sentences.${DOMAIN_HINT}"
 fi
 
 # Append methodology hints if any
