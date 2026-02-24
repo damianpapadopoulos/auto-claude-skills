@@ -421,52 +421,55 @@ KNEOF
         fi
         [ -z "${_pjson}" ] && continue
 
-        # Scan for skills
-        _skills="[]"
+        # Collect skill names as newline-separated string (no jq per item)
+        _skill_names=""
         if [ -d "${_plugin_root}skills" ]; then
             for _smd in "${_plugin_root}skills"/*/SKILL.md; do
                 [ -f "${_smd}" ] || continue
-                _sname="$(basename "$(dirname "${_smd}")")"
-                _skills="$(printf '%s' "${_skills}" | jq --arg s "${_sname}" '. + [$s]')"
+                _skill_names="${_skill_names}$(basename "$(dirname "${_smd}")")
+"
             done
         fi
 
-        # Scan for commands
-        _commands="[]"
+        # Collect command names with "/" prefix bash-side (no jq per item)
+        _cmd_names=""
         if [ -d "${_plugin_root}commands" ]; then
             for _cmd in "${_plugin_root}commands"/*.md; do
                 [ -f "${_cmd}" ] || continue
-                _cname="/$(basename "${_cmd}" .md)"
-                _commands="$(printf '%s' "${_commands}" | jq --arg c "${_cname}" '. + [$c]')"
+                _cmd_names="${_cmd_names}/$(basename "${_cmd}" .md)
+"
             done
         fi
 
-        # Scan for agents
-        _agents="[]"
+        # Collect agent names as newline-separated string (no jq per item)
+        _agent_names=""
         if [ -d "${_plugin_root}agents" ]; then
             for _agent in "${_plugin_root}agents"/*.md; do
                 [ -f "${_agent}" ] || continue
-                _aname="$(basename "${_agent}" .md)"
-                _agents="$(printf '%s' "${_agents}" | jq --arg a "${_aname}" '. + [$a]')"
+                _agent_names="${_agent_names}$(basename "${_agent}" .md)
+"
             done
         fi
 
-        # Build plugin entry
-        _entry="$(jq -n \
+        # Build plugin entry and append to PLUGINS_JSON in a single jq call
+        PLUGINS_JSON="$(printf '%s' "${PLUGINS_JSON}" | jq \
             --arg name "${_pname}" \
-            --arg source "auto-discovered" \
-            --argjson skills "${_skills}" \
-            --argjson commands "${_commands}" \
-            --argjson agents "${_agents}" \
-            '{
+            --arg skills "${_skill_names}" \
+            --arg commands "${_cmd_names}" \
+            --arg agents "${_agent_names}" \
+            '. + [{
                 name: $name,
-                source: $source,
-                provides: {commands: $commands, skills: $skills, agents: $agents, hooks: []},
+                source: "auto-discovered",
+                provides: {
+                    commands: ($commands | split("\n") | map(select(. != ""))),
+                    skills:  ($skills  | split("\n") | map(select(. != ""))),
+                    agents:  ($agents  | split("\n") | map(select(. != ""))),
+                    hooks: []
+                },
                 phase_fit: ["*"],
                 description: "Auto-discovered plugin",
                 available: true
-            }')"
-        PLUGINS_JSON="$(printf '%s' "${PLUGINS_JSON}" | jq --argjson p "${_entry}" '. + [$p]')"
+            }]')"
     done
 done
 
