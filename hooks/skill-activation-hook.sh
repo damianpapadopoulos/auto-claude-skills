@@ -81,8 +81,8 @@ fi
 # Use jq to iterate available+enabled skills, test each trigger regex
 # against the lowercased prompt, compute scores, and return sorted results.
 #
-# Score formula: trigger_score (30 for word-boundary, 10 for substring) + priority
-# We use jq to extract skill data, then bash for regex matching.
+# Score formula: sum(trigger_scores) + priority + name_boost
+# Per-trigger: 30 for word-boundary match, 10 for substring match (accumulated, not max).
 
 # Single jq call extracts all enabled skills (replaces ~80 per-skill jq forks with 1).
 # Format: name<US>name_lower<US>role<US>priority<US>invoke<US>phase<US>triggers
@@ -150,9 +150,7 @@ while IFS="$FS" read -r skill_name skill_name_lower skill_role skill_priority sk
         else
           this_score=10
         fi
-        if [[ "$this_score" -gt "$trigger_score" ]]; then
-          trigger_score="$this_score"
-        fi
+        trigger_score=$((trigger_score + this_score))
       fi
     done
   fi
