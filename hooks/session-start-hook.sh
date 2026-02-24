@@ -343,27 +343,30 @@ fi
 # -----------------------------------------------------------------
 PLUGINS_JSON="[]"
 if [ -n "${DEFAULT_JSON}" ]; then
-    CURATED_COUNT="$(printf '%s' "${DEFAULT_JSON}" | jq '.plugins // [] | length' 2>/dev/null)" || CURATED_COUNT=0
-    pi=0
-    while [ "${pi}" -lt "${CURATED_COUNT}" ]; do
-        plugin_name="$(printf '%s' "${DEFAULT_JSON}" | jq -r ".plugins[${pi}].name")"
-        plugin_json="$(printf '%s' "${DEFAULT_JSON}" | jq ".plugins[${pi}]")"
+    # 1) Get all curated plugin names in one jq call
+    _curated_names="$(printf '%s' "${DEFAULT_JSON}" | jq -r '.plugins // [] | .[].name')"
 
-        # Check if installed in any marketplace cache dir
-        _installed=false
+    # 2) Check installation bash-side — iterate names, check dirs
+    _installed_names=""
+    while IFS= read -r _cn; do
+        [ -z "${_cn}" ] && continue
         for _mkt_dir in "${HOME}/.claude/plugins/cache"/*/; do
             [ -d "${_mkt_dir}" ] || continue
-            if [ -d "${_mkt_dir}${plugin_name}" ]; then
-                _installed=true
+            if [ -d "${_mkt_dir}${_cn}" ]; then
+                _installed_names="${_installed_names}${_cn}
+"
                 break
             fi
         done
+    done <<CURATED_EOF
+${_curated_names}
+CURATED_EOF
 
-        plugin_json="$(printf '%s' "${plugin_json}" | jq --argjson avail "${_installed}" '. + {available: $avail}')"
-        PLUGINS_JSON="$(printf '%s' "${PLUGINS_JSON}" | jq --argjson p "${plugin_json}" '. + [$p]')"
-
-        pi=$((pi + 1))
-    done
+    # 3) Single jq call — produce full PLUGINS_JSON with available flag
+    PLUGINS_JSON="$(printf '%s' "${DEFAULT_JSON}" | jq --arg installed "${_installed_names}" '
+        ($installed | split("\n") | map(select(. != ""))) as $inst |
+        [.plugins // [] | .[] | .name as $n | . + {available: ([$inst[] | select(. == $n)] | length > 0)}]
+    ')"
 fi
 
 # -----------------------------------------------------------------
