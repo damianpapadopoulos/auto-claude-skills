@@ -55,7 +55,7 @@ if ! command -v jq >/dev/null 2>&1; then
     if [ -f "${FALLBACK}" ]; then
         cp "${FALLBACK}" "${CACHE_FILE}"
     else
-        printf '{"version":"3.2.0-fallback","warnings":["jq not available, no fallback found"],"skills":[]}\n' > "${CACHE_FILE}"
+        printf '{"version":"4.0.0-fallback","warnings":["jq not available, no fallback found"],"skills":[]}\n' > "${CACHE_FILE}"
     fi
     # NOTE: jq unavailable on this path; MSG must remain a simple ASCII string (no quotes or backslashes)
     MSG="SessionStart: jq not found -- skill routing disabled. Install jq: brew install jq (macOS) or apt install jq (Linux)"
@@ -332,6 +332,141 @@ if [ -f "${DEFAULT_TRIGGERS}" ]; then
     METHODOLOGY_HINTS="$(jq '.methodology_hints // []' "${DEFAULT_TRIGGERS}" 2>/dev/null)" || METHODOLOGY_HINTS="[]"
 fi
 
+# Extract phase_compositions from default-triggers.json
+PHASE_COMPOSITIONS="{}"
+if [ -f "${DEFAULT_TRIGGERS}" ]; then
+    PHASE_COMPOSITIONS="$(jq '.phase_compositions // {}' "${DEFAULT_TRIGGERS}" 2>/dev/null)" || PHASE_COMPOSITIONS="{}"
+fi
+
+# -----------------------------------------------------------------
+# Step 8b: Discover curated plugins from default-triggers.json
+# -----------------------------------------------------------------
+PLUGINS_JSON="[]"
+if [ -f "${DEFAULT_TRIGGERS}" ]; then
+    CURATED_COUNT="$(jq '.plugins // [] | length' "${DEFAULT_TRIGGERS}" 2>/dev/null)" || CURATED_COUNT=0
+    pi=0
+    while [ "${pi}" -lt "${CURATED_COUNT}" ]; do
+        plugin_name="$(jq -r ".plugins[${pi}].name" "${DEFAULT_TRIGGERS}")"
+        plugin_json="$(jq ".plugins[${pi}]" "${DEFAULT_TRIGGERS}")"
+
+        # Check if installed in any marketplace cache dir
+        _installed=false
+        for _mkt_dir in "${HOME}/.claude/plugins/cache"/*/; do
+            [ -d "${_mkt_dir}" ] || continue
+            if [ -d "${_mkt_dir}${plugin_name}" ]; then
+                _installed=true
+                break
+            fi
+        done
+
+        plugin_json="$(printf '%s' "${plugin_json}" | jq --argjson avail "${_installed}" '. + {available: $avail}')"
+        PLUGINS_JSON="$(printf '%s' "${PLUGINS_JSON}" | jq --argjson p "${plugin_json}" '. + [$p]')"
+
+        pi=$((pi + 1))
+    done
+fi
+
+# -----------------------------------------------------------------
+# Step 8c: Auto-discover unknown plugins from all marketplaces
+# -----------------------------------------------------------------
+# Build list of curated plugin names for exclusion
+CURATED_NAMES="$(printf '%s' "${PLUGINS_JSON}" | jq -r '.[].name' 2>/dev/null)"
+# Also exclude plugins we already handle as skill sources
+KNOWN_NAMES="${CURATED_NAMES}
+superpowers
+frontend-design
+claude-md-management
+claude-code-setup
+pr-review-toolkit
+ralph-loop
+auto-claude-skills"
+
+for _mkt_dir in "${HOME}/.claude/plugins/cache"/*/; do
+    [ -d "${_mkt_dir}" ] || continue
+    for _plugin_dir in "${_mkt_dir}"*/; do
+        [ -d "${_plugin_dir}" ] || continue
+        _pname="$(basename "${_plugin_dir}")"
+
+        # Skip known/curated plugins
+        _skip=0
+        while IFS= read -r _kn; do
+            [ -z "${_kn}" ] && continue
+            if [ "${_kn}" = "${_pname}" ]; then
+                _skip=1
+                break
+            fi
+        done <<KNEOF
+${KNOWN_NAMES}
+KNEOF
+        [ "${_skip}" -eq 1 ] && continue
+
+        # Look for plugin.json — may be directly in plugin dir or in a version subdir
+        _pjson=""
+        _plugin_root=""
+        if [ -f "${_plugin_dir}.claude-plugin/plugin.json" ]; then
+            _pjson="${_plugin_dir}.claude-plugin/plugin.json"
+            _plugin_root="${_plugin_dir}"
+        else
+            for _vdir in "${_plugin_dir}"*/; do
+                [ -d "${_vdir}" ] || continue
+                if [ -f "${_vdir}.claude-plugin/plugin.json" ]; then
+                    _pjson="${_vdir}.claude-plugin/plugin.json"
+                    _plugin_root="${_vdir}"
+                    break
+                fi
+            done
+        fi
+        [ -z "${_pjson}" ] && continue
+
+        # Scan for skills
+        _skills="[]"
+        if [ -d "${_plugin_root}skills" ]; then
+            for _smd in "${_plugin_root}skills"/*/SKILL.md; do
+                [ -f "${_smd}" ] || continue
+                _sname="$(basename "$(dirname "${_smd}")")"
+                _skills="$(printf '%s' "${_skills}" | jq --arg s "${_sname}" '. + [$s]')"
+            done
+        fi
+
+        # Scan for commands
+        _commands="[]"
+        if [ -d "${_plugin_root}commands" ]; then
+            for _cmd in "${_plugin_root}commands"/*.md; do
+                [ -f "${_cmd}" ] || continue
+                _cname="/$(basename "${_cmd}" .md)"
+                _commands="$(printf '%s' "${_commands}" | jq --arg c "${_cname}" '. + [$c]')"
+            done
+        fi
+
+        # Scan for agents
+        _agents="[]"
+        if [ -d "${_plugin_root}agents" ]; then
+            for _agent in "${_plugin_root}agents"/*.md; do
+                [ -f "${_agent}" ] || continue
+                _aname="$(basename "${_agent}" .md)"
+                _agents="$(printf '%s' "${_agents}" | jq --arg a "${_aname}" '. + [$a]')"
+            done
+        fi
+
+        # Build plugin entry
+        _entry="$(jq -n \
+            --arg name "${_pname}" \
+            --arg source "auto-discovered" \
+            --argjson skills "${_skills}" \
+            --argjson commands "${_commands}" \
+            --argjson agents "${_agents}" \
+            '{
+                name: $name,
+                source: $source,
+                provides: {commands: $commands, skills: $skills, agents: $agents, hooks: []},
+                phase_fit: ["*"],
+                description: "Auto-discovered plugin",
+                available: true
+            }')"
+        PLUGINS_JSON="$(printf '%s' "${PLUGINS_JSON}" | jq --argjson p "${_entry}" '. + [$p]')"
+    done
+done
+
 # -----------------------------------------------------------------
 # Step 9: Build final registry JSON
 # -----------------------------------------------------------------
@@ -341,13 +476,17 @@ UNAVAILABLE_COUNT=$((SKILL_COUNT - AVAILABLE_COUNT))
 WARNING_COUNT="$(printf '%s' "${WARNINGS}" | jq 'length' 2>/dev/null)" || WARNING_COUNT=0
 
 REGISTRY="$(jq -n \
-    --arg version "3.2.0" \
+    --arg version "4.0.0" \
     --argjson skills "${SKILLS_JSON}" \
+    --argjson plugins "${PLUGINS_JSON}" \
+    --argjson phase_compositions "${PHASE_COMPOSITIONS}" \
     --argjson methodology_hints "${METHODOLOGY_HINTS}" \
     --argjson warnings "${WARNINGS}" \
     '{
         version: $version,
         skills: $skills,
+        plugins: $plugins,
+        phase_compositions: $phase_compositions,
         methodology_hints: $methodology_hints,
         warnings: $warnings
     }'
@@ -365,7 +504,7 @@ MISSING_PLUGINS=""
 MISSING_COUNT=0
 
 # Check companion plugins
-for _plugin in superpowers frontend-design claude-md-management pr-review-toolkit claude-code-setup; do
+for _plugin in superpowers frontend-design claude-md-management pr-review-toolkit claude-code-setup commit-commands security-guidance hookify feature-dev code-review code-simplifier skill-creator; do
     _found=0
     case "${_plugin}" in
         superpowers)
@@ -412,7 +551,10 @@ fi
 # -----------------------------------------------------------------
 # Step 12: Emit health check
 # -----------------------------------------------------------------
-MSG="SessionStart: skill registry built (${SKILL_COUNT} skills, ${AVAILABLE_COUNT} available, from ${SOURCE_COUNT} sources, ${WARNING_COUNT} warnings)${SETUP_HINTS}"
+PLUGIN_COUNT="$(printf '%s' "${PLUGINS_JSON}" | jq 'length' 2>/dev/null)" || PLUGIN_COUNT=0
+PLUGIN_AVAILABLE="$(printf '%s' "${PLUGINS_JSON}" | jq '[.[] | select(.available == true)] | length' 2>/dev/null)" || PLUGIN_AVAILABLE=0
+
+MSG="SessionStart: skill registry built (${SKILL_COUNT} skills, ${AVAILABLE_COUNT} available, from ${SOURCE_COUNT} sources, ${PLUGIN_COUNT} plugins (${PLUGIN_AVAILABLE} installed), ${WARNING_COUNT} warnings)${SETUP_HINTS}"
 printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' \
     "$(printf '%s' "${MSG}" | jq -Rs .)"
 

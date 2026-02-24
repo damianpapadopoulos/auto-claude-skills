@@ -44,7 +44,7 @@ test_empty_env_produces_fallback() {
     # Should have a version field
     local version
     version="$(jq -r '.version' "${cache_file}" 2>/dev/null)"
-    assert_contains "registry has version" "3.2" "${version}"
+    assert_contains "registry has version" "4.0" "${version}"
 
     # Should have skills array
     local skill_count
@@ -286,6 +286,166 @@ test_discovers_agent_team_skills() {
     teardown_test_env
 }
 
+test_default_triggers_has_plugins_section() {
+    echo "-- test: default-triggers has plugins section --"
+    setup_test_env
+
+    local plugin_count
+    plugin_count="$(jq '.plugins | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+
+    # Should have 7 curated plugins
+    assert_equals "default-triggers has 7 plugins" "7" "${plugin_count}"
+
+    # Each plugin should have required fields
+    local valid_count
+    valid_count="$(jq '[.plugins[] | select(.name and .source and .provides and .phase_fit and .description)] | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+    assert_equals "all plugins have required fields" "7" "${valid_count}"
+
+    teardown_test_env
+}
+
+test_default_triggers_has_phase_compositions() {
+    echo "-- test: default-triggers has phase_compositions --"
+    setup_test_env
+
+    local phases
+    phases="$(jq '.phase_compositions | keys[]' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null | sort)"
+
+    assert_contains "has DESIGN phase" "DESIGN" "${phases}"
+    assert_contains "has PLAN phase" "PLAN" "${phases}"
+    assert_contains "has IMPLEMENT phase" "IMPLEMENT" "${phases}"
+    assert_contains "has REVIEW phase" "REVIEW" "${phases}"
+    assert_contains "has SHIP phase" "SHIP" "${phases}"
+    assert_contains "has DEBUG phase" "DEBUG" "${phases}"
+
+    # Each phase must have a driver field
+    local driver_count
+    driver_count="$(jq '[.phase_compositions | to_entries[] | select(.value.driver)] | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+    assert_equals "all 6 phases have drivers" "6" "${driver_count}"
+
+    # REVIEW should have parallel entries
+    local review_parallel
+    review_parallel="$(jq '.phase_compositions.REVIEW.parallel | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+    assert_equals "REVIEW has 2 parallel entries" "2" "${review_parallel}"
+
+    # SHIP should have sequence entries
+    local ship_sequence
+    ship_sequence="$(jq '.phase_compositions.SHIP.sequence | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+    assert_equals "SHIP has 3 sequence entries" "3" "${ship_sequence}"
+
+    teardown_test_env
+}
+
+test_discovers_curated_plugins() {
+    echo "-- test: discovers curated plugins --"
+    setup_test_env
+
+    # Create mock plugin directories for curated plugins
+    local plugin_base="${HOME}/.claude/plugins/cache/claude-plugins-official"
+    mkdir -p "${plugin_base}/commit-commands"
+    mkdir -p "${plugin_base}/feature-dev"
+    mkdir -p "${plugin_base}/code-review"
+
+    local output
+    output="$(run_hook)"
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    assert_file_exists "cache file created" "${cache_file}"
+    assert_json_valid "cache file is valid JSON" "${cache_file}"
+
+    # commit-commands should be in plugins array and marked available
+    local cc_available
+    cc_available="$(jq -r '.plugins[] | select(.name == "commit-commands") | .available' "${cache_file}" 2>/dev/null)"
+    assert_equals "commit-commands is available" "true" "${cc_available}"
+
+    # feature-dev should be available
+    local fd_available
+    fd_available="$(jq -r '.plugins[] | select(.name == "feature-dev") | .available' "${cache_file}" 2>/dev/null)"
+    assert_equals "feature-dev is available" "true" "${fd_available}"
+
+    # security-guidance should exist but be unavailable (not installed)
+    local sg_available
+    sg_available="$(jq -r '.plugins[] | select(.name == "security-guidance") | .available' "${cache_file}" 2>/dev/null)"
+    assert_equals "security-guidance is unavailable" "false" "${sg_available}"
+
+    teardown_test_env
+}
+
+test_registry_includes_phase_compositions() {
+    echo "-- test: registry cache includes phase_compositions --"
+    setup_test_env
+
+    local output
+    output="$(run_hook)"
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    assert_json_valid "cache file is valid JSON" "${cache_file}"
+
+    local pc_keys
+    pc_keys="$(jq '.phase_compositions | keys | length' "${cache_file}" 2>/dev/null)"
+    assert_equals "phase_compositions has 6 phases" "6" "${pc_keys}"
+
+    teardown_test_env
+}
+
+test_auto_discovers_unknown_plugins() {
+    echo "-- test: auto-discovers unknown plugins --"
+    setup_test_env
+
+    # Create a mock unknown plugin with skills and commands
+    local unknown_dir="${HOME}/.claude/plugins/cache/community-marketplace/my-unknown-plugin/1.0.0"
+    mkdir -p "${unknown_dir}/skills/custom-lint"
+    printf '---\nname: custom-lint\ndescription: Custom lint rules\n---\n# Custom Lint\n' > \
+        "${unknown_dir}/skills/custom-lint/SKILL.md"
+    mkdir -p "${unknown_dir}/commands"
+    printf '# Run Lint\n' > "${unknown_dir}/commands/lint.md"
+    mkdir -p "${unknown_dir}/.claude-plugin"
+    printf '{"name":"my-unknown-plugin","version":"1.0.0"}\n' > "${unknown_dir}/.claude-plugin/plugin.json"
+
+    local output
+    output="$(run_hook)"
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    assert_json_valid "cache file is valid JSON" "${cache_file}"
+
+    # Unknown plugin should appear in plugins array
+    local up_name
+    up_name="$(jq -r '.plugins[] | select(.name == "my-unknown-plugin") | .name' "${cache_file}" 2>/dev/null)"
+    assert_equals "unknown plugin discovered" "my-unknown-plugin" "${up_name}"
+
+    local up_available
+    up_available="$(jq -r '.plugins[] | select(.name == "my-unknown-plugin") | .available' "${cache_file}" 2>/dev/null)"
+    assert_equals "unknown plugin is available" "true" "${up_available}"
+
+    # Should detect the skill
+    local up_skills
+    up_skills="$(jq -r '.plugins[] | select(.name == "my-unknown-plugin") | .provides.skills[0]' "${cache_file}" 2>/dev/null)"
+    assert_equals "unknown plugin skill detected" "custom-lint" "${up_skills}"
+
+    # Should detect the command
+    local up_commands
+    up_commands="$(jq -r '.plugins[] | select(.name == "my-unknown-plugin") | .provides.commands[0]' "${cache_file}" 2>/dev/null)"
+    assert_equals "unknown plugin command detected" "/lint" "${up_commands}"
+
+    teardown_test_env
+}
+
+test_health_check_reports_new_plugins() {
+    echo "-- test: health check reports plugin count --"
+    setup_test_env
+
+    # Install one curated plugin
+    mkdir -p "${HOME}/.claude/plugins/cache/claude-plugins-official/commit-commands"
+
+    local output
+    output="$(run_hook)"
+
+    # Health check should mention plugins
+    assert_contains "health check mentions plugins" "plugin" "$(printf '%s' "${output}" | tr '[:upper:]' '[:lower:]')"
+
+    teardown_test_env
+}
+
 # ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
@@ -297,5 +457,11 @@ test_missing_dirs_no_crash
 test_user_config_disables_skill
 test_health_check_output
 test_discovers_agent_team_skills
+test_default_triggers_has_plugins_section
+test_default_triggers_has_phase_compositions
+test_discovers_curated_plugins
+test_registry_includes_phase_compositions
+test_auto_discovers_unknown_plugins
+test_health_check_reports_new_plugins
 
 print_summary

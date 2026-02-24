@@ -289,6 +289,84 @@ HEOF
 done
 
 # =================================================================
+# PHASE COMPOSITION: PARALLEL / SEQUENCE / HINTS
+# =================================================================
+COMPOSITION_LINES=""
+COMPOSITION_HINTS=""
+
+# Determine the current phase from selected skills
+CURRENT_PHASE=""
+while IFS='|' read -r score name role invoke phase; do
+    [[ -z "$name" ]] && continue
+    if [[ -n "$phase" ]]; then
+        CURRENT_PHASE="$phase"
+        break
+    fi
+done <<EOF
+${SELECTED}
+EOF
+
+# Look up phase composition if registry has it and a phase was determined
+if [[ -n "$CURRENT_PHASE" ]]; then
+    _pc="$(printf '%s' "$REGISTRY" | jq -c --arg ph "$CURRENT_PHASE" '.phase_compositions[$ph] // empty' 2>/dev/null)"
+    if [[ -n "$_pc" ]]; then
+        # Emit PARALLEL lines for available plugins
+        _par_count="$(printf '%s' "$_pc" | jq '.parallel // [] | length' 2>/dev/null)" || _par_count=0
+        _pi=0
+        while [[ "$_pi" -lt "$_par_count" ]]; do
+            _plugin="$(printf '%s' "$_pc" | jq -r ".parallel[${_pi}].plugin" 2>/dev/null)"
+            _use="$(printf '%s' "$_pc" | jq -r ".parallel[${_pi}].use" 2>/dev/null)"
+            _purpose="$(printf '%s' "$_pc" | jq -r ".parallel[${_pi}].purpose" 2>/dev/null)"
+
+            # Check if plugin is available
+            _pavail="$(printf '%s' "$REGISTRY" | jq -r --arg pn "$_plugin" '.plugins // [] | .[] | select(.name == $pn) | .available' 2>/dev/null)"
+            if [[ "$_pavail" == "true" ]]; then
+                COMPOSITION_LINES="${COMPOSITION_LINES}
+  PARALLEL: ${_use} -> ${_purpose} [${_plugin}]"
+            fi
+            _pi=$((_pi + 1))
+        done
+
+        # Emit SEQUENCE lines (SHIP phase)
+        _seq_count="$(printf '%s' "$_pc" | jq '.sequence // [] | length' 2>/dev/null)" || _seq_count=0
+        _si=0
+        while [[ "$_si" -lt "$_seq_count" ]]; do
+            _plugin="$(printf '%s' "$_pc" | jq -r ".sequence[${_si}].plugin // empty" 2>/dev/null)"
+            _step="$(printf '%s' "$_pc" | jq -r ".sequence[${_si}].step // empty" 2>/dev/null)"
+            _use="$(printf '%s' "$_pc" | jq -r ".sequence[${_si}].use // empty" 2>/dev/null)"
+            _purpose="$(printf '%s' "$_pc" | jq -r ".sequence[${_si}].purpose" 2>/dev/null)"
+
+            if [[ -n "$_plugin" ]]; then
+                _pavail="$(printf '%s' "$REGISTRY" | jq -r --arg pn "$_plugin" '.plugins // [] | .[] | select(.name == $pn) | .available' 2>/dev/null)"
+                if [[ "$_pavail" == "true" ]]; then
+                    COMPOSITION_LINES="${COMPOSITION_LINES}
+  SEQUENCE: ${_use} -> ${_purpose} [${_plugin}]"
+                fi
+            elif [[ -n "$_step" ]]; then
+                COMPOSITION_LINES="${COMPOSITION_LINES}
+  SEQUENCE: ${_step} -> ${_purpose}"
+            fi
+            _si=$((_si + 1))
+        done
+
+        # Collect composition hints for available plugins
+        _hint_count="$(printf '%s' "$_pc" | jq '.hints // [] | length' 2>/dev/null)" || _hint_count=0
+        _hi=0
+        while [[ "$_hi" -lt "$_hint_count" ]]; do
+            _plugin="$(printf '%s' "$_pc" | jq -r ".hints[${_hi}].plugin" 2>/dev/null)"
+            _text="$(printf '%s' "$_pc" | jq -r ".hints[${_hi}].text" 2>/dev/null)"
+
+            _pavail="$(printf '%s' "$REGISTRY" | jq -r --arg pn "$_plugin" '.plugins // [] | .[] | select(.name == $pn) | .available' 2>/dev/null)"
+            if [[ "$_pavail" == "true" ]]; then
+                COMPOSITION_HINTS="${COMPOSITION_HINTS}
+- ${_text}"
+            fi
+            _hi=$((_hi + 1))
+        done
+    fi
+fi
+
+# =================================================================
 # BUILD ORCHESTRATED CONTEXT OUTPUT
 # =================================================================
 
@@ -337,7 +415,7 @@ ${name} -> ${invoke}"
 ${SELECTED}
 EOF
 
-  OUT+="${PROCESS_LINE}${DOMAIN_LINES}${WORKFLOW_LINES}${STANDALONE_LINES}"
+  OUT+="${PROCESS_LINE}${DOMAIN_LINES}${WORKFLOW_LINES}${STANDALONE_LINES}${COMPOSITION_LINES}"
 
   # Append overflow domain skills (relevant but didn't fit in top suggestions)
   OVERFLOW_LINES=""
@@ -427,6 +505,7 @@ EOF
   done <<EOF
 ${OVERFLOW_DOMAIN}
 EOF
+  OUT+="${COMPOSITION_LINES}"
 
   OUT+="
 You MUST print a brief evaluation for each skill above. Format:
@@ -444,9 +523,9 @@ Domain skills evaluated YES: invoke them (before, during, or after the process s
 fi
 
 # Append methodology hints if any
-if [[ -n "$HINTS" ]]; then
+if [[ -n "$HINTS" ]] || [[ -n "$COMPOSITION_HINTS" ]]; then
   OUT+="
-${HINTS}"
+${HINTS}${COMPOSITION_HINTS}"
 fi
 
 printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":%s}}\n' \
