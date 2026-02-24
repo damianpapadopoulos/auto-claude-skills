@@ -972,6 +972,311 @@ test_no_parallel_when_plugin_unavailable() {
 }
 
 # ---------------------------------------------------------------------------
+# 26. Process skill reserved when high-priority domain/workflow fill slots
+# ---------------------------------------------------------------------------
+test_process_slot_reserved() {
+    echo "-- test: process slot reserved under cap --"
+    setup_test_env
+    install_registry
+
+    # "build a secure frontend dashboard and ship it" triggers:
+    #   brainstorming (process, prio 30), security-scanner (domain, prio 102),
+    #   frontend-design (domain, prio 101), finishing-a-development-branch (workflow, prio 61)
+    # With max_suggestions=3, all 3 slots could go to non-process skills.
+    # Process skill MUST still be selected.
+    local output context
+    output="$(run_hook "build a secure frontend dashboard and ship it")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "process skill reserved" "Skill(superpowers:brainstorming)" "${context}"
+    assert_contains "process skill has Process: prefix" "Process:" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# 26.5. Malformed skill entry (missing triggers) does not break hook
+# ---------------------------------------------------------------------------
+test_missing_triggers_handled() {
+    echo "-- test: missing triggers handled gracefully --"
+    setup_test_env
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'BADREG'
+{
+  "version": "test",
+  "skills": [
+    {
+      "name": "good-skill",
+      "role": "process",
+      "phase": "DEBUG",
+      "triggers": ["(debug|bug)"],
+      "priority": 10,
+      "invoke": "Skill(mock:good-skill)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "no-triggers-skill",
+      "role": "domain",
+      "priority": 50,
+      "invoke": "Skill(mock:no-triggers)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "null-triggers-skill",
+      "role": "domain",
+      "triggers": null,
+      "priority": 50,
+      "invoke": "Skill(mock:null-triggers)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "methodology_hints": [],
+  "phase_compositions": {}
+}
+BADREG
+
+    local exit_code=0
+    local output context
+    output="$(run_hook "debug this broken module")" || exit_code=$?
+
+    assert_equals "hook exits cleanly with malformed skills" "0" "${exit_code}"
+    context="$(extract_context "${output}")"
+    assert_contains "good skill still selected" "good-skill" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# 27. Phase composition uses process phase, not domain phase
+# ---------------------------------------------------------------------------
+test_phase_uses_process_precedence() {
+    echo "-- test: phase composition uses process phase precedence --"
+    setup_test_env
+    install_registry_v4
+
+    # "build a secure frontend dashboard" triggers:
+    #   brainstorming (process, phase=DESIGN, prio 30),
+    #   security-scanner (domain, no phase, prio 102),
+    #   frontend-design (domain, no phase, prio 101)
+    # Phase should be DESIGN (from process), not any domain phase
+    local output context
+    output="$(run_hook "build a secure frontend dashboard component with csrf protection")"
+    context="$(extract_context "${output}")"
+
+    # The DESIGN phase composition has a PARALLEL line for feature-dev plugin
+    assert_contains "phase composition uses DESIGN" "PARALLEL:" "${context}"
+    assert_contains "phase composition mentions feature-dev" "feature-dev" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# 28. Compact Evaluate phase uses process phase
+# ---------------------------------------------------------------------------
+test_eval_phase_uses_process() {
+    echo "-- test: compact Evaluate phase uses process phase --"
+    setup_test_env
+
+    # Use a minimal registry with just 1 process + 1 domain to stay in compact format
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'PHASEREG'
+{
+  "version": "test",
+  "skills": [
+    {
+      "name": "brainstorming",
+      "role": "process",
+      "phase": "DESIGN",
+      "triggers": ["(build|create)"],
+      "priority": 30,
+      "invoke": "Skill(superpowers:brainstorming)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "security-scanner",
+      "role": "domain",
+      "phase": "IMPLEMENT",
+      "triggers": ["(secur(e|ity)|encrypt)"],
+      "priority": 102,
+      "invoke": "Skill(security-scanner)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "methodology_hints": [],
+  "phase_compositions": {}
+}
+PHASEREG
+
+    # 2 skills -> compact format with Evaluate line
+    # security-scanner has phase=IMPLEMENT, brainstorming has phase=DESIGN
+    # Process phase (DESIGN) should win
+    local output context
+    output="$(run_hook "build a secure authentication service with encryption")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "Evaluate uses DESIGN phase" "Phase: [DESIGN]" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# 29. Skill name boost uses boundary-aware matching
+# ---------------------------------------------------------------------------
+test_name_boost_boundary_aware() {
+    echo "-- test: skill name boost boundary-aware --"
+    setup_test_env
+
+    # Custom registry with two skills: "debug" and "debug-advanced"
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'NAMEREG'
+{
+  "version": "test",
+  "skills": [
+    {
+      "name": "debug",
+      "role": "domain",
+      "triggers": ["(never-match-this-nonsense-string)"],
+      "priority": 10,
+      "invoke": "Skill(mock:debug)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "debug-advanced",
+      "role": "domain",
+      "triggers": ["(never-match-this-nonsense-string)"],
+      "priority": 10,
+      "invoke": "Skill(mock:debug-advanced)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "methodology_hints": [],
+  "phase_compositions": {}
+}
+NAMEREG
+
+    # Mention only "debug-advanced" by name — "debug" should NOT get boosted
+    local output context
+    output="$(run_hook "tell me about the debug-advanced skill and how it works")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "debug-advanced is selected" "debug-advanced" "${context}"
+    assert_not_contains "plain debug not selected" "mock:debug)" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# 29.5. Trigger word-boundary excludes dot (file extension separator)
+# ---------------------------------------------------------------------------
+test_trigger_boundary_excludes_dot() {
+    echo "-- test: trigger word-boundary excludes dot --"
+    setup_test_env
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'DOTREG'
+{
+  "version": "test",
+  "skills": [
+    {
+      "name": "py-tool",
+      "role": "domain",
+      "triggers": ["py"],
+      "priority": 0,
+      "invoke": "Skill(mock:py-tool)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "other-tool",
+      "role": "domain",
+      "triggers": ["(skill|tool)"],
+      "priority": 0,
+      "invoke": "Skill(mock:other-tool)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "methodology_hints": [],
+  "phase_compositions": {}
+}
+DOTREG
+
+    # "check skill.py file" — "py" appears after a dot, NOT a word boundary
+    # "other-tool" has trigger "skill" which gets word-boundary score (30)
+    # "py-tool" trigger "py" should only get substring score (10)
+    # With equal priority (0), other-tool (score 30) should rank above py-tool (score 10)
+    local output context
+    output="$(run_hook "check the skill.py file for issues please")"
+    context="$(extract_context "${output}")"
+
+    # other-tool should appear (word-boundary match on "skill")
+    assert_contains "other-tool selected" "other-tool" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# 30. Domain instruction wording without process skill
+# ---------------------------------------------------------------------------
+test_domain_instruction_no_process() {
+    echo "-- test: domain instruction wording without process --"
+    setup_test_env
+
+    # Custom registry: only domain skills, no process skills
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'DOMREG'
+{
+  "version": "test",
+  "skills": [
+    {
+      "name": "security-scanner",
+      "role": "domain",
+      "triggers": ["(secur(e|ity)|vulnerab)"],
+      "priority": 102,
+      "invoke": "Skill(security-scanner)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "frontend-design",
+      "role": "domain",
+      "triggers": ["(frontend|dashboard|component)"],
+      "priority": 101,
+      "invoke": "Skill(frontend-design)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "methodology_hints": [],
+  "phase_compositions": {}
+}
+DOMREG
+
+    local output context
+    output="$(run_hook "build a secure frontend dashboard component")"
+    context="$(extract_context "${output}")"
+
+    # Should have domain invocation instruction but NOT mention "the process skill"
+    assert_contains "has domain invocation instruction" "invoke them" "${context}"
+    assert_not_contains "no process skill reference" "the process skill" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_debug_prompt_matches
@@ -999,5 +1304,12 @@ test_teammate_idle_guard
 test_review_emits_parallel_lines
 test_ship_emits_sequence_lines
 test_no_parallel_when_plugin_unavailable
+test_process_slot_reserved
+test_missing_triggers_handled
+test_phase_uses_process_precedence
+test_eval_phase_uses_process
+test_name_boost_boundary_aware
+test_trigger_boundary_excludes_dot
+test_domain_instruction_no_process
 
 print_summary

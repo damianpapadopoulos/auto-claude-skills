@@ -89,13 +89,19 @@ SCORED_SKILLS="$(printf '%s' "$REGISTRY" | jq -c '
   [.skills[] | select(.available == true and .enabled == true)][]
 ' 2>/dev/null)"
 
-# L3: Pre-pass — collect skill names that appear verbatim in the prompt
+# L3: Pre-pass — collect skill names that appear as whole words in the prompt
+# Uses newline-delimited list + boundary checks to avoid prefix/substring false positives
 SKILL_NAME_MATCHES=""
 while IFS= read -r _sj; do
   [[ -z "$_sj" ]] && continue
   _sn="$(printf '%s' "$_sj" | jq -r '.name')"
-  if [[ "$P" == *"$_sn"* ]]; then
-    SKILL_NAME_MATCHES="${SKILL_NAME_MATCHES}|${_sn}"
+  _sn_lower="$(printf '%s' "$_sn" | tr '[:upper:]' '[:lower:]')"
+  # Check if skill name appears with word boundaries in the lowercased prompt
+  # Word boundaries for kebab-case names: start/end of string, or non-[a-z0-9-] character
+  if [[ "$P" =~ (^|[^a-z0-9-])${_sn_lower}($|[^a-z0-9-]) ]]; then
+    SKILL_NAME_MATCHES="${SKILL_NAME_MATCHES}
+${_sn}
+"
   fi
 done <<EOF
 ${SCORED_SKILLS}
@@ -106,18 +112,17 @@ RESULTS=""
 while IFS= read -r skill_json; do
   [[ -z "$skill_json" ]] && continue
 
-  skill_name="$(printf '%s' "$skill_json" | jq -r '.name')"
-  skill_role="$(printf '%s' "$skill_json" | jq -r '.role')"
-  skill_priority="$(printf '%s' "$skill_json" | jq -r '.priority // 0')"
-  skill_invoke="$(printf '%s' "$skill_json" | jq -r '.invoke // "SKIP"')"
-  skill_phase="$(printf '%s' "$skill_json" | jq -r '.phase // ""')"
+  # Extract all fields in one jq call (reduces 5 forks to 1 per skill)
+  read -r skill_name skill_role skill_priority skill_invoke skill_phase <<FIELDS
+$(printf '%s' "$skill_json" | jq -r '[.name, .role, (.priority // 0 | tostring), (.invoke // "SKIP"), (.phase // "")] | @tsv')
+FIELDS
 
-  trigger_count="$(printf '%s' "$skill_json" | jq '.triggers | length')"
+  trigger_count="$(printf '%s' "$skill_json" | jq '.triggers // [] | length')"
   trigger_score=0
 
   ti=0
   while [[ "$ti" -lt "$trigger_count" ]]; do
-    trigger="$(printf '%s' "$skill_json" | jq -r ".triggers[${ti}]")"
+    trigger="$(printf '%s' "$skill_json" | jq -r "(.triggers // [])[${ti}]")"
     ti=$((ti + 1))
 
     # Test regex against lowercased prompt
@@ -132,13 +137,13 @@ while IFS= read -r skill_json; do
 
       if [[ "$prefix_len" -gt 0 ]]; then
         char_before="${P:$((prefix_len - 1)):1}"
-        if [[ "$char_before" =~ [a-z0-9_-] ]]; then
+        if [[ "$char_before" =~ [a-z0-9_.-] ]]; then
           is_word_boundary=0
         fi
       fi
       if [[ "$after_pos" -lt "${#P}" ]]; then
         char_after="${P:${after_pos}:1}"
-        if [[ "$char_after" =~ [a-z0-9_-] ]]; then
+        if [[ "$char_after" =~ [a-z0-9_.-] ]]; then
           is_word_boundary=0
         fi
       fi
@@ -157,7 +162,9 @@ while IFS= read -r skill_json; do
 
   # L3: Apply skill-name-mention boost (+100) and allow through even with zero trigger_score
   name_boost=0
-  if [[ "$SKILL_NAME_MATCHES" == *"|${skill_name}"* ]]; then
+  if [[ "$SKILL_NAME_MATCHES" == *"
+${skill_name}
+"* ]]; then
     name_boost=100
   fi
 
@@ -177,6 +184,7 @@ SORTED="$(printf '%s' "$RESULTS" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
 # SELECT BY ROLE CAPS
 # =================================================================
 # Max 1 process, up to 2 domain, max 1 workflow, total <= max_suggestions
+# INVARIANT: If any process skill matched, it gets a reserved slot.
 SELECTED=""
 OVERFLOW_DOMAIN=""
 PROCESS_COUNT=0
@@ -184,8 +192,30 @@ DOMAIN_COUNT=0
 WORKFLOW_COUNT=0
 TOTAL_COUNT=0
 
+# Pre-select: find the highest-ranked process skill and reserve a slot
+RESERVED_PROCESS=""
 while IFS='|' read -r score name role invoke phase; do
   [[ -z "$name" ]] && continue
+  if [[ "$role" == "process" ]]; then
+    RESERVED_PROCESS="${score}|${name}|${role}|${invoke}|${phase}"
+    SELECTED="${RESERVED_PROCESS}
+"
+    PROCESS_COUNT=1
+    TOTAL_COUNT=1
+    break
+  fi
+done <<EOF
+${SORTED}
+EOF
+
+# Fill remaining slots from SORTED, skipping the reserved process skill
+while IFS='|' read -r score name role invoke phase; do
+  [[ -z "$name" ]] && continue
+
+  # Skip the already-reserved process skill
+  if [[ -n "$RESERVED_PROCESS" ]] && [[ "$role" == "process" ]] && [[ "$RESERVED_PROCESS" == "${score}|${name}|${role}|${invoke}|${phase}" ]]; then
+    continue
+  fi
 
   case "$role" in
     process)
@@ -259,6 +289,39 @@ EOF
 [[ "$HAS_WORKFLOW" -eq 1 ]] && PLABEL="${PLABEL} + Workflow"
 
 # =================================================================
+# PRIMARY PHASE (process > workflow > domain > first non-empty)
+# =================================================================
+PRIMARY_PHASE=""
+_PHASE_PROCESS=""
+_PHASE_WORKFLOW=""
+_PHASE_DOMAIN=""
+_PHASE_FIRST=""
+
+while IFS='|' read -r score name role invoke phase; do
+  [[ -z "$name" ]] && continue
+  if [[ -n "$phase" ]] && [[ -z "$_PHASE_FIRST" ]]; then
+    _PHASE_FIRST="$phase"
+  fi
+  case "$role" in
+    process)  [[ -z "$_PHASE_PROCESS" ]] && _PHASE_PROCESS="$phase" ;;
+    workflow) [[ -z "$_PHASE_WORKFLOW" ]] && _PHASE_WORKFLOW="$phase" ;;
+    domain)   [[ -z "$_PHASE_DOMAIN" ]] && _PHASE_DOMAIN="$phase" ;;
+  esac
+done <<EOF
+${SELECTED}
+EOF
+
+if [[ -n "$_PHASE_PROCESS" ]]; then
+  PRIMARY_PHASE="$_PHASE_PROCESS"
+elif [[ -n "$_PHASE_WORKFLOW" ]]; then
+  PRIMARY_PHASE="$_PHASE_WORKFLOW"
+elif [[ -n "$_PHASE_DOMAIN" ]]; then
+  PRIMARY_PHASE="$_PHASE_DOMAIN"
+else
+  PRIMARY_PHASE="$_PHASE_FIRST"
+fi
+
+# =================================================================
 # METHODOLOGY HINTS
 # =================================================================
 HINTS=""
@@ -294,17 +357,8 @@ done
 COMPOSITION_LINES=""
 COMPOSITION_HINTS=""
 
-# Determine the current phase from selected skills
-CURRENT_PHASE=""
-while IFS='|' read -r score name role invoke phase; do
-    [[ -z "$name" ]] && continue
-    if [[ -n "$phase" ]]; then
-        CURRENT_PHASE="$phase"
-        break
-    fi
-done <<EOF
-${SELECTED}
-EOF
+# Determine the current phase from selected skills (use PRIMARY_PHASE)
+CURRENT_PHASE="$PRIMARY_PHASE"
 
 # Look up phase composition if registry has it and a phase was determined
 if [[ -n "$CURRENT_PHASE" ]]; then
@@ -429,17 +483,8 @@ ${OVERFLOW_DOMAIN}
 EOF
   OUT+="${OVERFLOW_LINES}"
 
-  # Get phase from process skill or first skill
-  EVAL_PHASE=""
-  while IFS='|' read -r score name role invoke phase; do
-    [[ -z "$name" ]] && continue
-    if [[ -n "$phase" ]]; then
-      EVAL_PHASE="$phase"
-      break
-    fi
-  done <<EOF
-${SELECTED}
-EOF
+  # Phase from process skill (with precedence)
+  EVAL_PHASE="$PRIMARY_PHASE"
   [[ -z "$EVAL_PHASE" ]] && EVAL_PHASE="IMPLEMENT"
 
   OUT+="
@@ -448,8 +493,13 @@ Evaluate: **Phase: [${EVAL_PHASE}]** | ${EVAL_SKILLS}"
 
   # Add domain invocation instruction when domain skills are present
   if [[ "$DOMAIN_COUNT" -gt 0 ]] || [[ -n "$OVERFLOW_DOMAIN" ]]; then
-    OUT+="
+    if [[ -n "$PROCESS_SKILL" ]]; then
+      OUT+="
 Domain skills evaluated YES: invoke them (before, during, or after the process skill) -- do not just note them."
+    else
+      OUT+="
+Domain skills evaluated YES: invoke them -- do not just note them."
+    fi
   fi
 
 else
@@ -468,8 +518,12 @@ Step 1 -- ASSESS PHASE. Check conversation context:
 
 Step 2 -- EVALUATE skills against your phase assessment."
 
-  # Build skill lines with orchestration
+  # Build grouped skill lines (process-first ordering)
   EVAL_SKILLS=""
+  _FULL_PROCESS_LINE=""
+  _FULL_DOMAIN_LINES=""
+  _FULL_WORKFLOW_LINES=""
+  _FULL_STANDALONE_LINES=""
 
   while IFS='|' read -r score name role invoke phase; do
     [[ -z "$name" ]] && continue
@@ -481,20 +535,22 @@ Step 2 -- EVALUATE skills against your phase assessment."
 
     if [[ -n "$PROCESS_SKILL" ]]; then
       case "$role" in
-        process)  OUT+="
+        process)  _FULL_PROCESS_LINE="
 Process: ${name} -> ${invoke}" ;;
-        domain)   OUT+="
+        domain)   _FULL_DOMAIN_LINES="${_FULL_DOMAIN_LINES}
   Domain: ${name} -> ${invoke}" ;;
-        workflow) OUT+="
+        workflow) _FULL_WORKFLOW_LINES="${_FULL_WORKFLOW_LINES}
 Workflow: ${name} -> ${invoke}" ;;
       esac
     else
-      OUT+="
+      _FULL_STANDALONE_LINES="${_FULL_STANDALONE_LINES}
 ${name} -> ${invoke}"
     fi
   done <<EOF
 ${SELECTED}
 EOF
+
+  OUT+="${_FULL_PROCESS_LINE}${_FULL_DOMAIN_LINES}${_FULL_WORKFLOW_LINES}${_FULL_STANDALONE_LINES}"
 
   # Append overflow domain skills
   while IFS='|' read -r oname oinvoke; do
@@ -517,8 +573,13 @@ Step 3 -- State your plan and proceed. Keep it to 1-2 sentences."
 
   # Add domain invocation instruction when domain skills are present
   if [[ "$DOMAIN_COUNT" -gt 0 ]] || [[ -n "$OVERFLOW_DOMAIN" ]]; then
-    OUT+="
+    if [[ -n "$PROCESS_SKILL" ]]; then
+      OUT+="
 Domain skills evaluated YES: invoke them (before, during, or after the process skill) -- do not just note them."
+    else
+      OUT+="
+Domain skills evaluated YES: invoke them -- do not just note them."
+    fi
   fi
 fi
 
