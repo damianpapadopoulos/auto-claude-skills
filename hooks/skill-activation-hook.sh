@@ -89,13 +89,19 @@ SCORED_SKILLS="$(printf '%s' "$REGISTRY" | jq -c '
   [.skills[] | select(.available == true and .enabled == true)][]
 ' 2>/dev/null)"
 
-# L3: Pre-pass — collect skill names that appear verbatim in the prompt
+# L3: Pre-pass — collect skill names that appear as whole words in the prompt
+# Uses newline-delimited list + boundary checks to avoid prefix/substring false positives
 SKILL_NAME_MATCHES=""
 while IFS= read -r _sj; do
   [[ -z "$_sj" ]] && continue
   _sn="$(printf '%s' "$_sj" | jq -r '.name')"
-  if [[ "$P" == *"$_sn"* ]]; then
-    SKILL_NAME_MATCHES="${SKILL_NAME_MATCHES}|${_sn}"
+  _sn_lower="$(printf '%s' "$_sn" | tr '[:upper:]' '[:lower:]')"
+  # Check if skill name appears with word boundaries in the lowercased prompt
+  # Word boundaries for kebab-case names: start/end of string, or non-[a-z0-9-] character
+  if [[ "$P" =~ (^|[^a-z0-9-])${_sn_lower}($|[^a-z0-9-]) ]]; then
+    SKILL_NAME_MATCHES="${SKILL_NAME_MATCHES}
+${_sn}
+"
   fi
 done <<EOF
 ${SCORED_SKILLS}
@@ -131,13 +137,13 @@ FIELDS
 
       if [[ "$prefix_len" -gt 0 ]]; then
         char_before="${P:$((prefix_len - 1)):1}"
-        if [[ "$char_before" =~ [a-z0-9_-] ]]; then
+        if [[ "$char_before" =~ [a-z0-9_.-] ]]; then
           is_word_boundary=0
         fi
       fi
       if [[ "$after_pos" -lt "${#P}" ]]; then
         char_after="${P:${after_pos}:1}"
-        if [[ "$char_after" =~ [a-z0-9_-] ]]; then
+        if [[ "$char_after" =~ [a-z0-9_.-] ]]; then
           is_word_boundary=0
         fi
       fi
@@ -156,7 +162,9 @@ FIELDS
 
   # L3: Apply skill-name-mention boost (+100) and allow through even with zero trigger_score
   name_boost=0
-  if [[ "$SKILL_NAME_MATCHES" == *"|${skill_name}"* ]]; then
+  if [[ "$SKILL_NAME_MATCHES" == *"
+${skill_name}
+"* ]]; then
     name_boost=100
   fi
 

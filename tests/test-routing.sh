@@ -1128,6 +1128,106 @@ PHASEREG
 }
 
 # ---------------------------------------------------------------------------
+# 29. Skill name boost uses boundary-aware matching
+# ---------------------------------------------------------------------------
+test_name_boost_boundary_aware() {
+    echo "-- test: skill name boost boundary-aware --"
+    setup_test_env
+
+    # Custom registry with two skills: "debug" and "debug-advanced"
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'NAMEREG'
+{
+  "version": "test",
+  "skills": [
+    {
+      "name": "debug",
+      "role": "domain",
+      "triggers": ["(never-match-this-nonsense-string)"],
+      "priority": 10,
+      "invoke": "Skill(mock:debug)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "debug-advanced",
+      "role": "domain",
+      "triggers": ["(never-match-this-nonsense-string)"],
+      "priority": 10,
+      "invoke": "Skill(mock:debug-advanced)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "methodology_hints": [],
+  "phase_compositions": {}
+}
+NAMEREG
+
+    # Mention only "debug-advanced" by name — "debug" should NOT get boosted
+    local output context
+    output="$(run_hook "tell me about the debug-advanced skill and how it works")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "debug-advanced is selected" "debug-advanced" "${context}"
+    assert_not_contains "plain debug not selected" "mock:debug)" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# 29.5. Trigger word-boundary excludes dot (file extension separator)
+# ---------------------------------------------------------------------------
+test_trigger_boundary_excludes_dot() {
+    echo "-- test: trigger word-boundary excludes dot --"
+    setup_test_env
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'DOTREG'
+{
+  "version": "test",
+  "skills": [
+    {
+      "name": "py-tool",
+      "role": "domain",
+      "triggers": ["py"],
+      "priority": 0,
+      "invoke": "Skill(mock:py-tool)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "other-tool",
+      "role": "domain",
+      "triggers": ["(skill|tool)"],
+      "priority": 0,
+      "invoke": "Skill(mock:other-tool)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "methodology_hints": [],
+  "phase_compositions": {}
+}
+DOTREG
+
+    # "check skill.py file" — "py" appears after a dot, NOT a word boundary
+    # "other-tool" has trigger "skill" which gets word-boundary score (30)
+    # "py-tool" trigger "py" should only get substring score (10)
+    # With equal priority (0), other-tool (score 30) should rank above py-tool (score 10)
+    local output context
+    output="$(run_hook "check the skill.py file for issues please")"
+    context="$(extract_context "${output}")"
+
+    # other-tool should appear (word-boundary match on "skill")
+    assert_contains "other-tool selected" "other-tool" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_debug_prompt_matches
@@ -1159,5 +1259,7 @@ test_process_slot_reserved
 test_missing_triggers_handled
 test_phase_uses_process_precedence
 test_eval_phase_uses_process
+test_name_boost_boundary_aware
+test_trigger_boundary_excludes_dot
 
 print_summary
