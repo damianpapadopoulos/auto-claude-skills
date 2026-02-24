@@ -430,6 +430,22 @@ test_auto_discovers_unknown_plugins() {
     teardown_test_env
 }
 
+test_health_check_reports_new_plugins() {
+    echo "-- test: health check reports plugin count --"
+    setup_test_env
+
+    # Install one curated plugin
+    mkdir -p "${HOME}/.claude/plugins/cache/claude-plugins-official/commit-commands"
+
+    local output
+    output="$(run_hook)"
+
+    # Health check should mention plugins
+    assert_contains "health check mentions plugins" "plugin" "$(printf '%s' "${output}" | tr '[:upper:]' '[:lower:]')"
+
+    teardown_test_env
+}
+
 # ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
@@ -446,5 +462,6 @@ test_default_triggers_has_phase_compositions
 test_discovers_curated_plugins
 test_registry_includes_phase_compositions
 test_auto_discovers_unknown_plugins
+test_health_check_reports_new_plugins
 
 print_summary

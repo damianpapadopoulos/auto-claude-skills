@@ -504,7 +504,7 @@ MISSING_PLUGINS=""
 MISSING_COUNT=0
 
 # Check companion plugins
-for _plugin in superpowers frontend-design claude-md-management pr-review-toolkit claude-code-setup; do
+for _plugin in superpowers frontend-design claude-md-management pr-review-toolkit claude-code-setup commit-commands security-guidance hookify feature-dev code-review code-simplifier skill-creator; do
     _found=0
     case "${_plugin}" in
         superpowers)
@@ -551,7 +551,10 @@ fi
 # -----------------------------------------------------------------
 # Step 12: Emit health check
 # -----------------------------------------------------------------
-MSG="SessionStart: skill registry built (${SKILL_COUNT} skills, ${AVAILABLE_COUNT} available, from ${SOURCE_COUNT} sources, ${WARNING_COUNT} warnings)${SETUP_HINTS}"
+PLUGIN_COUNT="$(printf '%s' "${PLUGINS_JSON}" | jq 'length' 2>/dev/null)" || PLUGIN_COUNT=0
+PLUGIN_AVAILABLE="$(printf '%s' "${PLUGINS_JSON}" | jq '[.[] | select(.available == true)] | length' 2>/dev/null)" || PLUGIN_AVAILABLE=0
+
+MSG="SessionStart: skill registry built (${SKILL_COUNT} skills, ${AVAILABLE_COUNT} available, from ${SOURCE_COUNT} sources, ${PLUGIN_COUNT} plugins (${PLUGIN_AVAILABLE} installed), ${WARNING_COUNT} warnings)${SETUP_HINTS}"
 printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' \
     "$(printf '%s' "${MSG}" | jq -Rs .)"
 
