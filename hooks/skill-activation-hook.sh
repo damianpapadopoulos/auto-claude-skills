@@ -177,6 +177,7 @@ SORTED="$(printf '%s' "$RESULTS" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
 # SELECT BY ROLE CAPS
 # =================================================================
 # Max 1 process, up to 2 domain, max 1 workflow, total <= max_suggestions
+# INVARIANT: If any process skill matched, it gets a reserved slot.
 SELECTED=""
 OVERFLOW_DOMAIN=""
 PROCESS_COUNT=0
@@ -184,8 +185,30 @@ DOMAIN_COUNT=0
 WORKFLOW_COUNT=0
 TOTAL_COUNT=0
 
+# Pre-select: find the highest-ranked process skill and reserve a slot
+RESERVED_PROCESS=""
 while IFS='|' read -r score name role invoke phase; do
   [[ -z "$name" ]] && continue
+  if [[ "$role" == "process" ]]; then
+    RESERVED_PROCESS="${score}|${name}|${role}|${invoke}|${phase}"
+    SELECTED="${RESERVED_PROCESS}
+"
+    PROCESS_COUNT=1
+    TOTAL_COUNT=1
+    break
+  fi
+done <<EOF
+${SORTED}
+EOF
+
+# Fill remaining slots from SORTED, skipping the reserved process skill
+while IFS='|' read -r score name role invoke phase; do
+  [[ -z "$name" ]] && continue
+
+  # Skip the already-reserved process skill
+  if [[ -n "$RESERVED_PROCESS" ]] && [[ "$role" == "process" ]] && [[ "$RESERVED_PROCESS" == "${score}|${name}|${role}|${invoke}|${phase}" ]]; then
+    continue
+  fi
 
   case "$role" in
     process)

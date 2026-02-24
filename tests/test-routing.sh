@@ -972,6 +972,29 @@ test_no_parallel_when_plugin_unavailable() {
 }
 
 # ---------------------------------------------------------------------------
+# 26. Process skill reserved when high-priority domain/workflow fill slots
+# ---------------------------------------------------------------------------
+test_process_slot_reserved() {
+    echo "-- test: process slot reserved under cap --"
+    setup_test_env
+    install_registry
+
+    # "build a secure frontend dashboard and ship it" triggers:
+    #   brainstorming (process, prio 30), security-scanner (domain, prio 102),
+    #   frontend-design (domain, prio 101), finishing-a-development-branch (workflow, prio 61)
+    # With max_suggestions=3, all 3 slots could go to non-process skills.
+    # Process skill MUST still be selected.
+    local output context
+    output="$(run_hook "build a secure frontend dashboard and ship it")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "process skill reserved" "Skill(superpowers:brainstorming)" "${context}"
+    assert_contains "process skill has Process: prefix" "Process:" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_debug_prompt_matches
@@ -999,5 +1022,6 @@ test_teammate_idle_guard
 test_review_emits_parallel_lines
 test_ship_emits_sequence_lines
 test_no_parallel_when_plugin_unavailable
+test_process_slot_reserved
 
 print_summary
