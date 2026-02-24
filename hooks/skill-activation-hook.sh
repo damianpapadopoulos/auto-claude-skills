@@ -115,11 +115,6 @@ while IFS= read -r skill_json; do
   trigger_count="$(printf '%s' "$skill_json" | jq '.triggers | length')"
   trigger_score=0
 
-  # H1b: brainstorming requires a non-trivial prompt (>= 30 chars)
-  if [[ "$skill_name" == "brainstorming" ]] && (( ${#P} < 30 )); then
-    continue
-  fi
-
   ti=0
   while [[ "$ti" -lt "$trigger_count" ]]; do
     trigger="$(printf '%s' "$skill_json" | jq -r ".triggers[${ti}]")"
@@ -183,6 +178,7 @@ SORTED="$(printf '%s' "$RESULTS" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
 # =================================================================
 # Max 1 process, up to 2 domain, max 1 workflow, total <= max_suggestions
 SELECTED=""
+OVERFLOW_DOMAIN=""
 PROCESS_COUNT=0
 DOMAIN_COUNT=0
 WORKFLOW_COUNT=0
@@ -190,19 +186,25 @@ TOTAL_COUNT=0
 
 while IFS='|' read -r score name role invoke phase; do
   [[ -z "$name" ]] && continue
-  [[ "$TOTAL_COUNT" -ge "$MAX_SUGGESTIONS" ]] && break
 
   case "$role" in
     process)
       [[ "$PROCESS_COUNT" -ge 1 ]] && continue
+      [[ "$TOTAL_COUNT" -ge "$MAX_SUGGESTIONS" ]] && continue
       PROCESS_COUNT=$((PROCESS_COUNT + 1))
       ;;
     domain)
-      [[ "$DOMAIN_COUNT" -ge 2 ]] && continue
+      if [[ "$DOMAIN_COUNT" -ge 2 ]] || [[ "$TOTAL_COUNT" -ge "$MAX_SUGGESTIONS" ]]; then
+        # Track overflow domain skills — still relevant, just didn't fit
+        OVERFLOW_DOMAIN="${OVERFLOW_DOMAIN}${name}|${invoke}
+"
+        continue
+      fi
       DOMAIN_COUNT=$((DOMAIN_COUNT + 1))
       ;;
     workflow)
       [[ "$WORKFLOW_COUNT" -ge 1 ]] && continue
+      [[ "$TOTAL_COUNT" -ge "$MAX_SUGGESTIONS" ]] && continue
       WORKFLOW_COUNT=$((WORKFLOW_COUNT + 1))
       ;;
   esac
@@ -323,7 +325,7 @@ elif [[ "$TOTAL_COUNT" -le 2 ]]; then
         process)  PROCESS_LINE="
 Process: ${name} -> ${invoke}" ;;
         domain)   DOMAIN_LINES="${DOMAIN_LINES}
-  INFORMED BY: ${name} -> ${invoke}" ;;
+  Domain: ${name} -> ${invoke}" ;;
         workflow) WORKFLOW_LINES="${WORKFLOW_LINES}
 Workflow: ${name} -> ${invoke}" ;;
       esac
@@ -336,6 +338,18 @@ ${SELECTED}
 EOF
 
   OUT+="${PROCESS_LINE}${DOMAIN_LINES}${WORKFLOW_LINES}${STANDALONE_LINES}"
+
+  # Append overflow domain skills (relevant but didn't fit in top suggestions)
+  OVERFLOW_LINES=""
+  while IFS='|' read -r oname oinvoke; do
+    [[ -z "$oname" ]] && continue
+    OVERFLOW_LINES="${OVERFLOW_LINES}
+  Also relevant: ${oname} -> ${oinvoke}"
+    EVAL_SKILLS="${EVAL_SKILLS}, ${oname} YES/NO"
+  done <<EOF
+${OVERFLOW_DOMAIN}
+EOF
+  OUT+="${OVERFLOW_LINES}"
 
   # Get phase from process skill or first skill
   EVAL_PHASE=""
@@ -353,6 +367,12 @@ EOF
   OUT+="
 
 Evaluate: **Phase: [${EVAL_PHASE}]** | ${EVAL_SKILLS}"
+
+  # Add domain invocation instruction when domain skills are present
+  if [[ "$DOMAIN_COUNT" -gt 0 ]] || [[ -n "$OVERFLOW_DOMAIN" ]]; then
+    OUT+="
+Domain skills evaluated YES: invoke them (before, during, or after the process skill) -- do not just note them."
+  fi
 
 else
   # --- 3+ skills (full format) ---
@@ -386,7 +406,7 @@ Step 2 -- EVALUATE skills against your phase assessment."
         process)  OUT+="
 Process: ${name} -> ${invoke}" ;;
         domain)   OUT+="
-  INFORMED BY: ${name} -> ${invoke}" ;;
+  Domain: ${name} -> ${invoke}" ;;
         workflow) OUT+="
 Workflow: ${name} -> ${invoke}" ;;
       esac
@@ -398,6 +418,16 @@ ${name} -> ${invoke}"
 ${SELECTED}
 EOF
 
+  # Append overflow domain skills
+  while IFS='|' read -r oname oinvoke; do
+    [[ -z "$oname" ]] && continue
+    OUT+="
+  Also relevant: ${oname} -> ${oinvoke}"
+    EVAL_SKILLS="${EVAL_SKILLS}, ${oname} YES/NO"
+  done <<EOF
+${OVERFLOW_DOMAIN}
+EOF
+
   OUT+="
 You MUST print a brief evaluation for each skill above. Format:
   **Phase: [PHASE]** | [skill1] YES/NO, [skill2] YES/NO
@@ -405,6 +435,12 @@ Example: **Phase: IMPLEMENT** | test-driven-development YES, claude-md-improver 
 This line is MANDATORY -- do not skip it.
 
 Step 3 -- State your plan and proceed. Keep it to 1-2 sentences."
+
+  # Add domain invocation instruction when domain skills are present
+  if [[ "$DOMAIN_COUNT" -gt 0 ]] || [[ -n "$OVERFLOW_DOMAIN" ]]; then
+    OUT+="
+Domain skills evaluated YES: invoke them (before, during, or after the process skill) -- do not just note them."
+  fi
 fi
 
 # Append methodology hints if any

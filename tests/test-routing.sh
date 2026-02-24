@@ -348,10 +348,10 @@ test_short_prompt_blocked() {
 }
 
 # ---------------------------------------------------------------------------
-# 6. Domain skill appears alongside process skill with INFORMED BY
+# 6. Domain skill appears alongside process skill with Domain:
 # ---------------------------------------------------------------------------
 test_domain_informed_by() {
-    echo "-- test: domain skill shows INFORMED BY --"
+    echo "-- test: domain skill shows Domain: --"
     setup_test_env
     install_registry
 
@@ -362,8 +362,8 @@ test_domain_informed_by() {
 
     # Should have a process skill (brainstorming for "build")
     assert_contains "has process skill" "Process:" "${context}"
-    # Should have domain skill as INFORMED BY
-    assert_contains "has INFORMED BY" "INFORMED BY:" "${context}"
+    # Should have domain skill as Domain:
+    assert_contains "has Domain:" "Domain:" "${context}"
     # security-scanner or frontend-design should appear
     assert_contains "has domain skill" "domain" "$(printf '%s' "${output}" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null | tr '[:upper:]' '[:lower:]')"
 
@@ -563,10 +563,10 @@ test_agent_team_execution_matches() {
 }
 
 # ---------------------------------------------------------------------------
-# 16. Design-debate appears as INFORMED BY domain skill
+# 16. Design-debate appears as Domain: domain skill
 # ---------------------------------------------------------------------------
 test_design_debate_as_domain() {
-    echo "-- test: design-debate appears as INFORMED BY --"
+    echo "-- test: design-debate appears as Domain: --"
     setup_test_env
     install_registry
 
@@ -575,7 +575,7 @@ test_design_debate_as_domain() {
     context="$(extract_context "$output")"
     # brainstorming is process (higher priority), design-debate is domain
     assert_contains "has brainstorming" "brainstorming" "$context"
-    assert_contains "has INFORMED BY design-debate" "design-debate" "$context"
+    assert_contains "has Domain: design-debate" "design-debate" "$context"
 
     teardown_test_env
 }
@@ -597,20 +597,20 @@ test_agent_team_review_matches() {
 }
 
 # ---------------------------------------------------------------------------
-# 18. Brainstorming does NOT fire on short prompts (<30 chars)
+# 18. Brainstorming fires on short design prompts too
 # ---------------------------------------------------------------------------
-test_brainstorming_short_prompt_guard() {
-    echo "-- test: brainstorming blocked on short prompts --"
+test_brainstorming_short_prompt() {
+    echo "-- test: brainstorming fires on short design prompts --"
     setup_test_env
     install_registry
 
     local output context
-    # "build a widget" is < 30 chars — brainstorming should not fire
+    # Short but legitimate design prompts should trigger brainstorming
     output="$(run_hook "build a widget")"
     context="$(extract_context "${output}")"
-    assert_not_contains "brainstorming not in short prompt" "brainstorming" "${context}"
+    assert_contains "brainstorming fires on short build prompt" "brainstorming" "${context}"
 
-    # Long prompt should still trigger brainstorming
+    # Long prompts should also work
     output="$(run_hook "design a new user authentication flow with OAuth and social login")"
     context="$(extract_context "${output}")"
     assert_contains "brainstorming fires on long prompt" "brainstorming" "${context}"
@@ -632,6 +632,52 @@ test_skill_name_mention_boost() {
     context="$(extract_context "${output}")"
 
     assert_contains "skill name mention boosts security-scanner" "security-scanner" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# 20. Domain invocation instruction appears when domain skills present
+# ---------------------------------------------------------------------------
+test_domain_invocation_instruction() {
+    echo "-- test: domain invocation instruction --"
+    setup_test_env
+    install_registry
+
+    local output context
+    # "build a secure dashboard" triggers brainstorming (process) + security-scanner + frontend-design (domain)
+    output="$(run_hook "build a secure frontend dashboard component with csrf protection")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "domain invocation instruction present" "invoke them" "${context}"
+
+    # Prompt with only process skill and no domain should NOT have the instruction
+    output="$(run_hook "continue with the next task in the plan")"
+    context="$(extract_context "${output}")"
+    assert_not_contains "no domain instruction without domain skills" "invoke them" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# 21. Overflow domain skills shown as "Also relevant"
+# ---------------------------------------------------------------------------
+test_overflow_domain_shown() {
+    echo "-- test: overflow domain skills shown --"
+    setup_test_env
+    install_registry
+
+    # With max_suggestions=3 (default), process + 2 domain fills the cap.
+    # A third domain skill should appear as "Also relevant"
+    # "build a secure responsive dashboard" triggers:
+    #   brainstorming (process), security-scanner (domain, p102), frontend-design (domain, p101), design-debate (domain, p14)
+    # design-debate should overflow
+    local output context
+    output="$(run_hook "build a secure responsive dashboard with csrf protection")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "overflow domain shown" "Also relevant" "${context}"
+    assert_contains "overflow includes design-debate" "design-debate" "${context}"
 
     teardown_test_env
 }
@@ -693,8 +739,10 @@ test_methodology_hints
 test_agent_team_execution_matches
 test_design_debate_as_domain
 test_agent_team_review_matches
-test_brainstorming_short_prompt_guard
+test_brainstorming_short_prompt
 test_skill_name_mention_boost
+test_domain_invocation_instruction
+test_overflow_domain_shown
 test_teammate_idle_guard
 
 print_summary

@@ -258,7 +258,7 @@
       "role": "domain",
       "phase": "DESIGN",
       "triggers": [
-        "(build|create|implement|develop|scaffold|brainstorm|design|architect|strateg|scope|outline|approach|add|write|make|generate|set.?up|install|configure|integrate|extend|new|start)"
+        "(build|create|implement|develop|scaffold|brainstorm|design|architect|strateg|scope|outline|approach|generate|set.?up|integrate|extend|new|start)"
       ],
       "trigger_mode": "regex",
       "priority": 14,
