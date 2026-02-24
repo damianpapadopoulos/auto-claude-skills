@@ -125,32 +125,38 @@ while IFS="$FS" read -r skill_name skill_name_lower skill_role skill_priority sk
 
       # Test regex against lowercased prompt
       if [[ "$P" =~ $trigger ]]; then
-        matched="${BASH_REMATCH[0]}"
-        # Word-boundary heuristic: check chars before/after match
-        prefix="${P%%"$matched"*}"
-        prefix_len="${#prefix}"
-        after_pos=$((prefix_len + ${#matched}))
-        is_word_boundary=1
+        # Scan for the best match position (word-boundary=30 > substring=10).
+        # The leftmost regex match may land inside a word (e.g. "bug" in
+        # "debug"), even when a word-boundary match exists later (e.g.
+        # standalone "error").  Re-try on progressively shorter suffixes
+        # until a boundary hit is found or the string is exhausted.
+        _best=10
+        _scan="$P"
+        _offset=0
+        while true; do
+          matched="${BASH_REMATCH[0]}"
+          [[ -z "$matched" ]] && break
 
-        if [[ "$prefix_len" -gt 0 ]]; then
-          char_before="${P:$((prefix_len - 1)):1}"
-          if [[ "$char_before" =~ [a-z0-9_.-] ]]; then
-            is_word_boundary=0
-          fi
-        fi
-        if [[ "$after_pos" -lt "${#P}" ]]; then
-          char_after="${P:${after_pos}:1}"
-          if [[ "$char_after" =~ [a-z0-9_.-] ]]; then
-            is_word_boundary=0
-          fi
-        fi
+          _pre="${_scan%%"$matched"*}"
+          _abs=$((_offset + ${#_pre}))
+          _aft=$((_abs + ${#matched}))
+          _wb=1
+          [[ "$_abs" -gt 0 ]] && [[ "${P:$((_abs-1)):1}" =~ [a-z0-9_.-] ]] && _wb=0
+          [[ "$_aft" -lt "${#P}" ]] && [[ "${P:${_aft}:1}" =~ [a-z0-9_.-] ]] && _wb=0
 
-        if [[ "$is_word_boundary" -eq 1 ]]; then
-          this_score=30
-        else
-          this_score=10
-        fi
-        trigger_score=$((trigger_score + this_score))
+          if [[ "$_wb" -eq 1 ]]; then
+            _best=30
+            break
+          fi
+
+          # Advance one char past match start and retry regex
+          _skip=$((${#_pre} + 1))
+          _scan="${_scan:${_skip}}"
+          _offset=$((_offset + _skip))
+          [[ -z "$_scan" ]] && break
+          [[ "$_scan" =~ $trigger ]] || break
+        done
+        trigger_score=$((trigger_score + _best))
       fi
     done
   fi
