@@ -232,13 +232,14 @@
       "role": "workflow",
       "phase": "IMPLEMENT",
       "triggers": [
-        "(agent.team|team.execute|parallel.team|swarm|fan.out|specialist|multi.agent)"
+        "(agent.team|team.execute|parallel.team|swarm|fan.out|specialist|multi.agent)",
+        "(execute.*plan|run.the.plan|implement.the.plan|implement.*(rest|remaining)|continue|follow.the.plan|pick.up|resume|next.task|next.step|carry.on|keep.going|where.were.we|what.s.next)"
       ],
       "trigger_mode": "regex",
       "priority": 16,
       "precedes": [],
       "requires": ["writing-plans"],
-      "description": "Team-based parallel execution for plans with 3+ independent tasks. Lead assigns file-disjoint specialist groups."
+      "description": "Team-based parallel execution for plans with 3+ independent tasks. Auto-offered alongside executing-plans when plan has 3+ file-disjoint groups."
     },
     {
       "name": "agent-team-review",

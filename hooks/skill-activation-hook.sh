@@ -383,7 +383,7 @@ else
 Step 1 -- ASSESS PHASE. Check conversation context:
   DESIGN    -> brainstorming (ask questions, get approval)
   PLAN      -> writing-plans (break into tasks, confirm before execution)
-  IMPLEMENT -> executing-plans or subagent-driven-development + TDD
+  IMPLEMENT -> executing-plans or subagent-driven-development + TDD (offer agent-team-execution for 3+ independent tasks)
   REVIEW    -> requesting-code-review
   SHIP      -> verification-before-completion + finishing-a-development-branch
   DEBUG     -> systematic-debugging, then return to current phase
