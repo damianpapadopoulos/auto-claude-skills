@@ -72,6 +72,12 @@ PLUGIN_CACHE="${HOME}/.claude/plugins/cache/claude-plugins-official"
 USER_SKILLS_DIR="${HOME}/.claude/skills"
 USER_CONFIG="${HOME}/.claude/skill-config.json"
 
+# Read default triggers once into memory (avoid repeated file I/O)
+DEFAULT_JSON=""
+if [ -f "${DEFAULT_TRIGGERS}" ]; then
+    DEFAULT_JSON="$(cat "${DEFAULT_TRIGGERS}")"
+fi
+
 # -----------------------------------------------------------------
 # Step 3: Discover superpowers plugin skills
 # -----------------------------------------------------------------
@@ -178,8 +184,8 @@ lookup_discovered() {
 # Helper: check if a skill name exists in the defaults
 is_in_defaults() {
     local name="$1"
-    if [ -f "${DEFAULT_TRIGGERS}" ]; then
-        jq -e --arg n "${name}" '.skills[] | select(.name == $n)' "${DEFAULT_TRIGGERS}" >/dev/null 2>&1
+    if [ -n "${DEFAULT_JSON}" ]; then
+        printf '%s' "${DEFAULT_JSON}" | jq -e --arg n "${name}" '.skills[] | select(.name == $n)' >/dev/null 2>&1
         return $?
     fi
     return 1
@@ -189,13 +195,13 @@ is_in_defaults() {
 # Start with default skills, overlay discovered paths
 SKILLS_JSON="[]"
 
-if [ -f "${DEFAULT_TRIGGERS}" ]; then
+if [ -n "${DEFAULT_JSON}" ]; then
     # Process each default skill
-    SKILL_COUNT="$(jq '.skills | length' "${DEFAULT_TRIGGERS}")"
+    SKILL_COUNT="$(printf '%s' "${DEFAULT_JSON}" | jq '.skills | length')"
     i=0
     while [ "${i}" -lt "${SKILL_COUNT}" ]; do
-        skill_name="$(jq -r ".skills[${i}].name" "${DEFAULT_TRIGGERS}")"
-        skill_json="$(jq ".skills[${i}]" "${DEFAULT_TRIGGERS}")"
+        skill_name="$(printf '%s' "${DEFAULT_JSON}" | jq -r ".skills[${i}].name")"
+        skill_json="$(printf '%s' "${DEFAULT_JSON}" | jq ".skills[${i}]")"
 
         # Look up discovered invoke path
         invoke_path=""
@@ -327,33 +333,33 @@ fi
 # -----------------------------------------------------------------
 # Step 8: Extract methodology_hints from default-triggers.json
 # -----------------------------------------------------------------
-METHODOLOGY_HINTS="[]"
-if [ -f "${DEFAULT_TRIGGERS}" ]; then
-    METHODOLOGY_HINTS="$(jq '.methodology_hints // []' "${DEFAULT_TRIGGERS}" 2>/dev/null)" || METHODOLOGY_HINTS="[]"
-fi
-
-# Extract phase_compositions from default-triggers.json
-PHASE_COMPOSITIONS="{}"
-if [ -f "${DEFAULT_TRIGGERS}" ]; then
-    PHASE_COMPOSITIONS="$(jq '.phase_compositions // {}' "${DEFAULT_TRIGGERS}" 2>/dev/null)" || PHASE_COMPOSITIONS="{}"
-fi
-
-# Extract phase_guide from default-triggers.json
-PHASE_GUIDE="{}"
-if [ -f "${DEFAULT_TRIGGERS}" ]; then
-    PHASE_GUIDE="$(jq '.phase_guide // {}' "${DEFAULT_TRIGGERS}" 2>/dev/null)" || PHASE_GUIDE="{}"
+if [ -n "${DEFAULT_JSON}" ]; then
+    _meta="$(printf '%s' "${DEFAULT_JSON}" | jq -r -j '
+        (.methodology_hints // [] | tojson),
+        "\u001f",
+        (.phase_compositions // {} | tojson),
+        "\u001f",
+        (.phase_guide // {} | tojson)
+    ')"
+    METHODOLOGY_HINTS="${_meta%%$'\x1f'*}"; _meta="${_meta#*$'\x1f'}"
+    PHASE_COMPOSITIONS="${_meta%%$'\x1f'*}"
+    PHASE_GUIDE="${_meta#*$'\x1f'}"
+else
+    METHODOLOGY_HINTS="[]"
+    PHASE_COMPOSITIONS="{}"
+    PHASE_GUIDE="{}"
 fi
 
 # -----------------------------------------------------------------
 # Step 8b: Discover curated plugins from default-triggers.json
 # -----------------------------------------------------------------
 PLUGINS_JSON="[]"
-if [ -f "${DEFAULT_TRIGGERS}" ]; then
-    CURATED_COUNT="$(jq '.plugins // [] | length' "${DEFAULT_TRIGGERS}" 2>/dev/null)" || CURATED_COUNT=0
+if [ -n "${DEFAULT_JSON}" ]; then
+    CURATED_COUNT="$(printf '%s' "${DEFAULT_JSON}" | jq '.plugins // [] | length' 2>/dev/null)" || CURATED_COUNT=0
     pi=0
     while [ "${pi}" -lt "${CURATED_COUNT}" ]; do
-        plugin_name="$(jq -r ".plugins[${pi}].name" "${DEFAULT_TRIGGERS}")"
-        plugin_json="$(jq ".plugins[${pi}]" "${DEFAULT_TRIGGERS}")"
+        plugin_name="$(printf '%s' "${DEFAULT_JSON}" | jq -r ".plugins[${pi}].name")"
+        plugin_json="$(printf '%s' "${DEFAULT_JSON}" | jq ".plugins[${pi}]")"
 
         # Check if installed in any marketplace cache dir
         _installed=false
