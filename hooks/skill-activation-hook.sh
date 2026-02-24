@@ -81,13 +81,25 @@ fi
 # Use jq to iterate available+enabled skills, test each trigger regex
 # against the lowercased prompt, compute scores, and return sorted results.
 #
-# Score formula: trigger_score (3 for word-boundary, 1 for substring) + priority
+# Score formula: trigger_score (30 for word-boundary, 10 for substring) + priority
 # We use jq to extract skill data, then bash for regex matching.
 
 # Extract skills array as line-delimited JSON objects (one per skill)
 SCORED_SKILLS="$(printf '%s' "$REGISTRY" | jq -c '
   [.skills[] | select(.available == true and .enabled == true)][]
 ' 2>/dev/null)"
+
+# L3: Pre-pass — collect skill names that appear verbatim in the prompt
+SKILL_NAME_MATCHES=""
+while IFS= read -r _sj; do
+  [[ -z "$_sj" ]] && continue
+  _sn="$(printf '%s' "$_sj" | jq -r '.name')"
+  if [[ "$P" == *"$_sn"* ]]; then
+    SKILL_NAME_MATCHES="${SKILL_NAME_MATCHES}|${_sn}"
+  fi
+done <<EOF
+${SCORED_SKILLS}
+EOF
 
 # Score each skill
 RESULTS=""
@@ -102,6 +114,11 @@ while IFS= read -r skill_json; do
 
   trigger_count="$(printf '%s' "$skill_json" | jq '.triggers | length')"
   trigger_score=0
+
+  # H1b: brainstorming requires a non-trivial prompt (>= 30 chars)
+  if [[ "$skill_name" == "brainstorming" ]] && (( ${#P} < 30 )); then
+    continue
+  fi
 
   ti=0
   while [[ "$ti" -lt "$trigger_count" ]]; do
@@ -132,9 +149,9 @@ while IFS= read -r skill_json; do
       fi
 
       if [[ "$is_word_boundary" -eq 1 ]]; then
-        this_score=3
+        this_score=30
       else
-        this_score=1
+        this_score=10
       fi
 
       if [[ "$this_score" -gt "$trigger_score" ]]; then
@@ -143,8 +160,14 @@ while IFS= read -r skill_json; do
     fi
   done
 
-  if [[ "$trigger_score" -gt 0 ]]; then
-    final_score=$((trigger_score + skill_priority))
+  # L3: Apply skill-name-mention boost (+100) and allow through even with zero trigger_score
+  name_boost=0
+  if [[ "$SKILL_NAME_MATCHES" == *"|${skill_name}"* ]]; then
+    name_boost=100
+  fi
+
+  if [[ "$trigger_score" -gt 0 ]] || [[ "$name_boost" -gt 0 ]]; then
+    final_score=$((trigger_score + skill_priority + name_boost))
     RESULTS="${RESULTS}${final_score}|${skill_name}|${skill_role}|${skill_invoke}|${skill_phase}
 "
   fi
@@ -242,6 +265,14 @@ hi=0
 while [[ "$hi" -lt "$HINT_COUNT" ]]; do
   hint_triggers="$(printf '%s' "$REGISTRY" | jq -r ".methodology_hints[${hi}].triggers[]" 2>/dev/null)"
   hint_text="$(printf '%s' "$REGISTRY" | jq -r ".methodology_hints[${hi}].hint" 2>/dev/null)"
+  hint_skill="$(printf '%s' "$REGISTRY" | jq -r ".methodology_hints[${hi}].skill // empty" 2>/dev/null)"
+
+  # L1b: Suppress hint if its associated skill is already selected
+  if [[ -n "$hint_skill" ]] && printf '%s' "$SELECTED" | grep -q "|${hint_skill}|"; then
+    hi=$((hi + 1))
+    continue
+  fi
+
   while IFS= read -r htrigger; do
     [[ -z "$htrigger" ]] && continue
     if [[ "$P" =~ $htrigger ]]; then

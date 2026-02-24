@@ -6,7 +6,7 @@
       "role": "process",
       "phase": "DEBUG",
       "triggers": [
-        "(debug|bug|fix|broken|fail|error|crash|wrong|unexpected|not.work|regression|issue|problem|doesn.t|won.t|can.t|stuck|hang|freeze|timeout|leak|corrupt|invalid|missing)"
+        "(debug|bug|broken|crash|regression|not.work|error|fail|hang|freeze|timeout|leak|corrupt|unexpected|wrong)"
       ],
       "trigger_mode": "regex",
       "priority": 50,
@@ -32,15 +32,13 @@
       "role": "process",
       "phase": "DESIGN",
       "triggers": [
-        "(build|create|implement|develop|scaffold|init|bootstrap|brainstorm|design|architect|strateg|scope|outline|approach|add|write|make|generate|set.?up|install|configure|wire.up|connect|integrate|extend|new|start|introduce|enable|support|how.(should|would|could))",
-        "(update|change|modify|edit|alter|adjust|tweak|move|rename|replace|swap|switch|convert|transform|migrate|upgrade|downgrade|bump|patch|optimize|improve|enhance|speed.up|performance|refactor|restructure|reorganize|simplify|consolidate|extract|inline|split|combine)",
-        "(remove|delete|drop|clean|prune|strip|deprecate|disable|turn.off|get.rid|eliminate|unused|dead.code)"
+        "(build|create|implement|develop|scaffold|init|bootstrap|brainstorm|design|architect|strateg|scope|outline|approach|generate|set.?up|wire.up|connect|integrate|extend|new|start|introduce|enable|support|how.(should|would|could))"
       ],
       "trigger_mode": "regex",
       "priority": 30,
       "precedes": ["writing-plans"],
       "requires": [],
-      "description": "Ask clarifying questions, explore options, and get user approval before planning. Activated for Build, Modify, and Remove intents."
+      "description": "Ask clarifying questions, explore options, and get user approval before planning. Activated for Build intents."
     },
     {
       "name": "writing-plans",
@@ -149,7 +147,7 @@
       "name": "writing-skills",
       "role": "domain",
       "triggers": [
-        "(claude\\.md|claude.md|\\.claude|skill|hook|mcp|plugin)"
+        "(skill|write.*skill|create.*skill|edit.*skill|new.*skill|skill.*(file|md|template|format))"
       ],
       "trigger_mode": "regex",
       "priority": 15,
@@ -185,7 +183,7 @@
       "name": "webapp-testing",
       "role": "domain",
       "triggers": [
-        "(^|[^a-z])(ui|frontend|component|layout|style|css|tailwind|responsive|dashboard|landing.?page|mockup|wireframe)($|[^a-z])"
+        "(playwright|e2e|browser.test|screenshot|visual.regress|accessibility|a11y|selenium|cypress|puppeteer|end.to.end)"
       ],
       "trigger_mode": "regex",
       "priority": 12,
@@ -209,7 +207,7 @@
       "name": "claude-automation-recommender",
       "role": "domain",
       "triggers": [
-        "(claude\\.md|claude.md|\\.claude|skill|hook|mcp|plugin)"
+        "(hook|mcp|plugin|automation|setup.*claude|configure.*claude|recommend.*claude|claude.*recommend)"
       ],
       "trigger_mode": "regex",
       "priority": 12,
@@ -221,7 +219,7 @@
       "name": "claude-md-improver",
       "role": "domain",
       "triggers": [
-        "(claude\\.md|claude.md|\\.claude|skill|hook|mcp|plugin)"
+        "(claude\\.md|claude.md|project.?memory|improve.*claude|audit.*claude|update.*claude.md)"
       ],
       "trigger_mode": "regex",
       "priority": 10,
@@ -234,7 +232,7 @@
       "role": "workflow",
       "phase": "IMPLEMENT",
       "triggers": [
-        "(agent.team|team.execute|parallel.team|swarm|execute.*plan|run.the.plan|implement.the.plan|implement.*(rest|remaining)|continue|follow.the.plan|pick.up|resume|next.task|next.step|carry.on|keep.going|where.were.we|what.s.next)"
+        "(agent.team|team.execute|parallel.team|swarm|fan.out|specialist|multi.agent)"
       ],
       "trigger_mode": "regex",
       "priority": 16,
@@ -284,14 +282,8 @@
         "(review|pull.?request|code.?review|(^|[^a-z])pr($|[^a-z]))"
       ],
       "trigger_mode": "regex",
-      "hint": "PR REVIEW: Consider /pr-review for structured review."
-    }
-  ],
-  "blocklist_patterns": [
-    {
-      "pattern": "^(hi|hello|hey|thanks|thank.you|good.(morning|afternoon|evening)|bye|goodbye|ok|okay|yes|no|sure|yep|nope|got.it|sounds.good|cool|nice|great|perfect|awesome|understood)([[:space:]!.,]+.{0,20})?$",
-      "description": "Greeting or short acknowledgement -- not a dev task. Allow short trailing words but not full sentences.",
-      "max_tail_length": 20
+      "hint": "PR REVIEW: Consider /pr-review for structured review.",
+      "skill": "requesting-code-review"
     }
   ]
 }

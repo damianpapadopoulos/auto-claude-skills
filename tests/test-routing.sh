@@ -42,7 +42,7 @@ install_registry() {
       "role": "process",
       "phase": "DEBUG",
       "triggers": [
-        "(debug|bug|fix|broken|fail|error|crash|wrong|unexpected|not.work|regression|issue|problem)"
+        "(debug|bug|broken|crash|regression|not.work|error|fail|hang|freeze|timeout|leak|corrupt|unexpected|wrong)"
       ],
       "trigger_mode": "regex",
       "priority": 10,
@@ -69,7 +69,7 @@ install_registry() {
       "role": "process",
       "phase": "DESIGN",
       "triggers": [
-        "(build|create|implement|develop|scaffold|brainstorm|design|architect|add|write|make|generate|new|start)"
+        "(build|create|implement|develop|scaffold|init|bootstrap|brainstorm|design|architect|strateg|scope|outline|approach|generate|set.?up|wire.up|connect|integrate|extend|new|start|introduce|enable|support|how.(should|would|could))"
       ],
       "trigger_mode": "regex",
       "priority": 30,
@@ -111,7 +111,7 @@ install_registry() {
         "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|tech.?debt|(^|[^a-z])pr($|[^a-z]))"
       ],
       "trigger_mode": "regex",
-      "priority": 50,
+      "priority": 51,
       "invoke": "Skill(superpowers:requesting-code-review)",
       "available": true,
       "enabled": true
@@ -124,7 +124,7 @@ install_registry() {
         "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|tech.?debt|(^|[^a-z])pr($|[^a-z]))"
       ],
       "trigger_mode": "regex",
-      "priority": 51,
+      "priority": 50,
       "invoke": "Skill(superpowers:receiving-code-review)",
       "available": true,
       "enabled": true
@@ -169,7 +169,7 @@ install_registry() {
       "name": "frontend-design",
       "role": "domain",
       "triggers": [
-        "(ui|frontend|component|layout|style|css|tailwind|responsive|dashboard)"
+        "(^|[^a-z])(ui|frontend|component|layout|style|css|tailwind|responsive|dashboard)($|[^a-z])"
       ],
       "trigger_mode": "regex",
       "priority": 101,
@@ -195,7 +195,7 @@ install_registry() {
       "role": "workflow",
       "phase": "IMPLEMENT",
       "triggers": [
-        "(agent.team|team.execute|parallel.team|swarm|execute.*plan|run.the.plan|implement.the.plan|implement.*(rest|remaining)|continue|follow.the.plan|pick.up|resume|next.task|next.step|carry.on|keep.going|where.were.we|what.s.next)"
+        "(agent.team|team.execute|parallel.team|swarm|fan.out|specialist|multi.agent)"
       ],
       "trigger_mode": "regex",
       "priority": 16,
@@ -221,7 +221,7 @@ install_registry() {
       "role": "domain",
       "phase": "DESIGN",
       "triggers": [
-        "(build|create|implement|develop|scaffold|brainstorm|design|architect|strateg|scope|outline|approach|add|write|make|generate|set.?up|install|configure|integrate|extend|new|start)"
+        "(build|create|implement|develop|scaffold|brainstorm|design|architect|strateg|scope|outline|approach|generate|set.?up|integrate|extend|new|start)"
       ],
       "trigger_mode": "regex",
       "priority": 14,
@@ -245,7 +245,8 @@ install_registry() {
         "(review|pull.?request|code.?review|(^|[^a-z])pr($|[^a-z]))"
       ],
       "trigger_mode": "regex",
-      "hint": "PR REVIEW: Consider /pr-review for structured review."
+      "hint": "PR REVIEW: Consider /pr-review for structured review.",
+      "skill": "requesting-code-review"
     }
   ],
   "blocklist_patterns": [
@@ -525,16 +526,22 @@ test_zero_matches_phase_checkpoint() {
 # 14. Methodology hints appended when matched
 # ---------------------------------------------------------------------------
 test_methodology_hints() {
-    echo "-- test: methodology hints appended when matched --"
+    echo "-- test: methodology hints suppressed when skill selected --"
     setup_test_env
     install_registry
 
+    # PR review hint should be suppressed because "review" triggers requesting-code-review
     local output
     output="$(run_hook "review this pull request for code quality issues")"
     local context
     context="$(extract_context "${output}")"
 
-    assert_contains "PR review hint present" "PR REVIEW" "${context}"
+    assert_not_contains "PR review hint suppressed when skill selected" "PR REVIEW" "${context}"
+
+    # Ralph-loop hint should still appear when matched (no associated skill)
+    output="$(run_hook "migrate all the legacy modules to the new framework and iterate until done")"
+    context="$(extract_context "${output}")"
+    assert_contains "Ralph loop hint present" "RALPH LOOP" "${context}"
 
     teardown_test_env
 }
@@ -585,6 +592,46 @@ test_agent_team_review_matches() {
     output="$(run_hook "review the code changes for this PR")"
     context="$(extract_context "$output")"
     assert_contains "agent-team-review matches" "agent-team-review" "$context"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# 18. Brainstorming does NOT fire on short prompts (<30 chars)
+# ---------------------------------------------------------------------------
+test_brainstorming_short_prompt_guard() {
+    echo "-- test: brainstorming blocked on short prompts --"
+    setup_test_env
+    install_registry
+
+    local output context
+    # "build a widget" is < 30 chars — brainstorming should not fire
+    output="$(run_hook "build a widget")"
+    context="$(extract_context "${output}")"
+    assert_not_contains "brainstorming not in short prompt" "brainstorming" "${context}"
+
+    # Long prompt should still trigger brainstorming
+    output="$(run_hook "design a new user authentication flow with OAuth and social login")"
+    context="$(extract_context "${output}")"
+    assert_contains "brainstorming fires on long prompt" "brainstorming" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# 19. Skill-name-mention boost works
+# ---------------------------------------------------------------------------
+test_skill_name_mention_boost() {
+    echo "-- test: skill-name-mention boost --"
+    setup_test_env
+    install_registry
+
+    local output context
+    # Mention "security-scanner" by name — should boost it even without a trigger word
+    output="$(run_hook "tell me about the security-scanner skill and how to use it")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "skill name mention boosts security-scanner" "security-scanner" "${context}"
 
     teardown_test_env
 }
@@ -646,6 +693,8 @@ test_methodology_hints
 test_agent_team_execution_matches
 test_design_debate_as_domain
 test_agent_team_review_matches
+test_brainstorming_short_prompt_guard
+test_skill_name_mention_boost
 test_teammate_idle_guard
 
 print_summary
