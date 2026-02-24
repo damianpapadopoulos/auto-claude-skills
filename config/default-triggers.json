@@ -285,5 +285,91 @@
       "hint": "PR REVIEW: Consider /pr-review for structured review.",
       "skill": "requesting-code-review"
     }
+  ],
+  "plugins": [
+    {
+      "name": "commit-commands",
+      "source": "claude-plugins-official",
+      "provides": {
+        "commands": ["/commit", "/commit-push-pr", "/clean_gone"],
+        "skills": [],
+        "agents": [],
+        "hooks": []
+      },
+      "phase_fit": ["SHIP"],
+      "description": "Structured commit workflows and branch-to-PR automation"
+    },
+    {
+      "name": "security-guidance",
+      "source": "claude-plugins-official",
+      "provides": {
+        "commands": [],
+        "skills": [],
+        "agents": [],
+        "hooks": ["PreToolUse:security-patterns"]
+      },
+      "phase_fit": ["*"],
+      "description": "Write-time security blocker for XSS, injection, unsafe deserialization"
+    },
+    {
+      "name": "hookify",
+      "source": "claude-plugins-official",
+      "provides": {
+        "commands": ["/hookify", "/hookify:list", "/hookify:configure"],
+        "skills": ["writing-rules"],
+        "agents": ["conversation-analyzer"],
+        "hooks": []
+      },
+      "phase_fit": ["DESIGN"],
+      "description": "Custom rule authoring for Claude behavior guards"
+    },
+    {
+      "name": "feature-dev",
+      "source": "claude-plugins-official",
+      "provides": {
+        "commands": ["/feature-dev"],
+        "skills": [],
+        "agents": ["code-explorer", "code-architect", "code-reviewer"],
+        "hooks": []
+      },
+      "phase_fit": ["DESIGN", "IMPLEMENT", "REVIEW"],
+      "description": "Full feature pipeline with parallel exploration and architecture agents"
+    },
+    {
+      "name": "code-review",
+      "source": "claude-plugins-official",
+      "provides": {
+        "commands": ["/code-review"],
+        "skills": [],
+        "agents": [],
+        "hooks": []
+      },
+      "phase_fit": ["REVIEW"],
+      "description": "5 parallel review agents with confidence scoring, posts to GitHub"
+    },
+    {
+      "name": "code-simplifier",
+      "source": "claude-plugins-official",
+      "provides": {
+        "commands": [],
+        "skills": [],
+        "agents": ["code-simplifier"],
+        "hooks": []
+      },
+      "phase_fit": ["REVIEW"],
+      "description": "Post-review code clarity and simplification pass"
+    },
+    {
+      "name": "skill-creator",
+      "source": "claude-plugins-official",
+      "provides": {
+        "commands": [],
+        "skills": ["skill-creator"],
+        "agents": ["executor", "grader", "comparator", "analyzer"],
+        "hooks": []
+      },
+      "phase_fit": ["DESIGN"],
+      "description": "Skill eval/improvement loop with benchmarking"
+    }
   ]
 }

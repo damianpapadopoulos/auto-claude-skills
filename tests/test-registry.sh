@@ -286,6 +286,24 @@ test_discovers_agent_team_skills() {
     teardown_test_env
 }
 
+test_default_triggers_has_plugins_section() {
+    echo "-- test: default-triggers has plugins section --"
+    setup_test_env
+
+    local plugin_count
+    plugin_count="$(jq '.plugins | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+
+    # Should have 7 curated plugins
+    assert_equals "default-triggers has 7 plugins" "7" "${plugin_count}"
+
+    # Each plugin should have required fields
+    local valid_count
+    valid_count="$(jq '[.plugins[] | select(.name and .source and .provides and .phase_fit and .description)] | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+    assert_equals "all plugins have required fields" "7" "${valid_count}"
+
+    teardown_test_env
+}
+
 # ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
@@ -297,5 +315,6 @@ test_missing_dirs_no_crash
 test_user_config_disables_skill
 test_health_check_output
 test_discovers_agent_team_skills
+test_default_triggers_has_plugins_section
 
 print_summary
