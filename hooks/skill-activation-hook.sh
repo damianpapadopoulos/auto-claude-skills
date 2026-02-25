@@ -485,10 +485,179 @@ EOF
   done
 fi
 
-# Domain invocation instruction (shared)
+# =================================================================
+# SKILL COMPOSITION CHAIN (walk precedes/requires graph)
+# =================================================================
+# Walk the precedes graph forward from the process skill to build a
+# sequential chain.  Also walk requires backward to show prerequisites
+# when the user enters mid-chain (e.g. "execute the plan").
+COMPOSITION_CHAIN=""
+COMPOSITION_NEXT=""
+COMPOSITION_DIRECTIVE=""
+
+# Determine the anchor skill for chain walking: prefer process, fall back to workflow
+_CHAIN_ANCHOR=""
+if [[ -n "$PROCESS_SKILL" ]]; then
+  _CHAIN_ANCHOR="$PROCESS_SKILL"
+else
+  # Check if the selected workflow skill has precedes/requires
+  while IFS='|' read -r _s _n _r _i _p; do
+    [[ -z "$_n" ]] && continue
+    if [[ "$_r" == "workflow" ]]; then
+      _has_chain="$(printf '%s' "$REGISTRY" | jq -r --arg n "$_n" '
+        .skills[] | select(.name == $n) |
+        if ((.precedes // []) | length) > 0 or ((.requires // []) | length) > 0 then "yes" else "no" end
+      ' 2>/dev/null)"
+      if [[ "$_has_chain" == "yes" ]]; then
+        _CHAIN_ANCHOR="$_n"
+        break
+      fi
+    fi
+  done <<EOF
+${SELECTED}
+EOF
+fi
+
+if [[ -n "$_CHAIN_ANCHOR" ]]; then
+  # Forward walk: anchor skill -> precedes[0] -> precedes[0] -> ...
+  # Single jq call returns pipe-delimited chain: skill1|skill2|skill3
+  _fwd_chain="$(printf '%s' "$REGISTRY" | jq -r --arg start "$_CHAIN_ANCHOR" '
+    .skills as $all |
+    def walk_fwd(name):
+      ($all[] | select(.name == name) | .precedes // []) as $next |
+      if ($next | length) > 0 then name + "|" + walk_fwd($next[0])
+      else name end;
+    walk_fwd($start)
+  ' 2>/dev/null)"
+
+  # Backward walk: anchor skill <- requires[0] <- requires[0] <- ...
+  _bwd_chain="$(printf '%s' "$REGISTRY" | jq -r --arg start "$_CHAIN_ANCHOR" '
+    .skills as $all |
+    def walk_bwd(name):
+      ($all[] | select(.name == name) | .requires // []) as $prev |
+      if ($prev | length) > 0 then walk_bwd($prev[0]) + "|" + name
+      else name end;
+    walk_bwd($start)
+  ' 2>/dev/null)"
+
+  # Merge: backward chain gives predecessors, forward chain gives successors
+  # Remove duplicates at the join point (the process skill itself)
+  if [[ -n "$_bwd_chain" ]] && [[ "$_bwd_chain" == *"|"* ]]; then
+    # Has predecessors — combine backward (minus last) + forward
+    _pre="${_bwd_chain%|*}"
+    _full_chain="${_pre}|${_fwd_chain}"
+  else
+    _full_chain="$_fwd_chain"
+  fi
+
+  # Only emit composition if chain has 2+ skills
+  if [[ "$_full_chain" == *"|"* ]]; then
+    # Build display lines with [DONE?] / [CURRENT] / [NEXT] / [LATER] markers
+    _step=0
+    _current_idx=-1
+    _chain_lines=""
+    _next_skill=""
+    _next_invoke=""
+
+    # Find the index of the current process skill
+    _idx=0
+    _tmp="$_full_chain"
+    while [[ -n "$_tmp" ]]; do
+      if [[ "$_tmp" == *"|"* ]]; then
+        _cname="${_tmp%%|*}"
+        _tmp="${_tmp#*|}"
+      else
+        _cname="$_tmp"
+        _tmp=""
+      fi
+      if [[ "$_cname" == "$_CHAIN_ANCHOR" ]]; then
+        _current_idx=$_idx
+      fi
+      _idx=$((_idx + 1))
+    done
+
+    # Batch-lookup all chain skills in a single jq call (avoids N forks)
+    # Format: name<FS>invoke<FS>description<FS>phase (one per line, chain order)
+    _chain_detail="$(printf '%s' "$REGISTRY" | jq -r --arg chain "$_full_chain" '
+      ($chain | split("|")) as $names |
+      .skills as $all |
+      $names[] as $n |
+      ($all[] | select(.name == $n)) as $s |
+      ($s.description // "" | split(".")[0]) as $desc |
+      "\($n)\u001f\($s.invoke // "Skill(\($n))")\u001f\($desc)\u001f\($s.phase // "")"
+    ' 2>/dev/null)"
+
+    # Build the chain display + phase labels in one pass
+    _idx=0
+    _chain_lines=""
+    _phase_labels=""
+    _next_skill=""
+    _next_invoke=""
+    while IFS="$FS" read -r _cname _cinvoke _cdesc _cphase; do
+      [[ -z "$_cname" ]] && continue
+
+      if [[ "$_idx" -lt "$_current_idx" ]]; then
+        _marker="DONE?"
+      elif [[ "$_idx" -eq "$_current_idx" ]]; then
+        _marker="CURRENT"
+      elif [[ "$_idx" -eq $((_current_idx + 1)) ]]; then
+        _marker="NEXT"
+        _next_skill="$_cname"
+        _next_invoke="$_cinvoke"
+      else
+        _marker="LATER"
+      fi
+
+      _step=$((_idx + 1))
+      _chain_lines="${_chain_lines}
+  [${_marker}] Step ${_step}: ${_cinvoke} -- ${_cdesc}"
+
+      # Build phase label (fall back to skill name if no phase)
+      _plabel="${_cphase:-${_cname}}"
+      if [[ -n "$_phase_labels" ]]; then
+        _phase_labels="${_phase_labels} -> ${_plabel}"
+      else
+        _phase_labels="$_plabel"
+      fi
+
+      _idx=$((_idx + 1))
+    done <<EOF
+${_chain_detail}
+EOF
+
+    COMPOSITION_CHAIN="
+Composition: ${_phase_labels}${_chain_lines}"
+
+    if [[ -n "$_next_skill" ]]; then
+      COMPOSITION_DIRECTIVE="
+IMPORTANT: After completing ${_CHAIN_ANCHOR}, invoke ${_next_invoke}. Do not stop at the current step."
+    fi
+
+    # Check for parallel workflow co-selection (same phase as process skill)
+    _SELECTED_WORKFLOW=""
+    while IFS='|' read -r _s _n _r _i _p; do
+      [[ -z "$_n" ]] && continue
+      [[ "$_r" == "workflow" ]] && _SELECTED_WORKFLOW="$_n" && break
+    done <<EOF
+${SELECTED}
+EOF
+    if [[ -n "$_SELECTED_WORKFLOW" ]] && [[ -n "$_PHASE_PROCESS" ]] && [[ -n "$_PHASE_WORKFLOW" ]] && [[ "$_PHASE_PROCESS" == "$_PHASE_WORKFLOW" ]]; then
+      _wf_invoke="$(printf '%s' "$REGISTRY" | jq -r --arg n "$_SELECTED_WORKFLOW" '
+        .skills[] | select(.name == $n) | .invoke // "Skill(\($n))"
+      ' 2>/dev/null)"
+      COMPOSITION_CHAIN="${COMPOSITION_CHAIN}
+  [PARALLEL] ${_wf_invoke} -- use alongside current step if eligible"
+    fi
+  fi
+fi
+
+# Domain invocation instruction (composition-aware)
 DOMAIN_HINT=""
 if [[ "$DOMAIN_COUNT" -gt 0 ]] || [[ -n "$OVERFLOW_DOMAIN" ]]; then
-  if [[ -n "$PROCESS_SKILL" ]]; then
+  if [[ -n "$COMPOSITION_CHAIN" ]]; then
+    DOMAIN_HINT="
+Domain skills evaluated YES: invoke them during the current step."
+  elif [[ -n "$PROCESS_SKILL" ]]; then
     DOMAIN_HINT="
 Domain skills evaluated YES: invoke them (before, during, or after the process skill) -- do not just note them."
   else
@@ -512,9 +681,9 @@ elif [[ "$TOTAL_COUNT" -le 2 ]]; then
   [[ -z "$EVAL_PHASE" ]] && EVAL_PHASE="IMPLEMENT"
 
   OUT="SKILL ACTIVATION (${TOTAL_COUNT} skills | ${PLABEL})
-${SKILL_LINES}${COMPOSITION_LINES}
+${SKILL_LINES}${COMPOSITION_CHAIN}${COMPOSITION_LINES}
 
-Evaluate: **Phase: [${EVAL_PHASE}]** | ${EVAL_SKILLS}${DOMAIN_HINT}"
+Evaluate: **Phase: [${EVAL_PHASE}]** | ${EVAL_SKILLS}${DOMAIN_HINT}${COMPOSITION_DIRECTIVE}"
 
 else
   # --- full format (3+ skills) ---
@@ -530,13 +699,13 @@ else
 Step 1 -- ASSESS PHASE. Check conversation context:
 ${_PHASE_GUIDE}
 
-Step 2 -- EVALUATE skills against your phase assessment.${SKILL_LINES}${COMPOSITION_LINES}
+Step 2 -- EVALUATE skills against your phase assessment.${SKILL_LINES}${COMPOSITION_CHAIN}${COMPOSITION_LINES}
 You MUST print a brief evaluation for each skill above. Format:
   **Phase: [PHASE]** | [skill1] YES/NO, [skill2] YES/NO
 Example: **Phase: IMPLEMENT** | test-driven-development YES, claude-md-improver NO (not editing CLAUDE.md)
 This line is MANDATORY -- do not skip it.
 
-Step 3 -- State your plan and proceed. Keep it to 1-2 sentences.${DOMAIN_HINT}"
+Step 3 -- State your plan and proceed. Keep it to 1-2 sentences.${DOMAIN_HINT}${COMPOSITION_DIRECTIVE}"
 fi
 
 # Append methodology hints if any

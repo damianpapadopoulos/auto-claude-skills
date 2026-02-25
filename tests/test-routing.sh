@@ -73,7 +73,22 @@ install_registry() {
       ],
       "trigger_mode": "regex",
       "priority": 30,
+      "precedes": ["writing-plans"],
+      "requires": [],
       "invoke": "Skill(superpowers:brainstorming)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "writing-plans",
+      "role": "process",
+      "phase": "PLAN",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 40,
+      "precedes": ["executing-plans"],
+      "requires": ["brainstorming"],
+      "invoke": "Skill(superpowers:writing-plans)",
       "available": true,
       "enabled": true
     },
@@ -86,6 +101,8 @@ install_registry() {
       ],
       "trigger_mode": "regex",
       "priority": 15,
+      "precedes": [],
+      "requires": ["writing-plans"],
       "invoke": "Skill(superpowers:executing-plans)",
       "available": true,
       "enabled": true
@@ -132,11 +149,14 @@ install_registry() {
     {
       "name": "verification-before-completion",
       "role": "workflow",
+      "phase": "SHIP",
       "triggers": [
         "(ship|merge|deploy|push|release|tag|publish|pr.ready|ready.to|wrap.?up|finalize|complete|finish)"
       ],
       "trigger_mode": "regex",
       "priority": 60,
+      "precedes": ["finishing-a-development-branch"],
+      "requires": [],
       "invoke": "Skill(superpowers:verification-before-completion)",
       "available": true,
       "enabled": true
@@ -144,11 +164,14 @@ install_registry() {
     {
       "name": "finishing-a-development-branch",
       "role": "workflow",
+      "phase": "SHIP",
       "triggers": [
         "(ship|merge|deploy|push|release|tag|publish|pr.ready|ready.to|wrap.?up|finalize|complete|finish)"
       ],
       "trigger_mode": "regex",
       "priority": 61,
+      "precedes": [],
+      "requires": ["verification-before-completion"],
       "invoke": "Skill(superpowers:finishing-a-development-branch)",
       "available": true,
       "enabled": true
@@ -298,7 +321,22 @@ install_registry_v4() {
       "triggers": ["(build|create|implement|develop|scaffold|init|bootstrap|brainstorm|design|architect|strateg|scope|outline|approach|generate|set.?up|wire.up|connect|integrate|extend|new|start|introduce|enable|support|how.(should|would|could))"],
       "trigger_mode": "regex",
       "priority": 30,
+      "precedes": ["writing-plans"],
+      "requires": [],
       "invoke": "Skill(superpowers:brainstorming)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "writing-plans",
+      "role": "process",
+      "phase": "PLAN",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 40,
+      "precedes": ["executing-plans"],
+      "requires": ["brainstorming"],
+      "invoke": "Skill(superpowers:writing-plans)",
       "available": true,
       "enabled": true
     },
@@ -309,6 +347,8 @@ install_registry_v4() {
       "triggers": ["(execute.*plan|run.the.plan|implement.the.plan|continue|follow.the.plan|resume|next.task|next.step)"],
       "trigger_mode": "regex",
       "priority": 15,
+      "precedes": [],
+      "requires": ["writing-plans"],
       "invoke": "Skill(superpowers:executing-plans)",
       "available": true,
       "enabled": true
@@ -353,6 +393,8 @@ install_registry_v4() {
       "triggers": ["(ship|merge|deploy|push|release|tag|publish|pr.ready|ready.to|wrap.?up|finalize|complete|finish)"],
       "trigger_mode": "regex",
       "priority": 60,
+      "precedes": ["finishing-a-development-branch"],
+      "requires": [],
       "invoke": "Skill(superpowers:verification-before-completion)",
       "available": true,
       "enabled": true
@@ -364,6 +406,8 @@ install_registry_v4() {
       "triggers": ["(ship|merge|deploy|push|release|tag|publish|pr.ready|ready.to|wrap.?up|finalize|complete|finish)"],
       "trigger_mode": "regex",
       "priority": 61,
+      "precedes": [],
+      "requires": ["verification-before-completion"],
       "invoke": "Skill(superpowers:finishing-a-development-branch)",
       "available": true,
       "enabled": true
@@ -1311,5 +1355,93 @@ test_eval_phase_uses_process
 test_name_boost_boundary_aware
 test_trigger_boundary_excludes_dot
 test_domain_instruction_no_process
+
+# ---------------------------------------------------------------------------
+# Skill composition chain tests
+# ---------------------------------------------------------------------------
+test_composition_chain_forward() {
+    echo "-- test: brainstorming emits composition chain --"
+    setup_test_env
+    install_registry
+
+    local output context
+    output="$(run_hook "build a new user dashboard")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "composition has Composition:" "Composition:" "${context}"
+    assert_contains "composition has CURRENT marker" "[CURRENT]" "${context}"
+    assert_contains "composition has NEXT marker" "[NEXT]" "${context}"
+    assert_contains "composition has writing-plans" "writing-plans" "${context}"
+    assert_contains "composition has IMPORTANT directive" "IMPORTANT:" "${context}"
+
+    teardown_test_env
+}
+
+test_composition_chain_midentry() {
+    echo "-- test: executing-plans shows backward chain --"
+    setup_test_env
+    install_registry
+
+    local output context
+    output="$(run_hook "follow the plan and resume where we left off next task")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "midentry has Composition:" "Composition:" "${context}"
+    assert_contains "midentry has DONE? marker" "[DONE?]" "${context}"
+    assert_contains "midentry has CURRENT on executing-plans" "[CURRENT]" "${context}"
+
+    teardown_test_env
+}
+
+test_composition_no_chain_for_debug() {
+    echo "-- test: debug has no composition chain --"
+    setup_test_env
+    install_registry
+
+    local output context
+    output="$(run_hook "debug the authentication crash")"
+    context="$(extract_context "${output}")"
+
+    assert_not_contains "debug has no Composition:" "Composition:" "${context}"
+    assert_not_contains "debug has no IMPORTANT directive" "IMPORTANT:" "${context}"
+
+    teardown_test_env
+}
+
+test_composition_domain_hint_during_step() {
+    echo "-- test: domain hint says 'during the current step' with composition --"
+    setup_test_env
+    install_registry
+
+    local output context
+    output="$(run_hook "build a secure authentication system with encryption")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "domain hint has during step" "during the current step" "${context}"
+    assert_not_contains "domain hint no before/during/after" "before, during, or after" "${context}"
+
+    teardown_test_env
+}
+
+test_composition_workflow_chain() {
+    echo "-- test: workflow skill with precedes emits chain --"
+    setup_test_env
+    install_registry
+
+    local output context
+    output="$(run_hook "ship it and merge to main branch")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "ship has Composition:" "Composition:" "${context}"
+    assert_contains "ship has finishing-a-development-branch" "finishing-a-development-branch" "${context}"
+
+    teardown_test_env
+}
+
+test_composition_chain_forward
+test_composition_chain_midentry
+test_composition_no_chain_for_debug
+test_composition_domain_hint_during_step
+test_composition_workflow_chain
 
 print_summary
