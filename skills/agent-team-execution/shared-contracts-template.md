@@ -21,6 +21,12 @@ Copy below into `shared-contracts.md` at the workspace root. Fill in from plan.
 > **Last updated by:** Lead
 > **Last update reason:** Initial creation from plan
 
+## 0. File Ownership
+
+| Specialist | Owned Files |
+|------------|-------------|
+| {specialist_name} | {comma-separated file list} |
+
 ## 1. Data Models
 
 {types and interfaces from plan -- field names, types, descriptions}
@@ -48,6 +54,13 @@ Copy below into `shared-contracts.md` at the workspace root. Fill in from plan.
 > **READ-ONLY for Specialists.** To request changes, SendMessage to the Lead.
 > **Last updated by:** Lead
 > **Last update reason:** Initial creation from plan
+
+## 0. File Ownership
+
+| Specialist | Owned Files |
+|------------|-------------|
+| auth-specialist | src/auth/login.ts, src/auth/session.ts, tests/auth/ |
+| api-specialist | src/api/routes.ts, src/api/middleware.ts, tests/api/ |
 
 ## 1. Data Models
 

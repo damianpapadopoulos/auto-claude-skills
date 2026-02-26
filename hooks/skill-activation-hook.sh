@@ -714,5 +714,10 @@ if [[ -n "$HINTS" ]] || [[ -n "$COMPOSITION_HINTS" ]]; then
 ${HINTS}${COMPOSITION_HINTS}"
 fi
 
+# Developer debug: emit scores to stderr when SKILL_DEBUG is set
+if [[ -n "${SKILL_DEBUG:-}" ]] && [[ -n "$SORTED" ]]; then
+  printf '[skill-hook] scores: %s\n' "$(printf '%s' "$SORTED" | tr '\n' ', ')" >&2
+fi
+
 printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":%s}}\n' \
   "$(printf '%s' "$OUT" | jq -Rs .)"

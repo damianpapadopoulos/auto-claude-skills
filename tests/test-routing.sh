@@ -1444,4 +1444,69 @@ test_composition_no_chain_for_debug
 test_composition_domain_hint_during_step
 test_composition_workflow_chain
 
+# ---------------------------------------------------------------------------
+# Idle guard cooldown tests
+# ---------------------------------------------------------------------------
+test_idle_guard_cooldown() {
+    echo "-- test: idle guard cooldown prevents spam --"
+    setup_test_env
+
+    local guard="${PROJECT_ROOT}/hooks/teammate-idle-guard.sh"
+
+    # Clean stale cooldown files from prior tests
+    rm -f "/tmp/claude-idle-test-team-worker-last-nudge"
+
+    # Create an in_progress task for the worker
+    mkdir -p "${HOME}/.claude/tasks/test-team"
+    printf '{"subject":"Fix auth","status":"in_progress","owner":"worker"}' \
+        > "${HOME}/.claude/tasks/test-team/1.json"
+
+    # First nudge should fire (exit 2)
+    printf '{"teammate_name":"worker","team_name":"test-team"}' | bash "$guard" 2>/dev/null
+    local exit_code=$?
+    assert_equals "first nudge fires" "2" "$exit_code"
+
+    # Second nudge within cooldown should be suppressed (exit 0)
+    printf '{"teammate_name":"worker","team_name":"test-team"}' | bash "$guard" 2>/dev/null
+    exit_code=$?
+    assert_equals "second nudge within cooldown suppressed" "0" "$exit_code"
+
+    # Clean up cooldown file
+    rm -f "/tmp/claude-idle-test-team-worker-last-nudge"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# SKILL_DEBUG stderr output tests
+# ---------------------------------------------------------------------------
+test_skill_debug_stderr() {
+    echo "-- test: SKILL_DEBUG emits scores to stderr --"
+    setup_test_env
+    install_registry
+
+    local stderr_file="${TEST_TMPDIR}/stderr.txt"
+
+    # With SKILL_DEBUG: stderr should contain scores
+    jq -n --arg p "debug this broken login bug" '{"prompt":$p}' | \
+        CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        SKILL_DEBUG=1 \
+        bash "${HOOK}" 2>"${stderr_file}" >/dev/null
+    local stderr_content
+    stderr_content="$(cat "${stderr_file}")"
+    assert_contains "debug mode emits scores" "[skill-hook] scores:" "${stderr_content}"
+
+    # Without SKILL_DEBUG: stderr should be empty
+    jq -n --arg p "debug this broken login bug" '{"prompt":$p}' | \
+        CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        bash "${HOOK}" 2>"${stderr_file}" >/dev/null
+    stderr_content="$(cat "${stderr_file}")"
+    assert_equals "no debug mode no stderr" "" "${stderr_content}"
+
+    teardown_test_env
+}
+
+test_idle_guard_cooldown
+test_skill_debug_stderr
+
 print_summary

@@ -17,7 +17,7 @@ Persistent reviewer spawned once per team. Processes review requests as they arr
 Task tool (general-purpose):
   name: "reviewer"
   team_name: "{feature_name}-impl"
-  mode: "bypassPermissions"
+  mode: "default"
   prompt: |
     You are the Integration Reviewer for the {feature_name} team.
 

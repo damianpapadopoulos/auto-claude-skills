@@ -6,7 +6,7 @@ Use this template when dispatching specialist teammates. Lead fills in all place
 Task tool (general-purpose):
   name: "{specialist_name}"
   team_name: "{feature_name}-impl"
-  mode: "bypassPermissions"
+  mode: "{specialist_mode}"  # default: "bypassPermissions" for impl speed; use "default" for safer runs
   prompt: |
     You are specialist {specialist_name} implementing tasks for {feature_name}.
 
