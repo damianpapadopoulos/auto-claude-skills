@@ -9,85 +9,139 @@
       "name": "systematic-debugging",
       "role": "process",
       "phase": "DEBUG",
-      "triggers": ["debug", "bug", "fix", "broken", "error", "crash", "failing", "not working", "regression"],
+      "triggers": [
+        "(debug|bug|broken|crash|regression|not.work|error|fail|hang|freeze|timeout|leak|corrupt|unexpected|wrong)"
+      ],
       "trigger_mode": "regex",
       "priority": 50,
+      "precedes": [],
+      "requires": [],
       "invoke": "Skill(superpowers:systematic-debugging)",
       "available": true,
       "enabled": true,
-      "description": "Methodically isolate and fix bugs using structured investigation"
-    },
-    {
-      "name": "executing-plans",
-      "role": "process",
-      "phase": "IMPLEMENT",
-      "triggers": ["execute plan", "implement plan", "follow the plan", "next task", "continue", "pick up"],
-      "trigger_mode": "regex",
-      "priority": 35,
-      "invoke": "Skill(superpowers:executing-plans)",
-      "available": true,
-      "enabled": true,
-      "description": "Systematically implement a confirmed plan, task by task"
-    },
-    {
-      "name": "brainstorming",
-      "role": "process",
-      "phase": "DESIGN",
-      "triggers": ["brainstorm", "design", "architect", "scope", "outline", "approach", "how should"],
-      "trigger_mode": "regex",
-      "priority": 30,
-      "invoke": "Skill(superpowers:brainstorming)",
-      "available": true,
-      "enabled": true,
-      "description": "Explore ideas, ask clarifying questions, get design approval before building"
-    },
-    {
-      "name": "requesting-code-review",
-      "role": "process",
-      "phase": "REVIEW",
-      "triggers": ["review", "code review", "pull request", "pr", "check changes", "diff"],
-      "trigger_mode": "regex",
-      "priority": 25,
-      "invoke": "Skill(superpowers:requesting-code-review)",
-      "available": true,
-      "enabled": true,
-      "description": "Prepare and request a structured code review"
+      "description": "Structured debugging: reproduce, hypothesise, isolate, fix, verify. Returns to the current phase after resolution."
     },
     {
       "name": "test-driven-development",
       "role": "process",
       "phase": "IMPLEMENT",
-      "triggers": ["tdd", "test first", "write tests", "test driven", "red green refactor"],
+      "triggers": [
+        "(test|tdd|run.tests|execute.tests|verify|validate|coverage|pass|green|assert|expect|spec|ensure.*pass|check.*(test|coverage|green))"
+      ],
       "trigger_mode": "regex",
       "priority": 20,
+      "precedes": [],
+      "requires": [],
       "invoke": "Skill(superpowers:test-driven-development)",
       "available": true,
       "enabled": true,
-      "description": "Write tests first, then implement to make them pass"
+      "description": "Write failing test first, then implement until green. Primary only for explicit test requests; other phases invoke TDD via skill chaining."
     },
     {
-      "name": "verification-before-completion",
-      "role": "workflow",
-      "phase": "SHIP",
-      "triggers": ["verify", "final check", "ready to ship", "all green", "all passing", "lgtm"],
+      "name": "brainstorming",
+      "role": "process",
+      "phase": "DESIGN",
+      "triggers": [
+        "(scaffold|init|bootstrap|brainstorm|design|architect|strateg|scope|outline|approach|set.?up|wire.up|how.(should|would|could))"
+      ],
       "trigger_mode": "regex",
-      "priority": 20,
-      "invoke": "Skill(superpowers:verification-before-completion)",
+      "priority": 30,
+      "precedes": ["writing-plans"],
+      "requires": [],
+      "invoke": "Skill(superpowers:brainstorming)",
       "available": true,
       "enabled": true,
-      "description": "Run final checks before declaring work complete"
+      "description": "Ask clarifying questions, explore options, and get user approval before planning. Activated for Build intents."
     },
     {
       "name": "writing-plans",
       "role": "process",
       "phase": "PLAN",
-      "triggers": ["plan", "break down", "task list", "steps", "outline tasks", "spec"],
+      "triggers": [],
       "trigger_mode": "regex",
       "priority": 40,
+      "precedes": ["executing-plans"],
+      "requires": ["brainstorming"],
       "invoke": "Skill(superpowers:writing-plans)",
       "available": true,
       "enabled": true,
-      "description": "Break work into structured tasks and confirm the plan before execution"
+      "description": "Break work into discrete tasks and confirm the plan with the user before execution begins."
+    },
+    {
+      "name": "executing-plans",
+      "role": "process",
+      "phase": "IMPLEMENT",
+      "triggers": [
+        "(execute.*plan|run.the.plan|implement.the.plan|implement.*(rest|remaining)|continue|follow.the.plan|pick.up|resume|next.task|next.step|carry.on|keep.going|where.were.we|what.s.next)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 35,
+      "precedes": [],
+      "requires": ["writing-plans"],
+      "invoke": "Skill(superpowers:executing-plans)",
+      "available": true,
+      "enabled": true,
+      "description": "Step-by-step execution of an approved plan. Triggered by explicit plan-continuation language."
+    },
+    {
+      "name": "subagent-driven-development",
+      "role": "process",
+      "phase": "IMPLEMENT",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 14,
+      "precedes": [],
+      "requires": [],
+      "invoke": "Skill(superpowers:subagent-driven-development)",
+      "available": true,
+      "enabled": true,
+      "description": "Delegate plan tasks to sub-agents for parallel implementation. Co-triggered with executing-plans."
+    },
+    {
+      "name": "requesting-code-review",
+      "role": "process",
+      "phase": "REVIEW",
+      "triggers": [
+        "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|smell|tech.?debt|(^|[^a-z])pr($|[^a-z]))"
+      ],
+      "trigger_mode": "regex",
+      "priority": 25,
+      "precedes": [],
+      "requires": [],
+      "invoke": "Skill(superpowers:requesting-code-review)",
+      "available": true,
+      "enabled": true,
+      "description": "Prepare and request a code review: summarise changes, highlight risks, open a PR."
+    },
+    {
+      "name": "receiving-code-review",
+      "role": "process",
+      "phase": "REVIEW",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 24,
+      "precedes": [],
+      "requires": [],
+      "invoke": "Skill(superpowers:receiving-code-review)",
+      "available": true,
+      "enabled": true,
+      "description": "Process incoming review feedback: address comments, push fixes, re-request review."
+    },
+    {
+      "name": "verification-before-completion",
+      "role": "workflow",
+      "phase": "SHIP",
+      "triggers": [
+        "(ship|merge|deploy|push|release|tag|publish|pr.ready|ready.to|wrap.?up|all.(done|good|green|passing)|lgtm|finalize|complete|finish)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 20,
+      "precedes": ["finishing-a-development-branch"],
+      "requires": [],
+      "invoke": "Skill(superpowers:verification-before-completion)",
+      "available": true,
+      "enabled": true,
+      "description": "Final verification checklist before shipping: tests pass, lint clean, no TODOs, docs updated."
     },
     {
       "name": "finishing-a-development-branch",
@@ -96,10 +150,85 @@
       "triggers": [],
       "trigger_mode": "regex",
       "priority": 19,
+      "precedes": [],
+      "requires": ["verification-before-completion"],
       "invoke": "Skill(superpowers:finishing-a-development-branch)",
       "available": true,
       "enabled": true,
-      "description": "Clean up, squash, and prepare a branch for merge"
+      "description": "Branch cleanup and merge: squash commits, update changelog, merge to main."
+    },
+    {
+      "name": "dispatching-parallel-agents",
+      "role": "workflow",
+      "triggers": [
+        "(parallel|concurrent|multiple.*(failure|bug|issue|error|test)|independent.*(task|failure|bug|issue|test)|worktree)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 15,
+      "precedes": [],
+      "requires": [],
+      "invoke": "Skill(superpowers:dispatching-parallel-agents)",
+      "available": true,
+      "enabled": true,
+      "description": "Fan out independent tasks to parallel sub-agents and collect results."
+    },
+    {
+      "name": "using-git-worktrees",
+      "role": "workflow",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 14,
+      "precedes": [],
+      "requires": [],
+      "invoke": "Skill(superpowers:using-git-worktrees)",
+      "available": true,
+      "enabled": true,
+      "description": "Use git worktrees to enable parallel work on multiple branches without stashing."
+    },
+    {
+      "name": "writing-skills",
+      "role": "domain",
+      "triggers": [
+        "(skill|write.*skill|create.*skill|edit.*skill|new.*skill|skill.*(file|md|template|format))"
+      ],
+      "trigger_mode": "regex",
+      "priority": 15,
+      "precedes": [],
+      "requires": [],
+      "invoke": "Skill(superpowers:writing-skills)",
+      "available": true,
+      "enabled": true,
+      "description": "Author and maintain Claude Code skill files (SKILL.md). Meta-overlay for Claude tooling prompts."
+    },
+    {
+      "name": "security-scanner",
+      "role": "domain",
+      "triggers": [
+        "(secur(e|ity)|vulnerab|owasp|pentest|attack|exploit|compliance|hipaa|gdpr|encrypt|auth(entication|orization)|inject|xss|csrf|sanitiz|supply.?chain)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 15,
+      "precedes": [],
+      "requires": [],
+      "invoke": "Skill(superpowers:security-scanner)",
+      "available": true,
+      "enabled": true,
+      "description": "Security analysis overlay: scan for vulnerabilities, OWASP risks, compliance issues, and supply-chain threats."
+    },
+    {
+      "name": "claude-md-improver",
+      "role": "domain",
+      "triggers": [
+        "(claude\\.md|claude.md|project.?memory|improve.*claude|audit.*claude|update.*claude.md)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 10,
+      "precedes": [],
+      "requires": [],
+      "invoke": "Skill(superpowers:claude-md-improver)",
+      "available": true,
+      "enabled": true,
+      "description": "Improve CLAUDE.md project files: structure, clarity, and completeness of project instructions."
     }
   ],
   "plugins": [],
