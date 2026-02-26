@@ -93,9 +93,11 @@ fi
 # --- _score_skills ------------------------------------------------
 # Input globals: SKILL_DATA, P
 # Output globals: RESULTS, SORTED
+# Explain globals (when SKILL_EXPLAIN is set): _EXPLAIN_SCORING
 _score_skills() {
   # Score each skill (name-boost check merged into the same loop — no separate pre-pass)
   RESULTS=""
+  _EXPLAIN_SCORING=""
   while IFS="$FS" read -r skill_name skill_name_lower skill_role skill_priority skill_invoke skill_phase triggers_joined; do
     [[ -z "$skill_name" ]] && continue
 
@@ -127,6 +129,7 @@ _score_skills() {
 
     # Score triggers (iterate using string splitting — no per-trigger jq fork)
     trigger_score=0
+    _explain_parts=""  # accumulate per-trigger explain details
     if [[ -n "$triggers_joined" ]]; then
       _remaining="$triggers_joined"
       while [[ -n "$_remaining" ]]; do
@@ -173,8 +176,24 @@ _score_skills() {
             [[ "$_scan" =~ $trigger ]] || break
           done
           trigger_score=$((trigger_score + _best))
+          # Collect explain data for this trigger hit
+          if [[ -n "${SKILL_EXPLAIN:-}" ]]; then
+            _btype="substring"
+            [[ "$_best" -eq 30 ]] && _btype="boundary"
+            _explain_parts="${_explain_parts} ${_btype}=${_best}"
+          fi
         fi
       done
+    fi
+
+    # Collect explain data for skills with no match
+    if [[ -n "${SKILL_EXPLAIN:-}" ]]; then
+      if [[ "$trigger_score" -eq 0 ]] && [[ "$name_boost" -eq 0 ]]; then
+        _trig_display="${triggers_joined//${DELIM}/|}"
+        [[ ${#_trig_display} -gt 40 ]] && _trig_display="${_trig_display:0:37}..."
+        _EXPLAIN_SCORING="${_EXPLAIN_SCORING}[skill-hook]   ${skill_name}: trigger=(${_trig_display}) no-match
+"
+      fi
     fi
 
     # Apply skill-name-mention boost (+100) and allow through even with zero trigger_score
@@ -182,6 +201,14 @@ _score_skills() {
       final_score=$((trigger_score + skill_priority + name_boost))
       RESULTS="${RESULTS}${final_score}|${skill_name}|${skill_role}|${skill_invoke}|${skill_phase}
 "
+      # Collect explain data for matched skills
+      if [[ -n "${SKILL_EXPLAIN:-}" ]]; then
+        _score_breakdown="${_explain_parts}"
+        [[ "$name_boost" -gt 0 ]] && _score_breakdown="${_score_breakdown} name-boost=${name_boost}"
+        [[ "$skill_priority" -gt 0 ]] && _score_breakdown="${_score_breakdown} priority=${skill_priority}"
+        _EXPLAIN_SCORING="${_EXPLAIN_SCORING}[skill-hook]   ${skill_name}: trigger=(${triggers_joined//${DELIM}/|})${_score_breakdown} = ${final_score}
+"
+      fi
     fi
   done <<EOF
 ${SKILL_DATA}
@@ -194,6 +221,7 @@ EOF
 # --- _select_by_role_caps -----------------------------------------
 # Input globals: SORTED, MAX_SUGGESTIONS
 # Output globals: SELECTED, OVERFLOW_DOMAIN, OVERFLOW_WORKFLOW, PROCESS_COUNT, DOMAIN_COUNT, WORKFLOW_COUNT, TOTAL_COUNT
+# Explain globals (when SKILL_EXPLAIN is set): _EXPLAIN_CAPS
 _select_by_role_caps() {
   # Max 1 process, up to 2 domain, max 1 workflow, total <= max_suggestions.
   # INVARIANT: The highest-ranked process skill always gets a reserved slot
@@ -205,6 +233,7 @@ _select_by_role_caps() {
   DOMAIN_COUNT=0
   WORKFLOW_COUNT=0
   TOTAL_COUNT=0
+  _EXPLAIN_CAPS=""
 
   # Pass 1: reserve the top process skill (if any)
   RESERVED_PROCESS_NAME=""
@@ -216,6 +245,8 @@ _select_by_role_caps() {
 "
       PROCESS_COUNT=1
       TOTAL_COUNT=1
+      [[ -n "${SKILL_EXPLAIN:-}" ]] && _EXPLAIN_CAPS="${_EXPLAIN_CAPS}[skill-hook]   [process] ${name} (${score}) <- reserved
+"
       break
     fi
   done <<EOF
@@ -230,25 +261,39 @@ EOF
       process)
         # Skip reserved process skill; cap additional process skills at 0
         [[ "$name" == "$RESERVED_PROCESS_NAME" ]] && continue
-        [[ "$PROCESS_COUNT" -ge 1 ]] && continue
+        if [[ "$PROCESS_COUNT" -ge 1 ]] || [[ "$TOTAL_COUNT" -ge "$MAX_SUGGESTIONS" ]]; then
+          [[ -n "${SKILL_EXPLAIN:-}" ]] && _EXPLAIN_CAPS="${_EXPLAIN_CAPS}[skill-hook]   [process] ${name} (${score}) <- capped
+"
+          continue
+        fi
         [[ "$TOTAL_COUNT" -ge "$MAX_SUGGESTIONS" ]] && continue
         PROCESS_COUNT=$((PROCESS_COUNT + 1))
+        [[ -n "${SKILL_EXPLAIN:-}" ]] && _EXPLAIN_CAPS="${_EXPLAIN_CAPS}[skill-hook]   [process] ${name} (${score}) <- slot ${PROCESS_COUNT}/1
+"
         ;;
       domain)
         if [[ "$DOMAIN_COUNT" -ge 2 ]] || [[ "$TOTAL_COUNT" -ge "$MAX_SUGGESTIONS" ]]; then
           OVERFLOW_DOMAIN="${OVERFLOW_DOMAIN}${name}|${invoke}
 "
+          [[ -n "${SKILL_EXPLAIN:-}" ]] && _EXPLAIN_CAPS="${_EXPLAIN_CAPS}[skill-hook]   [domain]  ${name} (${score}) <- overflow
+"
           continue
         fi
         DOMAIN_COUNT=$((DOMAIN_COUNT + 1))
+        [[ -n "${SKILL_EXPLAIN:-}" ]] && _EXPLAIN_CAPS="${_EXPLAIN_CAPS}[skill-hook]   [domain]  ${name} (${score}) <- slot ${DOMAIN_COUNT}/2
+"
         ;;
       workflow)
         if [[ "$WORKFLOW_COUNT" -ge 1 ]] || [[ "$TOTAL_COUNT" -ge "$MAX_SUGGESTIONS" ]]; then
           OVERFLOW_WORKFLOW="${OVERFLOW_WORKFLOW}${name}|${invoke}
 "
+          [[ -n "${SKILL_EXPLAIN:-}" ]] && _EXPLAIN_CAPS="${_EXPLAIN_CAPS}[skill-hook]   [workflow] ${name} (${score}) <- overflow
+"
           continue
         fi
         WORKFLOW_COUNT=$((WORKFLOW_COUNT + 1))
+        [[ -n "${SKILL_EXPLAIN:-}" ]] && _EXPLAIN_CAPS="${_EXPLAIN_CAPS}[skill-hook]   [workflow] ${name} (${score}) <- slot ${WORKFLOW_COUNT}/1
+"
         ;;
     esac
 
@@ -618,6 +663,32 @@ ${HINTS}${COMPOSITION_HINTS}"
     "$(printf '%s' "$OUT" | jq -Rs .)"
 }
 
+# --- _emit_explain ------------------------------------------------
+# Emits structured routing explanation to stderr when SKILL_EXPLAIN=1.
+# Input globals: PROMPT, _EXPLAIN_SCORING, _EXPLAIN_CAPS, TOTAL_COUNT, PLABEL, PRIMARY_PHASE
+_emit_explain() {
+  [[ -z "${SKILL_EXPLAIN:-}" ]] && return
+
+  {
+    printf '[skill-hook] === EXPLAIN ===\n'
+    printf '[skill-hook] Prompt: "%s"\n' "$PROMPT"
+    printf '[skill-hook] Scoring:\n'
+    if [[ -n "${_EXPLAIN_SCORING:-}" ]]; then
+      printf '%s' "$_EXPLAIN_SCORING"
+    else
+      printf '[skill-hook]   (no skills evaluated)\n'
+    fi
+    printf '[skill-hook] Role-cap selection (max=%s):\n' "$MAX_SUGGESTIONS"
+    if [[ -n "${_EXPLAIN_CAPS:-}" ]]; then
+      printf '%s' "$_EXPLAIN_CAPS"
+    else
+      printf '[skill-hook]   (none selected)\n'
+    fi
+    printf '[skill-hook] Result: %s skills | %s | phase=%s\n' "$TOTAL_COUNT" "${PLABEL:-}" "${PRIMARY_PHASE:-}"
+    printf '[skill-hook] === END ===\n'
+  } >&2
+}
+
 # =================================================================
 # MAIN FLOW
 # =================================================================
@@ -753,3 +824,6 @@ fi
 
 # --- Format and emit final JSON output ---
 _format_output
+
+# --- Emit SKILL_EXPLAIN diagnostic output (stderr) ---
+_emit_explain

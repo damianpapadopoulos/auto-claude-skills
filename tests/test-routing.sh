@@ -1778,9 +1778,72 @@ test_skill_debug_stderr() {
     teardown_test_env
 }
 
+test_skill_explain_with_matches() {
+    setup_test_env
+    install_registry
+
+    local stderr_file="${TEST_TMPDIR}/stderr_explain.txt"
+
+    # SKILL_EXPLAIN=1 with matching prompt → stderr contains explain output
+    jq -n --arg p "debug this broken login bug" '{"prompt":$p}' | \
+        CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        SKILL_EXPLAIN=1 \
+        bash "${HOOK}" 2>"${stderr_file}" >/dev/null
+    local stderr_content
+    stderr_content="$(cat "${stderr_file}")"
+    assert_contains "explain shows header" "=== EXPLAIN ===" "${stderr_content}"
+    assert_contains "explain shows scoring" "Scoring:" "${stderr_content}"
+    assert_contains "explain shows prompt" "Prompt:" "${stderr_content}"
+    assert_contains "explain shows skill score" "systematic-debugging:" "${stderr_content}"
+    assert_contains "explain shows role-cap" "Role-cap selection" "${stderr_content}"
+    assert_contains "explain shows result" "Result:" "${stderr_content}"
+    assert_contains "explain shows end marker" "=== END ===" "${stderr_content}"
+
+    teardown_test_env
+}
+
+test_skill_explain_no_matches() {
+    setup_test_env
+    install_registry
+
+    local stderr_file="${TEST_TMPDIR}/stderr_explain_none.txt"
+
+    # SKILL_EXPLAIN=1 with a prompt that won't match any triggers (long enough to pass length check)
+    jq -n --arg p "tell me about the weather forecast today please" '{"prompt":$p}' | \
+        CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        SKILL_EXPLAIN=1 \
+        bash "${HOOK}" 2>"${stderr_file}" >/dev/null
+    local stderr_content
+    stderr_content="$(cat "${stderr_file}")"
+    assert_contains "explain no-match shows header" "=== EXPLAIN ===" "${stderr_content}"
+    assert_contains "explain no-match shows 0 skills" "0 skills" "${stderr_content}"
+
+    teardown_test_env
+}
+
+test_skill_explain_off_by_default() {
+    setup_test_env
+    install_registry
+
+    local stderr_file="${TEST_TMPDIR}/stderr_explain_off.txt"
+
+    # Without SKILL_EXPLAIN → no explain output on stderr
+    jq -n --arg p "debug this broken login bug" '{"prompt":$p}' | \
+        CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        bash "${HOOK}" 2>"${stderr_file}" >/dev/null
+    local stderr_content
+    stderr_content="$(cat "${stderr_file}")"
+    assert_equals "no explain without SKILL_EXPLAIN" "" "${stderr_content}"
+
+    teardown_test_env
+}
+
 test_idle_guard_cooldown
 test_idle_guard_sanitization
 test_idle_guard_non_numeric_cooldown
 test_skill_debug_stderr
+test_skill_explain_with_matches
+test_skill_explain_no_matches
+test_skill_explain_off_by_default
 
 print_summary
