@@ -77,18 +77,73 @@ Create `~/.claude/skill-config.json` to customize:
     }
   ],
   "settings": {
-    "max_suggestions": 3,
-    "verbosity": "normal"
-  }
+    "max_suggestions": 3
+  },
+  "greeting_blocklist": "^(hi|hello|hey|thanks)([[:space:]].*)?$"
 }
 ```
 
 Trigger override syntax: `"+keyword"` adds to defaults, `"-keyword"` removes from defaults, `"keyword"` (no prefix) replaces all defaults.
 
+The `greeting_blocklist` is a regex that suppresses skill activation for greetings and acknowledgements. The default covers ~40 common phrases (hi, hello, thanks, ok, sure, etc.).
+
+## Composition chains
+
+Skills can declare `precedes` and `requires` relationships to form multi-step workflows:
+
+```
+brainstorming → writing-plans → executing-plans
+verification-before-completion → finishing-a-development-branch
+```
+
+When you enter mid-workflow (e.g. "execute the plan"), the plugin shows the full chain with `[DONE?] / [CURRENT] / [NEXT]` markers and a directive to continue to the next step.
+
+## Depth-aware verbosity
+
+The plugin reduces output as your session progresses to save context budget:
+
+| Prompt count | Format |
+|-------------|--------|
+| 1–5 | Full (phase guide + step-by-step instructions) |
+| 6–10 | Compact (skill list + eval line) |
+| 11+ | Minimal (skills + eval only) |
+
+Set `SKILL_VERBOSE=1` to force full output regardless of depth.
+
+## Debugging & diagnostics
+
+### `/skill-explain`
+
+Test how the routing engine scores any prompt:
+
+```
+/skill-explain "design a secure frontend component"
+```
+
+Shows trigger matches, word-boundary vs substring scoring, name-boost detection, role-cap filtering decisions, and the context that would be injected.
+
+### Environment variables
+
+| Variable | Effect |
+|----------|--------|
+| `SKILL_EXPLAIN=1` | Emit structured routing explanation to stderr |
+| `SKILL_DEBUG=1` | Emit raw sorted scores to stderr |
+| `SKILL_VERBOSE=1` | Force full-verbosity output regardless of session depth |
+
+## Agent teams
+
+The plugin includes infrastructure for collaborative agent teams (requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`):
+
+- **Idle guard** — nudges idle teammates who have unfinished tasks (120s cooldown)
+- **Compact hooks** — checkpoints team state before compaction and re-injects it after recovery
+- **Bundled skills** — agent-team-execution, agent-team-review, design-debate
+
+Run `/setup` to enable agent teams.
+
 ## Prerequisites
 
 - [Claude Code](https://code.claude.com) CLI
-- `jq` (auto-installed if missing)
+- `jq` — required for skill routing. Install with `brew install jq` (macOS) or `apt install jq` (Linux). The plugin warns on startup if jq is missing and falls back to a static registry with reduced functionality.
 
 ## Uninstalling
 
