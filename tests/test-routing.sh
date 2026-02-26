@@ -1452,10 +1452,12 @@ test_idle_guard_cooldown() {
     setup_test_env
 
     local guard="${PROJECT_ROOT}/hooks/teammate-idle-guard.sh"
-    local cooldown_file="/tmp/claude-idle-test-team-worker-last-nudge"
+    local cooldown_dir="${HOME}/.claude/.idle-cooldowns"
+    local cooldown_file="${cooldown_dir}/claude-idle-test-team-worker-last-nudge"
     local stderr_file="${TEST_TMPDIR}/guard-stderr.txt"
 
     # Clean stale cooldown files from prior tests
+    mkdir -p "$cooldown_dir"
     rm -f "$cooldown_file"
 
     # Create an in_progress task for the worker
@@ -1492,8 +1494,10 @@ test_idle_guard_sanitization() {
     setup_test_env
 
     local guard="${PROJECT_ROOT}/hooks/teammate-idle-guard.sh"
-    local cooldown_file="/tmp/claude-idle-safe-name-last-nudge"
+    local cooldown_dir="${HOME}/.claude/.idle-cooldowns"
+    local cooldown_file="${cooldown_dir}/claude-idle-safe-name-last-nudge"
 
+    mkdir -p "$cooldown_dir"
     rm -f "$cooldown_file"
 
     mkdir -p "${HOME}/.claude/tasks/safe-name"
@@ -1514,13 +1518,15 @@ test_idle_guard_non_numeric_cooldown() {
     setup_test_env
 
     local guard="${PROJECT_ROOT}/hooks/teammate-idle-guard.sh"
-    local cooldown_file="/tmp/claude-idle-test-team-worker-last-nudge"
+    local cooldown_dir="${HOME}/.claude/.idle-cooldowns"
+    local cooldown_file="${cooldown_dir}/claude-idle-test-team-worker-last-nudge"
 
     mkdir -p "${HOME}/.claude/tasks/test-team"
     printf '{"subject":"Task","status":"in_progress","owner":"worker"}' \
         > "${HOME}/.claude/tasks/test-team/1.json"
 
     # Write garbage to cooldown file — guard should still nudge (not crash)
+    mkdir -p "$cooldown_dir"
     printf 'not-a-number' > "$cooldown_file"
     printf '{"teammate_name":"worker","team_name":"test-team"}' | bash "$guard" 2>/dev/null
     local exit_code=$?

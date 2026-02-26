@@ -39,7 +39,9 @@ if [ -n "$UNFINISHED" ]; then
     # Cooldown: skip nudge if < 120 seconds since last nudge for this teammate
     SAFE_TEAM=$(printf '%s' "$TEAM" | tr -cd 'a-zA-Z0-9_-')
     SAFE_MATE=$(printf '%s' "$TEAMMATE" | tr -cd 'a-zA-Z0-9_-')
-    COOLDOWN_FILE="/tmp/claude-idle-${SAFE_TEAM}-${SAFE_MATE}-last-nudge"
+    COOLDOWN_DIR="${HOME}/.claude/.idle-cooldowns"
+    mkdir -p "$COOLDOWN_DIR" 2>/dev/null || COOLDOWN_DIR="/tmp"
+    COOLDOWN_FILE="${COOLDOWN_DIR}/claude-idle-${SAFE_TEAM}-${SAFE_MATE}-last-nudge"
     NOW=$(date +%s) || NOW=""
     if [ -n "$NOW" ] && [ -f "$COOLDOWN_FILE" ]; then
         LAST_NUDGE=$(cat "$COOLDOWN_FILE" 2>/dev/null) || LAST_NUDGE=""
