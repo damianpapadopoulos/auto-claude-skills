@@ -1838,6 +1838,112 @@ test_skill_explain_off_by_default() {
     teardown_test_env
 }
 
+# ---------------------------------------------------------------------------
+# Conversation-depth-aware verbosity tests
+# ---------------------------------------------------------------------------
+
+test_depth_full_format_first_prompt() {
+    setup_test_env
+    install_registry
+
+    # No counter file exists → treated as prompt 1 → full format for 3+ skills
+    rm -f "${HOME}/.claude/.skill-prompt-count"
+    local output
+    output="$(run_hook "build a secure frontend component")"
+    local ctx
+    ctx="$(extract_context "${output}")"
+
+    assert_contains "depth1: full format has ASSESS PHASE" "ASSESS PHASE" "${ctx}"
+    assert_contains "depth1: full format has EVALUATE skills" "EVALUATE skills" "${ctx}"
+    assert_contains "depth1: full format has Step 3" "State your plan" "${ctx}"
+
+    teardown_test_env
+}
+
+test_depth_compact_format_after_5() {
+    setup_test_env
+    install_registry
+
+    # Write counter=5 so next invocation will be prompt 6 → compact format even for 3+ skills
+    printf '5' > "${HOME}/.claude/.skill-prompt-count"
+    local output
+    output="$(run_hook "build a secure frontend component")"
+    local ctx
+    ctx="$(extract_context "${output}")"
+
+    assert_not_contains "depth6: compact format has no ASSESS PHASE" "ASSESS PHASE" "${ctx}"
+    assert_not_contains "depth6: compact format has no EVALUATE skills" "EVALUATE skills" "${ctx}"
+    assert_contains "depth6: compact format has Evaluate" "Evaluate:" "${ctx}"
+    assert_contains "depth6: compact format has skill names" "brainstorming" "${ctx}"
+
+    teardown_test_env
+}
+
+test_depth_minimal_format_after_10() {
+    setup_test_env
+    install_registry
+
+    # Write counter=10 so next invocation will be prompt 11 → minimal format
+    printf '10' > "${HOME}/.claude/.skill-prompt-count"
+    local output
+    output="$(run_hook "build a secure frontend component")"
+    local ctx
+    ctx="$(extract_context "${output}")"
+
+    assert_not_contains "depth11: minimal format has no ASSESS PHASE" "ASSESS PHASE" "${ctx}"
+    assert_not_contains "depth11: minimal format has no EVALUATE skills" "EVALUATE skills" "${ctx}"
+    assert_not_contains "depth11: minimal format has no State your plan" "State your plan" "${ctx}"
+    assert_not_contains "depth11: minimal format has no DOMAIN_HINT" "Domain skills evaluated" "${ctx}"
+    assert_contains "depth11: minimal format has Evaluate" "Evaluate:" "${ctx}"
+    assert_contains "depth11: minimal format has skill names" "brainstorming" "${ctx}"
+
+    teardown_test_env
+}
+
+test_depth_verbose_override() {
+    setup_test_env
+    install_registry
+
+    # Write counter=19 so next invocation will be prompt 20 → should be minimal,
+    # but SKILL_VERBOSE=1 forces full format
+    printf '19' > "${HOME}/.claude/.skill-prompt-count"
+    local output
+    output="$(jq -n --arg p "build a secure frontend component" '{"prompt":$p}' | \
+        CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        SKILL_VERBOSE=1 \
+        bash "${HOOK}" 2>/dev/null)"
+    local ctx
+    ctx="$(extract_context "${output}")"
+
+    assert_contains "verbose override: full format has ASSESS PHASE" "ASSESS PHASE" "${ctx}"
+    assert_contains "verbose override: full format has EVALUATE skills" "EVALUATE skills" "${ctx}"
+    assert_contains "verbose override: full format has State your plan" "State your plan" "${ctx}"
+
+    teardown_test_env
+}
+
+test_depth_counter_missing_treated_as_1() {
+    setup_test_env
+    install_registry
+
+    # Ensure counter file does NOT exist
+    rm -f "${HOME}/.claude/.skill-prompt-count"
+    local output
+    output="$(run_hook "build a secure frontend component")"
+    local ctx
+    ctx="$(extract_context "${output}")"
+
+    # Same as prompt 1: full format for 3+ skills
+    assert_contains "missing counter: full format has ASSESS PHASE" "ASSESS PHASE" "${ctx}"
+
+    # Verify counter file was created with value 1
+    local count_val
+    count_val="$(cat "${HOME}/.claude/.skill-prompt-count" 2>/dev/null)"
+    assert_equals "missing counter: file created with value 1" "1" "${count_val}"
+
+    teardown_test_env
+}
+
 test_idle_guard_cooldown
 test_idle_guard_sanitization
 test_idle_guard_non_numeric_cooldown
@@ -1845,5 +1951,10 @@ test_skill_debug_stderr
 test_skill_explain_with_matches
 test_skill_explain_no_matches
 test_skill_explain_off_by_default
+test_depth_full_format_first_prompt
+test_depth_compact_format_after_5
+test_depth_minimal_format_after_10
+test_depth_verbose_override
+test_depth_counter_missing_treated_as_1
 
 print_summary

@@ -606,7 +606,7 @@ EOF
 # --- _format_output -----------------------------------------------
 # Input globals: TOTAL_COUNT, PLABEL, SKILL_LINES, COMPOSITION_CHAIN, COMPOSITION_LINES,
 #                EVAL_SKILLS, PRIMARY_PHASE, DOMAIN_HINT, COMPOSITION_DIRECTIVE,
-#                HINTS, COMPOSITION_HINTS, REGISTRY, SORTED
+#                HINTS, COMPOSITION_HINTS, REGISTRY, SORTED, _PROMPT_COUNT
 # Output globals: OUT (+ prints final JSON)
 _format_output() {
   if [[ "$TOTAL_COUNT" -eq 0 ]]; then
@@ -615,8 +615,18 @@ _format_output() {
 Phase: assess current phase (DESIGN/PLAN/IMPLEMENT/REVIEW/SHIP/DEBUG)
 and consider whether any installed skill applies."
 
-  elif [[ "$TOTAL_COUNT" -le 2 ]]; then
-    # --- compact format ---
+  elif [[ "$_PROMPT_COUNT" -gt 10 ]]; then
+    # --- minimal format (depth 11+): skill list + eval only ---
+    EVAL_PHASE="$PRIMARY_PHASE"
+    [[ -z "$EVAL_PHASE" ]] && EVAL_PHASE="IMPLEMENT"
+
+    OUT="SKILL ACTIVATION (${TOTAL_COUNT} skills | ${PLABEL})
+${SKILL_LINES}
+
+Evaluate: **Phase: [${EVAL_PHASE}]** | ${EVAL_SKILLS}"
+
+  elif [[ "$TOTAL_COUNT" -le 2 ]] && [[ "$_PROMPT_COUNT" -le 5 ]]; then
+    # --- compact format (1-2 skills, depth 1-5) ---
     EVAL_PHASE="$PRIMARY_PHASE"
     [[ -z "$EVAL_PHASE" ]] && EVAL_PHASE="IMPLEMENT"
 
@@ -625,8 +635,8 @@ ${SKILL_LINES}${COMPOSITION_CHAIN}${COMPOSITION_LINES}
 
 Evaluate: **Phase: [${EVAL_PHASE}]** | ${EVAL_SKILLS}${DOMAIN_HINT}${COMPOSITION_DIRECTIVE}"
 
-  else
-    # --- full format (3+ skills) ---
+  elif [[ "$_PROMPT_COUNT" -le 5 ]] && [[ "$TOTAL_COUNT" -ge 3 ]]; then
+    # --- full format (3+ skills, depth 1-5) ---
     # Build phase guide from registry (falls back to a minimal default)
     _PHASE_GUIDE="$(printf '%s' "$REGISTRY" | jq -r '
       .phase_guide // empty | to_entries | sort_by(.key) |
@@ -646,6 +656,16 @@ Example: **Phase: IMPLEMENT** | test-driven-development YES, claude-md-improver 
 This line is MANDATORY -- do not skip it.
 
 Step 3 -- State your plan and proceed. Keep it to 1-2 sentences.${DOMAIN_HINT}${COMPOSITION_DIRECTIVE}"
+
+  else
+    # --- compact format (depth 6-10, or any remaining cases) ---
+    EVAL_PHASE="$PRIMARY_PHASE"
+    [[ -z "$EVAL_PHASE" ]] && EVAL_PHASE="IMPLEMENT"
+
+    OUT="SKILL ACTIVATION (${TOTAL_COUNT} skills | ${PLABEL})
+${SKILL_LINES}${COMPOSITION_CHAIN}${COMPOSITION_LINES}
+
+Evaluate: **Phase: [${EVAL_PHASE}]** | ${EVAL_SKILLS}${DOMAIN_HINT}${COMPOSITION_DIRECTIVE}"
   fi
 
   # Append methodology hints if any
@@ -688,6 +708,27 @@ _emit_explain() {
     printf '[skill-hook] === END ===\n'
   } >&2
 }
+
+# =================================================================
+# CONVERSATION-DEPTH COUNTER
+# =================================================================
+# Track how many prompts have been sent to reduce verbosity over time.
+# File: $HOME/.claude/.skill-prompt-count
+# SKILL_VERBOSE=1 forces full output regardless of depth.
+_PROMPT_COUNT_FILE="${HOME}/.claude/.skill-prompt-count"
+_PROMPT_COUNT=1
+if [[ -f "$_PROMPT_COUNT_FILE" ]]; then
+  _prev="$(cat "$_PROMPT_COUNT_FILE" 2>/dev/null)"
+  if [[ "$_prev" =~ ^[0-9]+$ ]]; then
+    _PROMPT_COUNT=$((_prev + 1))
+  fi
+fi
+printf '%s' "$_PROMPT_COUNT" > "$_PROMPT_COUNT_FILE" 2>/dev/null || true
+
+# SKILL_VERBOSE=1 overrides depth — treat as prompt 1
+if [[ -n "${SKILL_VERBOSE:-}" ]] && [[ "${SKILL_VERBOSE:-}" == "1" ]]; then
+  _PROMPT_COUNT=1
+fi
 
 # =================================================================
 # MAIN FLOW
