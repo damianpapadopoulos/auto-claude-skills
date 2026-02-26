@@ -1604,6 +1604,52 @@ test_config_custom_skills
 test_config_greeting_blocklist
 
 # ---------------------------------------------------------------------------
+# End-to-end integration test: session-start → routing pipeline
+# ---------------------------------------------------------------------------
+test_end_to_end_pipeline() {
+    echo "-- test: end-to-end session-start → routing pipeline --"
+    setup_test_env
+
+    local session_hook="${PROJECT_ROOT}/hooks/session-start-hook.sh"
+    local routing_hook="${PROJECT_ROOT}/hooks/skill-activation-hook.sh"
+    local cache="${HOME}/.claude/.skill-registry-cache.json"
+
+    # Step 1: Run session-start to build registry
+    CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" bash "$session_hook" >/dev/null 2>&1
+
+    # Step 2: Verify registry was created
+    assert_file_exists "e2e: registry cache created" "$cache"
+
+    # Step 3: Verify registry is valid JSON with skills
+    local skill_count
+    skill_count="$(jq '.skills | length' "$cache" 2>/dev/null)"
+    if [ -n "$skill_count" ] && [ "$skill_count" -gt 0 ]; then
+        _record_pass "e2e: registry has skills ($skill_count)"
+    else
+        _record_fail "e2e: registry has skills" "got ${skill_count:-empty}"
+        teardown_test_env
+        return
+    fi
+
+    # Step 4: Route a prompt through the routing hook
+    # Use a prompt that triggers design-debate (bundled skill, always available)
+    local output
+    output="$(jq -n --arg p "brainstorm the architecture and design trade-offs" '{"prompt":$p}' | \
+        CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        bash "$routing_hook" 2>/dev/null)"
+
+    local ctx
+    ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+
+    # Step 5: Verify design-debate was activated (bundled skill, always available)
+    assert_contains "e2e: brainstorm prompt activates design-debate" "design-debate" "$ctx"
+
+    teardown_test_env
+}
+
+test_end_to_end_pipeline
+
+# ---------------------------------------------------------------------------
 # Idle guard cooldown tests
 # ---------------------------------------------------------------------------
 test_idle_guard_cooldown() {
