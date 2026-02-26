@@ -176,6 +176,29 @@ echo "-- test: fallback has phase_compositions key --"
 has_pc="$(jq 'has("phase_compositions")' "${FALLBACK}" 2>/dev/null)"
 assert_equals "fallback has phase_compositions key" "true" "${has_pc}"
 
+# Test: session-start-hook.sh does NOT auto-install packages
+echo "-- test: no auto-install in session-start --"
+HOOK_SRC="$(cat "${PLUGIN_ROOT}/hooks/session-start-hook.sh")"
+
+# Check for actual install commands (exclude warning/message strings)
+if printf '%s' "${HOOK_SRC}" | grep -v 'printf\|MSG=' | grep -q 'pip install'; then
+    _record_fail "no pip install command in session-start" "found pip install outside of warning message"
+else
+    _record_pass "no pip install command in session-start"
+fi
+
+if printf '%s' "${HOOK_SRC}" | grep -v 'printf\|MSG=' | grep -q 'brew install'; then
+    _record_fail "no brew install command in session-start" "found brew install outside of warning message"
+else
+    _record_pass "no brew install command in session-start"
+fi
+
+if printf '%s' "${HOOK_SRC}" | grep -v 'printf\|MSG=' | grep -q 'apt-get install'; then
+    _record_fail "no apt-get install command in session-start" "found apt-get install outside of warning message"
+else
+    _record_pass "no apt-get install command in session-start"
+fi
+
 # ---------------------------------------------------------------------------
 # Print summary and exit with appropriate code
 # ---------------------------------------------------------------------------

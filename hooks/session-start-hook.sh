@@ -27,12 +27,15 @@ fi
 # Step 1b: Ensure cozempic is available (context protection)
 # -----------------------------------------------------------------
 if ! command -v cozempic >/dev/null 2>&1; then
-    python3 -m pip install --quiet cozempic 2>/dev/null || true
-    # Expand PATH to find newly installed binary
+    # Check common install locations before warning
     for _p in "$HOME/.local/bin" "$HOME/Library/Python"/*/bin; do
         [ -x "$_p/cozempic" ] && export PATH="$_p:$PATH" && break
     done
-    command -v cozempic >/dev/null 2>&1 && cozempic init >/dev/null 2>&1 || true
+fi
+if command -v cozempic >/dev/null 2>&1; then
+    cozempic init >/dev/null 2>&1 || true
+else
+    printf '[session-start] cozempic not found. Install with: pip install cozempic\n' >&2
 fi
 
 # -----------------------------------------------------------------
@@ -42,12 +45,7 @@ CACHE_FILE="${HOME}/.claude/.skill-registry-cache.json"
 mkdir -p "$(dirname "${CACHE_FILE}")"
 
 if ! command -v jq >/dev/null 2>&1; then
-    # Try to install jq (best-effort)
-    if command -v brew >/dev/null 2>&1; then
-        brew install --quiet jq 2>/dev/null || true
-    elif command -v apt-get >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
-        sudo apt-get install -y -qq jq 2>/dev/null || true
-    fi
+    printf '[session-start] jq not found. Install with: brew install jq (macOS) or apt install jq (Linux)\n' >&2
 fi
 
 if ! command -v jq >/dev/null 2>&1; then
