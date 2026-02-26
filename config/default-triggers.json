@@ -32,7 +32,7 @@
       "role": "process",
       "phase": "DESIGN",
       "triggers": [
-        "(scaffold|init|bootstrap|brainstorm|design|architect|strateg|scope|outline|approach|set.?up|wire.up|how.(should|would|could))"
+        "(build|create|implement|develop|scaffold|init|bootstrap|brainstorm|design|architect|strateg|scope|outline|approach|set.?up|wire.up|how.(should|would|could)|add|make|introduce|enable|new|start)"
       ],
       "trigger_mode": "regex",
       "priority": 30,
@@ -243,13 +243,15 @@
       "role": "workflow",
       "phase": "IMPLEMENT",
       "triggers": [
-        "(agent.team|team.execute|parallel.team|swarm|fan.out|specialist|multi.agent)"
+        "(agent.team|team.execute|parallel.team|swarm|fan.out|specialist|multi.agent)",
+        "(execute.*plan|run.the.plan|implement.the.plan|implement.*(rest|remaining)|continue|follow.the.plan|pick.up|resume|next.task|next.step|carry.on|keep.going|where.were.we|what.s.next)",
+        "(build|create|implement|develop|scaffold|add|make|wire.up|connect|integrate|extend)"
       ],
       "trigger_mode": "regex",
       "priority": 22,
       "precedes": [],
       "requires": ["writing-plans"],
-      "description": "Team-based parallel execution for plans with 3+ independent tasks. Auto-offered alongside executing-plans when plan has 3+ file-disjoint groups."
+      "description": "Use when executing implementation plans with 3+ independent, file-disjoint tasks that benefit from parallel specialist agents."
     },
     {
       "name": "agent-team-review",
@@ -270,7 +272,7 @@
       "role": "domain",
       "phase": "DESIGN",
       "triggers": [
-        "(brainstorm|design|architect|strateg|scope|outline|approach|trade.?off|debate|compare.*(option|approach|design)|weigh.*(option|approach)|pro.*con|alternative)"
+        "(build|create|implement|develop|scaffold|brainstorm|design|architect|strateg|scope|outline|approach|trade.?off|debate|compare.*(option|approach|design)|weigh.*(option|approach)|pro.*con|alternative|add|make|new|start)"
       ],
       "trigger_mode": "regex",
       "priority": 18,

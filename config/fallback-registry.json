@@ -42,7 +42,7 @@
       "role": "process",
       "phase": "DESIGN",
       "triggers": [
-        "(scaffold|init|bootstrap|brainstorm|design|architect|strateg|scope|outline|approach|set.?up|wire.up|how.(should|would|could))"
+        "(build|create|implement|develop|scaffold|init|bootstrap|brainstorm|design|architect|strateg|scope|outline|approach|set.?up|wire.up|how.(should|would|could)|add|make|introduce|enable|new|start)"
       ],
       "trigger_mode": "regex",
       "priority": 30,
@@ -234,6 +234,57 @@
       "available": true,
       "enabled": true,
       "description": "Improve CLAUDE.md project files: structure, clarity, and completeness of project instructions."
+    },
+    {
+      "name": "agent-team-execution",
+      "role": "workflow",
+      "phase": "IMPLEMENT",
+      "triggers": [
+        "(agent.team|team.execute|parallel.team|swarm|fan.out|specialist|multi.agent)",
+        "(execute.*plan|run.the.plan|implement.the.plan|implement.*(rest|remaining)|continue|follow.the.plan|pick.up|resume|next.task|next.step|carry.on|keep.going|where.were.we|what.s.next)",
+        "(build|create|implement|develop|scaffold|add|make|wire.up|connect|integrate|extend)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 22,
+      "precedes": [],
+      "requires": ["writing-plans"],
+      "invoke": "Skill(auto-claude-skills:agent-team-execution)",
+      "available": true,
+      "enabled": true,
+      "description": "Use when executing implementation plans with 3+ independent, file-disjoint tasks that benefit from parallel specialist agents."
+    },
+    {
+      "name": "agent-team-review",
+      "role": "workflow",
+      "phase": "REVIEW",
+      "triggers": [
+        "(team.review|multi.*(perspective|reviewer|agent).*(review|check)|thorough.*review|comprehensive.*review|full.*review)",
+        "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|(^|[^a-z])pr($|[^a-z]))"
+      ],
+      "trigger_mode": "regex",
+      "priority": 20,
+      "precedes": [],
+      "requires": [],
+      "invoke": "Skill(auto-claude-skills:agent-team-review)",
+      "available": true,
+      "enabled": true,
+      "description": "Multi-perspective parallel code review with specialist reviewers (security, quality, spec compliance)."
+    },
+    {
+      "name": "design-debate",
+      "role": "domain",
+      "phase": "DESIGN",
+      "triggers": [
+        "(build|create|implement|develop|scaffold|brainstorm|design|architect|strateg|scope|outline|approach|trade.?off|debate|compare.*(option|approach|design)|weigh.*(option|approach)|pro.*con|alternative|add|make|new|start)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 18,
+      "precedes": [],
+      "requires": [],
+      "invoke": "Skill(auto-claude-skills:design-debate)",
+      "available": true,
+      "enabled": true,
+      "description": "Multi-Agent Debate for complex designs. Spawns architect, critic, and pragmatist for collaborative design exploration."
     }
   ],
   "plugins": [],
