@@ -332,6 +332,11 @@ pr-review-toolkit
 ralph-loop
 auto-claude-skills"
 
+# Collect all unknown plugin data bash-side, then merge in one jq call
+_DISCOVERED_ENTRIES=""
+_ENTRY_DELIM="@@ENTRY@@"
+_FIELD_DELIM="@@F@@"
+
 for _mkt_dir in "${HOME}/.claude/plugins/cache"/*/; do
     [ -d "${_mkt_dir}" ] || continue
     for _plugin_dir in "${_mkt_dir}"*/; do
@@ -399,27 +404,35 @@ KNEOF
             done
         fi
 
-        # Build plugin entry and append to PLUGINS_JSON in a single jq call
-        PLUGINS_JSON="$(printf '%s' "${PLUGINS_JSON}" | jq \
-            --arg name "${_pname}" \
-            --arg skills "${_skill_names}" \
-            --arg commands "${_cmd_names}" \
-            --arg agents "${_agent_names}" \
-            '. + [{
-                name: $name,
+        # Accumulate entry as delimited string (no jq fork)
+        _DISCOVERED_ENTRIES="${_DISCOVERED_ENTRIES}${_DISCOVERED_ENTRIES:+${_ENTRY_DELIM}}${_pname}${_FIELD_DELIM}${_skill_names}${_FIELD_DELIM}${_cmd_names}${_FIELD_DELIM}${_agent_names}"
+    done
+done
+
+# Single jq call to merge all discovered plugins into PLUGINS_JSON
+if [ -n "${_DISCOVERED_ENTRIES}" ]; then
+    PLUGINS_JSON="$(printf '%s' "${PLUGINS_JSON}" | jq \
+        --arg entries "${_DISCOVERED_ENTRIES}" \
+        --arg edelim "${_ENTRY_DELIM}" \
+        --arg fdelim "${_FIELD_DELIM}" \
+        '. + [
+            $entries | split($edelim)[] |
+            split($fdelim) as $f |
+            {
+                name: $f[0],
                 source: "auto-discovered",
                 provides: {
-                    commands: ($commands | split("\n") | map(select(. != ""))),
-                    skills:  ($skills  | split("\n") | map(select(. != ""))),
-                    agents:  ($agents  | split("\n") | map(select(. != ""))),
+                    commands: ($f[2] | split("\n") | map(select(. != ""))),
+                    skills:  ($f[1] | split("\n") | map(select(. != ""))),
+                    agents:  ($f[3] | split("\n") | map(select(. != ""))),
                     hooks: []
                 },
                 phase_fit: ["*"],
                 description: "Auto-discovered plugin",
                 available: true
-            }]')"
-    done
-done
+            }
+        ]')"
+fi
 
 # -----------------------------------------------------------------
 # Step 9+10: Build final registry JSON, extract stats, and cache
