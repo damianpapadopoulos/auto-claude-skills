@@ -36,6 +36,17 @@ for task_file in "${TASKS_DIR}"/*.json; do
 done
 
 if [ -n "$UNFINISHED" ]; then
+    # Cooldown: skip nudge if < 120 seconds since last nudge for this teammate
+    COOLDOWN_FILE="/tmp/claude-idle-${TEAM}-${TEAMMATE}-last-nudge"
+    NOW=$(date +%s)
+    if [ -f "$COOLDOWN_FILE" ]; then
+        LAST_NUDGE=$(cat "$COOLDOWN_FILE" 2>/dev/null || echo 0)
+        ELAPSED=$((NOW - LAST_NUDGE))
+        if [ "$ELAPSED" -lt 120 ]; then
+            exit 0
+        fi
+    fi
+    printf '%s' "$NOW" > "$COOLDOWN_FILE"
     echo "You have unfinished tasks: ${UNFINISHED}. Continue working or report your blocker to the lead via SendMessage." >&2
     exit 2
 fi
