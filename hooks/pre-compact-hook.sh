@@ -20,14 +20,14 @@ fi
 
 # --- Read hook input ---
 INPUT="$(cat)"
-TRANSCRIPT_PATH="$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('transcript_path',''))" 2>/dev/null)"
-TRIGGER="$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('trigger','unknown'))" 2>/dev/null)"
+TRANSCRIPT_PATH="$(printf '%s' "$INPUT" | jq -r '.transcript_path // empty' 2>/dev/null)"
+TRIGGER="$(printf '%s' "$INPUT" | jq -r '.trigger // "unknown"' 2>/dev/null)"
 
 # --- Log compaction event (for future adaptive calibration) ---
 LOG_FILE="$HOME/.claude/.compact-events.log"
 if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
     FILE_SIZE=$(stat -f%z "$TRANSCRIPT_PATH" 2>/dev/null || stat -c%s "$TRANSCRIPT_PATH" 2>/dev/null || echo "unknown")
-    echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) trigger=$TRIGGER size_bytes=$FILE_SIZE path=$TRANSCRIPT_PATH" >> "$LOG_FILE" 2>/dev/null
+    printf '%s trigger=%s size_bytes=%s path=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$TRIGGER" "$FILE_SIZE" "$TRANSCRIPT_PATH" >> "$LOG_FILE" 2>/dev/null
 fi
 
 # --- Checkpoint team state ---
