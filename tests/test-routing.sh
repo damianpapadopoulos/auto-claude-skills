@@ -1481,6 +1481,129 @@ test_brainstorming_trigger_narrowed
 test_agent_team_no_plan_triggers
 
 # ---------------------------------------------------------------------------
+# User config override tests
+# ---------------------------------------------------------------------------
+test_config_max_suggestions() {
+    echo "-- test: max_suggestions limits skill count --"
+    setup_test_env
+    install_registry
+
+    # Write config with max_suggestions: 1
+    printf '{"max_suggestions": 1}' > "${HOME}/.claude/skill-config.json"
+
+    # Use a prompt that matches multiple skills
+    local output
+    output="$(run_hook "debug this broken login bug and fix it")"
+    local ctx
+    ctx="$(extract_context "$output")"
+
+    # With max_suggestions=1, should have only 1 skill line
+    local skill_count
+    skill_count="$(printf '%s' "$ctx" | grep -c 'Skill(' || true)"
+    if [ "$skill_count" -le 1 ]; then
+        _record_pass "max_suggestions=1 limits to 1 skill"
+    else
+        _record_fail "max_suggestions=1 limits to 1 skill" "got $skill_count skills"
+    fi
+
+    teardown_test_env
+}
+
+test_config_trigger_add() {
+    echo "-- test: trigger override adds new pattern --"
+    setup_test_env
+
+    local session_hook="${PROJECT_ROOT}/hooks/session-start-hook.sh"
+
+    # Add a new trigger pattern to systematic-debugging
+    printf '{"overrides":{"systematic-debugging":{"triggers":["+customtrigger123"]}}}' \
+        > "${HOME}/.claude/skill-config.json"
+
+    # Run session-start to build registry
+    CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" bash "$session_hook" >/dev/null 2>&1
+
+    local cache="${HOME}/.claude/.skill-registry-cache.json"
+    if [ ! -f "$cache" ]; then
+        _record_fail "trigger override: registry built" "cache file not found"
+        teardown_test_env
+        return
+    fi
+
+    local debug_triggers
+    debug_triggers="$(jq -r '.skills[] | select(.name == "systematic-debugging") | .triggers | join(" ")' "$cache" 2>/dev/null)"
+
+    assert_contains "trigger + adds new pattern" "customtrigger123" "$debug_triggers"
+
+    teardown_test_env
+}
+
+test_config_custom_skills() {
+    echo "-- test: custom_skills appear in registry --"
+    setup_test_env
+
+    local session_hook="${PROJECT_ROOT}/hooks/session-start-hook.sh"
+
+    # Write config with a custom skill
+    cat > "${HOME}/.claude/skill-config.json" <<'EOF'
+{
+    "custom_skills": [{
+        "name": "my-custom-test-skill",
+        "role": "domain",
+        "triggers": ["customskilltest"],
+        "invoke": "Skill(my-custom-test-skill)"
+    }]
+}
+EOF
+
+    # Run session-start to build registry
+    CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" bash "$session_hook" >/dev/null 2>&1
+
+    local cache="${HOME}/.claude/.skill-registry-cache.json"
+    if [ ! -f "$cache" ]; then
+        _record_fail "custom skill: registry built" "cache file not found"
+        teardown_test_env
+        return
+    fi
+
+    local custom_name
+    custom_name="$(jq -r '.skills[] | select(.name == "my-custom-test-skill") | .name' "$cache" 2>/dev/null)"
+
+    assert_equals "custom skill in registry" "my-custom-test-skill" "$custom_name"
+
+    # Verify it's marked as available and enabled
+    local custom_available
+    custom_available="$(jq -r '.skills[] | select(.name == "my-custom-test-skill") | .available' "$cache" 2>/dev/null)"
+    assert_equals "custom skill is available" "true" "$custom_available"
+
+    teardown_test_env
+}
+
+test_config_greeting_blocklist() {
+    echo "-- test: custom greeting blocklist blocks matching prompts --"
+    setup_test_env
+    install_registry
+
+    # Write config with a custom blocklist that blocks "xyztest"
+    printf '{"greeting_blocklist":"xyztest"}' > "${HOME}/.claude/skill-config.json"
+
+    # A prompt matching the custom blocklist should produce no skills
+    local output
+    output="$(run_hook "xyztest")"
+    local ctx
+    ctx="$(extract_context "$output")"
+
+    # Should have no skill output (blocklist triggers early exit)
+    assert_not_contains "custom blocklist blocks prompt" "Skill(" "$ctx"
+
+    teardown_test_env
+}
+
+test_config_max_suggestions
+test_config_trigger_add
+test_config_custom_skills
+test_config_greeting_blocklist
+
+# ---------------------------------------------------------------------------
 # Idle guard cooldown tests
 # ---------------------------------------------------------------------------
 test_idle_guard_cooldown() {
