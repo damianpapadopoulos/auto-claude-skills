@@ -1452,9 +1452,11 @@ test_idle_guard_cooldown() {
     setup_test_env
 
     local guard="${PROJECT_ROOT}/hooks/teammate-idle-guard.sh"
+    local cooldown_file="/tmp/claude-idle-test-team-worker-last-nudge"
+    local stderr_file="${TEST_TMPDIR}/guard-stderr.txt"
 
     # Clean stale cooldown files from prior tests
-    rm -f "/tmp/claude-idle-test-team-worker-last-nudge"
+    rm -f "$cooldown_file"
 
     # Create an in_progress task for the worker
     mkdir -p "${HOME}/.claude/tasks/test-team"
@@ -1462,18 +1464,69 @@ test_idle_guard_cooldown() {
         > "${HOME}/.claude/tasks/test-team/1.json"
 
     # First nudge should fire (exit 2)
-    printf '{"teammate_name":"worker","team_name":"test-team"}' | bash "$guard" 2>/dev/null
+    printf '{"teammate_name":"worker","team_name":"test-team"}' | bash "$guard" 2>"$stderr_file"
     local exit_code=$?
     assert_equals "first nudge fires" "2" "$exit_code"
+    assert_contains "first nudge has message" "unfinished tasks" "$(cat "$stderr_file")"
+    assert_file_exists "cooldown file created" "$cooldown_file"
 
     # Second nudge within cooldown should be suppressed (exit 0)
-    printf '{"teammate_name":"worker","team_name":"test-team"}' | bash "$guard" 2>/dev/null
+    printf '{"teammate_name":"worker","team_name":"test-team"}' | bash "$guard" 2>"$stderr_file"
     exit_code=$?
     assert_equals "second nudge within cooldown suppressed" "0" "$exit_code"
 
-    # Clean up cooldown file
-    rm -f "/tmp/claude-idle-test-team-worker-last-nudge"
+    # Simulate cooldown expiry by backdating the timestamp
+    printf '%s' "$(($(date +%s) - 121))" > "$cooldown_file"
+    printf '{"teammate_name":"worker","team_name":"test-team"}' | bash "$guard" 2>"$stderr_file"
+    exit_code=$?
+    assert_equals "nudge fires after cooldown expires" "2" "$exit_code"
 
+    # Clean up cooldown file
+    rm -f "$cooldown_file"
+
+    teardown_test_env
+}
+
+test_idle_guard_sanitization() {
+    echo "-- test: idle guard sanitizes path-unsafe names --"
+    setup_test_env
+
+    local guard="${PROJECT_ROOT}/hooks/teammate-idle-guard.sh"
+    local cooldown_file="/tmp/claude-idle-safe-name-last-nudge"
+
+    rm -f "$cooldown_file"
+
+    mkdir -p "${HOME}/.claude/tasks/safe-name"
+    printf '{"subject":"Task","status":"in_progress","owner":"safe-name"}' \
+        > "${HOME}/.claude/tasks/safe-name/1.json"
+
+    # Team/teammate with slashes should be sanitized (no path traversal)
+    printf '{"teammate_name":"safe-name","team_name":"safe-name"}' | bash "$guard" 2>/dev/null
+    local exit_code=$?
+    assert_equals "sanitized guard fires" "2" "$exit_code"
+
+    rm -f "$cooldown_file"
+    teardown_test_env
+}
+
+test_idle_guard_non_numeric_cooldown() {
+    echo "-- test: idle guard handles non-numeric cooldown file --"
+    setup_test_env
+
+    local guard="${PROJECT_ROOT}/hooks/teammate-idle-guard.sh"
+    local cooldown_file="/tmp/claude-idle-test-team-worker-last-nudge"
+
+    mkdir -p "${HOME}/.claude/tasks/test-team"
+    printf '{"subject":"Task","status":"in_progress","owner":"worker"}' \
+        > "${HOME}/.claude/tasks/test-team/1.json"
+
+    # Write garbage to cooldown file — guard should still nudge (not crash)
+    printf 'not-a-number' > "$cooldown_file"
+    printf '{"teammate_name":"worker","team_name":"test-team"}' | bash "$guard" 2>/dev/null
+    local exit_code=$?
+    assert_equals "nudge fires with corrupted cooldown file" "2" "$exit_code"
+
+    rm -f "$cooldown_file"
     teardown_test_env
 }
 
@@ -1503,10 +1556,20 @@ test_skill_debug_stderr() {
     stderr_content="$(cat "${stderr_file}")"
     assert_equals "no debug mode no stderr" "" "${stderr_content}"
 
+    # SKILL_DEBUG with no matching skills: stderr should be silent
+    jq -n --arg p "hello how are you today" '{"prompt":$p}' | \
+        CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        SKILL_DEBUG=1 \
+        bash "${HOOK}" 2>"${stderr_file}" >/dev/null
+    stderr_content="$(cat "${stderr_file}")"
+    assert_equals "debug mode no scores when nothing matches" "" "${stderr_content}"
+
     teardown_test_env
 }
 
 test_idle_guard_cooldown
+test_idle_guard_sanitization
+test_idle_guard_non_numeric_cooldown
 test_skill_debug_stderr
 
 print_summary

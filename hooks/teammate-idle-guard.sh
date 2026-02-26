@@ -37,16 +37,22 @@ done
 
 if [ -n "$UNFINISHED" ]; then
     # Cooldown: skip nudge if < 120 seconds since last nudge for this teammate
-    COOLDOWN_FILE="/tmp/claude-idle-${TEAM}-${TEAMMATE}-last-nudge"
-    NOW=$(date +%s)
-    if [ -f "$COOLDOWN_FILE" ]; then
-        LAST_NUDGE=$(cat "$COOLDOWN_FILE" 2>/dev/null || echo 0)
-        ELAPSED=$((NOW - LAST_NUDGE))
-        if [ "$ELAPSED" -lt 120 ]; then
-            exit 0
+    SAFE_TEAM=$(printf '%s' "$TEAM" | tr -cd 'a-zA-Z0-9_-')
+    SAFE_MATE=$(printf '%s' "$TEAMMATE" | tr -cd 'a-zA-Z0-9_-')
+    COOLDOWN_FILE="/tmp/claude-idle-${SAFE_TEAM}-${SAFE_MATE}-last-nudge"
+    NOW=$(date +%s) || NOW=""
+    if [ -n "$NOW" ] && [ -f "$COOLDOWN_FILE" ]; then
+        LAST_NUDGE=$(cat "$COOLDOWN_FILE" 2>/dev/null) || LAST_NUDGE=""
+        if [[ "$LAST_NUDGE" =~ ^[0-9]+$ ]]; then
+            ELAPSED=$((NOW - LAST_NUDGE))
+            if [ "$ELAPSED" -lt 120 ]; then
+                exit 0
+            fi
         fi
     fi
-    printf '%s' "$NOW" > "$COOLDOWN_FILE"
+    if [ -n "$NOW" ]; then
+        printf '%s' "$NOW" > "$COOLDOWN_FILE" 2>/dev/null || true
+    fi
     echo "You have unfinished tasks: ${UNFINISHED}. Continue working or report your blocker to the lead via SendMessage." >&2
     exit 2
 fi
