@@ -715,7 +715,10 @@ _emit_explain() {
 # Track how many prompts have been sent to reduce verbosity over time.
 # File: $HOME/.claude/.skill-prompt-count
 # SKILL_VERBOSE=1 forces full output regardless of depth.
-_PROMPT_COUNT_FILE="${HOME}/.claude/.skill-prompt-count"
+# Read session token for session-scoped counter (avoids race between concurrent sessions)
+_SESSION_TOKEN=""
+[[ -f "${HOME}/.claude/.skill-session-token" ]] && _SESSION_TOKEN="$(cat "${HOME}/.claude/.skill-session-token" 2>/dev/null)"
+_PROMPT_COUNT_FILE="${HOME}/.claude/.skill-prompt-count-${_SESSION_TOKEN:-default}"
 _PROMPT_COUNT=1
 if [[ -f "$_PROMPT_COUNT_FILE" ]]; then
   _prev="$(cat "$_PROMPT_COUNT_FILE" 2>/dev/null)"

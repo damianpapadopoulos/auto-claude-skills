@@ -10,6 +10,13 @@ if ! command -v cozempic >/dev/null 2>&1; then
     done
 fi
 
+# --- Reset depth counter (fresh context after compaction) ---
+_SESSION_TOKEN=""
+[ -f "${HOME}/.claude/.skill-session-token" ] && _SESSION_TOKEN="$(cat "${HOME}/.claude/.skill-session-token" 2>/dev/null)"
+if [ -n "$_SESSION_TOKEN" ]; then
+    printf '0' > "${HOME}/.claude/.skill-prompt-count-${_SESSION_TOKEN}" 2>/dev/null || true
+fi
+
 # --- Re-inject team checkpoint if it exists ---
 CHECKPOINT="${HOME}/.claude/team-checkpoint.md"
 if [ -f "$CHECKPOINT" ]; then

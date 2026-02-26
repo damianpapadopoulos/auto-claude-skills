@@ -160,6 +160,7 @@
     {
       "name": "dispatching-parallel-agents",
       "role": "workflow",
+      "phase": "IMPLEMENT",
       "triggers": [
         "(parallel|concurrent|multiple.*(failure|bug|issue|error|test)|independent.*(task|failure|bug|issue|test)|worktree)"
       ],
@@ -175,6 +176,7 @@
     {
       "name": "using-git-worktrees",
       "role": "workflow",
+      "phase": "IMPLEMENT",
       "triggers": [],
       "trigger_mode": "regex",
       "priority": 14,
@@ -188,6 +190,7 @@
     {
       "name": "writing-skills",
       "role": "domain",
+      "phase": "DESIGN",
       "triggers": [
         "(skill|write.*skill|create.*skill|edit.*skill|new.*skill|skill.*(file|md|template|format))"
       ],
@@ -203,6 +206,7 @@
     {
       "name": "security-scanner",
       "role": "domain",
+      "phase": "REVIEW",
       "triggers": [
         "(secur(e|ity)|vulnerab|owasp|pentest|attack|exploit|compliance|hipaa|gdpr|encrypt|auth(entication|orization)|inject|xss|csrf|sanitiz|supply.?chain)"
       ],
@@ -218,6 +222,7 @@
     {
       "name": "claude-md-improver",
       "role": "domain",
+      "phase": "DESIGN",
       "triggers": [
         "(claude\\.md|claude.md|project.?memory|improve.*claude|audit.*claude|update.*claude.md)"
       ],

@@ -447,6 +447,50 @@ test_health_check_reports_new_plugins() {
 }
 
 # ---------------------------------------------------------------------------
+# Fallback registry drift detection
+# ---------------------------------------------------------------------------
+test_fallback_registry_skill_coverage() {
+    echo "-- test: fallback registry covers all default-triggers skills --"
+
+    local triggers_file="${PROJECT_ROOT}/config/default-triggers.json"
+    local fallback_file="${PROJECT_ROOT}/config/fallback-registry.json"
+
+    # Extract skill names from default-triggers.json
+    local trigger_skills
+    trigger_skills="$(jq -r '.skills[].name' "$triggers_file" | sort)"
+
+    # Extract skill names from fallback-registry.json
+    local fallback_skills
+    fallback_skills="$(jq -r '.skills[].name' "$fallback_file" | sort)"
+
+    # Every fallback skill should exist in default-triggers
+    local missing_from_triggers=""
+    while IFS= read -r name; do
+        [[ -z "$name" ]] && continue
+        if ! printf '%s\n' "$trigger_skills" | grep -qx "$name"; then
+            missing_from_triggers="${missing_from_triggers} ${name}"
+        fi
+    done <<EOF
+${fallback_skills}
+EOF
+    assert_equals "fallback skills all exist in default-triggers" "" "${missing_from_triggers}"
+
+    # Check that fallback has invoke fields for all its skills
+    local missing_invoke
+    missing_invoke="$(jq -r '.skills[] | select(.invoke == null or .invoke == "") | .name' "$fallback_file" | tr '\n' ' ')"
+    assert_equals "fallback skills all have invoke fields" "" "${missing_invoke}"
+
+    # Check that all skills in both files have phase fields
+    local triggers_missing_phase
+    triggers_missing_phase="$(jq -r '.skills[] | select(.phase == null or .phase == "") | .name' "$triggers_file" | tr '\n' ' ')"
+    assert_equals "default-triggers skills all have phase fields" "" "${triggers_missing_phase}"
+
+    local fallback_missing_phase
+    fallback_missing_phase="$(jq -r '.skills[] | select(.phase == null or .phase == "") | .name' "$fallback_file" | tr '\n' ' ')"
+    assert_equals "fallback skills all have phase fields" "" "${fallback_missing_phase}"
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_empty_env_produces_fallback
@@ -463,5 +507,6 @@ test_discovers_curated_plugins
 test_registry_includes_phase_compositions
 test_auto_discovers_unknown_plugins
 test_health_check_reports_new_plugins
+test_fallback_registry_skill_coverage
 
 print_summary

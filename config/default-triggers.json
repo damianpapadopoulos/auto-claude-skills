@@ -102,6 +102,7 @@
     {
       "name": "verification-before-completion",
       "role": "workflow",
+      "phase": "SHIP",
       "triggers": [
         "(ship|merge|deploy|push|release|tag|publish|pr.ready|ready.to|wrap.?up|all.(done|good|green|passing)|lgtm|finalize|complete|finish)"
       ],
@@ -114,6 +115,7 @@
     {
       "name": "finishing-a-development-branch",
       "role": "workflow",
+      "phase": "SHIP",
       "triggers": [],
       "trigger_mode": "regex",
       "priority": 19,
@@ -124,6 +126,7 @@
     {
       "name": "dispatching-parallel-agents",
       "role": "workflow",
+      "phase": "IMPLEMENT",
       "triggers": [
         "(parallel|concurrent|multiple.*(failure|bug|issue|error|test)|independent.*(task|failure|bug|issue|test)|worktree)"
       ],
@@ -136,6 +139,7 @@
     {
       "name": "using-git-worktrees",
       "role": "workflow",
+      "phase": "IMPLEMENT",
       "triggers": [],
       "trigger_mode": "regex",
       "priority": 14,
@@ -146,6 +150,7 @@
     {
       "name": "writing-skills",
       "role": "domain",
+      "phase": "DESIGN",
       "triggers": [
         "(skill|write.*skill|create.*skill|edit.*skill|new.*skill|skill.*(file|md|template|format))"
       ],
@@ -158,6 +163,7 @@
     {
       "name": "frontend-design",
       "role": "domain",
+      "phase": "DESIGN",
       "triggers": [
         "(^|[^a-z])(ui|frontend|component|layout|style|css|tailwind|responsive|dashboard|landing.?page|mockup|wireframe)($|[^a-z])"
       ],
@@ -170,6 +176,7 @@
     {
       "name": "security-scanner",
       "role": "domain",
+      "phase": "REVIEW",
       "triggers": [
         "(secur(e|ity)|vulnerab|owasp|pentest|attack|exploit|compliance|hipaa|gdpr|encrypt|auth(entication|orization)|inject|xss|csrf|sanitiz|supply.?chain)"
       ],
@@ -182,6 +189,7 @@
     {
       "name": "webapp-testing",
       "role": "domain",
+      "phase": "IMPLEMENT",
       "triggers": [
         "(playwright|e2e|browser.test|screenshot|visual.regress|accessibility|a11y|selenium|cypress|puppeteer|end.to.end)"
       ],
@@ -194,6 +202,7 @@
     {
       "name": "doc-coauthoring",
       "role": "domain",
+      "phase": "DESIGN",
       "triggers": [
         "(proposal|spec[^a-z]|rfc|write.?up|technical.?doc|architecture.?doc|documentation)"
       ],
@@ -206,6 +215,7 @@
     {
       "name": "claude-automation-recommender",
       "role": "domain",
+      "phase": "DESIGN",
       "triggers": [
         "(hook|mcp|plugin|automation|setup.*claude|configure.*claude|recommend.*claude|claude.*recommend)"
       ],
@@ -218,6 +228,7 @@
     {
       "name": "claude-md-improver",
       "role": "domain",
+      "phase": "DESIGN",
       "triggers": [
         "(claude\\.md|claude.md|project.?memory|improve.*claude|audit.*claude|update.*claude.md)"
       ],

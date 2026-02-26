@@ -39,6 +39,16 @@ else
 fi
 
 # -----------------------------------------------------------------
+# Step 1c: Reset depth counter for new session
+# -----------------------------------------------------------------
+# Generate a session-scoped token so concurrent sessions don't share counters.
+# Clean up stale counter files from previous sessions first.
+_SESSION_TOKEN="$(date +%s)-$$"
+printf '%s' "$_SESSION_TOKEN" > "${HOME}/.claude/.skill-session-token" 2>/dev/null || true
+rm -f "${HOME}/.claude/.skill-prompt-count-"* 2>/dev/null || true
+printf '0' > "${HOME}/.claude/.skill-prompt-count-${_SESSION_TOKEN}" 2>/dev/null || true
+
+# -----------------------------------------------------------------
 # Step 2: Check jq availability
 # -----------------------------------------------------------------
 CACHE_FILE="${HOME}/.claude/.skill-registry-cache.json"

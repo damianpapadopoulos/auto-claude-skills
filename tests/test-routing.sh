@@ -1842,12 +1842,26 @@ test_skill_explain_off_by_default() {
 # Conversation-depth-aware verbosity tests
 # ---------------------------------------------------------------------------
 
+_setup_depth_counter() {
+    # Helper: set session-scoped depth counter to a value
+    # Usage: _setup_depth_counter 5  (sets counter to 5)
+    #        _setup_depth_counter     (removes counter + token)
+    local val="${1:-}"
+    local token="test-session-$$"
+    rm -f "${HOME}/.claude/.skill-prompt-count-"* 2>/dev/null
+    rm -f "${HOME}/.claude/.skill-session-token" 2>/dev/null
+    if [[ -n "$val" ]]; then
+        printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
+        printf '%s' "$val" > "${HOME}/.claude/.skill-prompt-count-${token}"
+    fi
+}
+
 test_depth_full_format_first_prompt() {
     setup_test_env
     install_registry
 
     # No counter file exists → treated as prompt 1 → full format for 3+ skills
-    rm -f "${HOME}/.claude/.skill-prompt-count"
+    _setup_depth_counter
     local output
     output="$(run_hook "build a secure frontend component")"
     local ctx
@@ -1865,7 +1879,7 @@ test_depth_compact_format_after_5() {
     install_registry
 
     # Write counter=5 so next invocation will be prompt 6 → compact format even for 3+ skills
-    printf '5' > "${HOME}/.claude/.skill-prompt-count"
+    _setup_depth_counter 5
     local output
     output="$(run_hook "build a secure frontend component")"
     local ctx
@@ -1884,7 +1898,7 @@ test_depth_minimal_format_after_10() {
     install_registry
 
     # Write counter=10 so next invocation will be prompt 11 → minimal format
-    printf '10' > "${HOME}/.claude/.skill-prompt-count"
+    _setup_depth_counter 10
     local output
     output="$(run_hook "build a secure frontend component")"
     local ctx
@@ -1906,7 +1920,7 @@ test_depth_verbose_override() {
 
     # Write counter=19 so next invocation will be prompt 20 → should be minimal,
     # but SKILL_VERBOSE=1 forces full format
-    printf '19' > "${HOME}/.claude/.skill-prompt-count"
+    _setup_depth_counter 19
     local output
     output="$(jq -n --arg p "build a secure frontend component" '{"prompt":$p}' | \
         CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
@@ -1927,7 +1941,7 @@ test_depth_counter_missing_treated_as_1() {
     install_registry
 
     # Ensure counter file does NOT exist
-    rm -f "${HOME}/.claude/.skill-prompt-count"
+    _setup_depth_counter
     local output
     output="$(run_hook "build a secure frontend component")"
     local ctx
@@ -1936,9 +1950,9 @@ test_depth_counter_missing_treated_as_1() {
     # Same as prompt 1: full format for 3+ skills
     assert_contains "missing counter: full format has ASSESS PHASE" "ASSESS PHASE" "${ctx}"
 
-    # Verify counter file was created with value 1
+    # Verify a counter file was created with value 1
     local count_val
-    count_val="$(cat "${HOME}/.claude/.skill-prompt-count" 2>/dev/null)"
+    count_val="$(cat "${HOME}/.claude/.skill-prompt-count-"* 2>/dev/null)"
     assert_equals "missing counter: file created with value 1" "1" "${count_val}"
 
     teardown_test_env
