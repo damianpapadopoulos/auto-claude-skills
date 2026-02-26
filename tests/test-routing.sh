@@ -1447,18 +1447,16 @@ test_composition_workflow_chain
 # ---------------------------------------------------------------------------
 # Trigger pattern validation tests (against default-triggers.json)
 # ---------------------------------------------------------------------------
-test_brainstorming_trigger_narrowed() {
-    echo "-- test: brainstorming triggers exclude generic terms --"
+test_brainstorming_has_broad_triggers() {
+    echo "-- test: brainstorming has broad verb triggers --"
     local triggers_file="${PROJECT_ROOT}/config/default-triggers.json"
     local brainstorm_triggers
     brainstorm_triggers="$(jq -r '.skills[] | select(.name == "brainstorming") | .triggers[]' "$triggers_file")"
 
-    # Should NOT contain overly generic terms
-    assert_not_contains "brainstorming excludes build" "build" "$brainstorm_triggers"
-    assert_not_contains "brainstorming excludes create" "create" "$brainstorm_triggers"
-    assert_not_contains "brainstorming excludes implement" "implement" "$brainstorm_triggers"
-    assert_not_contains "brainstorming excludes new" "|new|" "$brainstorm_triggers"
-    assert_not_contains "brainstorming excludes start" "|start|" "$brainstorm_triggers"
+    # Should contain common feature-request verbs
+    assert_contains "brainstorming has build" "build" "$brainstorm_triggers"
+    assert_contains "brainstorming has create" "create" "$brainstorm_triggers"
+    assert_contains "brainstorming has implement" "implement" "$brainstorm_triggers"
 
     # Should still contain core design terms
     assert_contains "brainstorming has brainstorm" "brainstorm" "$brainstorm_triggers"
@@ -1466,19 +1464,19 @@ test_brainstorming_trigger_narrowed() {
     assert_contains "brainstorming has architect" "architect" "$brainstorm_triggers"
 }
 
-test_agent_team_no_plan_triggers() {
-    echo "-- test: agent-team-execution has no plan-execution triggers --"
+test_agent_team_has_plan_triggers() {
+    echo "-- test: agent-team-execution has plan-execution triggers --"
     local triggers_file="${PROJECT_ROOT}/config/default-triggers.json"
     local ate_triggers
     ate_triggers="$(jq -r '.skills[] | select(.name == "agent-team-execution") | .triggers[]' "$triggers_file")"
 
-    assert_not_contains "agent-team no execute.*plan" "execute.*plan" "$ate_triggers"
-    assert_not_contains "agent-team no follow.the.plan" "follow" "$ate_triggers"
+    assert_contains "agent-team has execute.*plan" "execute.*plan" "$ate_triggers"
+    assert_contains "agent-team has build" "build" "$ate_triggers"
     assert_contains "agent-team has team keywords" "agent.team" "$ate_triggers"
 }
 
-test_brainstorming_trigger_narrowed
-test_agent_team_no_plan_triggers
+test_brainstorming_has_broad_triggers
+test_agent_team_has_plan_triggers
 
 # ---------------------------------------------------------------------------
 # User config override tests
