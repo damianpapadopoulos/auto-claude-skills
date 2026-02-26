@@ -10,6 +10,7 @@
 #
 # Bash 3.2 compatible (macOS default). Heavy jq usage for scoring.
 # -----------------------------------------------------------------
+# Note: -e is intentionally omitted. Regex match failures in [[ $P =~ $trigger ]] return exit 1, which would abort the script.
 set -uo pipefail
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
@@ -84,8 +85,544 @@ if [[ -f "$USER_CONFIG" ]] && jq empty "$USER_CONFIG" >/dev/null 2>&1; then
 fi
 
 # =================================================================
-# SCORE SKILLS AGAINST PROMPT
+# ROUTING ENGINE FUNCTIONS
 # =================================================================
+# These functions operate on shared globals (bash functions share scope).
+# Extracted from the linear flow for maintainability.
+
+# --- _score_skills ------------------------------------------------
+# Input globals: SKILL_DATA, P
+# Output globals: RESULTS, SORTED
+_score_skills() {
+  # Score each skill (name-boost check merged into the same loop — no separate pre-pass)
+  RESULTS=""
+  while IFS="$FS" read -r skill_name skill_name_lower skill_role skill_priority skill_invoke skill_phase triggers_joined; do
+    [[ -z "$skill_name" ]] && continue
+
+    # Name boost: full name match (100) or hyphen-segment match (40).
+    # Full: "frontend-design" as whole word in prompt -> 100
+    # Segment: "frontend" as whole word (segment of "frontend-design") -> 40
+    name_boost=0
+    if [[ "$P" =~ (^|[^a-z0-9-])${skill_name_lower}($|[^a-z0-9-]) ]]; then
+      name_boost=100
+    elif [[ "$skill_name_lower" == *-* ]]; then
+      _seg_remaining="$skill_name_lower"
+      while [[ -n "$_seg_remaining" ]]; do
+        if [[ "$_seg_remaining" == *-* ]]; then
+          _seg="${_seg_remaining%%-*}"
+          _seg_remaining="${_seg_remaining#*-}"
+        else
+          _seg="$_seg_remaining"
+          _seg_remaining=""
+        fi
+        # Skip segments shorter than 6 chars to avoid false positives on
+        # common words like "test", "code", "plan" that are also trigger words
+        [[ "${#_seg}" -lt 6 ]] && continue
+        if [[ "$P" =~ (^|[^a-z0-9])${_seg}($|[^a-z0-9]) ]]; then
+          name_boost=40
+          break
+        fi
+      done
+    fi
+
+    # Score triggers (iterate using string splitting — no per-trigger jq fork)
+    trigger_score=0
+    if [[ -n "$triggers_joined" ]]; then
+      _remaining="$triggers_joined"
+      while [[ -n "$_remaining" ]]; do
+        if [[ "$_remaining" == *"${DELIM}"* ]]; then
+          trigger="${_remaining%%${DELIM}*}"
+          _remaining="${_remaining#*${DELIM}}"
+        else
+          trigger="$_remaining"
+          _remaining=""
+        fi
+        [[ -z "$trigger" ]] && continue
+
+        # Test regex against lowercased prompt
+        if [[ "$P" =~ $trigger ]]; then
+          # Scan for the best match position (word-boundary=30 > substring=10).
+          # The leftmost regex match may land inside a word (e.g. "bug" in
+          # "debug"), even when a word-boundary match exists later (e.g.
+          # standalone "error").  Re-try on progressively shorter suffixes
+          # until a boundary hit is found or the string is exhausted.
+          _best=10
+          _scan="$P"
+          _offset=0
+          while true; do
+            matched="${BASH_REMATCH[0]}"
+            [[ -z "$matched" ]] && break
+
+            _pre="${_scan%%"$matched"*}"
+            _abs=$((_offset + ${#_pre}))
+            _aft=$((_abs + ${#matched}))
+            _wb=1
+            [[ "$_abs" -gt 0 ]] && [[ "${P:$((_abs-1)):1}" =~ [a-z0-9_.-] ]] && _wb=0
+            [[ "$_aft" -lt "${#P}" ]] && [[ "${P:${_aft}:1}" =~ [a-z0-9_.-] ]] && _wb=0
+
+            if [[ "$_wb" -eq 1 ]]; then
+              _best=30
+              break
+            fi
+
+            # Advance one char past match start and retry regex
+            _skip=$((${#_pre} + 1))
+            _scan="${_scan:${_skip}}"
+            _offset=$((_offset + _skip))
+            [[ -z "$_scan" ]] && break
+            [[ "$_scan" =~ $trigger ]] || break
+          done
+          trigger_score=$((trigger_score + _best))
+        fi
+      done
+    fi
+
+    # Apply skill-name-mention boost (+100) and allow through even with zero trigger_score
+    if [[ "$trigger_score" -gt 0 ]] || [[ "$name_boost" -gt 0 ]]; then
+      final_score=$((trigger_score + skill_priority + name_boost))
+      RESULTS="${RESULTS}${final_score}|${skill_name}|${skill_role}|${skill_invoke}|${skill_phase}
+"
+    fi
+  done <<EOF
+${SKILL_DATA}
+EOF
+
+  # Sort by score descending
+  SORTED="$(printf '%s' "$RESULTS" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
+}
+
+# --- _select_by_role_caps -----------------------------------------
+# Input globals: SORTED, MAX_SUGGESTIONS
+# Output globals: SELECTED, OVERFLOW_DOMAIN, OVERFLOW_WORKFLOW, PROCESS_COUNT, DOMAIN_COUNT, WORKFLOW_COUNT, TOTAL_COUNT
+_select_by_role_caps() {
+  # Max 1 process, up to 2 domain, max 1 workflow, total <= max_suggestions.
+  # INVARIANT: The highest-ranked process skill always gets a reserved slot
+  # (it is selected in the first pass and other roles fill remaining slots).
+  SELECTED=""
+  OVERFLOW_DOMAIN=""
+  OVERFLOW_WORKFLOW=""
+  PROCESS_COUNT=0
+  DOMAIN_COUNT=0
+  WORKFLOW_COUNT=0
+  TOTAL_COUNT=0
+
+  # Pass 1: reserve the top process skill (if any)
+  RESERVED_PROCESS_NAME=""
+  while IFS='|' read -r score name role invoke phase; do
+    [[ -z "$name" ]] && continue
+    if [[ "$role" == "process" ]]; then
+      RESERVED_PROCESS_NAME="$name"
+      SELECTED="${score}|${name}|${role}|${invoke}|${phase}
+"
+      PROCESS_COUNT=1
+      TOTAL_COUNT=1
+      break
+    fi
+  done <<EOF
+${SORTED}
+EOF
+
+  # Pass 2: fill remaining slots, skipping the reserved process skill by name
+  while IFS='|' read -r score name role invoke phase; do
+    [[ -z "$name" ]] && continue
+
+    case "$role" in
+      process)
+        # Skip reserved process skill; cap additional process skills at 0
+        [[ "$name" == "$RESERVED_PROCESS_NAME" ]] && continue
+        [[ "$PROCESS_COUNT" -ge 1 ]] && continue
+        [[ "$TOTAL_COUNT" -ge "$MAX_SUGGESTIONS" ]] && continue
+        PROCESS_COUNT=$((PROCESS_COUNT + 1))
+        ;;
+      domain)
+        if [[ "$DOMAIN_COUNT" -ge 2 ]] || [[ "$TOTAL_COUNT" -ge "$MAX_SUGGESTIONS" ]]; then
+          OVERFLOW_DOMAIN="${OVERFLOW_DOMAIN}${name}|${invoke}
+"
+          continue
+        fi
+        DOMAIN_COUNT=$((DOMAIN_COUNT + 1))
+        ;;
+      workflow)
+        if [[ "$WORKFLOW_COUNT" -ge 1 ]] || [[ "$TOTAL_COUNT" -ge "$MAX_SUGGESTIONS" ]]; then
+          OVERFLOW_WORKFLOW="${OVERFLOW_WORKFLOW}${name}|${invoke}
+"
+          continue
+        fi
+        WORKFLOW_COUNT=$((WORKFLOW_COUNT + 1))
+        ;;
+    esac
+
+    SELECTED="${SELECTED}${score}|${name}|${role}|${invoke}|${phase}
+"
+    TOTAL_COUNT=$((TOTAL_COUNT + 1))
+  done <<EOF
+${SORTED}
+EOF
+}
+
+# --- _determine_label_phase ---------------------------------------
+# Input globals: SELECTED
+# Output globals: PLABEL, PRIMARY_PHASE, PROCESS_SKILL, HAS_DOMAIN, HAS_WORKFLOW
+_determine_label_phase() {
+  PLABEL=""
+  PROCESS_SKILL=""
+  HAS_DOMAIN=0
+  HAS_WORKFLOW=0
+
+  while IFS='|' read -r score name role invoke phase; do
+    [[ -z "$name" ]] && continue
+    case "$role" in
+      process)
+        PROCESS_SKILL="$name"
+        case "$name" in
+          systematic-debugging)       PLABEL="Fix / Debug" ;;
+          brainstorming)              PLABEL="Build New" ;;
+          executing-plans|subagent-driven-development) PLABEL="Plan Execution" ;;
+          test-driven-development)    PLABEL="Run / Test" ;;
+          requesting-code-review|receiving-code-review) PLABEL="Review" ;;
+        esac
+        ;;
+      domain)
+        HAS_DOMAIN=1
+        ;;
+      workflow)
+        HAS_WORKFLOW=1
+        # If no process skill sets the label, workflow skills set Ship / Complete
+        if [[ -z "$PLABEL" ]]; then
+          case "$name" in
+            verification-before-completion|finishing-a-development-branch) PLABEL="Ship / Complete" ;;
+          esac
+        fi
+        ;;
+    esac
+  done <<EOF
+${SELECTED}
+EOF
+
+  [[ -z "$PLABEL" ]] && PLABEL="(Claude: assess intent)"
+  [[ "$HAS_DOMAIN" -eq 1 ]] && PLABEL="${PLABEL} + Domain"
+  [[ "$HAS_WORKFLOW" -eq 1 ]] && PLABEL="${PLABEL} + Workflow"
+
+  # PRIMARY PHASE (process > workflow > domain > first non-empty)
+  PRIMARY_PHASE=""
+  _PHASE_PROCESS=""
+  _PHASE_WORKFLOW=""
+  _PHASE_DOMAIN=""
+  _PHASE_FIRST=""
+
+  while IFS='|' read -r score name role invoke phase; do
+    [[ -z "$name" ]] && continue
+    if [[ -n "$phase" ]] && [[ -z "$_PHASE_FIRST" ]]; then
+      _PHASE_FIRST="$phase"
+    fi
+    case "$role" in
+      process)  [[ -z "$_PHASE_PROCESS" ]] && _PHASE_PROCESS="$phase" ;;
+      workflow) [[ -z "$_PHASE_WORKFLOW" ]] && _PHASE_WORKFLOW="$phase" ;;
+      domain)   [[ -z "$_PHASE_DOMAIN" ]] && _PHASE_DOMAIN="$phase" ;;
+    esac
+  done <<EOF
+${SELECTED}
+EOF
+
+  if [[ -n "$_PHASE_PROCESS" ]]; then
+    PRIMARY_PHASE="$_PHASE_PROCESS"
+  elif [[ -n "$_PHASE_WORKFLOW" ]]; then
+    PRIMARY_PHASE="$_PHASE_WORKFLOW"
+  elif [[ -n "$_PHASE_DOMAIN" ]]; then
+    PRIMARY_PHASE="$_PHASE_DOMAIN"
+  else
+    PRIMARY_PHASE="$_PHASE_FIRST"
+  fi
+}
+
+# --- _build_skill_lines -------------------------------------------
+# Input globals: SELECTED, OVERFLOW_DOMAIN, OVERFLOW_WORKFLOW, PROCESS_SKILL, TOTAL_COUNT
+# Output globals: SKILL_LINES, EVAL_SKILLS
+_build_skill_lines() {
+  SKILL_LINES=""
+  EVAL_SKILLS=""
+
+  if [[ "$TOTAL_COUNT" -gt 0 ]]; then
+    _SL_PROCESS=""
+    _SL_DOMAIN=""
+    _SL_WORKFLOW=""
+    _SL_STANDALONE=""
+
+    while IFS='|' read -r score name role invoke phase; do
+      [[ -z "$name" ]] && continue
+      if [[ -n "$EVAL_SKILLS" ]]; then
+        EVAL_SKILLS="${EVAL_SKILLS}, ${name} YES/NO"
+      else
+        EVAL_SKILLS="${name} YES/NO"
+      fi
+
+      if [[ -n "$PROCESS_SKILL" ]]; then
+        case "$role" in
+          process)  _SL_PROCESS="
+Process: ${name} -> ${invoke}" ;;
+          domain)   _SL_DOMAIN="${_SL_DOMAIN}
+  Domain: ${name} -> ${invoke}" ;;
+          workflow) _SL_WORKFLOW="${_SL_WORKFLOW}
+Workflow: ${name} -> ${invoke}" ;;
+        esac
+      else
+        _SL_STANDALONE="${_SL_STANDALONE}
+${name} -> ${invoke}"
+      fi
+    done <<EOF
+${SELECTED}
+EOF
+
+    SKILL_LINES="${_SL_PROCESS}${_SL_DOMAIN}${_SL_WORKFLOW}${_SL_STANDALONE}"
+
+    # Overflow skills (relevant but didn't fit in top suggestions)
+    for _overflow_var in OVERFLOW_DOMAIN OVERFLOW_WORKFLOW; do
+      _overflow_val="${!_overflow_var}"
+      while IFS='|' read -r oname oinvoke; do
+        [[ -z "$oname" ]] && continue
+        SKILL_LINES="${SKILL_LINES}
+  Also relevant: ${oname} -> ${oinvoke}"
+        EVAL_SKILLS="${EVAL_SKILLS}, ${oname} YES/NO"
+      done <<EOF
+${_overflow_val}
+EOF
+    done
+  fi
+}
+
+# --- _walk_composition_chain --------------------------------------
+# Input globals: REGISTRY, PROCESS_SKILL, SELECTED
+# Output globals: COMPOSITION_CHAIN, COMPOSITION_DIRECTIVE, COMPOSITION_HINTS (unused here but declared)
+_walk_composition_chain() {
+  # Walk the precedes graph forward from the process skill to build a
+  # sequential chain.  Also walk requires backward to show prerequisites
+  # when the user enters mid-chain (e.g. "execute the plan").
+  COMPOSITION_CHAIN=""
+  COMPOSITION_NEXT=""
+  COMPOSITION_DIRECTIVE=""
+
+  # Determine the anchor skill for chain walking: prefer process, fall back to workflow
+  _CHAIN_ANCHOR=""
+  if [[ -n "$PROCESS_SKILL" ]]; then
+    _CHAIN_ANCHOR="$PROCESS_SKILL"
+  else
+    # Check if the selected workflow skill has precedes/requires
+    while IFS='|' read -r _s _n _r _i _p; do
+      [[ -z "$_n" ]] && continue
+      if [[ "$_r" == "workflow" ]]; then
+        _has_chain="$(printf '%s' "$REGISTRY" | jq -r --arg n "$_n" '
+          .skills[] | select(.name == $n) |
+          if ((.precedes // []) | length) > 0 or ((.requires // []) | length) > 0 then "yes" else "no" end
+        ' 2>/dev/null)"
+        if [[ "$_has_chain" == "yes" ]]; then
+          _CHAIN_ANCHOR="$_n"
+          break
+        fi
+      fi
+    done <<EOF
+${SELECTED}
+EOF
+  fi
+
+  if [[ -n "$_CHAIN_ANCHOR" ]]; then
+    # Forward walk: anchor skill -> precedes[0] -> precedes[0] -> ...
+    # Single jq call returns pipe-delimited chain: skill1|skill2|skill3
+    _fwd_chain="$(printf '%s' "$REGISTRY" | jq -r --arg start "$_CHAIN_ANCHOR" '
+      .skills as $all |
+      def walk_fwd(name):
+        ($all[] | select(.name == name) | .precedes // []) as $next |
+        if ($next | length) > 0 then name + "|" + walk_fwd($next[0])
+        else name end;
+      walk_fwd($start)
+    ' 2>/dev/null)"
+
+    # Backward walk: anchor skill <- requires[0] <- requires[0] <- ...
+    _bwd_chain="$(printf '%s' "$REGISTRY" | jq -r --arg start "$_CHAIN_ANCHOR" '
+      .skills as $all |
+      def walk_bwd(name):
+        ($all[] | select(.name == name) | .requires // []) as $prev |
+        if ($prev | length) > 0 then walk_bwd($prev[0]) + "|" + name
+        else name end;
+      walk_bwd($start)
+    ' 2>/dev/null)"
+
+    # Merge: backward chain gives predecessors, forward chain gives successors
+    # Remove duplicates at the join point (the process skill itself)
+    if [[ -n "$_bwd_chain" ]] && [[ "$_bwd_chain" == *"|"* ]]; then
+      # Has predecessors — combine backward (minus last) + forward
+      _pre="${_bwd_chain%|*}"
+      _full_chain="${_pre}|${_fwd_chain}"
+    else
+      _full_chain="$_fwd_chain"
+    fi
+
+    # Only emit composition if chain has 2+ skills
+    if [[ "$_full_chain" == *"|"* ]]; then
+      # Build display lines with [DONE?] / [CURRENT] / [NEXT] / [LATER] markers
+      _step=0
+      _current_idx=-1
+      _chain_lines=""
+      _next_skill=""
+      _next_invoke=""
+
+      # Find the index of the current process skill
+      _idx=0
+      _tmp="$_full_chain"
+      while [[ -n "$_tmp" ]]; do
+        if [[ "$_tmp" == *"|"* ]]; then
+          _cname="${_tmp%%|*}"
+          _tmp="${_tmp#*|}"
+        else
+          _cname="$_tmp"
+          _tmp=""
+        fi
+        if [[ "$_cname" == "$_CHAIN_ANCHOR" ]]; then
+          _current_idx=$_idx
+        fi
+        _idx=$((_idx + 1))
+      done
+
+      # Batch-lookup all chain skills in a single jq call (avoids N forks)
+      # Format: name<FS>invoke<FS>description<FS>phase (one per line, chain order)
+      _chain_detail="$(printf '%s' "$REGISTRY" | jq -r --arg chain "$_full_chain" '
+        ($chain | split("|")) as $names |
+        .skills as $all |
+        $names[] as $n |
+        ($all[] | select(.name == $n)) as $s |
+        ($s.description // "" | split(".")[0]) as $desc |
+        "\($n)\u001f\($s.invoke // "Skill(\($n))")\u001f\($desc)\u001f\($s.phase // "")"
+      ' 2>/dev/null)"
+
+      # Build the chain display + phase labels in one pass
+      _idx=0
+      _chain_lines=""
+      _phase_labels=""
+      _next_skill=""
+      _next_invoke=""
+      while IFS="$FS" read -r _cname _cinvoke _cdesc _cphase; do
+        [[ -z "$_cname" ]] && continue
+
+        if [[ "$_idx" -lt "$_current_idx" ]]; then
+          _marker="DONE?"
+        elif [[ "$_idx" -eq "$_current_idx" ]]; then
+          _marker="CURRENT"
+        elif [[ "$_idx" -eq $((_current_idx + 1)) ]]; then
+          _marker="NEXT"
+          _next_skill="$_cname"
+          _next_invoke="$_cinvoke"
+        else
+          _marker="LATER"
+        fi
+
+        _step=$((_idx + 1))
+        _chain_lines="${_chain_lines}
+  [${_marker}] Step ${_step}: ${_cinvoke} -- ${_cdesc}"
+
+        # Build phase label (fall back to skill name if no phase)
+        _plabel="${_cphase:-${_cname}}"
+        if [[ -n "$_phase_labels" ]]; then
+          _phase_labels="${_phase_labels} -> ${_plabel}"
+        else
+          _phase_labels="$_plabel"
+        fi
+
+        _idx=$((_idx + 1))
+      done <<EOF
+${_chain_detail}
+EOF
+
+      COMPOSITION_CHAIN="
+Composition: ${_phase_labels}${_chain_lines}"
+
+      if [[ -n "$_next_skill" ]]; then
+        COMPOSITION_DIRECTIVE="
+IMPORTANT: After completing ${_CHAIN_ANCHOR}, invoke ${_next_invoke}. Do not stop at the current step."
+      fi
+
+      # Check for parallel workflow co-selection (same phase as process skill)
+      _SELECTED_WORKFLOW=""
+      while IFS='|' read -r _s _n _r _i _p; do
+        [[ -z "$_n" ]] && continue
+        [[ "$_r" == "workflow" ]] && _SELECTED_WORKFLOW="$_n" && break
+      done <<EOF
+${SELECTED}
+EOF
+      if [[ -n "$_SELECTED_WORKFLOW" ]] && [[ -n "$_PHASE_PROCESS" ]] && [[ -n "$_PHASE_WORKFLOW" ]] && [[ "$_PHASE_PROCESS" == "$_PHASE_WORKFLOW" ]]; then
+        _wf_invoke="$(printf '%s' "$REGISTRY" | jq -r --arg n "$_SELECTED_WORKFLOW" '
+          .skills[] | select(.name == $n) | .invoke // "Skill(\($n))"
+        ' 2>/dev/null)"
+        COMPOSITION_CHAIN="${COMPOSITION_CHAIN}
+  [PARALLEL] ${_wf_invoke} -- use alongside current step if eligible"
+      fi
+    fi
+  fi
+}
+
+# --- _format_output -----------------------------------------------
+# Input globals: TOTAL_COUNT, PLABEL, SKILL_LINES, COMPOSITION_CHAIN, COMPOSITION_LINES,
+#                EVAL_SKILLS, PRIMARY_PHASE, DOMAIN_HINT, COMPOSITION_DIRECTIVE,
+#                HINTS, COMPOSITION_HINTS, REGISTRY, SORTED
+# Output globals: OUT (+ prints final JSON)
+_format_output() {
+  if [[ "$TOTAL_COUNT" -eq 0 ]]; then
+    OUT="SKILL ACTIVATION (0 skills | phase checkpoint only)
+
+Phase: assess current phase (DESIGN/PLAN/IMPLEMENT/REVIEW/SHIP/DEBUG)
+and consider whether any installed skill applies."
+
+  elif [[ "$TOTAL_COUNT" -le 2 ]]; then
+    # --- compact format ---
+    EVAL_PHASE="$PRIMARY_PHASE"
+    [[ -z "$EVAL_PHASE" ]] && EVAL_PHASE="IMPLEMENT"
+
+    OUT="SKILL ACTIVATION (${TOTAL_COUNT} skills | ${PLABEL})
+${SKILL_LINES}${COMPOSITION_CHAIN}${COMPOSITION_LINES}
+
+Evaluate: **Phase: [${EVAL_PHASE}]** | ${EVAL_SKILLS}${DOMAIN_HINT}${COMPOSITION_DIRECTIVE}"
+
+  else
+    # --- full format (3+ skills) ---
+    # Build phase guide from registry (falls back to a minimal default)
+    _PHASE_GUIDE="$(printf '%s' "$REGISTRY" | jq -r '
+      .phase_guide // empty | to_entries | sort_by(.key) |
+      .[] | "  " + .key + (" " * ((10 - (.key | length)) | if . < 0 then 0 else . end)) + " -> " + .value
+    ' 2>/dev/null)"
+    [[ -z "$_PHASE_GUIDE" ]] && _PHASE_GUIDE="  (no phase guide available — assess intent from context)"
+
+    OUT="SKILL ACTIVATION (${TOTAL_COUNT} skills | ${PLABEL})
+
+Step 1 -- ASSESS PHASE. Check conversation context:
+${_PHASE_GUIDE}
+
+Step 2 -- EVALUATE skills against your phase assessment.${SKILL_LINES}${COMPOSITION_CHAIN}${COMPOSITION_LINES}
+You MUST print a brief evaluation for each skill above. Format:
+  **Phase: [PHASE]** | [skill1] YES/NO, [skill2] YES/NO
+Example: **Phase: IMPLEMENT** | test-driven-development YES, claude-md-improver NO (not editing CLAUDE.md)
+This line is MANDATORY -- do not skip it.
+
+Step 3 -- State your plan and proceed. Keep it to 1-2 sentences.${DOMAIN_HINT}${COMPOSITION_DIRECTIVE}"
+  fi
+
+  # Append methodology hints if any
+  if [[ -n "$HINTS" ]] || [[ -n "$COMPOSITION_HINTS" ]]; then
+    OUT+="
+${HINTS}${COMPOSITION_HINTS}"
+  fi
+
+  # Developer debug: emit scores to stderr when SKILL_DEBUG is set
+  if [[ -n "${SKILL_DEBUG:-}" ]] && [[ -n "$SORTED" ]]; then
+    printf '[skill-hook] scores: %s\n' "$(printf '%s' "$SORTED" | tr '\n' ', ')" >&2
+  fi
+
+  printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":%s}}\n' \
+    "$(printf '%s' "$OUT" | jq -Rs .)"
+}
+
+# =================================================================
+# MAIN FLOW
+# =================================================================
+
+# --- Prepare skill data for scoring ---
 # Use jq to iterate available+enabled skills, test each trigger regex
 # against the lowercased prompt, compute scores, and return sorted results.
 #
@@ -105,243 +642,10 @@ SKILL_DATA="$(printf '%s' "$REGISTRY" | jq -r '
    (.phase // "") + "\u001f" + ((.triggers // []) | join("\u0001")))
 ' 2>/dev/null)"
 
-# Score each skill (name-boost check merged into the same loop — no separate pre-pass)
-RESULTS=""
-while IFS="$FS" read -r skill_name skill_name_lower skill_role skill_priority skill_invoke skill_phase triggers_joined; do
-  [[ -z "$skill_name" ]] && continue
-
-  # Name boost: full name match (100) or hyphen-segment match (40).
-  # Full: "frontend-design" as whole word in prompt -> 100
-  # Segment: "frontend" as whole word (segment of "frontend-design") -> 40
-  name_boost=0
-  if [[ "$P" =~ (^|[^a-z0-9-])${skill_name_lower}($|[^a-z0-9-]) ]]; then
-    name_boost=100
-  elif [[ "$skill_name_lower" == *-* ]]; then
-    _seg_remaining="$skill_name_lower"
-    while [[ -n "$_seg_remaining" ]]; do
-      if [[ "$_seg_remaining" == *-* ]]; then
-        _seg="${_seg_remaining%%-*}"
-        _seg_remaining="${_seg_remaining#*-}"
-      else
-        _seg="$_seg_remaining"
-        _seg_remaining=""
-      fi
-      # Skip segments shorter than 6 chars to avoid false positives on
-      # common words like "test", "code", "plan" that are also trigger words
-      [[ "${#_seg}" -lt 6 ]] && continue
-      if [[ "$P" =~ (^|[^a-z0-9])${_seg}($|[^a-z0-9]) ]]; then
-        name_boost=40
-        break
-      fi
-    done
-  fi
-
-  # Score triggers (iterate using string splitting — no per-trigger jq fork)
-  trigger_score=0
-  if [[ -n "$triggers_joined" ]]; then
-    _remaining="$triggers_joined"
-    while [[ -n "$_remaining" ]]; do
-      if [[ "$_remaining" == *"${DELIM}"* ]]; then
-        trigger="${_remaining%%${DELIM}*}"
-        _remaining="${_remaining#*${DELIM}}"
-      else
-        trigger="$_remaining"
-        _remaining=""
-      fi
-      [[ -z "$trigger" ]] && continue
-
-      # Test regex against lowercased prompt
-      if [[ "$P" =~ $trigger ]]; then
-        # Scan for the best match position (word-boundary=30 > substring=10).
-        # The leftmost regex match may land inside a word (e.g. "bug" in
-        # "debug"), even when a word-boundary match exists later (e.g.
-        # standalone "error").  Re-try on progressively shorter suffixes
-        # until a boundary hit is found or the string is exhausted.
-        _best=10
-        _scan="$P"
-        _offset=0
-        while true; do
-          matched="${BASH_REMATCH[0]}"
-          [[ -z "$matched" ]] && break
-
-          _pre="${_scan%%"$matched"*}"
-          _abs=$((_offset + ${#_pre}))
-          _aft=$((_abs + ${#matched}))
-          _wb=1
-          [[ "$_abs" -gt 0 ]] && [[ "${P:$((_abs-1)):1}" =~ [a-z0-9_.-] ]] && _wb=0
-          [[ "$_aft" -lt "${#P}" ]] && [[ "${P:${_aft}:1}" =~ [a-z0-9_.-] ]] && _wb=0
-
-          if [[ "$_wb" -eq 1 ]]; then
-            _best=30
-            break
-          fi
-
-          # Advance one char past match start and retry regex
-          _skip=$((${#_pre} + 1))
-          _scan="${_scan:${_skip}}"
-          _offset=$((_offset + _skip))
-          [[ -z "$_scan" ]] && break
-          [[ "$_scan" =~ $trigger ]] || break
-        done
-        trigger_score=$((trigger_score + _best))
-      fi
-    done
-  fi
-
-  # Apply skill-name-mention boost (+100) and allow through even with zero trigger_score
-  if [[ "$trigger_score" -gt 0 ]] || [[ "$name_boost" -gt 0 ]]; then
-    final_score=$((trigger_score + skill_priority + name_boost))
-    RESULTS="${RESULTS}${final_score}|${skill_name}|${skill_role}|${skill_invoke}|${skill_phase}
-"
-  fi
-done <<EOF
-${SKILL_DATA}
-EOF
-
-# Sort by score descending
-SORTED="$(printf '%s' "$RESULTS" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
-
-# =================================================================
-# SELECT BY ROLE CAPS (single pass)
-# =================================================================
-# Max 1 process, up to 2 domain, max 1 workflow, total <= max_suggestions.
-# INVARIANT: The highest-ranked process skill always gets a reserved slot
-# (it is selected in the first pass and other roles fill remaining slots).
-SELECTED=""
-OVERFLOW_DOMAIN=""
-OVERFLOW_WORKFLOW=""
-PROCESS_COUNT=0
-DOMAIN_COUNT=0
-WORKFLOW_COUNT=0
-TOTAL_COUNT=0
-
-# Pass 1: reserve the top process skill (if any)
-RESERVED_PROCESS_NAME=""
-while IFS='|' read -r score name role invoke phase; do
-  [[ -z "$name" ]] && continue
-  if [[ "$role" == "process" ]]; then
-    RESERVED_PROCESS_NAME="$name"
-    SELECTED="${score}|${name}|${role}|${invoke}|${phase}
-"
-    PROCESS_COUNT=1
-    TOTAL_COUNT=1
-    break
-  fi
-done <<EOF
-${SORTED}
-EOF
-
-# Pass 2: fill remaining slots, skipping the reserved process skill by name
-while IFS='|' read -r score name role invoke phase; do
-  [[ -z "$name" ]] && continue
-
-  case "$role" in
-    process)
-      # Skip reserved process skill; cap additional process skills at 0
-      [[ "$name" == "$RESERVED_PROCESS_NAME" ]] && continue
-      [[ "$PROCESS_COUNT" -ge 1 ]] && continue
-      [[ "$TOTAL_COUNT" -ge "$MAX_SUGGESTIONS" ]] && continue
-      PROCESS_COUNT=$((PROCESS_COUNT + 1))
-      ;;
-    domain)
-      if [[ "$DOMAIN_COUNT" -ge 2 ]] || [[ "$TOTAL_COUNT" -ge "$MAX_SUGGESTIONS" ]]; then
-        OVERFLOW_DOMAIN="${OVERFLOW_DOMAIN}${name}|${invoke}
-"
-        continue
-      fi
-      DOMAIN_COUNT=$((DOMAIN_COUNT + 1))
-      ;;
-    workflow)
-      if [[ "$WORKFLOW_COUNT" -ge 1 ]] || [[ "$TOTAL_COUNT" -ge "$MAX_SUGGESTIONS" ]]; then
-        OVERFLOW_WORKFLOW="${OVERFLOW_WORKFLOW}${name}|${invoke}
-"
-        continue
-      fi
-      WORKFLOW_COUNT=$((WORKFLOW_COUNT + 1))
-      ;;
-  esac
-
-  SELECTED="${SELECTED}${score}|${name}|${role}|${invoke}|${phase}
-"
-  TOTAL_COUNT=$((TOTAL_COUNT + 1))
-done <<EOF
-${SORTED}
-EOF
-
-# =================================================================
-# DETERMINE LABEL
-# =================================================================
-PLABEL=""
-PROCESS_SKILL=""
-HAS_DOMAIN=0
-HAS_WORKFLOW=0
-
-while IFS='|' read -r score name role invoke phase; do
-  [[ -z "$name" ]] && continue
-  case "$role" in
-    process)
-      PROCESS_SKILL="$name"
-      case "$name" in
-        systematic-debugging)       PLABEL="Fix / Debug" ;;
-        brainstorming)              PLABEL="Build New" ;;
-        executing-plans|subagent-driven-development) PLABEL="Plan Execution" ;;
-        test-driven-development)    PLABEL="Run / Test" ;;
-        requesting-code-review|receiving-code-review) PLABEL="Review" ;;
-      esac
-      ;;
-    domain)
-      HAS_DOMAIN=1
-      ;;
-    workflow)
-      HAS_WORKFLOW=1
-      # If no process skill sets the label, workflow skills set Ship / Complete
-      if [[ -z "$PLABEL" ]]; then
-        case "$name" in
-          verification-before-completion|finishing-a-development-branch) PLABEL="Ship / Complete" ;;
-        esac
-      fi
-      ;;
-  esac
-done <<EOF
-${SELECTED}
-EOF
-
-[[ -z "$PLABEL" ]] && PLABEL="(Claude: assess intent)"
-[[ "$HAS_DOMAIN" -eq 1 ]] && PLABEL="${PLABEL} + Domain"
-[[ "$HAS_WORKFLOW" -eq 1 ]] && PLABEL="${PLABEL} + Workflow"
-
-# =================================================================
-# PRIMARY PHASE (process > workflow > domain > first non-empty)
-# =================================================================
-PRIMARY_PHASE=""
-_PHASE_PROCESS=""
-_PHASE_WORKFLOW=""
-_PHASE_DOMAIN=""
-_PHASE_FIRST=""
-
-while IFS='|' read -r score name role invoke phase; do
-  [[ -z "$name" ]] && continue
-  if [[ -n "$phase" ]] && [[ -z "$_PHASE_FIRST" ]]; then
-    _PHASE_FIRST="$phase"
-  fi
-  case "$role" in
-    process)  [[ -z "$_PHASE_PROCESS" ]] && _PHASE_PROCESS="$phase" ;;
-    workflow) [[ -z "$_PHASE_WORKFLOW" ]] && _PHASE_WORKFLOW="$phase" ;;
-    domain)   [[ -z "$_PHASE_DOMAIN" ]] && _PHASE_DOMAIN="$phase" ;;
-  esac
-done <<EOF
-${SELECTED}
-EOF
-
-if [[ -n "$_PHASE_PROCESS" ]]; then
-  PRIMARY_PHASE="$_PHASE_PROCESS"
-elif [[ -n "$_PHASE_WORKFLOW" ]]; then
-  PRIMARY_PHASE="$_PHASE_WORKFLOW"
-elif [[ -n "$_PHASE_DOMAIN" ]]; then
-  PRIMARY_PHASE="$_PHASE_DOMAIN"
-else
-  PRIMARY_PHASE="$_PHASE_FIRST"
-fi
+# --- Score, select, label, build, compose, format ---
+_score_skills
+_select_by_role_caps
+_determine_label_phase
 
 # =================================================================
 # METHODOLOGY HINTS
@@ -428,228 +732,9 @@ ${_comp_output}
 EOF
 fi
 
-# =================================================================
-# BUILD ORCHESTRATED CONTEXT OUTPUT
-# =================================================================
-
-# =================================================================
-# BUILD SKILL LINES + EVAL LIST (shared across compact and full formats)
-# =================================================================
-SKILL_LINES=""
-EVAL_SKILLS=""
-
-if [[ "$TOTAL_COUNT" -gt 0 ]]; then
-  _SL_PROCESS=""
-  _SL_DOMAIN=""
-  _SL_WORKFLOW=""
-  _SL_STANDALONE=""
-
-  while IFS='|' read -r score name role invoke phase; do
-    [[ -z "$name" ]] && continue
-    if [[ -n "$EVAL_SKILLS" ]]; then
-      EVAL_SKILLS="${EVAL_SKILLS}, ${name} YES/NO"
-    else
-      EVAL_SKILLS="${name} YES/NO"
-    fi
-
-    if [[ -n "$PROCESS_SKILL" ]]; then
-      case "$role" in
-        process)  _SL_PROCESS="
-Process: ${name} -> ${invoke}" ;;
-        domain)   _SL_DOMAIN="${_SL_DOMAIN}
-  Domain: ${name} -> ${invoke}" ;;
-        workflow) _SL_WORKFLOW="${_SL_WORKFLOW}
-Workflow: ${name} -> ${invoke}" ;;
-      esac
-    else
-      _SL_STANDALONE="${_SL_STANDALONE}
-${name} -> ${invoke}"
-    fi
-  done <<EOF
-${SELECTED}
-EOF
-
-  SKILL_LINES="${_SL_PROCESS}${_SL_DOMAIN}${_SL_WORKFLOW}${_SL_STANDALONE}"
-
-  # Overflow skills (relevant but didn't fit in top suggestions)
-  for _overflow_var in OVERFLOW_DOMAIN OVERFLOW_WORKFLOW; do
-    _overflow_val="${!_overflow_var}"
-    while IFS='|' read -r oname oinvoke; do
-      [[ -z "$oname" ]] && continue
-      SKILL_LINES="${SKILL_LINES}
-  Also relevant: ${oname} -> ${oinvoke}"
-      EVAL_SKILLS="${EVAL_SKILLS}, ${oname} YES/NO"
-    done <<EOF
-${_overflow_val}
-EOF
-  done
-fi
-
-# =================================================================
-# SKILL COMPOSITION CHAIN (walk precedes/requires graph)
-# =================================================================
-# Walk the precedes graph forward from the process skill to build a
-# sequential chain.  Also walk requires backward to show prerequisites
-# when the user enters mid-chain (e.g. "execute the plan").
-COMPOSITION_CHAIN=""
-COMPOSITION_NEXT=""
-COMPOSITION_DIRECTIVE=""
-
-# Determine the anchor skill for chain walking: prefer process, fall back to workflow
-_CHAIN_ANCHOR=""
-if [[ -n "$PROCESS_SKILL" ]]; then
-  _CHAIN_ANCHOR="$PROCESS_SKILL"
-else
-  # Check if the selected workflow skill has precedes/requires
-  while IFS='|' read -r _s _n _r _i _p; do
-    [[ -z "$_n" ]] && continue
-    if [[ "$_r" == "workflow" ]]; then
-      _has_chain="$(printf '%s' "$REGISTRY" | jq -r --arg n "$_n" '
-        .skills[] | select(.name == $n) |
-        if ((.precedes // []) | length) > 0 or ((.requires // []) | length) > 0 then "yes" else "no" end
-      ' 2>/dev/null)"
-      if [[ "$_has_chain" == "yes" ]]; then
-        _CHAIN_ANCHOR="$_n"
-        break
-      fi
-    fi
-  done <<EOF
-${SELECTED}
-EOF
-fi
-
-if [[ -n "$_CHAIN_ANCHOR" ]]; then
-  # Forward walk: anchor skill -> precedes[0] -> precedes[0] -> ...
-  # Single jq call returns pipe-delimited chain: skill1|skill2|skill3
-  _fwd_chain="$(printf '%s' "$REGISTRY" | jq -r --arg start "$_CHAIN_ANCHOR" '
-    .skills as $all |
-    def walk_fwd(name):
-      ($all[] | select(.name == name) | .precedes // []) as $next |
-      if ($next | length) > 0 then name + "|" + walk_fwd($next[0])
-      else name end;
-    walk_fwd($start)
-  ' 2>/dev/null)"
-
-  # Backward walk: anchor skill <- requires[0] <- requires[0] <- ...
-  _bwd_chain="$(printf '%s' "$REGISTRY" | jq -r --arg start "$_CHAIN_ANCHOR" '
-    .skills as $all |
-    def walk_bwd(name):
-      ($all[] | select(.name == name) | .requires // []) as $prev |
-      if ($prev | length) > 0 then walk_bwd($prev[0]) + "|" + name
-      else name end;
-    walk_bwd($start)
-  ' 2>/dev/null)"
-
-  # Merge: backward chain gives predecessors, forward chain gives successors
-  # Remove duplicates at the join point (the process skill itself)
-  if [[ -n "$_bwd_chain" ]] && [[ "$_bwd_chain" == *"|"* ]]; then
-    # Has predecessors — combine backward (minus last) + forward
-    _pre="${_bwd_chain%|*}"
-    _full_chain="${_pre}|${_fwd_chain}"
-  else
-    _full_chain="$_fwd_chain"
-  fi
-
-  # Only emit composition if chain has 2+ skills
-  if [[ "$_full_chain" == *"|"* ]]; then
-    # Build display lines with [DONE?] / [CURRENT] / [NEXT] / [LATER] markers
-    _step=0
-    _current_idx=-1
-    _chain_lines=""
-    _next_skill=""
-    _next_invoke=""
-
-    # Find the index of the current process skill
-    _idx=0
-    _tmp="$_full_chain"
-    while [[ -n "$_tmp" ]]; do
-      if [[ "$_tmp" == *"|"* ]]; then
-        _cname="${_tmp%%|*}"
-        _tmp="${_tmp#*|}"
-      else
-        _cname="$_tmp"
-        _tmp=""
-      fi
-      if [[ "$_cname" == "$_CHAIN_ANCHOR" ]]; then
-        _current_idx=$_idx
-      fi
-      _idx=$((_idx + 1))
-    done
-
-    # Batch-lookup all chain skills in a single jq call (avoids N forks)
-    # Format: name<FS>invoke<FS>description<FS>phase (one per line, chain order)
-    _chain_detail="$(printf '%s' "$REGISTRY" | jq -r --arg chain "$_full_chain" '
-      ($chain | split("|")) as $names |
-      .skills as $all |
-      $names[] as $n |
-      ($all[] | select(.name == $n)) as $s |
-      ($s.description // "" | split(".")[0]) as $desc |
-      "\($n)\u001f\($s.invoke // "Skill(\($n))")\u001f\($desc)\u001f\($s.phase // "")"
-    ' 2>/dev/null)"
-
-    # Build the chain display + phase labels in one pass
-    _idx=0
-    _chain_lines=""
-    _phase_labels=""
-    _next_skill=""
-    _next_invoke=""
-    while IFS="$FS" read -r _cname _cinvoke _cdesc _cphase; do
-      [[ -z "$_cname" ]] && continue
-
-      if [[ "$_idx" -lt "$_current_idx" ]]; then
-        _marker="DONE?"
-      elif [[ "$_idx" -eq "$_current_idx" ]]; then
-        _marker="CURRENT"
-      elif [[ "$_idx" -eq $((_current_idx + 1)) ]]; then
-        _marker="NEXT"
-        _next_skill="$_cname"
-        _next_invoke="$_cinvoke"
-      else
-        _marker="LATER"
-      fi
-
-      _step=$((_idx + 1))
-      _chain_lines="${_chain_lines}
-  [${_marker}] Step ${_step}: ${_cinvoke} -- ${_cdesc}"
-
-      # Build phase label (fall back to skill name if no phase)
-      _plabel="${_cphase:-${_cname}}"
-      if [[ -n "$_phase_labels" ]]; then
-        _phase_labels="${_phase_labels} -> ${_plabel}"
-      else
-        _phase_labels="$_plabel"
-      fi
-
-      _idx=$((_idx + 1))
-    done <<EOF
-${_chain_detail}
-EOF
-
-    COMPOSITION_CHAIN="
-Composition: ${_phase_labels}${_chain_lines}"
-
-    if [[ -n "$_next_skill" ]]; then
-      COMPOSITION_DIRECTIVE="
-IMPORTANT: After completing ${_CHAIN_ANCHOR}, invoke ${_next_invoke}. Do not stop at the current step."
-    fi
-
-    # Check for parallel workflow co-selection (same phase as process skill)
-    _SELECTED_WORKFLOW=""
-    while IFS='|' read -r _s _n _r _i _p; do
-      [[ -z "$_n" ]] && continue
-      [[ "$_r" == "workflow" ]] && _SELECTED_WORKFLOW="$_n" && break
-    done <<EOF
-${SELECTED}
-EOF
-    if [[ -n "$_SELECTED_WORKFLOW" ]] && [[ -n "$_PHASE_PROCESS" ]] && [[ -n "$_PHASE_WORKFLOW" ]] && [[ "$_PHASE_PROCESS" == "$_PHASE_WORKFLOW" ]]; then
-      _wf_invoke="$(printf '%s' "$REGISTRY" | jq -r --arg n "$_SELECTED_WORKFLOW" '
-        .skills[] | select(.name == $n) | .invoke // "Skill(\($n))"
-      ' 2>/dev/null)"
-      COMPOSITION_CHAIN="${COMPOSITION_CHAIN}
-  [PARALLEL] ${_wf_invoke} -- use alongside current step if eligible"
-    fi
-  fi
-fi
+# --- Build skill display lines and walk composition chain ---
+_build_skill_lines
+_walk_composition_chain
 
 # Domain invocation instruction (composition-aware)
 DOMAIN_HINT=""
@@ -666,58 +751,5 @@ Domain skills evaluated YES: invoke them -- do not just note them."
   fi
 fi
 
-# =================================================================
-# FORMAT OUTPUT (only the wrapper text differs between compact/full)
-# =================================================================
-if [[ "$TOTAL_COUNT" -eq 0 ]]; then
-  OUT="SKILL ACTIVATION (0 skills | phase checkpoint only)
-
-Phase: assess current phase (DESIGN/PLAN/IMPLEMENT/REVIEW/SHIP/DEBUG)
-and consider whether any installed skill applies."
-
-elif [[ "$TOTAL_COUNT" -le 2 ]]; then
-  # --- compact format ---
-  EVAL_PHASE="$PRIMARY_PHASE"
-  [[ -z "$EVAL_PHASE" ]] && EVAL_PHASE="IMPLEMENT"
-
-  OUT="SKILL ACTIVATION (${TOTAL_COUNT} skills | ${PLABEL})
-${SKILL_LINES}${COMPOSITION_CHAIN}${COMPOSITION_LINES}
-
-Evaluate: **Phase: [${EVAL_PHASE}]** | ${EVAL_SKILLS}${DOMAIN_HINT}${COMPOSITION_DIRECTIVE}"
-
-else
-  # --- full format (3+ skills) ---
-  # Build phase guide from registry (falls back to a minimal default)
-  _PHASE_GUIDE="$(printf '%s' "$REGISTRY" | jq -r '
-    .phase_guide // empty | to_entries | sort_by(.key) |
-    .[] | "  " + .key + (" " * ((10 - (.key | length)) | if . < 0 then 0 else . end)) + " -> " + .value
-  ' 2>/dev/null)"
-  [[ -z "$_PHASE_GUIDE" ]] && _PHASE_GUIDE="  (no phase guide available — assess intent from context)"
-
-  OUT="SKILL ACTIVATION (${TOTAL_COUNT} skills | ${PLABEL})
-
-Step 1 -- ASSESS PHASE. Check conversation context:
-${_PHASE_GUIDE}
-
-Step 2 -- EVALUATE skills against your phase assessment.${SKILL_LINES}${COMPOSITION_CHAIN}${COMPOSITION_LINES}
-You MUST print a brief evaluation for each skill above. Format:
-  **Phase: [PHASE]** | [skill1] YES/NO, [skill2] YES/NO
-Example: **Phase: IMPLEMENT** | test-driven-development YES, claude-md-improver NO (not editing CLAUDE.md)
-This line is MANDATORY -- do not skip it.
-
-Step 3 -- State your plan and proceed. Keep it to 1-2 sentences.${DOMAIN_HINT}${COMPOSITION_DIRECTIVE}"
-fi
-
-# Append methodology hints if any
-if [[ -n "$HINTS" ]] || [[ -n "$COMPOSITION_HINTS" ]]; then
-  OUT+="
-${HINTS}${COMPOSITION_HINTS}"
-fi
-
-# Developer debug: emit scores to stderr when SKILL_DEBUG is set
-if [[ -n "${SKILL_DEBUG:-}" ]] && [[ -n "$SORTED" ]]; then
-  printf '[skill-hook] scores: %s\n' "$(printf '%s' "$SORTED" | tr '\n' ', ')" >&2
-fi
-
-printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":%s}}\n' \
-  "$(printf '%s' "$OUT" | jq -Rs .)"
+# --- Format and emit final JSON output ---
+_format_output
