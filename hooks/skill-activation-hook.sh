@@ -241,6 +241,54 @@ EOF
   SORTED="$(printf '%s' "$RESULTS" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
 }
 
+# --- _apply_context_bonus -----------------------------------------
+# If the last-invoked skill has `precedes` entries, boost those successor
+# skills by +20 in the sorted results. Also boost skills whose `requires`
+# array contains the last-invoked skill.
+# Input globals: SORTED, REGISTRY, _SESSION_TOKEN
+# Output globals: SORTED (re-sorted with bonus applied)
+_LAST_INVOKED_SKILL=""
+_apply_context_bonus() {
+  [[ -z "${_SESSION_TOKEN:-}" ]] && return
+  local _signal_file="${HOME}/.claude/.skill-last-invoked-${_SESSION_TOKEN}"
+  [[ -f "$_signal_file" ]] || return
+
+  local _last_skill
+  _last_skill="$(jq -r '.skill // empty' "$_signal_file" 2>/dev/null)"
+  [[ -z "$_last_skill" ]] && return
+
+  # Store for use by _walk_composition_chain
+  _LAST_INVOKED_SKILL="$_last_skill"
+
+  # Find skills that should be boosted: those whose requires contains last_skill,
+  # OR those that appear in last_skill's precedes array
+  local _successors
+  _successors="$(printf '%s' "$REGISTRY" | jq -r --arg last "$_last_skill" '
+    [.skills[] | select(
+      ((.requires // []) | any(. == $last))
+    ) | .name] as $req_matches |
+    [.skills[] | select(.name == $last) | .precedes // []] | flatten | . + $req_matches | unique | join("|")
+  ' 2>/dev/null)"
+  [[ -z "$_successors" ]] && return
+
+  local _new_sorted=""
+  while IFS='|' read -r score name role invoke phase; do
+    [[ -z "$name" ]] && continue
+    local _boosted="$score"
+    # Check if this skill name is in the successors list
+    local _check="|${_successors}|"
+    if [[ "$_check" == *"|${name}|"* ]]; then
+      _boosted=$((score + 20))
+    fi
+    _new_sorted="${_new_sorted}${_boosted}|${name}|${role}|${invoke}|${phase}
+"
+  done <<EOF
+${SORTED}
+EOF
+
+  SORTED="$(printf '%s' "$_new_sorted" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
+}
+
 # --- _select_by_role_caps -----------------------------------------
 # Input globals: SORTED, MAX_SUGGESTIONS
 # Output globals: SELECTED, OVERFLOW_DOMAIN, OVERFLOW_WORKFLOW, PROCESS_COUNT, DOMAIN_COUNT, WORKFLOW_COUNT, TOTAL_COUNT
@@ -561,6 +609,24 @@ EOF
         "\($n)\u001f\($s.invoke // "Skill(\($n))")\u001f\($desc)\u001f\($s.phase // "")"
       ' 2>/dev/null)"
 
+      # Find position of last-invoked skill in chain (for DONE vs DONE? markers)
+      _last_skill_chain_idx=-1
+      if [[ -n "${_LAST_INVOKED_SKILL:-}" ]]; then
+        _lsi=0
+        _ltmp="$_full_chain"
+        while [[ -n "$_ltmp" ]]; do
+          if [[ "$_ltmp" == *"|"* ]]; then
+            _lname="${_ltmp%%|*}"
+            _ltmp="${_ltmp#*|}"
+          else
+            _lname="$_ltmp"
+            _ltmp=""
+          fi
+          [[ "$_lname" == "${_LAST_INVOKED_SKILL}" ]] && _last_skill_chain_idx=$_lsi
+          _lsi=$((_lsi + 1))
+        done
+      fi
+
       # Build the chain display + phase labels in one pass
       _idx=0
       _chain_lines=""
@@ -571,7 +637,11 @@ EOF
         [[ -z "$_cname" ]] && continue
 
         if [[ "$_idx" -lt "$_current_idx" ]]; then
-          _marker="DONE?"
+          if [[ "$_last_skill_chain_idx" -ge 0 ]] && [[ "$_idx" -le "$_last_skill_chain_idx" ]]; then
+            _marker="DONE"
+          else
+            _marker="DONE?"
+          fi
         elif [[ "$_idx" -eq "$_current_idx" ]]; then
           _marker="CURRENT"
         elif [[ "$_idx" -eq $((_current_idx + 1)) ]]; then
@@ -711,6 +781,16 @@ ${HINTS}${COMPOSITION_HINTS}"
 
   printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":%s}}\n' \
     "$(printf '%s' "$OUT" | jq -Rs .)"
+
+  # Write last-invoked skill signal for composition tie-breaking
+  if [[ "$TOTAL_COUNT" -gt 0 ]] && [[ -n "${_SESSION_TOKEN:-}" ]]; then
+    _top_skill="$(printf '%s' "$SELECTED" | head -1 | cut -d'|' -f2)"
+    _top_phase="$(printf '%s' "$SELECTED" | head -1 | cut -d'|' -f5)"
+    if [[ -n "$_top_skill" ]]; then
+      printf '{"skill":"%s","phase":"%s"}' "$_top_skill" "$_top_phase" \
+        > "${HOME}/.claude/.skill-last-invoked-${_SESSION_TOKEN}" 2>/dev/null || true
+    fi
+  fi
 }
 
 # --- _emit_explain ------------------------------------------------
@@ -800,6 +880,7 @@ SKILL_DATA="$(printf '%s' "$REGISTRY" | jq -r '
 
 # --- Score, select, label, build, compose, format ---
 _score_skills
+_apply_context_bonus
 _select_by_role_caps
 _determine_label_phase
 

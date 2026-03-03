@@ -2206,4 +2206,143 @@ test_match_not_counted_as_zero() {
 test_zero_match_instrumented
 test_match_not_counted_as_zero
 
+# ---------------------------------------------------------------------------
+# Last-skill context signal and composition tie-breaking tests
+# ---------------------------------------------------------------------------
+
+test_last_skill_signal_written() {
+    setup_test_env
+    install_registry
+    rm -f "${HOME}/.claude/.skill-last-invoked-"*
+    printf 'test-signal-session' > "${HOME}/.claude/.skill-session-token"
+    run_hook "debug this bug" >/dev/null
+    local signal_file="${HOME}/.claude/.skill-last-invoked-test-signal-session"
+    assert_file_exists "signal file should be created after routing" "$signal_file"
+    local skill_name
+    skill_name="$(jq -r '.skill' "$signal_file" 2>/dev/null)"
+    assert_equals "signal should contain the top skill" "systematic-debugging" "$skill_name"
+    local skill_phase
+    skill_phase="$(jq -r '.phase' "$signal_file" 2>/dev/null)"
+    assert_equals "signal should contain the skill's phase" "DEBUG" "$skill_phase"
+    teardown_test_env
+}
+test_last_skill_signal_written
+
+test_composition_bonus_boosts_successor() {
+    setup_test_env
+    # Set up a chain: brainstorming -> writing-plans
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    cat > "${cache_file}" <<'REGISTRY'
+{
+  "version": "4.0.0",
+  "skills": [
+    {
+      "name": "brainstorming",
+      "role": "process",
+      "phase": "DESIGN",
+      "triggers": ["(build|create)"],
+      "trigger_mode": "regex",
+      "priority": 30,
+      "invoke": "Skill(superpowers:brainstorming)",
+      "precedes": ["writing-plans"],
+      "requires": [],
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "writing-plans",
+      "role": "process",
+      "phase": "PLAN",
+      "triggers": ["(plan|outline)"],
+      "trigger_mode": "regex",
+      "priority": 40,
+      "invoke": "Skill(superpowers:writing-plans)",
+      "precedes": [],
+      "requires": ["brainstorming"],
+      "available": true,
+      "enabled": true
+    }
+  ]
+}
+REGISTRY
+    # Simulate brainstorming was last invoked
+    printf 'test-bonus-session' > "${HOME}/.claude/.skill-session-token"
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' > "${HOME}/.claude/.skill-last-invoked-test-bonus-session"
+
+    # Send a prompt that matches writing-plans ("plan") — it should get +20 bonus
+    local output
+    output="$(jq -n --arg p "let's plan this out" '{"prompt":$p}' | \
+        CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" SKILL_EXPLAIN=1 bash "${HOOK}" 2>&1 1>/dev/null)"
+    # The explain output should show writing-plans selected
+    assert_contains "writing-plans should be boosted after brainstorming" "writing-plans" "$output"
+    teardown_test_env
+}
+test_composition_bonus_boosts_successor
+
+test_done_marker_when_signal_exists() {
+    setup_test_env
+    # Same chain setup, verify [DONE] instead of [DONE?]
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    cat > "${cache_file}" <<'REGISTRY'
+{
+  "version": "4.0.0",
+  "skills": [
+    {
+      "name": "brainstorming",
+      "role": "process",
+      "phase": "DESIGN",
+      "triggers": ["(build|create)"],
+      "trigger_mode": "regex",
+      "priority": 30,
+      "invoke": "Skill(superpowers:brainstorming)",
+      "precedes": ["writing-plans"],
+      "requires": [],
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "writing-plans",
+      "role": "process",
+      "phase": "PLAN",
+      "triggers": ["(plan|outline)"],
+      "trigger_mode": "regex",
+      "priority": 40,
+      "invoke": "Skill(superpowers:writing-plans)",
+      "precedes": ["executing-plans"],
+      "requires": ["brainstorming"],
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "executing-plans",
+      "role": "process",
+      "phase": "IMPLEMENT",
+      "triggers": ["(continue|next|execute)"],
+      "trigger_mode": "regex",
+      "priority": 35,
+      "invoke": "Skill(superpowers:executing-plans)",
+      "precedes": [],
+      "requires": ["writing-plans"],
+      "available": true,
+      "enabled": true
+    }
+  ]
+}
+REGISTRY
+    # Simulate: writing-plans was last invoked (so brainstorming is DONE)
+    printf 'test-done-session' > "${HOME}/.claude/.skill-session-token"
+    printf '{"skill":"writing-plans","phase":"PLAN"}' > "${HOME}/.claude/.skill-last-invoked-test-done-session"
+
+    # Trigger executing-plans
+    local output
+    output="$(run_hook "continue with next step")"
+    local ctx
+    ctx="$(extract_context "$output")"
+    # The composition chain should show [DONE] for brainstorming (not [DONE?])
+    assert_contains "brainstorming should show [DONE] when signal confirms it ran" "[DONE]" "$ctx"
+    assert_not_contains "should not show [DONE?] when signal confirms completion" "[DONE?]" "$ctx"
+    teardown_test_env
+}
+test_done_marker_when_signal_exists
+
 print_summary
