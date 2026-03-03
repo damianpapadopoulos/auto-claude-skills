@@ -2345,4 +2345,95 @@ REGISTRY
 }
 test_done_marker_when_signal_exists
 
+# ---------------------------------------------------------------------------
+# Opal Integration: exercise keywords, zero-match counter, last-skill signal,
+# and composition tie-breaking together in one flow
+# ---------------------------------------------------------------------------
+test_opal_integration() {
+    setup_test_env
+    # Full flow: keywords + context signal + zero-match counter + composition bonus
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    cat > "${cache_file}" <<'REGISTRY'
+{
+  "version": "4.0.0",
+  "skills": [
+    {
+      "name": "systematic-debugging",
+      "role": "process",
+      "phase": "DEBUG",
+      "triggers": ["(debug|bug|broken)"],
+      "keywords": ["something is off"],
+      "trigger_mode": "regex",
+      "priority": 50,
+      "invoke": "Skill(superpowers:systematic-debugging)",
+      "precedes": [],
+      "requires": [],
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "brainstorming",
+      "role": "process",
+      "phase": "DESIGN",
+      "triggers": ["(build|create)"],
+      "keywords": [],
+      "trigger_mode": "regex",
+      "priority": 30,
+      "invoke": "Skill(superpowers:brainstorming)",
+      "precedes": ["writing-plans"],
+      "requires": [],
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "writing-plans",
+      "role": "process",
+      "phase": "PLAN",
+      "triggers": ["(plan|outline)"],
+      "keywords": [],
+      "trigger_mode": "regex",
+      "priority": 40,
+      "invoke": "Skill(superpowers:writing-plans)",
+      "precedes": [],
+      "requires": ["brainstorming"],
+      "available": true,
+      "enabled": true
+    }
+  ]
+}
+REGISTRY
+
+    printf 'opal-integration-session' > "${HOME}/.claude/.skill-session-token"
+    rm -f "${HOME}/.claude/.skill-last-invoked-opal-integration-session"
+    rm -f "${HOME}/.claude/.skill-zero-match-count"
+
+    # Step 1: Keyword match — "something is off" routes to debugging
+    local output ctx
+    output="$(run_hook "something is off with the auth flow")"
+    ctx="$(extract_context "$output")"
+    assert_contains "keyword 'something is off' should route to debugging" "systematic-debugging" "$ctx"
+
+    # Step 2: Verify signal was written
+    local signal_file="${HOME}/.claude/.skill-last-invoked-opal-integration-session"
+    assert_file_exists "signal file created after keyword match" "$signal_file"
+    local last_skill
+    last_skill="$(jq -r '.skill' "$signal_file" 2>/dev/null)"
+    assert_equals "signal should record debugging as last skill" "systematic-debugging" "$last_skill"
+
+    # Step 3: Zero-match — prompt with no matching skills
+    run_hook "explain this code to me please" >/dev/null
+    local zm_count
+    zm_count="$(cat "${HOME}/.claude/.skill-zero-match-count" 2>/dev/null)"
+    assert_equals "zero-match counter should be 1" "1" "$zm_count"
+
+    # Step 4: Context bonus — simulate brainstorming was last, then trigger writing-plans
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' > "$signal_file"
+    output="$(run_hook "let's plan this out")"
+    ctx="$(extract_context "$output")"
+    assert_contains "writing-plans should be selected after brainstorming context" "writing-plans" "$ctx"
+
+    teardown_test_env
+}
+test_opal_integration
+
 print_summary
