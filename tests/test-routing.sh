@@ -284,6 +284,27 @@ install_registry() {
 REGISTRY
 }
 
+# Helper: install registry extended with batch-scripting skill
+install_registry_with_batch() {
+    install_registry
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    local tmp_file
+    tmp_file="$(mktemp)"
+    jq '.skills += [{
+      "name": "batch-scripting",
+      "role": "workflow",
+      "phase": "IMPLEMENT",
+      "triggers": ["(batch|bulk|mass|across.*files|every.*file|all.*files|migrate.*all|transform.*all|refactor.*all|sweep|codemod|claude.?-p|headless|each.*file)"],
+      "trigger_mode": "regex",
+      "priority": 15,
+      "precedes": [],
+      "requires": [],
+      "invoke": "Skill(auto-claude-skills:batch-scripting)",
+      "available": true,
+      "enabled": true
+    }]' "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
+}
+
 # Helper: install a v4 skill registry cache with plugins and phase_compositions
 install_registry_v4() {
     local cache_file="${HOME}/.claude/.skill-registry-cache.json"
@@ -1956,6 +1977,64 @@ test_depth_counter_missing_treated_as_1() {
     teardown_test_env
 }
 
+# ---------------------------------------------------------------------------
+# Batch scripting skill routing
+# ---------------------------------------------------------------------------
+test_batch_scripting_triggers() {
+    setup_test_env
+    install_registry_with_batch
+
+    local out ctx
+
+    out="$(run_hook "batch migrate all files to ESM")"
+    ctx="$(extract_context "$out")"
+    assert_contains "batch-scripting triggers on 'batch migrate'" \
+        "batch-scripting" "$ctx"
+
+    out="$(run_hook "bulk refactor across all files")"
+    ctx="$(extract_context "$out")"
+    assert_contains "batch-scripting triggers on 'bulk refactor across all files'" \
+        "batch-scripting" "$ctx"
+
+    out="$(run_hook "transform all test files")"
+    ctx="$(extract_context "$out")"
+    assert_contains "batch-scripting triggers on 'transform all'" \
+        "batch-scripting" "$ctx"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# Red flags injection when verification-before-completion fires
+# ---------------------------------------------------------------------------
+test_red_flags_injected_for_verification() {
+    setup_test_env
+    install_registry
+
+    local out ctx
+
+    out="$(run_hook "ship it, all tests pass")"
+    ctx="$(extract_context "$out")"
+    assert_contains "red flags injected when verification fires" \
+        "HALT if any Red Flag" "$ctx"
+
+    teardown_test_env
+}
+
+test_red_flags_not_injected_for_other_skills() {
+    setup_test_env
+    install_registry
+
+    local out ctx
+
+    out="$(run_hook "debug this crash")"
+    ctx="$(extract_context "$out")"
+    assert_not_contains "red flags NOT injected for debugging" \
+        "HALT if any Red Flag" "$ctx"
+
+    teardown_test_env
+}
+
 test_idle_guard_cooldown
 test_idle_guard_sanitization
 test_idle_guard_non_numeric_cooldown
@@ -1968,5 +2047,8 @@ test_depth_compact_format_after_5
 test_depth_minimal_format_after_10
 test_depth_verbose_override
 test_depth_counter_missing_treated_as_1
+test_batch_scripting_triggers
+test_red_flags_injected_for_verification
+test_red_flags_not_injected_for_other_skills
 
 print_summary

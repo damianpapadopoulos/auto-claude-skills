@@ -857,7 +857,7 @@ _walk_composition_chain
 # When verification-before-completion is selected, append red flags
 # to the skill lines so the model sees them in additionalContext.
 RED_FLAGS=""
-if printf '%s' "$SELECTED" | grep -q '|verification-before-completion|'; then
+if printf '%s' "${SELECTED}${OVERFLOW_WORKFLOW}" | grep -q 'verification-before-completion'; then
   RED_FLAGS="
 HALT if any Red Flag is true:
 - Claiming 'tests pass' without showing test runner output
