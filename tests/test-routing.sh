@@ -2035,6 +2035,28 @@ test_red_flags_not_injected_for_other_skills() {
     teardown_test_env
 }
 
+# ---------------------------------------------------------------------------
+# Raw scores in explain output
+# ---------------------------------------------------------------------------
+test_skill_explain_raw_scores() {
+    setup_test_env
+    install_registry
+
+    local stderr_file="${TEST_TMPDIR}/stderr_raw_scores.txt"
+
+    # SKILL_EXPLAIN=1 with matching prompt → stderr should include raw scores
+    jq -n --arg p "debug this broken login bug" '{"prompt":$p}' | \
+        CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        SKILL_EXPLAIN=1 \
+        bash "${HOOK}" 2>"${stderr_file}" >/dev/null
+    local stderr_content
+    stderr_content="$(cat "${stderr_file}")"
+    assert_contains "explain shows raw scores header" "Raw scores:" "${stderr_content}"
+    assert_contains "explain shows skill name=score" "systematic-debugging=" "${stderr_content}"
+
+    teardown_test_env
+}
+
 test_idle_guard_cooldown
 test_idle_guard_sanitization
 test_idle_guard_non_numeric_cooldown
@@ -2050,5 +2072,6 @@ test_depth_counter_missing_treated_as_1
 test_batch_scripting_triggers
 test_red_flags_injected_for_verification
 test_red_flags_not_injected_for_other_skills
+test_skill_explain_raw_scores
 
 print_summary

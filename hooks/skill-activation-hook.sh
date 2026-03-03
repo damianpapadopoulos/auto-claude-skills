@@ -705,6 +705,17 @@ _emit_explain() {
       printf '[skill-hook]   (none selected)\n'
     fi
     printf '[skill-hook] Result: %s skills | %s | phase=%s\n' "$TOTAL_COUNT" "${PLABEL:-}" "${PRIMARY_PHASE:-}"
+    # Raw scores from SORTED (format: score|name|role|invoke|phase per line)
+    local _raw_scores=""
+    if [[ -n "${SORTED:-}" ]]; then
+      while IFS='|' read -r _sc _nm _rest; do
+        [[ -z "$_nm" ]] && continue
+        _raw_scores="${_raw_scores:+${_raw_scores} }${_nm}=${_sc}"
+      done <<EOF
+${SORTED}
+EOF
+    fi
+    printf '[skill-hook] Raw scores: %s\n' "${_raw_scores:-(none)}"
     printf '[skill-hook] === END ===\n'
   } >&2
 }
