@@ -285,6 +285,22 @@
       "available": true,
       "enabled": true,
       "description": "Multi-Agent Debate for complex designs. Spawns architect, critic, and pragmatist for collaborative design exploration."
+    },
+    {
+      "name": "batch-scripting",
+      "role": "workflow",
+      "phase": "IMPLEMENT",
+      "triggers": [
+        "(batch|bulk|mass|across.*files|every.*file|all.*files|migrate.*all|transform.*all|refactor.*all|sweep|codemod|claude.?-p|headless|each.*file)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 15,
+      "precedes": [],
+      "requires": [],
+      "invoke": "Skill(auto-claude-skills:batch-scripting)",
+      "available": true,
+      "enabled": true,
+      "description": "Bulk file operations using claude -p with manifest, dry-run, and log-based retry."
     }
   ],
   "plugins": [],
