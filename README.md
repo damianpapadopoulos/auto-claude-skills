@@ -126,8 +126,7 @@ Shows trigger matches, word-boundary vs substring scoring, name-boost detection,
 
 | Variable | Effect |
 |----------|--------|
-| `SKILL_EXPLAIN=1` | Emit structured routing explanation to stderr |
-| `SKILL_DEBUG=1` | Emit raw sorted scores to stderr |
+| `SKILL_EXPLAIN=1` | Emit structured routing explanation with raw scores to stderr |
 | `SKILL_VERBOSE=1` | Force full-verbosity output regardless of session depth |
 
 ## Agent teams

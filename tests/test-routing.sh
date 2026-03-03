@@ -1761,38 +1761,22 @@ test_idle_guard_non_numeric_cooldown() {
 }
 
 # ---------------------------------------------------------------------------
-# SKILL_DEBUG stderr output tests
+# stderr silence tests (no SKILL_EXPLAIN = no stderr)
 # ---------------------------------------------------------------------------
-test_skill_debug_stderr() {
-    echo "-- test: SKILL_DEBUG emits scores to stderr --"
+test_no_stderr_without_explain() {
+    echo "-- test: no stderr without SKILL_EXPLAIN --"
     setup_test_env
     install_registry
 
     local stderr_file="${TEST_TMPDIR}/stderr.txt"
 
-    # With SKILL_DEBUG: stderr should contain scores
+    # Without SKILL_EXPLAIN: stderr should be empty (even with matching skills)
     jq -n --arg p "debug this broken login bug" '{"prompt":$p}' | \
         CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
-        SKILL_DEBUG=1 \
         bash "${HOOK}" 2>"${stderr_file}" >/dev/null
     local stderr_content
     stderr_content="$(cat "${stderr_file}")"
-    assert_contains "debug mode emits scores" "[skill-hook] scores:" "${stderr_content}"
-
-    # Without SKILL_DEBUG: stderr should be empty
-    jq -n --arg p "debug this broken login bug" '{"prompt":$p}' | \
-        CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
-        bash "${HOOK}" 2>"${stderr_file}" >/dev/null
-    stderr_content="$(cat "${stderr_file}")"
-    assert_equals "no debug mode no stderr" "" "${stderr_content}"
-
-    # SKILL_DEBUG with no matching skills: stderr should be silent
-    jq -n --arg p "hello how are you today" '{"prompt":$p}' | \
-        CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
-        SKILL_DEBUG=1 \
-        bash "${HOOK}" 2>"${stderr_file}" >/dev/null
-    stderr_content="$(cat "${stderr_file}")"
-    assert_equals "debug mode no scores when nothing matches" "" "${stderr_content}"
+    assert_equals "no stderr without SKILL_EXPLAIN" "" "${stderr_content}"
 
     teardown_test_env
 }
