@@ -2163,4 +2163,47 @@ KWSHORTREG
 test_keywords_match
 test_keywords_no_short_match
 
+# ---------------------------------------------------------------------------
+# Zero-match instrumentation tests
+# ---------------------------------------------------------------------------
+
+test_zero_match_instrumented() {
+    setup_test_env
+    install_registry
+    local counter_file="${HOME}/.claude/.skill-zero-match-count"
+    rm -f "$counter_file"
+    # Run a prompt that won't match any skills
+    run_hook "explain this code to me" >/dev/null
+    assert_file_exists "zero-match counter file should be created" "$counter_file"
+    local count
+    count="$(cat "$counter_file")"
+    assert_equals "zero-match count should be 1 after first miss" "1" "$count"
+    # Run another non-matching prompt
+    run_hook "what does this function do" >/dev/null
+    count="$(cat "$counter_file")"
+    assert_equals "zero-match count should be 2 after second miss" "2" "$count"
+    teardown_test_env
+}
+
+test_match_not_counted_as_zero() {
+    setup_test_env
+    install_registry
+    local counter_file="${HOME}/.claude/.skill-zero-match-count"
+    rm -f "$counter_file"
+    # Run a prompt that DOES match
+    run_hook "debug this bug" >/dev/null
+    # Counter file should not exist or be 0
+    if [[ -f "$counter_file" ]]; then
+        local count
+        count="$(cat "$counter_file")"
+        assert_equals "zero-match count should not increment on a match" "0" "$count"
+    else
+        _record_pass "zero-match counter file correctly not created on match"
+    fi
+    teardown_test_env
+}
+
+test_zero_match_instrumented
+test_match_not_counted_as_zero
+
 print_summary

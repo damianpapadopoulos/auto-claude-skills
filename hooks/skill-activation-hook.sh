@@ -633,6 +633,13 @@ EOF
 # Output globals: OUT (+ prints final JSON)
 _format_output() {
   if [[ "$TOTAL_COUNT" -eq 0 ]]; then
+    # Instrument zero-match rate
+    _ZM_FILE="${HOME}/.claude/.skill-zero-match-count"
+    _zm=0
+    [[ -f "$_ZM_FILE" ]] && _zm="$(cat "$_ZM_FILE" 2>/dev/null)"
+    [[ "$_zm" =~ ^[0-9]+$ ]] || _zm=0
+    printf '%s' "$((_zm + 1))" > "$_ZM_FILE" 2>/dev/null || true
+
     OUT="SKILL ACTIVATION (0 skills | phase checkpoint only)
 
 Phase: assess current phase (DESIGN/PLAN/IMPLEMENT/REVIEW/SHIP/DEBUG)
