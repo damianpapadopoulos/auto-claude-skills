@@ -851,6 +851,25 @@ fi
 _build_skill_lines
 _walk_composition_chain
 
+# =================================================================
+# RED FLAGS: Anti-hallucination checklist for verification
+# =================================================================
+# When verification-before-completion is selected, append red flags
+# to the skill lines so the model sees them in additionalContext.
+RED_FLAGS=""
+if printf '%s' "$SELECTED" | grep -q '|verification-before-completion|'; then
+  RED_FLAGS="
+HALT if any Red Flag is true:
+- Claiming 'tests pass' without showing test runner output
+- Claiming 'everything works' without running verification commands
+- Referencing files that were never read with the Read tool
+- Claiming to have executed commands without Bash tool calls in this conversation
+- Saying 'no changes needed' on code the user flagged as broken
+- Skipping verification steps listed in the skill
+- Generating placeholder/stub/TODO implementations as final output"
+  SKILL_LINES="${SKILL_LINES}${RED_FLAGS}"
+fi
+
 # Domain invocation instruction (composition-aware)
 DOMAIN_HINT=""
 if [[ "$DOMAIN_COUNT" -gt 0 ]] || [[ -n "$OVERFLOW_DOMAIN" ]]; then
