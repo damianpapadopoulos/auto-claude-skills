@@ -2074,4 +2074,93 @@ test_red_flags_injected_for_verification
 test_red_flags_not_injected_for_other_skills
 test_skill_explain_raw_scores
 
+# ---------------------------------------------------------------------------
+# Keyword matching tests
+# ---------------------------------------------------------------------------
+test_keywords_match() {
+    echo "-- test: keyword 'something is off' routes to systematic-debugging --"
+    setup_test_env
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'KWREG'
+{
+  "version": "test",
+  "skills": [
+    {
+      "name": "systematic-debugging",
+      "role": "process",
+      "phase": "DEBUG",
+      "triggers": [],
+      "keywords": ["stuck on", "something is off", "not right", "doesn't make sense", "confused by"],
+      "priority": 10,
+      "invoke": "Skill(superpowers:systematic-debugging)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "brainstorming",
+      "role": "process",
+      "phase": "DESIGN",
+      "triggers": [],
+      "keywords": ["how should", "what approach", "best way to", "ideas for", "options for"],
+      "priority": 30,
+      "invoke": "Skill(superpowers:brainstorming)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "methodology_hints": [],
+  "phase_compositions": {}
+}
+KWREG
+
+    local output context
+    output="$(run_hook "I'm stuck on this auth flow and something is off")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "keyword 'something is off' matches systematic-debugging" "systematic-debugging" "${context}"
+
+    teardown_test_env
+}
+
+test_keywords_no_short_match() {
+    echo "-- test: keywords shorter than 6 chars are ignored --"
+    setup_test_env
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'KWSHORTREG'
+{
+  "version": "test",
+  "skills": [
+    {
+      "name": "short-keyword-skill",
+      "role": "domain",
+      "triggers": [],
+      "keywords": ["help", "fix", "bad"],
+      "priority": 10,
+      "invoke": "Skill(mock:short-keyword-skill)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "methodology_hints": [],
+  "phase_compositions": {}
+}
+KWSHORTREG
+
+    local output context
+    output="$(run_hook "help me fix this bad code please")"
+    context="$(extract_context "${output}")"
+
+    # All keywords are < 6 chars so none should score; expect 0 skills
+    assert_contains "short keywords produce 0 skills" "0 skills" "${context}"
+
+    teardown_test_env
+}
+
+test_keywords_match
+test_keywords_no_short_match
+
 print_summary

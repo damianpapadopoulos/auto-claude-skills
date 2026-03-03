@@ -98,7 +98,7 @@ _score_skills() {
   # Score each skill (name-boost check merged into the same loop — no separate pre-pass)
   RESULTS=""
   _EXPLAIN_SCORING=""
-  while IFS="$FS" read -r skill_name skill_name_lower skill_role skill_priority skill_invoke skill_phase triggers_joined; do
+  while IFS="$FS" read -r skill_name skill_name_lower skill_role skill_priority skill_invoke skill_phase triggers_joined keywords_joined; do
     [[ -z "$skill_name" ]] && continue
 
     # Name boost: full name match (100) or hyphen-segment match (40).
@@ -186,9 +186,31 @@ _score_skills() {
       done
     fi
 
+    # Keyword matching: exact case-insensitive match, 20 points per hit
+    keyword_score=0
+    if [[ -n "$keywords_joined" ]]; then
+      _kw_remaining="$keywords_joined"
+      while [[ -n "$_kw_remaining" ]]; do
+        if [[ "$_kw_remaining" == *"${DELIM}"* ]]; then
+          keyword="${_kw_remaining%%${DELIM}*}"
+          _kw_remaining="${_kw_remaining#*${DELIM}}"
+        else
+          keyword="$_kw_remaining"
+          _kw_remaining=""
+        fi
+        [[ -z "$keyword" ]] && continue
+        # Skip short keywords (same threshold as name-segment boost)
+        [[ "${#keyword}" -lt 6 ]] && continue
+        # Case-insensitive exact substring match (P is already lowercased)
+        if [[ "$P" == *"$keyword"* ]]; then
+          keyword_score=$((keyword_score + 20))
+        fi
+      done
+    fi
+
     # Collect explain data for skills with no match
     if [[ -n "${SKILL_EXPLAIN:-}" ]]; then
-      if [[ "$trigger_score" -eq 0 ]] && [[ "$name_boost" -eq 0 ]]; then
+      if [[ "$trigger_score" -eq 0 ]] && [[ "$name_boost" -eq 0 ]] && [[ "$keyword_score" -eq 0 ]]; then
         _trig_display="${triggers_joined//${DELIM}/|}"
         [[ ${#_trig_display} -gt 40 ]] && _trig_display="${_trig_display:0:37}..."
         _EXPLAIN_SCORING="${_EXPLAIN_SCORING}[skill-hook]   ${skill_name}: trigger=(${_trig_display}) no-match
@@ -197,13 +219,14 @@ _score_skills() {
     fi
 
     # Apply skill-name-mention boost (+100) and allow through even with zero trigger_score
-    if [[ "$trigger_score" -gt 0 ]] || [[ "$name_boost" -gt 0 ]]; then
-      final_score=$((trigger_score + skill_priority + name_boost))
+    if [[ "$trigger_score" -gt 0 ]] || [[ "$name_boost" -gt 0 ]] || [[ "$keyword_score" -gt 0 ]]; then
+      final_score=$((trigger_score + skill_priority + name_boost + keyword_score))
       RESULTS="${RESULTS}${final_score}|${skill_name}|${skill_role}|${skill_invoke}|${skill_phase}
 "
       # Collect explain data for matched skills
       if [[ -n "${SKILL_EXPLAIN:-}" ]]; then
         _score_breakdown="${_explain_parts}"
+        [[ "$keyword_score" -gt 0 ]] && _score_breakdown="${_score_breakdown} keyword=${keyword_score}"
         [[ "$name_boost" -gt 0 ]] && _score_breakdown="${_score_breakdown} name-boost=${name_boost}"
         [[ "$skill_priority" -gt 0 ]] && _score_breakdown="${_score_breakdown} priority=${skill_priority}"
         _EXPLAIN_SCORING="${_EXPLAIN_SCORING}[skill-hook]   ${skill_name}: trigger=(${triggers_joined//${DELIM}/|})${_score_breakdown} = ${final_score}
@@ -765,7 +788,7 @@ SKILL_DATA="$(printf '%s' "$REGISTRY" | jq -r '
   [.skills[] | select(.available == true and .enabled == true)] | .[] |
   (.name + "\u001f" + (.name | ascii_downcase) + "\u001f" + .role + "\u001f" +
    (.priority // 0 | tostring) + "\u001f" + (.invoke // "SKIP") + "\u001f" +
-   (.phase // "") + "\u001f" + ((.triggers // []) | join("\u0001")))
+   (.phase // "") + "\u001f" + ((.triggers // []) | join("\u0001")) + "\u001f" + ((.keywords // []) | join("\u0001")))
 ' 2>/dev/null)"
 
 # --- Score, select, label, build, compose, format ---
