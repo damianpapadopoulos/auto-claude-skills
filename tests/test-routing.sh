@@ -2423,21 +2423,21 @@ test_opal_integration
 # ---------------------------------------------------------------------------
 # Browserless MCP trigger tests
 # ---------------------------------------------------------------------------
-test_browserless_triggers_webapp_testing() {
-    echo "-- test: browserless/lighthouse keywords route to webapp-testing --"
+test_playwright_mcp_triggers_webapp_testing() {
+    echo "-- test: playwright-mcp/lighthouse keywords route to webapp-testing --"
     local triggers_file="${PROJECT_ROOT}/config/default-triggers.json"
     local wt_triggers wt_keywords
     wt_triggers="$(jq -r '.skills[] | select(.name == "webapp-testing") | .triggers[]' "$triggers_file")"
     wt_keywords="$(jq -r '.skills[] | select(.name == "webapp-testing") | .keywords[]' "$triggers_file")"
 
     assert_contains "webapp-testing has lighthouse trigger" "lighthouse" "$wt_triggers"
-    assert_contains "webapp-testing has browserless keyword" "browserless" "$wt_keywords"
+    assert_contains "webapp-testing has playwright mcp keyword" "playwright mcp" "$wt_keywords"
     assert_contains "webapp-testing has performance audit keyword" "performance audit" "$wt_keywords"
 }
 
-test_browserless_triggers_webapp_testing
+test_playwright_mcp_triggers_webapp_testing
 
-test_browserless_prompt_routes_to_webapp_testing() {
+test_lighthouse_prompt_routes_to_webapp_testing() {
     echo "-- test: 'run a lighthouse audit' routes to webapp-testing --"
     setup_test_env
 
@@ -2454,7 +2454,7 @@ test_browserless_prompt_routes_to_webapp_testing() {
       "triggers": [
         "(playwright|e2e|browser.test|screenshot|visual.regress|accessibility|a11y|selenium|cypress|puppeteer|end.to.end|lighthouse|perf(ormance)?.audit)"
       ],
-      "keywords": ["browserless", "performance audit", "visual validation", "lighthouse score"],
+      "keywords": ["playwright mcp", "performance audit", "visual validation", "lighthouse score"],
       "trigger_mode": "regex",
       "priority": 12,
       "precedes": [],
@@ -2487,6 +2487,6 @@ BLREG
     teardown_test_env
 }
 
-test_browserless_prompt_routes_to_webapp_testing
+test_lighthouse_prompt_routes_to_webapp_testing
 
 print_summary

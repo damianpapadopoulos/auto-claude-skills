@@ -83,7 +83,7 @@ If the user agrees, scan the project for tech stack signals and recommend releva
 
 | Project signal | Recommended MCP | What it enables |
 |---------------|----------------|-----------------|
-| Frontend code (React, Vue, Svelte, HTML) | Browserless | Screenshots, Lighthouse audits, visual testing |
+| Frontend code (React, Vue, Svelte, HTML) | Playwright MCP | Browser automation, screenshots, DOM inspection, accessibility snapshots |
 | `.github/` or CI config | GitHub MCP | PR management, issue tracking, code search |
 | `docker-compose.yml` with Postgres/MySQL | Database MCP | Query execution, schema inspection |
 | Slack/Discord config or mentions | Slack/Discord MCP | Team notifications, channel management |

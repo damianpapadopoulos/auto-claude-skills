@@ -208,12 +208,12 @@
       "triggers": [
         "(playwright|e2e|browser.test|screenshot|visual.regress|accessibility|a11y|selenium|cypress|puppeteer|end.to.end|lighthouse|perf(ormance)?.audit)"
       ],
-      "keywords": ["browserless", "performance audit", "visual validation", "lighthouse score"],
+      "keywords": ["playwright mcp", "performance audit", "visual validation", "lighthouse score"],
       "trigger_mode": "regex",
       "priority": 12,
       "precedes": [],
       "requires": [],
-      "description": "Web application testing: browser automation, accessibility checks, visual regression, E2E flows, and Browserless MCP integration for screenshots and Lighthouse audits."
+      "description": "Web application testing: browser automation, accessibility checks, visual regression, E2E flows, and Playwright MCP integration for screenshots and Lighthouse audits."
     },
     {
       "name": "doc-coauthoring",
