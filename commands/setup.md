@@ -75,27 +75,9 @@ cp -r /tmp/cervelli-llms/.claude/skills/security-scanner ~/.claude/skills/securi
 rm -rf /tmp/cervelli-llms
 ```
 
-### 5. MCP servers (optional, project-aware)
-
-**Ask the user:** "Would you like MCP server recommendations based on your project? MCP servers give Claude access to external tools like databases, browsers, and cloud services."
-
-If the user agrees, scan the project for tech stack signals and recommend relevant MCP servers:
-
-| Project signal | Recommended MCP | What it enables |
-|---------------|----------------|-----------------|
-| Frontend code (React, Vue, Svelte, HTML) | Playwright MCP | Browser automation, screenshots, DOM inspection, accessibility snapshots |
-| `.github/` or CI config | GitHub MCP | PR management, issue tracking, code search |
-| `docker-compose.yml` with Postgres/MySQL | Database MCP | Query execution, schema inspection |
-| Slack/Discord config or mentions | Slack/Discord MCP | Team notifications, channel management |
-| Kubernetes manifests or cloud config | Cloud platform MCPs | Infrastructure management |
-
-For the full directory of available MCP servers, see: https://github.com/punkpeye/awesome-mcp-servers
-
-Guide the user through configuring any recommended servers in `~/.claude/settings.json` under the `mcpServers` key.
-
 ## Execution
 
-Run each step in order. For steps 0 and 1, use AskUserQuestion to get the user's preference before taking action. For steps 2-4, if a skill directory already exists at the target path, skip it. For step 5, only recommend MCPs relevant to the detected project.
+Run each step in order. For steps 0 and 1, use AskUserQuestion to get the user's preference before taking action. For steps 2-4, if a skill directory already exists at the target path, skip it.
 
 After setup, confirm what was configured:
 - Companion plugins: which were installed or skipped
@@ -104,4 +86,3 @@ After setup, confirm what was configured:
 - `~/.claude/skills/doc-coauthoring/SKILL.md` exists
 - `~/.claude/skills/webapp-testing/SKILL.md` exists
 - `~/.claude/skills/security-scanner/SKILL.md` exists
-- MCP servers: which were recommended and configured, or skipped
