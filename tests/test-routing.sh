@@ -2420,4 +2420,21 @@ REGISTRY
 }
 test_opal_integration
 
+# ---------------------------------------------------------------------------
+# Browserless MCP trigger tests
+# ---------------------------------------------------------------------------
+test_browserless_triggers_webapp_testing() {
+    echo "-- test: browserless/lighthouse keywords route to webapp-testing --"
+    local triggers_file="${PROJECT_ROOT}/config/default-triggers.json"
+    local wt_triggers wt_keywords
+    wt_triggers="$(jq -r '.skills[] | select(.name == "webapp-testing") | .triggers[]' "$triggers_file")"
+    wt_keywords="$(jq -r '.skills[] | select(.name == "webapp-testing") | .keywords[]' "$triggers_file")"
+
+    assert_contains "webapp-testing has lighthouse trigger" "lighthouse" "$wt_triggers"
+    assert_contains "webapp-testing has browserless keyword" "browserless" "$wt_keywords"
+    assert_contains "webapp-testing has performance audit keyword" "performance audit" "$wt_keywords"
+}
+
+test_browserless_triggers_webapp_testing
+
 print_summary
