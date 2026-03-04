@@ -2437,4 +2437,56 @@ test_browserless_triggers_webapp_testing() {
 
 test_browserless_triggers_webapp_testing
 
+test_browserless_prompt_routes_to_webapp_testing() {
+    echo "-- test: 'run a lighthouse audit' routes to webapp-testing --"
+    setup_test_env
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'BLREG'
+{
+  "version": "test",
+  "skills": [
+    {
+      "name": "webapp-testing",
+      "role": "domain",
+      "phase": "IMPLEMENT",
+      "triggers": [
+        "(playwright|e2e|browser.test|screenshot|visual.regress|accessibility|a11y|selenium|cypress|puppeteer|end.to.end|lighthouse|perf(ormance)?.audit)"
+      ],
+      "keywords": ["browserless", "performance audit", "visual validation", "lighthouse score"],
+      "trigger_mode": "regex",
+      "priority": 12,
+      "precedes": [],
+      "requires": [],
+      "invoke": "Skill(webapp-testing)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "test-driven-development",
+      "role": "process",
+      "phase": "IMPLEMENT",
+      "triggers": [
+        "(build|create|implement|add|write|make)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 20,
+      "invoke": "Skill(superpowers:test-driven-development)",
+      "available": true,
+      "enabled": true
+    }
+  ]
+}
+BLREG
+
+    local output context
+    output="$(run_hook "run a lighthouse performance audit on the homepage")"
+    context="$(extract_context "$output")"
+    assert_contains "lighthouse prompt matches webapp-testing" "webapp-testing" "$context"
+    teardown_test_env
+}
+
+test_browserless_prompt_routes_to_webapp_testing
+
 print_summary
