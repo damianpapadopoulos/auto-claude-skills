@@ -885,7 +885,13 @@ _determine_label_phase
 # Single jq call extracts all hint data (replaces ~9 per-hint jq forks with 1)
 HINTS=""
 HINTS_DATA="$(printf '%s' "$REGISTRY" | jq -r '
+  (.plugins // []) as $plugins |
   .methodology_hints // [] | .[] |
+  # Gate plugin-scoped hints on plugin availability
+  (if .plugin then
+    (.plugin as $p | [$plugins[] | select(.name == $p and .available == true)] | length > 0)
+  else true end) as $available |
+  select($available) |
   ((.skill // "") + "\u001f" + .hint + "\u001f" + ((.triggers // []) | join("\u0001")))
 ' 2>/dev/null)"
 

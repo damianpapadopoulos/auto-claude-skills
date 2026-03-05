@@ -24,6 +24,8 @@ claude plugin marketplace add obra/superpowers-marketplace
 | claude-md-management | claude-plugins-official | CLAUDE.md auditing and maintenance |
 | claude-code-setup | claude-plugins-official | Claude Code automation recommendations |
 | pr-review-toolkit | claude-plugins-official | Structured PR review with specialist agents |
+| context7 | claude-plugins-official | Up-to-date library/framework documentation via MCP |
+| github | claude-plugins-official | GitHub repository management, PR creation, issue tracking via MCP |
 
 For each plugin the user wants, run:
 ```bash

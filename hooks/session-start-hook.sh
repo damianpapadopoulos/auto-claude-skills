@@ -484,7 +484,7 @@ MISSING_PLUGINS=""
 MISSING_COUNT=0
 
 # Check companion plugins
-for _plugin in superpowers frontend-design claude-md-management pr-review-toolkit claude-code-setup commit-commands security-guidance hookify feature-dev code-review code-simplifier skill-creator; do
+for _plugin in superpowers frontend-design claude-md-management pr-review-toolkit claude-code-setup commit-commands security-guidance hookify feature-dev code-review code-simplifier skill-creator context7 github; do
     _found=0
     case "${_plugin}" in
         superpowers)

@@ -342,6 +342,24 @@
       "trigger_mode": "regex",
       "hint": "PR REVIEW: Consider /pr-review for structured review.",
       "skill": "requesting-code-review"
+    },
+    {
+      "name": "context7-docs",
+      "triggers": [
+        "(library|package|module|sdk|api|docs|documentation|reference|version|latest|upgrade|deprecat|migrat)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "CONTEXT7: If working with external libraries, use Context7 MCP tools (resolve-library-id, get-library-docs) for up-to-date documentation instead of relying on training data.",
+      "plugin": "context7"
+    },
+    {
+      "name": "github-mcp",
+      "triggers": [
+        "(pull.?request|issue|github|merge|branch|repo)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "GITHUB MCP: Use GitHub MCP tools for PR creation, issue management, and repository operations when available.",
+      "plugin": "github"
     }
   ],
   "plugins": [
@@ -428,6 +446,32 @@
       },
       "phase_fit": ["DESIGN"],
       "description": "Skill eval/improvement loop with benchmarking"
+    },
+    {
+      "name": "context7",
+      "source": "claude-plugins-official",
+      "provides": {
+        "commands": [],
+        "skills": [],
+        "agents": [],
+        "hooks": [],
+        "mcp_tools": ["resolve-library-id", "get-library-docs"]
+      },
+      "phase_fit": ["DESIGN", "IMPLEMENT", "DEBUG"],
+      "description": "Up-to-date library documentation via Context7 MCP. Resolves library IDs and fetches current docs, API references, and examples."
+    },
+    {
+      "name": "github",
+      "source": "claude-plugins-official",
+      "provides": {
+        "commands": [],
+        "skills": [],
+        "agents": [],
+        "hooks": [],
+        "mcp_tools": ["create_pull_request", "get_pull_request", "list_issues", "create_issue", "add_issue_comment", "search_repositories"]
+      },
+      "phase_fit": ["REVIEW", "SHIP"],
+      "description": "GitHub MCP for repository management. Create/review PRs, manage issues, search repos, and interact with GitHub APIs programmatically."
     }
   ],
   "phase_compositions": {
@@ -439,6 +483,12 @@
           "use": "agents:code-explorer",
           "when": "installed",
           "purpose": "Parallel codebase exploration while brainstorming clarifies intent"
+        },
+        {
+          "plugin": "context7",
+          "use": "mcp:resolve-library-id + get-library-docs",
+          "when": "installed AND prompt mentions libraries/frameworks",
+          "purpose": "Fetch current library docs during design to inform technology choices"
         }
       ],
       "hints": [
@@ -472,6 +522,12 @@
           "use": "hooks:PreToolUse",
           "when": "installed",
           "purpose": "Passive write-time security guard (always active, no explicit invocation)"
+        },
+        {
+          "plugin": "context7",
+          "use": "mcp:get-library-docs",
+          "when": "installed AND using external libraries",
+          "purpose": "Look up current API signatures and usage patterns during implementation"
         }
       ],
       "hints": []
@@ -490,6 +546,12 @@
           "use": "agents:code-simplifier",
           "when": "installed",
           "purpose": "Post-review simplification pass for clarity"
+        },
+        {
+          "plugin": "github",
+          "use": "mcp:get_pull_request + add_issue_comment",
+          "when": "installed AND reviewing a PR",
+          "purpose": "Read PR details and post review comments directly via GitHub API"
         }
       ],
       "hints": [
@@ -525,12 +587,24 @@
           "plugin": "commit-commands",
           "text": "Consider /commit-push-pr for automated branch-to-PR workflow",
           "when": "installed"
+        },
+        {
+          "plugin": "github",
+          "text": "Use GitHub MCP tools (create_pull_request) for programmatic PR creation with labels and reviewers",
+          "when": "installed"
         }
       ]
     },
     "DEBUG": {
       "driver": "systematic-debugging",
-      "parallel": [],
+      "parallel": [
+        {
+          "plugin": "context7",
+          "use": "mcp:get-library-docs",
+          "when": "installed AND debugging library-related issues",
+          "purpose": "Check current library docs for known issues, breaking changes, or correct API usage"
+        }
+      ],
       "hints": []
     }
   }
