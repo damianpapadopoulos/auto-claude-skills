@@ -4,9 +4,9 @@ Configure auto-claude-skills: install recommended companion plugins, enable agen
 
 ## Instructions
 
-### 0. Recommended plugins
+### 0. Recommended plugins and MCPs
 
-**Ask the user:** "Would you like to install recommended companion plugins? These provide 15+ additional skills that the routing engine discovers automatically."
+**Ask the user:** "Would you like to install recommended companion plugins? These provide 15+ additional skills and MCP integrations that the routing engine discovers automatically."
 
 Present the following plugins. For each one, check if it's already installed by looking for its directory in `~/.claude/plugins/cache/`. Skip any that are already present.
 
@@ -16,7 +16,7 @@ claude plugin marketplace add anthropics/claude-plugins-official
 claude plugin marketplace add obra/superpowers-marketplace
 ```
 
-**Plugins:**
+**Core plugins (essential for SDLC loop):**
 | Plugin | Source | What it adds |
 |--------|--------|-------------|
 | superpowers | superpowers-marketplace | brainstorming, TDD, debugging, planning, code review, and more |
@@ -24,9 +24,25 @@ claude plugin marketplace add obra/superpowers-marketplace
 | claude-md-management | claude-plugins-official | CLAUDE.md auditing and maintenance |
 | claude-code-setup | claude-plugins-official | Claude Code automation recommendations |
 | pr-review-toolkit | claude-plugins-official | Structured PR review with specialist agents |
+
+**MCP plugins (SDLC data sources):**
+| Plugin | Source | What it adds |
+|--------|--------|-------------|
 | context7 | claude-plugins-official | Up-to-date library/framework documentation via MCP |
 | github | claude-plugins-official | GitHub repository management, PR creation, issue tracking via MCP |
-| atlassian | claude-plugins-official | Jira and Confluence integration for requirements and design docs |
+
+Note: Atlassian (Jira/Confluence) is available as a claude.ai managed integration — connect it via `/mcp` in Claude Code. No marketplace install needed.
+
+**Phase enhancer plugins (improve specific phases):**
+| Plugin | Source | Phase | What it adds |
+|--------|--------|-------|-------------|
+| commit-commands | claude-plugins-official | SHIP | Structured commit workflows and branch-to-PR automation |
+| security-guidance | claude-plugins-official | IMPLEMENT | Write-time security guard (passive hook) |
+| code-review | claude-plugins-official | REVIEW | 5 parallel review agents with GitHub posting |
+| code-simplifier | claude-plugins-official | REVIEW | Post-review code clarity pass |
+| feature-dev | claude-plugins-official | DESIGN | Parallel exploration and architecture agents |
+| hookify | claude-plugins-official | DESIGN | Custom behavior rule authoring |
+| skill-creator | claude-plugins-official | DESIGN | Skill eval/improvement with benchmarking |
 
 For each plugin the user wants, run:
 ```bash

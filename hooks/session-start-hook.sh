@@ -495,23 +495,35 @@ _plugin_installed() {
     esac
 }
 
-# Recommended plugins (core experience)
-MISSING_RECOMMENDED=""
-MISSING_RECOMMENDED_COUNT=0
+# Core plugins (essential for the SDLC loop)
+MISSING_CORE=""
+MISSING_CORE_COUNT=0
 for _plugin in superpowers frontend-design claude-md-management claude-code-setup pr-review-toolkit; do
     if ! _plugin_installed "${_plugin}"; then
-        MISSING_RECOMMENDED="${MISSING_RECOMMENDED:+${MISSING_RECOMMENDED}, }${_plugin}"
-        MISSING_RECOMMENDED_COUNT=$((MISSING_RECOMMENDED_COUNT + 1))
+        MISSING_CORE="${MISSING_CORE:+${MISSING_CORE}, }${_plugin}"
+        MISSING_CORE_COUNT=$((MISSING_CORE_COUNT + 1))
     fi
 done
 
-# Recommended MCP plugins (SDLC integration)
+# MCP plugins (SDLC data sources — live docs, GitHub, Atlassian)
+# Note: Atlassian may be available as a claude.ai managed integration
+# (mcp__claude_ai_Atlassian__) without a marketplace install.
 MISSING_MCP=""
 MISSING_MCP_COUNT=0
-for _plugin in context7 github atlassian; do
+for _plugin in context7 github; do
     if ! _plugin_installed "${_plugin}"; then
         MISSING_MCP="${MISSING_MCP:+${MISSING_MCP}, }${_plugin}"
         MISSING_MCP_COUNT=$((MISSING_MCP_COUNT + 1))
+    fi
+done
+
+# Phase enhancer plugins (improve specific SDLC phases)
+MISSING_ENHANCERS=""
+MISSING_ENHANCERS_COUNT=0
+for _plugin in commit-commands security-guidance code-review code-simplifier feature-dev hookify skill-creator; do
+    if ! _plugin_installed "${_plugin}"; then
+        MISSING_ENHANCERS="${MISSING_ENHANCERS:+${MISSING_ENHANCERS}, }${_plugin}"
+        MISSING_ENHANCERS_COUNT=$((MISSING_ENHANCERS_COUNT + 1))
     fi
 done
 
@@ -534,16 +546,19 @@ else
     AGENT_TEAMS_MISSING=1
 fi
 
-# Build setup hints (only for recommended items, not optional)
+# Build setup hints
 SETUP_HINTS=""
-if [ "${MISSING_RECOMMENDED_COUNT}" -gt 0 ]; then
-    SETUP_HINTS="\\nTip: ${MISSING_RECOMMENDED_COUNT} recommended plugin(s) not installed (${MISSING_RECOMMENDED}). Run /setup to install."
+if [ "${MISSING_CORE_COUNT}" -gt 0 ]; then
+    SETUP_HINTS="\\nTip: ${MISSING_CORE_COUNT} core plugin(s) not installed (${MISSING_CORE}). Run /setup to install."
 fi
 if [ "${MISSING_MCP_COUNT}" -gt 0 ]; then
-    SETUP_HINTS="${SETUP_HINTS}\\nTip: ${MISSING_MCP_COUNT} recommended MCP plugin(s) not installed (${MISSING_MCP}). Run /setup to install."
+    SETUP_HINTS="${SETUP_HINTS}\\nTip: ${MISSING_MCP_COUNT} MCP plugin(s) not installed (${MISSING_MCP}). Run /setup to install."
+fi
+if [ "${MISSING_ENHANCERS_COUNT}" -gt 0 ]; then
+    SETUP_HINTS="${SETUP_HINTS}\\nTip: ${MISSING_ENHANCERS_COUNT} phase enhancer(s) available (${MISSING_ENHANCERS}). Run /setup for details."
 fi
 if [ "${MISSING_SKILLS_COUNT}" -gt 0 ]; then
-    SETUP_HINTS="${SETUP_HINTS}\\nTip: ${MISSING_SKILLS_COUNT} recommended skill(s) not installed (${MISSING_SKILLS}). Run /setup to install."
+    SETUP_HINTS="${SETUP_HINTS}\\nTip: ${MISSING_SKILLS_COUNT} skill(s) not installed (${MISSING_SKILLS}). Run /setup to install."
 fi
 if [ "${AGENT_TEAMS_MISSING}" -eq 1 ]; then
     SETUP_HINTS="${SETUP_HINTS}\\nTip: Agent teams not enabled. Run /setup to configure."

@@ -539,7 +539,7 @@
     },
     {
       "name": "atlassian",
-      "source": "claude-plugins-official",
+      "source": "claude-ai-managed",
       "provides": {
         "commands": [],
         "skills": [],
@@ -548,7 +548,7 @@
         "mcp_tools": ["searchJiraIssuesUsingJql", "getJiraIssue", "getConfluencePage", "searchConfluenceUsingCql"]
       },
       "phase_fit": ["DESIGN", "PLAN", "REVIEW"],
-      "description": "Jira and Confluence integration. Pull acceptance criteria, search issues, read design docs and knowledge base pages."
+      "description": "Jira and Confluence integration via claude.ai managed MCP. Connect via /mcp in Claude Code. Pull acceptance criteria, search issues, read design docs."
     }
   ],
   "phase_compositions": {
