@@ -16,6 +16,7 @@
 
 **Files:**
 - Modify: `config/default-triggers.json:365` (after `plugins[]`, before `phase_compositions`)
+- Modify: `tests/test-registry.sh` (add test + wire into runner at line 511)
 
 **Step 1: Write the test**
 
@@ -39,6 +40,11 @@ test_default_triggers_has_mcp_servers_section() {
 
     teardown_test_env
 }
+```
+
+Wire into runner list — add after `test_default_triggers_has_plugins_section` (line 504):
+```
+test_default_triggers_has_mcp_servers_section
 ```
 
 **Step 2: Run test to verify it fails**
@@ -125,12 +131,14 @@ git commit -m "feat: add mcp_servers[] to default-triggers.json for SDLC MCPs"
 
 ---
 
-### Task 2: Add `mcp_servers[]` to `fallback-registry.json`
+### Task 2: Add `mcp_servers[]` to `fallback-registry.json` and `session-start-hook.sh`
 
 **Files:**
 - Modify: `config/fallback-registry.json:306` (after `"plugins": []`)
+- Modify: `hooks/session-start-hook.sh:280-297` (extract mcp_servers from defaults)
+- Modify: `hooks/session-start-hook.sh:448-469` (include mcp_servers in registry JSON)
 
-**Step 1: Add empty `mcp_servers` key**
+**Step 1: Add empty `mcp_servers` to fallback registry**
 
 After `"plugins": [],` (line 306) add:
 
@@ -138,16 +146,77 @@ After `"plugins": [],` (line 306) add:
   "mcp_servers": [],
 ```
 
-**Step 2: Verify fallback registry is still valid JSON**
+**Step 2: Extract `mcp_servers` from `default-triggers.json` in session-start-hook.sh**
+
+In `hooks/session-start-hook.sh`, after the extraction of `PHASE_GUIDE` (~line 297), add:
+
+```bash
+# Extract mcp_servers from default-triggers.json
+MCP_SERVERS_JSON="[]"
+if [ -n "${DEFAULT_JSON}" ]; then
+    MCP_SERVERS_JSON="$(printf '%s' "${DEFAULT_JSON}" | jq '.mcp_servers // []')"
+fi
+```
+
+**Step 3: Include `mcp_servers` in the final registry cache**
+
+In `hooks/session-start-hook.sh`, modify the `RESULT` jq call (lines 450-469). Add `--argjson mcps "${MCP_SERVERS_JSON}"` and include `mcp_servers:$mcps` in the registry object:
+
+Change from:
+```bash
+RESULT="$(jq -n \
+    --arg version "4.0.0" \
+    --argjson skills "${SKILLS_JSON}" \
+    --argjson plugins "${PLUGINS_JSON}" \
+    --argjson pc "${PHASE_COMPOSITIONS}" \
+    --argjson pg "${PHASE_GUIDE}" \
+    --argjson mh "${METHODOLOGY_HINTS}" \
+    --argjson warnings "${WARNINGS}" \
+    '{
+        registry: {version:$version, skills:$skills, plugins:$plugins,
+                   phase_compositions:$pc, phase_guide:$pg,
+                   methodology_hints:$mh, warnings:$warnings},
+```
+
+To:
+```bash
+RESULT="$(jq -n \
+    --arg version "4.0.0" \
+    --argjson skills "${SKILLS_JSON}" \
+    --argjson plugins "${PLUGINS_JSON}" \
+    --argjson mcps "${MCP_SERVERS_JSON}" \
+    --argjson pc "${PHASE_COMPOSITIONS}" \
+    --argjson pg "${PHASE_GUIDE}" \
+    --argjson mh "${METHODOLOGY_HINTS}" \
+    --argjson warnings "${WARNINGS}" \
+    '{
+        registry: {version:$version, skills:$skills, plugins:$plugins,
+                   mcp_servers:$mcps,
+                   phase_compositions:$pc, phase_guide:$pg,
+                   methodology_hints:$mh, warnings:$warnings},
+```
+
+**Step 4: Verify registry builds correctly**
+
+Run: `CLAUDE_PLUGIN_ROOT="$(pwd)" bash hooks/session-start-hook.sh 2>&1`
+Expected: JSON output with health message, no errors
+
+Run: `jq '.mcp_servers | length' ~/.claude/.skill-registry-cache.json`
+Expected: `6`
+
+Run: `jq '[.mcp_servers[] | select(.available == true)] | length' ~/.claude/.skill-registry-cache.json`
+Expected: `0` (all default to available: false since they come from defaults, not plugin cache)
+
+**Step 5: Verify fallback registry is valid JSON**
 
 Run: `jq empty config/fallback-registry.json && echo "valid" || echo "invalid"`
 Expected: `valid`
 
-**Step 3: Commit**
+**Step 6: Commit**
 
 ```bash
-git add config/fallback-registry.json
-git commit -m "feat: add empty mcp_servers[] to fallback registry"
+git add config/fallback-registry.json hooks/session-start-hook.sh
+git commit -m "feat: carry mcp_servers[] through session-start into registry cache"
 ```
 
 ---
@@ -156,6 +225,7 @@ git commit -m "feat: add empty mcp_servers[] to fallback registry"
 
 **Files:**
 - Modify: `config/default-triggers.json:473`
+- Modify: `tests/test-registry.sh` (add test + wire into runner)
 
 **Step 1: Write the test**
 
@@ -175,6 +245,11 @@ test_github_plugin_has_design_plan_phases() {
 
     teardown_test_env
 }
+```
+
+Wire into runner — add after `test_default_triggers_has_mcp_servers_section`:
+```
+test_github_plugin_has_design_plan_phases
 ```
 
 **Step 2: Run test to verify it fails**
@@ -212,8 +287,9 @@ git commit -m "feat: expand GitHub plugin phase_fit to include DESIGN and PLAN"
 **Files:**
 - Modify: `hooks/skill-activation-hook.sh:887-896` (HINTS_DATA jq call)
 - Modify: `hooks/skill-activation-hook.sh:898-927` (hint evaluation loop)
+- Modify: `tests/test-routing.sh` (add tests + wire into runner)
 
-**Step 1: Write the test**
+**Step 1: Write the tests**
 
 Add to `tests/test-routing.sh`:
 
@@ -222,31 +298,15 @@ test_phase_scoped_hints() {
     echo "-- test: phase-scoped hints respect phases filter --"
     setup_test_env
 
-    # Install registry with a phase-scoped hint
     local cache_file="${HOME}/.claude/.skill-registry-cache.json"
     mkdir -p "$(dirname "${cache_file}")"
 
-    # Start from v4 registry and add a phase-scoped hint
+    # Start from v4 registry and add phase-scoped hints
     install_registry_v4
     local tmp_file
     tmp_file="$(mktemp)"
-    jq '.methodology_hints += [{
-        "name": "test-design-only-hint",
-        "triggers": ["(build|create|design)"],
-        "trigger_mode": "regex",
-        "hint": "TEST-DESIGN-HINT: This should only appear during DESIGN phase.",
-        "phases": ["DESIGN"]
-    }]' "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
 
-    # "build" triggers brainstorming (DESIGN phase) — hint should appear
-    local output context
-    output="$(run_hook "build a new service")"
-    context="$(extract_context "$output")"
-    assert_contains "phase-scoped hint appears in matching phase" "TEST-DESIGN-HINT" "$context"
-
-    # "debug this crash" triggers systematic-debugging (DEBUG phase) — hint should NOT appear
-    # even though "crash" doesn't match the hint trigger, we need a prompt that DOES match the trigger but is DEBUG phase
-    # Use a hint that triggers on "error" (matches DEBUG prompts) but is scoped to DESIGN
+    # Hint that triggers on "error|bug" but is scoped to DESIGN only
     jq '.methodology_hints += [{
         "name": "test-design-error-hint",
         "triggers": ["(error|bug)"],
@@ -255,9 +315,25 @@ test_phase_scoped_hints() {
         "phases": ["DESIGN"]
     }]' "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
 
+    # "debug this error" triggers systematic-debugging (DEBUG phase) — hint should NOT appear
+    local output context
     output="$(run_hook "debug this error in the auth module")"
     context="$(extract_context "$output")"
     assert_not_contains "phase-scoped hint suppressed in non-matching phase" "TEST-DESIGN-ERROR-HINT" "$context"
+
+    # "build something with an error handler" triggers brainstorming (DESIGN phase)
+    # and also matches "error" trigger — hint SHOULD appear
+    jq '.methodology_hints += [{
+        "name": "test-design-build-hint",
+        "triggers": ["(build|create)"],
+        "trigger_mode": "regex",
+        "hint": "TEST-DESIGN-BUILD-HINT: Should appear during DESIGN.",
+        "phases": ["DESIGN"]
+    }]' "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
+
+    output="$(run_hook "build a new error handling service")"
+    context="$(extract_context "$output")"
+    assert_contains "phase-scoped hint appears in matching phase" "TEST-DESIGN-BUILD-HINT" "$context"
 
     teardown_test_env
 }
@@ -277,16 +353,20 @@ test_hints_without_phases_fire_unconditionally() {
 }
 ```
 
+Wire into runner — add before `print_summary` at end of `tests/test-routing.sh`:
+```
+test_phase_scoped_hints
+test_hints_without_phases_fire_unconditionally
+```
+
 **Step 2: Run tests to verify they fail**
 
-Run: `bash tests/test-routing.sh 2>&1 | grep -A2 "phase-scoped"`
+Run: `bash tests/test-routing.sh 2>&1 | grep -A2 "phase-scoped\|without phases"`
 Expected: FAIL — phase filtering not implemented yet
 
 **Step 3: Modify the HINTS_DATA jq extraction**
 
-In `hooks/skill-activation-hook.sh` line 887, update the jq call to also extract the `phases` array:
-
-Replace lines 887-896 with:
+In `hooks/skill-activation-hook.sh`, replace lines 887-896 with:
 
 ```bash
 HINTS_DATA="$(printf '%s' "$REGISTRY" | jq -r '
@@ -379,7 +459,8 @@ git commit -m "feat: add phase-scoped hint evaluation and mcp_server gate"
 ### Task 5: Add `mcp_server` gate to phase composition evaluation
 
 **Files:**
-- Modify: `hooks/skill-activation-hook.sh:938-958` (composition jq call)
+- Modify: `hooks/skill-activation-hook.sh:940-958` (composition jq call)
+- Modify: `tests/test-routing.sh` (add test + wire into runner)
 
 **Step 1: Write the test**
 
@@ -390,7 +471,6 @@ test_mcp_server_gated_composition() {
     echo "-- test: mcp_server-gated compositions render when available --"
     setup_test_env
 
-    # Build a registry with an MCP-gated DESIGN composition
     local cache_file="${HOME}/.claude/.skill-registry-cache.json"
     mkdir -p "$(dirname "${cache_file}")"
     install_registry_v4
@@ -419,6 +499,11 @@ test_mcp_server_gated_composition() {
 }
 ```
 
+Wire into runner — add before `print_summary`:
+```
+test_mcp_server_gated_composition
+```
+
 **Step 2: Run test to verify it fails**
 
 Run: `bash tests/test-routing.sh 2>&1 | grep -A2 "mcp_server-gated"`
@@ -426,7 +511,7 @@ Expected: FAIL — composition jq doesn't know about `mcp_server` gate
 
 **Step 3: Update the composition jq call**
 
-Replace lines 940-958 in `hooks/skill-activation-hook.sh` with:
+Replace the `_comp_output` jq call (lines 940-958) with:
 
 ```bash
   _comp_output="$(printf '%s' "$REGISTRY" | jq -r --arg ph "$CURRENT_PHASE" '
@@ -478,20 +563,35 @@ git commit -m "feat: add mcp_server gate to phase composition evaluation"
 
 ### Task 6: Add prompt-time MCP detection to `skill-activation-hook.sh`
 
-**Files:**
-- Modify: `hooks/skill-activation-hook.sh` (insert after LOAD REGISTRY section, ~line 72, before LOAD USER SETTINGS)
+**IMPORTANT placement note:** The `_detect_mcp_servers` function uses `FS` (line 867), `DELIM` (line 867), and `USER_CONFIG` (line 78). It must be called AFTER the MAIN FLOW section initializes `FS` and `DELIM` (line 867-868), and after `USER_CONFIG` is set (line 78). The correct insertion point is **after line 874** (after `SKILL_DATA` extraction) and **before `_score_skills`** (line 877).
 
-**Step 1: Write the test**
+**Files:**
+- Modify: `hooks/skill-activation-hook.sh` (insert between SKILL_DATA extraction and _score_skills call, ~line 875)
+- Modify: `tests/test-routing.sh` (add tests + wire into runner)
+
+**Step 1: Write the tests**
+
+**IMPORTANT test isolation:** `setup_test_env()` swaps `HOME` but not `PWD`. MCP detection walks `PWD` for `.mcp.json`. Tests must create `.mcp.json` in a temp directory and `cd` there for the test, then `cd` back.
 
 Add to `tests/test-routing.sh`:
 
 ```bash
+# Helper: run the hook from a specific directory
+run_hook_in_dir() {
+    local dir="$1"
+    local prompt="$2"
+    (cd "$dir" && jq -n --arg p "${prompt}" '{"prompt":$p}' | \
+        CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        bash "${HOOK}" 2>/dev/null)
+}
+
 test_mcp_detection_from_mcp_json() {
     echo "-- test: MCP detection reads .mcp.json and sets availability --"
     setup_test_env
-    install_registry_v4
 
     local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    install_registry_v4
     local tmp_file
     tmp_file="$(mktemp)"
 
@@ -505,17 +605,16 @@ test_mcp_detection_from_mcp_json() {
     jq '.methodology_hints += [{"name": "test-jira", "triggers": ["(jira|ticket)"], "trigger_mode": "regex", "hint": "TEST-JIRA-HINT: Use Jira MCP.", "mcp_server": "atlassian"}]' \
         "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
 
-    # Create .mcp.json in the working directory
-    printf '{"mcpServers": {"my-jira-server": {"command": "uvx", "args": ["mcp-atlassian"]}}}\n' > "${PWD}/.mcp.json"
+    # Create a temp project dir with .mcp.json
+    local test_project="${TEST_TMPDIR}/test-project"
+    mkdir -p "$test_project"
+    printf '{"mcpServers": {"my-jira-server": {"command": "uvx", "args": ["mcp-atlassian"]}}}\n' > "${test_project}/.mcp.json"
 
-    # The hint should now fire because MCP detection should find atlassian via command matching
+    # Run hook FROM the temp project dir — hint should fire
     local output context
-    output="$(run_hook "check the jira ticket for acceptance criteria")"
+    output="$(run_hook_in_dir "$test_project" "check the jira ticket for acceptance criteria")"
     context="$(extract_context "$output")"
     assert_contains "MCP detection enables atlassian hint" "TEST-JIRA-HINT" "$context"
-
-    # Clean up
-    rm -f "${PWD}/.mcp.json"
 
     teardown_test_env
 }
@@ -523,9 +622,10 @@ test_mcp_detection_from_mcp_json() {
 test_mcp_detection_user_override() {
     echo "-- test: MCP detection respects user mcp_mappings override --"
     setup_test_env
-    install_registry_v4
 
     local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    install_registry_v4
     local tmp_file
     tmp_file="$(mktemp)"
 
@@ -537,19 +637,18 @@ test_mcp_detection_user_override() {
     jq '.methodology_hints += [{"name": "test-jira2", "triggers": ["(jira|ticket)"], "trigger_mode": "regex", "hint": "TEST-JIRA2-HINT: User override works.", "mcp_server": "atlassian"}]' \
         "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
 
-    # Create .mcp.json with a non-standard name
-    printf '{"mcpServers": {"company-issue-tracker": {"command": "node", "args": ["custom-server.js"]}}}\n' > "${PWD}/.mcp.json"
+    # Create temp project dir with .mcp.json using non-standard name
+    local test_project="${TEST_TMPDIR}/test-project2"
+    mkdir -p "$test_project"
+    printf '{"mcpServers": {"company-issue-tracker": {"command": "node", "args": ["custom-server.js"]}}}\n' > "${test_project}/.mcp.json"
 
     # Create user config with mcp_mappings override
     printf '{"mcp_mappings": {"company-issue-tracker": "atlassian"}}\n' > "${HOME}/.claude/skill-config.json"
 
     local output context
-    output="$(run_hook "check the jira ticket for acceptance criteria")"
+    output="$(run_hook_in_dir "$test_project" "check the jira ticket for acceptance criteria")"
     context="$(extract_context "$output")"
     assert_contains "user override enables atlassian" "TEST-JIRA2-HINT" "$context"
-
-    # Clean up
-    rm -f "${PWD}/.mcp.json"
 
     teardown_test_env
 }
@@ -557,9 +656,10 @@ test_mcp_detection_user_override() {
 test_no_mcp_no_noise() {
     echo "-- test: no MCP config produces no MCP noise --"
     setup_test_env
-    install_registry_v4
 
     local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    install_registry_v4
     local tmp_file
     tmp_file="$(mktemp)"
 
@@ -571,11 +671,12 @@ test_no_mcp_no_noise() {
     jq '.methodology_hints += [{"name": "test-jira3", "triggers": ["(jira|ticket)"], "trigger_mode": "regex", "hint": "TEST-JIRA3-HINT: Should not appear.", "mcp_server": "atlassian"}]' \
         "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
 
-    # No .mcp.json, no MCP config — hint should NOT fire
-    rm -f "${PWD}/.mcp.json"
+    # Run from a temp dir with NO .mcp.json — hint should NOT fire
+    local test_project="${TEST_TMPDIR}/test-project-empty"
+    mkdir -p "$test_project"
 
     local output context
-    output="$(run_hook "check the jira ticket")"
+    output="$(run_hook_in_dir "$test_project" "check the jira ticket")"
     context="$(extract_context "$output")"
     assert_not_contains "no MCP means no MCP hints" "TEST-JIRA3-HINT" "$context"
 
@@ -583,14 +684,21 @@ test_no_mcp_no_noise() {
 }
 ```
 
+Wire into runner — add before `print_summary`:
+```
+test_mcp_detection_from_mcp_json
+test_mcp_detection_user_override
+test_no_mcp_no_noise
+```
+
 **Step 2: Run tests to verify they fail**
 
-Run: `bash tests/test-routing.sh 2>&1 | grep -A2 "MCP detection"`
+Run: `bash tests/test-routing.sh 2>&1 | grep -A2 "MCP detection\|no MCP"`
 Expected: FAIL — MCP detection not implemented
 
 **Step 3: Add MCP detection function**
 
-Insert after the LOAD REGISTRY section (~line 72, after `REGISTRY="$(cat...)"`) and before LOAD USER SETTINGS:
+Insert in `hooks/skill-activation-hook.sh` **after line 874** (after `SKILL_DATA` extraction, which initializes `FS` and `DELIM` at line 867-868) and **before `_score_skills`** (line 877):
 
 ```bash
 # =================================================================
@@ -610,17 +718,27 @@ _detect_mcp_servers() {
   # Format: name<TAB>command_string (one per line)
   local _mcp_entries=""
 
-  # 1. Project scope: walk up from PWD to find .mcp.json
+  # 1. Find project root: walk up from PWD for .mcp.json or .git
+  local _proj_root=""
   local _proj_mcp=""
   local _walk="$PWD"
   while [[ "$_walk" != "/" ]]; do
     if [[ -f "${_walk}/.mcp.json" ]]; then
       _proj_mcp="${_walk}/.mcp.json"
+      _proj_root="${_walk}"
       break
+    fi
+    if [[ -d "${_walk}/.git" ]]; then
+      _proj_root="${_walk}"
+      # Don't break — keep looking for .mcp.json above .git
+      # But record project root for local-scope lookup
     fi
     _walk="$(dirname "$_walk")"
   done
+  # If we found .git but no .mcp.json, use .git's parent as project root
+  [[ -z "$_proj_root" ]] && _proj_root="$PWD"
 
+  # Read project-scoped .mcp.json
   if [[ -n "$_proj_mcp" ]] && jq empty "$_proj_mcp" >/dev/null 2>&1; then
     _mcp_entries="$(jq -r '.mcpServers // {} | to_entries[] | "\(.key)\t\((.value.command // "") + " " + ((.value.args // []) | join(" ")))"' "$_proj_mcp" 2>/dev/null)"
   fi
@@ -636,11 +754,8 @@ _detect_mcp_servers() {
     fi
   fi
 
-  # 3. Local scope: ~/.claude.json projects[<project-path>].mcpServers
-  if [[ -f "$_user_claude" ]] && [[ -n "$_proj_mcp" || -n "$_walk" ]]; then
-    # Use the project root we found (or PWD if no .mcp.json)
-    local _proj_root="${_walk}"
-    [[ -z "$_proj_root" ]] && _proj_root="$PWD"
+  # 3. Local scope: ~/.claude.json projects[<project-root>].mcpServers
+  if [[ -f "$_user_claude" ]] && [[ -n "$_proj_root" ]]; then
     local _local_entries
     _local_entries="$(jq -r --arg p "$_proj_root" '(.projects[$p].mcpServers // {}) | to_entries[] | "\(.key)\t\((.value.command // "") + " " + ((.value.args // []) | join(" ")))"' "$_user_claude" 2>/dev/null)"
     if [[ -n "$_local_entries" ]]; then
@@ -773,7 +888,7 @@ _detect_mcp_servers
 
 **Step 4: Run tests to verify they pass**
 
-Run: `bash tests/test-routing.sh 2>&1 | grep -A2 "MCP detection\|no MCP"`
+Run: `bash tests/test-routing.sh 2>&1 | grep -A2 "MCP detection\|no MCP\|user mcp_mappings"`
 Expected: PASS for all three
 
 **Step 5: Commit**
@@ -789,10 +904,11 @@ git commit -m "feat: add prompt-time MCP server detection with three-tier identi
 
 **Files:**
 - Modify: `config/default-triggers.json:328-363` (methodology_hints array)
+- Modify: `tests/test-registry.sh` (add test + wire into runner)
 
 **Step 1: Write the test**
 
-Add to `tests/test-routing.sh`:
+Add to `tests/test-registry.sh`:
 
 ```bash
 test_mcp_methodology_hints_in_config() {
@@ -817,6 +933,11 @@ test_mcp_methodology_hints_in_config() {
 
     teardown_test_env
 }
+```
+
+Wire into runner — add after `test_github_plugin_has_design_plan_phases`:
+```
+test_mcp_methodology_hints_in_config
 ```
 
 **Step 2: Run test to verify it fails**
@@ -900,7 +1021,7 @@ Add to `methodology_hints[]` in `config/default-triggers.json` after the existin
     }
 ```
 
-Also update the existing `github-mcp` hint (line 356-363) — expand triggers and add phases:
+Also update the existing `github-mcp` hint — expand triggers and add phases:
 
 ```json
     {
@@ -933,6 +1054,7 @@ git commit -m "feat: add 7 SDLC MCP methodology hints with phase scoping"
 
 **Files:**
 - Modify: `config/default-triggers.json:477-610` (phase_compositions)
+- Modify: `tests/test-registry.sh` (add test + wire into runner, update existing count assertions)
 
 **Step 1: Write the test**
 
@@ -943,41 +1065,43 @@ test_phase_compositions_include_mcp_entries() {
     echo "-- test: phase compositions include MCP entries --"
     setup_test_env
 
-    # DESIGN should have atlassian and github parallel entries
+    # DESIGN should have 4 parallel entries (2 existing + 2 new)
     local design_parallel
     design_parallel="$(jq '.phase_compositions.DESIGN.parallel | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    # Original 2 (feature-dev, context7) + 2 new (atlassian, github)
     assert_equals "DESIGN has 4 parallel entries" "4" "${design_parallel}"
 
-    # PLAN should have 2 parallel entries
+    # PLAN should have 2 parallel entries (was 0)
     local plan_parallel
     plan_parallel="$(jq '.phase_compositions.PLAN.parallel | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
     assert_equals "PLAN has 2 parallel entries" "2" "${plan_parallel}"
 
-    # SHIP should have 6 sequence entries (3 new gcp-observability + 3 existing)
+    # SHIP should have 6 sequence entries (3 new + 3 existing)
     local ship_sequence
     ship_sequence="$(jq '.phase_compositions.SHIP.sequence | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
     assert_equals "SHIP has 6 sequence entries" "6" "${ship_sequence}"
 
-    # SHIP gcp-observability entries should be first (before commit-commands)
+    # First SHIP sequence entry should be gcp-observability (prepended)
     local first_ship_entry
     first_ship_entry="$(jq -r '.phase_compositions.SHIP.sequence[0].mcp_server // .phase_compositions.SHIP.sequence[0].plugin // empty' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
     assert_equals "first SHIP sequence is gcp-observability" "gcp-observability" "${first_ship_entry}"
 
-    # REVIEW should have atlassian parallel entry
+    # REVIEW should have 4 parallel entries (3 existing + 1 new)
     local review_parallel
     review_parallel="$(jq '.phase_compositions.REVIEW.parallel | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    # Original 3 + 1 new (atlassian)
     assert_equals "REVIEW has 4 parallel entries" "4" "${review_parallel}"
 
-    # DEBUG should have gcp-observability parallel entry
+    # DEBUG should have 2 parallel entries (1 existing + 1 new)
     local debug_parallel
     debug_parallel="$(jq '.phase_compositions.DEBUG.parallel | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    # Original 1 (context7) + 1 new (gcp-observability)
     assert_equals "DEBUG has 2 parallel entries" "2" "${debug_parallel}"
 
     teardown_test_env
 }
+```
+
+Wire into runner — add after `test_mcp_methodology_hints_in_config`:
+```
+test_phase_compositions_include_mcp_entries
 ```
 
 **Step 2: Run test to verify it fails**
@@ -1098,18 +1222,16 @@ Add to DEBUG `hints[]`:
         }
 ```
 
-**Step 4: Run test to verify it passes**
+**Step 4: Update existing test count assertions in `test-registry.sh`**
 
-Run: `bash tests/test-registry.sh 2>&1 | grep -A2 "MCP entries"`
+In `test_default_triggers_has_phase_compositions`:
+- Line 329: Change `"3"` to `"4"` for REVIEW parallel count
+- Line 334: Change `"3"` to `"6"` for SHIP sequence count
+
+**Step 5: Run test to verify it passes**
+
+Run: `bash tests/test-registry.sh 2>&1 | grep -A2 "MCP entries\|phase_compositions"`
 Expected: PASS
-
-**Step 5: Also update existing test counts**
-
-In `tests/test-registry.sh`, update `test_default_triggers_has_plugins_section` — plugin count stays at 9 (no new plugins added).
-
-Update `test_default_triggers_has_phase_compositions`:
-- Line 329: REVIEW parallel from 3 to 4
-- Line 334: SHIP sequence from 3 to 6
 
 **Step 6: Commit**
 
@@ -1127,13 +1249,7 @@ git commit -m "feat: add SDLC MCP phase composition entries for DESIGN/PLAN/REVI
 
 **Step 1: Update `install_registry_v4` to include `mcp_servers`**
 
-Add `"mcp_servers": []` after `"plugins": [...]` in the v4 fixture. This ensures tests that use `install_registry_v4` have the key present even if empty.
-
-In the `install_registry_v4` function, after the `plugins` array closing `]` (around line 506), add:
-
-```json
-  "mcp_servers": [],
-```
+Add `"mcp_servers": [],` after the `plugins` array in the v4 fixture (after line 506, before `"phase_compositions"`).
 
 **Step 2: Run all existing routing tests**
 
