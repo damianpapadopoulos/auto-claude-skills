@@ -546,28 +546,21 @@ else
     AGENT_TEAMS_MISSING=1
 fi
 
-# Build setup hints
-SETUP_HINTS=""
-if [ "${MISSING_CORE_COUNT}" -gt 0 ]; then
-    SETUP_HINTS="\\nTip: ${MISSING_CORE_COUNT} core plugin(s) not installed (${MISSING_CORE}). Run /setup to install."
-fi
-if [ "${MISSING_MCP_COUNT}" -gt 0 ]; then
-    SETUP_HINTS="${SETUP_HINTS}\\nTip: ${MISSING_MCP_COUNT} MCP plugin(s) not installed (${MISSING_MCP}). Run /setup to install."
-fi
-if [ "${MISSING_ENHANCERS_COUNT}" -gt 0 ]; then
-    SETUP_HINTS="${SETUP_HINTS}\\nTip: ${MISSING_ENHANCERS_COUNT} phase enhancer(s) available (${MISSING_ENHANCERS}). Run /setup for details."
-fi
-if [ "${MISSING_SKILLS_COUNT}" -gt 0 ]; then
-    SETUP_HINTS="${SETUP_HINTS}\\nTip: ${MISSING_SKILLS_COUNT} skill(s) not installed (${MISSING_SKILLS}). Run /setup to install."
-fi
-if [ "${AGENT_TEAMS_MISSING}" -eq 1 ]; then
-    SETUP_HINTS="${SETUP_HINTS}\\nTip: Agent teams not enabled. Run /setup to configure."
-fi
+# Count total and installed companion plugins (core + MCP + enhancers)
+TOTAL_COMPANIONS=14  # 5 core + 2 MCP + 7 enhancers
+MISSING_COMPANION_COUNT=$((MISSING_CORE_COUNT + MISSING_MCP_COUNT + MISSING_ENHANCERS_COUNT))
+INSTALLED_COMPANIONS=$((TOTAL_COMPANIONS - MISSING_COMPANION_COUNT))
 
 # -----------------------------------------------------------------
 # Step 12: Emit health check
 # -----------------------------------------------------------------
-MSG="SessionStart: skill registry built (${SKILL_COUNT} skills, ${AVAILABLE_COUNT} available, from ${SOURCE_COUNT} sources, ${PLUGIN_COUNT} plugins (${PLUGIN_AVAILABLE} installed), ${WARNING_COUNT} warnings)${SETUP_HINTS}"
+SETUP_CTA=""
+if [ "${MISSING_COMPANION_COUNT}" -gt 0 ] || [ "${MISSING_SKILLS_COUNT}" -gt 0 ] || [ "${AGENT_TEAMS_MISSING}" -eq 1 ]; then
+    SETUP_CTA=". Run /setup for the full experience"
+else
+    SETUP_CTA=". Setup complete"
+fi
+MSG="SessionStart: ${AVAILABLE_COUNT} skills active (${INSTALLED_COMPANIONS} of ${TOTAL_COMPANIONS} plugins)${SETUP_CTA}"
 printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' \
     "$(printf '%s' "${MSG}" | jq -Rs .)"
 

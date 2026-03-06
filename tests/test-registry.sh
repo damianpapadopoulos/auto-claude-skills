@@ -54,7 +54,7 @@ test_empty_env_produces_fallback() {
     assert_contains "skills array exists" "" "$(jq -r '.skills' "${cache_file}" 2>/dev/null)"
 
     # Health check output
-    assert_contains "health check in output" "skill registry built" "${output}"
+    assert_contains "health check in output" "skills active" "${output}"
 
     teardown_test_env
 }
@@ -91,7 +91,7 @@ test_discovers_superpowers_skills() {
     assert_equals "brainstorming invoke uses Skill()" "Skill(superpowers:brainstorming)" "${brainstorm_invoke}"
 
     # Health check output
-    assert_contains "health check in output" "skill registry built" "${output}"
+    assert_contains "health check in output" "skills active" "${output}"
 
     teardown_test_env
 }
@@ -226,7 +226,7 @@ test_user_config_disables_skill() {
 }
 
 # ---------------------------------------------------------------------------
-# 7. Health check output contains "skill registry built"
+# 7. Health check output contains "skills active"
 # ---------------------------------------------------------------------------
 test_health_check_output() {
     echo "-- test: health check output format --"
@@ -236,12 +236,12 @@ test_health_check_output() {
     output="$(run_hook)"
 
     assert_contains "output has hookEventName" "SessionStart" "${output}"
-    assert_contains "output has skill registry built" "skill registry built" "${output}"
+    assert_contains "output has skills active" "skills active" "${output}"
 
     # Should be valid JSON output
     local hook_json
     hook_json="$(echo "${output}" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
-    assert_contains "output context has skill registry built" "skill registry built" "${hook_json}"
+    assert_contains "output context has skills active" "skills active" "${hook_json}"
 
     teardown_test_env
 }
