@@ -297,14 +297,6 @@ else
 fi
 
 # -----------------------------------------------------------------
-# Step 8a: Extract mcp_servers from default-triggers.json
-# -----------------------------------------------------------------
-MCP_SERVERS_JSON="[]"
-if [ -n "${DEFAULT_JSON}" ]; then
-    MCP_SERVERS_JSON="$(printf '%s' "${DEFAULT_JSON}" | jq '[.mcp_servers // [] | .[] | . + {available: false}]')"
-fi
-
-# -----------------------------------------------------------------
 # Step 8b: Discover curated plugins from default-triggers.json
 # -----------------------------------------------------------------
 PLUGINS_JSON="[]"
@@ -459,14 +451,12 @@ RESULT="$(jq -n \
     --arg version "4.0.0" \
     --argjson skills "${SKILLS_JSON}" \
     --argjson plugins "${PLUGINS_JSON}" \
-    --argjson mcps "${MCP_SERVERS_JSON}" \
     --argjson pc "${PHASE_COMPOSITIONS}" \
     --argjson pg "${PHASE_GUIDE}" \
     --argjson mh "${METHODOLOGY_HINTS}" \
     --argjson warnings "${WARNINGS}" \
     '{
         registry: {version:$version, skills:$skills, plugins:$plugins,
-                   mcp_servers:$mcps,
                    phase_compositions:$pc, phase_guide:$pg,
                    methodology_hints:$mh, warnings:$warnings},
         stats: {

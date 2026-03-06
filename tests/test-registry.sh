@@ -304,61 +304,6 @@ test_default_triggers_has_plugins_section() {
     teardown_test_env
 }
 
-test_default_triggers_has_mcp_servers_section() {
-    echo "-- test: default-triggers has mcp_servers section --"
-    setup_test_env
-
-    local mcp_count
-    mcp_count="$(jq '.mcp_servers | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-
-    # Should have 6 MCP servers (atlassian, gcp-observability, gke, cloud-run, firebase, playwright)
-    assert_equals "default-triggers has 6 mcp_servers" "6" "${mcp_count}"
-
-    # Each MCP server should have required fields
-    local valid_count
-    valid_count="$(jq '[.mcp_servers[] | select(.name and .phase_fit and .description and .mcp_tools)] | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "all mcp_servers have required fields" "6" "${valid_count}"
-
-    teardown_test_env
-}
-
-test_github_plugin_has_design_plan_phases() {
-    echo "-- test: github plugin includes DESIGN and PLAN phases --"
-    setup_test_env
-
-    local phases
-    phases="$(jq -r '.plugins[] | select(.name == "github") | .phase_fit | join(",")' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_contains "github has DESIGN" "DESIGN" "${phases}"
-    assert_contains "github has PLAN" "PLAN" "${phases}"
-    assert_contains "github has REVIEW" "REVIEW" "${phases}"
-    assert_contains "github has SHIP" "SHIP" "${phases}"
-
-    teardown_test_env
-}
-
-test_mcp_methodology_hints_in_config() {
-    echo "-- test: SDLC MCP methodology hints exist in config --"
-    setup_test_env
-
-    local hint_count
-    hint_count="$(jq '[.methodology_hints[] | select(.mcp_server)] | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-
-    # Should have 7 mcp_server-gated hints
-    assert_equals "7 mcp_server-gated hints in config" "7" "${hint_count}"
-
-    # Atlassian Jira hint exists
-    local jira_hint
-    jira_hint="$(jq -r '[.methodology_hints[] | select(.name == "atlassian-jira")] | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "atlassian-jira hint exists" "1" "${jira_hint}"
-
-    # GCP observability hint exists
-    local gcp_hint
-    gcp_hint="$(jq -r '[.methodology_hints[] | select(.name == "gcp-observability")] | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "gcp-observability hint exists" "1" "${gcp_hint}"
-
-    teardown_test_env
-}
-
 test_default_triggers_has_phase_compositions() {
     echo "-- test: default-triggers has phase_compositions --"
     setup_test_env
@@ -381,49 +326,12 @@ test_default_triggers_has_phase_compositions() {
     # REVIEW should have parallel entries
     local review_parallel
     review_parallel="$(jq '.phase_compositions.REVIEW.parallel | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "REVIEW has 4 parallel entries" "4" "${review_parallel}"
+    assert_equals "REVIEW has 3 parallel entries" "3" "${review_parallel}"
 
     # SHIP should have sequence entries
     local ship_sequence
     ship_sequence="$(jq '.phase_compositions.SHIP.sequence | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "SHIP has 6 sequence entries" "6" "${ship_sequence}"
-
-    teardown_test_env
-}
-
-test_phase_compositions_include_mcp_entries() {
-    echo "-- test: phase compositions include MCP entries --"
-    setup_test_env
-
-    # DESIGN should have 4 parallel entries (2 existing + 2 new)
-    local design_parallel
-    design_parallel="$(jq '.phase_compositions.DESIGN.parallel | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "DESIGN has 4 parallel entries" "4" "${design_parallel}"
-
-    # PLAN should have 2 parallel entries (was 0)
-    local plan_parallel
-    plan_parallel="$(jq '.phase_compositions.PLAN.parallel | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "PLAN has 2 parallel entries" "2" "${plan_parallel}"
-
-    # SHIP should have 6 sequence entries (3 new + 3 existing)
-    local ship_sequence
-    ship_sequence="$(jq '.phase_compositions.SHIP.sequence | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "SHIP has 6 sequence entries" "6" "${ship_sequence}"
-
-    # First SHIP sequence entry should be gcp-observability (prepended)
-    local first_ship_entry
-    first_ship_entry="$(jq -r '.phase_compositions.SHIP.sequence[0].mcp_server // .phase_compositions.SHIP.sequence[0].plugin // empty' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "first SHIP sequence is gcp-observability" "gcp-observability" "${first_ship_entry}"
-
-    # REVIEW should have 4 parallel entries (3 existing + 1 new)
-    local review_parallel
-    review_parallel="$(jq '.phase_compositions.REVIEW.parallel | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "REVIEW has 4 parallel entries" "4" "${review_parallel}"
-
-    # DEBUG should have 2 parallel entries (1 existing + 1 new)
-    local debug_parallel
-    debug_parallel="$(jq '.phase_compositions.DEBUG.parallel | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "DEBUG has 2 parallel entries" "2" "${debug_parallel}"
+    assert_equals "SHIP has 3 sequence entries" "3" "${ship_sequence}"
 
     teardown_test_env
 }
@@ -594,11 +502,7 @@ test_user_config_disables_skill
 test_health_check_output
 test_discovers_agent_team_skills
 test_default_triggers_has_plugins_section
-test_default_triggers_has_mcp_servers_section
-test_github_plugin_has_design_plan_phases
-test_mcp_methodology_hints_in_config
 test_default_triggers_has_phase_compositions
-test_phase_compositions_include_mcp_entries
 test_discovers_curated_plugins
 test_registry_includes_phase_compositions
 test_auto_discovers_unknown_plugins

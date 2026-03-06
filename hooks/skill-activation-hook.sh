@@ -873,190 +873,6 @@ SKILL_DATA="$(printf '%s' "$REGISTRY" | jq -r '
    (.phase // "") + "\u001f" + ((.triggers // []) | join("\u0001")) + "\u001f" + ((.keywords // []) | join("\u0001")))
 ' 2>/dev/null)"
 
-# =================================================================
-# MCP SERVER DETECTION (prompt-time)
-# =================================================================
-# Detect configured MCP servers from .mcp.json and ~/.claude.json,
-# then override mcp_servers[].available in REGISTRY (in memory only).
-# Three-tier identification: user override > command match > name match.
-
-_detect_mcp_servers() {
-  # Skip if no mcp_servers in registry
-  local _has_mcps
-  _has_mcps="$(printf '%s' "$REGISTRY" | jq -r '.mcp_servers // [] | length' 2>/dev/null)"
-  [[ "$_has_mcps" == "0" ]] && return
-
-  # --- Collect all configured MCP server entries ---
-  # Format: name<TAB>command_string (one per line)
-  local _mcp_entries=""
-
-  # 1. Find project root: walk up from PWD for .mcp.json or .git
-  local _proj_root=""
-  local _proj_mcp=""
-  local _walk="$PWD"
-  while [[ "$_walk" != "/" ]]; do
-    if [[ -f "${_walk}/.mcp.json" ]]; then
-      _proj_mcp="${_walk}/.mcp.json"
-      _proj_root="${_walk}"
-      break
-    fi
-    if [[ -d "${_walk}/.git" ]]; then
-      _proj_root="${_walk}"
-      # Don't break — keep looking for .mcp.json above .git
-      # But record project root for local-scope lookup
-    fi
-    _walk="$(dirname "$_walk")"
-  done
-  # If we found .git but no .mcp.json, use .git's parent as project root
-  [[ -z "$_proj_root" ]] && _proj_root="$PWD"
-
-  # Read project-scoped .mcp.json
-  if [[ -n "$_proj_mcp" ]] && jq empty "$_proj_mcp" >/dev/null 2>&1; then
-    _mcp_entries="$(jq -r '.mcpServers // {} | to_entries[] | "\(.key)\t\((.value.command // "") + " " + ((.value.args // []) | join(" ")))"' "$_proj_mcp" 2>/dev/null)"
-  fi
-
-  # 2. User scope: ~/.claude.json top-level mcpServers
-  local _user_claude="${HOME}/.claude.json"
-  if [[ -f "$_user_claude" ]] && jq empty "$_user_claude" >/dev/null 2>&1; then
-    local _user_entries
-    _user_entries="$(jq -r '.mcpServers // {} | to_entries[] | "\(.key)\t\((.value.command // "") + " " + ((.value.args // []) | join(" ")))"' "$_user_claude" 2>/dev/null)"
-    if [[ -n "$_user_entries" ]]; then
-      _mcp_entries="${_mcp_entries}${_mcp_entries:+
-}${_user_entries}"
-    fi
-  fi
-
-  # 3. Local scope: ~/.claude.json projects[<project-root>].mcpServers
-  if [[ -f "$_user_claude" ]] && [[ -n "$_proj_root" ]]; then
-    local _local_entries
-    _local_entries="$(jq -r --arg p "$_proj_root" '(.projects[$p].mcpServers // {}) | to_entries[] | "\(.key)\t\((.value.command // "") + " " + ((.value.args // []) | join(" ")))"' "$_user_claude" 2>/dev/null)"
-    if [[ -n "$_local_entries" ]]; then
-      # Local scope takes precedence — prepend
-      _mcp_entries="${_local_entries}${_mcp_entries:+
-}${_mcp_entries}"
-    fi
-  fi
-
-  [[ -z "$_mcp_entries" ]] && return
-
-  # --- Load user override map ---
-  local _user_mappings="{}"
-  if [[ -f "$USER_CONFIG" ]] && jq empty "$USER_CONFIG" >/dev/null 2>&1; then
-    _user_mappings="$(jq '.mcp_mappings // {}' "$USER_CONFIG" 2>/dev/null)"
-  fi
-
-  # --- Load detection rules from registry ---
-  local _detect_rules
-  _detect_rules="$(printf '%s' "$REGISTRY" | jq -r '.mcp_servers // [] | .[] | .name + "\u001f" + ((.detect_commands // []) | join("\u0001")) + "\u001f" + ((.detect_names // []) | join("\u0001")) + "\u001f" + ((.detect_args // []) | join("\u0001"))' 2>/dev/null)"
-
-  # --- Match each configured server against detection rules ---
-  local _matched_mcps=""
-
-  while IFS=$'\t' read -r _srv_name _srv_cmd; do
-    [[ -z "$_srv_name" ]] && continue
-    local _srv_name_lower
-    _srv_name_lower="$(printf '%s' "$_srv_name" | tr '[:upper:]' '[:lower:]')"
-    _srv_cmd="$(printf '%s' "$_srv_cmd" | tr '[:upper:]' '[:lower:]')"
-
-    local _mapped=""
-
-    # Tier 1: User override map
-    _mapped="$(printf '%s' "$_user_mappings" | jq -r --arg k "$_srv_name" '.[$k] // empty' 2>/dev/null)"
-    if [[ -n "$_mapped" ]]; then
-      _matched_mcps="${_matched_mcps}${_mapped}
-"
-      continue
-    fi
-
-    # Tier 2 + 3: Command/arg and name matching against registry rules
-    while IFS="$FS" read -r _rule_name _rule_cmds _rule_names _rule_args; do
-      [[ -z "$_rule_name" ]] && continue
-
-      # Tier 2: Command matching
-      if [[ -n "$_rule_cmds" ]]; then
-        local _rc_remaining="$_rule_cmds"
-        while [[ -n "$_rc_remaining" ]]; do
-          if [[ "$_rc_remaining" == *"${DELIM}"* ]]; then
-            _rc="${_rc_remaining%%${DELIM}*}"
-            _rc_remaining="${_rc_remaining#*${DELIM}}"
-          else
-            _rc="$_rc_remaining"
-            _rc_remaining=""
-          fi
-          [[ -z "$_rc" ]] && continue
-          if [[ "$_srv_cmd" == *"$_rc"* ]]; then
-            # If rule has detect_args, also check those
-            if [[ -n "$_rule_args" ]]; then
-              local _ra_remaining="$_rule_args"
-              while [[ -n "$_ra_remaining" ]]; do
-                if [[ "$_ra_remaining" == *"${DELIM}"* ]]; then
-                  _ra="${_ra_remaining%%${DELIM}*}"
-                  _ra_remaining="${_ra_remaining#*${DELIM}}"
-                else
-                  _ra="$_ra_remaining"
-                  _ra_remaining=""
-                fi
-                [[ -z "$_ra" ]] && continue
-                if [[ "$_srv_cmd" == *"$_ra"* ]]; then
-                  _mapped="$_rule_name"
-                  break 2
-                fi
-              done
-            else
-              _mapped="$_rule_name"
-              break
-            fi
-          fi
-        done
-      fi
-
-      # Tier 3: Name pattern matching
-      if [[ -z "$_mapped" ]] && [[ -n "$_rule_names" ]]; then
-        local _rn_remaining="$_rule_names"
-        while [[ -n "$_rn_remaining" ]]; do
-          if [[ "$_rn_remaining" == *"${DELIM}"* ]]; then
-            _rn="${_rn_remaining%%${DELIM}*}"
-            _rn_remaining="${_rn_remaining#*${DELIM}}"
-          else
-            _rn="$_rn_remaining"
-            _rn_remaining=""
-          fi
-          [[ -z "$_rn" ]] && continue
-          if [[ "$_srv_name_lower" == *"$_rn"* ]]; then
-            _mapped="$_rule_name"
-            break
-          fi
-        done
-      fi
-
-      [[ -n "$_mapped" ]] && break
-    done <<RULES
-${_detect_rules}
-RULES
-
-    if [[ -n "$_mapped" ]]; then
-      _matched_mcps="${_matched_mcps}${_mapped}
-"
-    fi
-  done <<ENTRIES
-${_mcp_entries}
-ENTRIES
-
-  # --- Override availability in REGISTRY (in memory) ---
-  if [[ -n "$_matched_mcps" ]]; then
-    # Deduplicate
-    _matched_mcps="$(printf '%s' "$_matched_mcps" | sort -u | grep -v '^$')"
-    # Build jq array from matched names
-    local _jq_arr
-    _jq_arr="$(printf '%s' "$_matched_mcps" | jq -R -s 'split("\n") | map(select(. != ""))')"
-    REGISTRY="$(printf '%s' "$REGISTRY" | jq --argjson matched "$_jq_arr" '
-      .mcp_servers = [.mcp_servers // [] | .[] | if (.name as $n | $matched | any(. == $n)) then .available = true else . end]
-    ')"
-  fi
-}
-
-_detect_mcp_servers
-
 # --- Score, select, label, build, compose, format ---
 _score_skills
 _apply_context_bonus
@@ -1070,45 +886,21 @@ _determine_label_phase
 HINTS=""
 HINTS_DATA="$(printf '%s' "$REGISTRY" | jq -r '
   (.plugins // []) as $plugins |
-  (.mcp_servers // []) as $mcps |
   .methodology_hints // [] | .[] |
   # Gate plugin-scoped hints on plugin availability
   (if .plugin then
     (.plugin as $p | [$plugins[] | select(.name == $p and .available == true)] | length > 0)
-  elif .mcp_server then
-    (.mcp_server as $m | [$mcps[] | select(.name == $m and .available == true)] | length > 0)
   else true end) as $available |
   select($available) |
-  ((.skill // "") + "\u001f" + .hint + "\u001f" + ((.triggers // []) | join("\u0001")) + "\u001f" + ((.phases // []) | join("\u0001")))
+  ((.skill // "") + "\u001f" + .hint + "\u001f" + ((.triggers // []) | join("\u0001")))
 ' 2>/dev/null)"
 
-while IFS="$FS" read -r hint_skill hint_text hint_triggers_joined hint_phases_joined; do
+while IFS="$FS" read -r hint_skill hint_text hint_triggers_joined; do
   [[ -z "$hint_text" ]] && continue
 
   # Suppress hint if its associated skill is already selected
   if [[ -n "$hint_skill" ]] && printf '%s' "$SELECTED" | grep -q "|${hint_skill}|"; then
     continue
-  fi
-
-  # Phase-scope check: if hint has phases, PRIMARY_PHASE must match one
-  if [[ -n "$hint_phases_joined" ]] && [[ -n "$PRIMARY_PHASE" ]]; then
-    _phase_match=0
-    _hp_remaining="$hint_phases_joined"
-    while [[ -n "$_hp_remaining" ]]; do
-      if [[ "$_hp_remaining" == *"${DELIM}"* ]]; then
-        _hp="${_hp_remaining%%${DELIM}*}"
-        _hp_remaining="${_hp_remaining#*${DELIM}}"
-      else
-        _hp="$_hp_remaining"
-        _hp_remaining=""
-      fi
-      [[ -z "$_hp" ]] && continue
-      if [[ "$_hp" == "$PRIMARY_PHASE" ]]; then
-        _phase_match=1
-        break
-      fi
-    done
-    [[ "$_phase_match" -eq 0 ]] && continue
   fi
 
   # Test hint triggers against prompt
@@ -1146,33 +938,21 @@ CURRENT_PHASE="$PRIMARY_PHASE"
 # Single jq call computes all composition output (replaces ~20-30 per-entry jq forks with 1)
 if [[ -n "$CURRENT_PHASE" ]]; then
   _comp_output="$(printf '%s' "$REGISTRY" | jq -r --arg ph "$CURRENT_PHASE" '
-    [.plugins // [] | .[] | select(.available == true) | .name] as $avail_plugins |
-    [.mcp_servers // [] | .[] | select(.available == true) | .name] as $avail_mcps |
+    [.plugins // [] | .[] | select(.available == true) | .name] as $avail |
     .phase_compositions[$ph] // empty |
     (
       (.parallel // [] | .[] |
-        if .mcp_server then
-          select(.mcp_server as $m | $avail_mcps | any(. == $m))
-        else
-          select(.plugin as $p | $avail_plugins | any(. == $p))
-        end |
-        "LINE:  PARALLEL: \(.use) -> \(.purpose) [\(.mcp_server // .plugin)]"),
+        select(.plugin as $p | $avail | any(. == $p)) |
+        "LINE:  PARALLEL: \(.use) -> \(.purpose) [\(.plugin)]"),
       (.sequence // [] | .[] |
-        if .mcp_server then
-          select(.mcp_server as $m | $avail_mcps | any(. == $m)) |
-          "LINE:  SEQUENCE: \(.use // .step) -> \(.purpose) [\(.mcp_server)]"
-        elif .plugin then
-          select(.plugin as $p | $avail_plugins | any(. == $p)) |
+        if .plugin then
+          select(.plugin as $p | $avail | any(. == $p)) |
           "LINE:  SEQUENCE: \(.use // .step) -> \(.purpose) [\(.plugin)]"
         else
           "LINE:  SEQUENCE: \(.step) -> \(.purpose)"
         end),
       (.hints // [] | .[] |
-        if .mcp_server then
-          select(.mcp_server as $m | $avail_mcps | any(. == $m))
-        else
-          select(.plugin as $p | $avail_plugins | any(. == $p))
-        end |
+        select(.plugin as $p | $avail | any(. == $p)) |
         "HINT:\(.text)")
     )
   ' 2>/dev/null)"

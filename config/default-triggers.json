@@ -355,82 +355,11 @@
     {
       "name": "github-mcp",
       "triggers": [
-        "(pull.?request|issue|github|merge|branch|repo|related.pr|similar.change|previous.attempt|what.was.tried|prior.art|code.history)"
+        "(pull.?request|issue|github|merge|branch|repo)"
       ],
       "trigger_mode": "regex",
-      "hint": "GITHUB MCP: Use GitHub MCP tools for PR/issue context, workflow run status, and code history. During brainstorming/planning, search for related PRs and issues to ground decisions in engineering history.",
-      "plugin": "github",
-      "phases": ["DESIGN", "PLAN", "REVIEW", "SHIP"]
-    },
-    {
-      "name": "atlassian-jira",
-      "triggers": [
-        "(ticket|story|epic|acceptance.criter|definition.of.done|requirement|user.story|jira|sprint|backlog)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "ATLASSIAN MCP: Use Jira MCP tools (searchJiraIssuesUsingJql, getJiraIssue) to pull acceptance criteria and linked context before planning. Prefer targeted issue lookups over broad searches.",
-      "mcp_server": "atlassian",
-      "phases": ["DESIGN", "PLAN"]
-    },
-    {
-      "name": "atlassian-confluence",
-      "triggers": [
-        "(confluence|wiki|knowledge.base|design.doc|architecture.doc|adr|decision.record)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "ATLASSIAN MCP: Use Confluence MCP tools (getConfluencePage, searchConfluenceUsingCql) for design references. Keep searches narrow -- broad page search adds noise.",
-      "mcp_server": "atlassian",
-      "phases": ["DESIGN", "PLAN"]
-    },
-    {
-      "name": "gcp-observability",
-      "triggers": [
-        "(runtime.log|error.group|metric.regress|production.error|staging.error|verify.deploy|post.deploy|list.log|list.metric|trace.search)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "GCP OBSERVABILITY: Use observability MCP tools (list_log_entries, list_time_series, list_error_groups) to verify runtime state. Scope queries to service + environment + bounded time window (30-60 min).",
-      "mcp_server": "gcp-observability",
-      "phases": ["SHIP", "DEBUG"]
-    },
-    {
-      "name": "gke",
-      "triggers": [
-        "(cluster|kubernetes|k8s|pod|node|namespace|workload|gke)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "GKE MCP: Use GKE MCP tools (query_logs, list_clusters) for cluster context and log queries. Prefer LQL log queries over broad log dumps.",
-      "mcp_server": "gke",
-      "phases": ["SHIP", "DEBUG"]
-    },
-    {
-      "name": "cloud-run",
-      "triggers": [
-        "(cloud.?run|serverless.deploy|revision|service.log|cloud.?run.service)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "CLOUD RUN MCP: Use Cloud Run MCP tools (get_service, get_service_log) to check service state and logs after deployment.",
-      "mcp_server": "cloud-run",
-      "phases": ["SHIP", "DEBUG"]
-    },
-    {
-      "name": "firebase",
-      "triggers": [
-        "(firebase|firestore|auth.user|security.rules|realtime.db|cloud.function|hosting)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "FIREBASE MCP: Use Firebase MCP tools for read-only resource inspection (documents, auth, rules). Use CLI for deployment and mutations.",
-      "mcp_server": "firebase",
-      "phases": ["IMPLEMENT", "SHIP", "DEBUG"]
-    },
-    {
-      "name": "playwright-mcp",
-      "triggers": [
-        "(screenshot|visual.test|browser.test|layout.regress|lighthouse|a11y|smoke.test|e2e|playwright)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "PLAYWRIGHT MCP: Use Playwright MCP tools (browser_navigate, browser_screenshot) for visual verification and interactive debugging. Captures what CLI test runners can't show.",
-      "mcp_server": "playwright",
-      "phases": ["IMPLEMENT", "REVIEW", "DEBUG", "SHIP"]
+      "hint": "GITHUB MCP: Use GitHub MCP tools for PR creation, issue management, and repository operations when available.",
+      "plugin": "github"
     }
   ],
   "plugins": [
@@ -541,66 +470,8 @@
         "hooks": [],
         "mcp_tools": ["create_pull_request", "get_pull_request", "list_issues", "create_issue", "add_issue_comment", "search_repositories"]
       },
-      "phase_fit": ["DESIGN", "PLAN", "REVIEW", "SHIP"],
+      "phase_fit": ["REVIEW", "SHIP"],
       "description": "GitHub MCP for repository management. Create/review PRs, manage issues, search repos, and interact with GitHub APIs programmatically."
-    }
-  ],
-  "mcp_servers": [
-    {
-      "name": "atlassian",
-      "source": "mcp",
-      "mcp_tools": ["searchJiraIssuesUsingJql", "getJiraIssue", "getConfluencePage", "searchConfluenceUsingCql", "getJiraIssueTypeMetaWithFields"],
-      "phase_fit": ["DESIGN", "PLAN", "REVIEW"],
-      "description": "Jira and Confluence context for requirements, acceptance criteria, and design references",
-      "detect_commands": ["mcp-atlassian", "uvx mcp-atlassian"],
-      "detect_names": ["atlassian", "jira", "confluence"]
-    },
-    {
-      "name": "gcp-observability",
-      "source": "mcp",
-      "mcp_tools": ["list_log_entries", "list_time_series", "get_trace", "list_error_groups", "get_error_group_stats"],
-      "phase_fit": ["SHIP", "DEBUG"],
-      "description": "GCP runtime verification: logs, metrics, traces, and error groups",
-      "detect_commands": ["gcloud-mcp"],
-      "detect_args": ["observability"],
-      "detect_names": ["gcp-observability", "gcloud-observability", "observability-mcp"]
-    },
-    {
-      "name": "gke",
-      "source": "mcp",
-      "mcp_tools": ["list_clusters", "get_cluster", "query_logs", "get_kubeconfig"],
-      "phase_fit": ["SHIP", "DEBUG"],
-      "description": "GKE cluster context and log querying for Kubernetes deployments",
-      "detect_commands": ["gke-mcp"],
-      "detect_names": ["gke"]
-    },
-    {
-      "name": "cloud-run",
-      "source": "mcp",
-      "mcp_tools": ["list_services", "get_service", "get_service_log", "get_service_revisions"],
-      "phase_fit": ["SHIP", "DEBUG"],
-      "description": "Cloud Run service state and logs for serverless deployments",
-      "detect_commands": ["cloud-run-mcp"],
-      "detect_names": ["cloud-run", "cloudrun"]
-    },
-    {
-      "name": "firebase",
-      "source": "mcp",
-      "mcp_tools": ["list_projects", "get_firestore_documents", "get_auth_users", "get_rules"],
-      "phase_fit": ["IMPLEMENT", "SHIP", "DEBUG"],
-      "description": "Firebase read-only resource inspection: Firestore, Auth, and security rules",
-      "detect_commands": ["firebase-tools"],
-      "detect_args": ["mcp"],
-      "detect_names": ["firebase"]
-    },
-    {
-      "name": "playwright",
-      "source": "mcp",
-      "mcp_tools": ["browser_navigate", "browser_screenshot", "browser_click", "browser_type", "browser_console_logs"],
-      "phase_fit": ["IMPLEMENT", "REVIEW", "DEBUG", "SHIP"],
-      "description": "Visual verification and interactive browser testing via Playwright",
-      "detect_commands": ["playwright", "@playwright/mcp"],
-      "detect_names": ["playwright"]
     }
   ],
   "phase_compositions": {
@@ -618,18 +489,6 @@
           "use": "mcp:resolve-library-id + get-library-docs",
           "when": "installed AND prompt mentions libraries/frameworks",
           "purpose": "Fetch current library docs during design to inform technology choices"
-        },
-        {
-          "mcp_server": "atlassian",
-          "use": "mcp:searchJiraIssuesUsingJql + getJiraIssue",
-          "when": "installed",
-          "purpose": "Pull acceptance criteria and constraints while brainstorming clarifies intent"
-        },
-        {
-          "plugin": "github",
-          "use": "mcp:list_issues + search_repositories",
-          "when": "installed",
-          "purpose": "Inspect known related issues and search repo for prior approaches"
         }
       ],
       "hints": [
@@ -647,37 +506,13 @@
           "plugin": "hookify",
           "text": "Consider /hookify to create behavior rules",
           "when": "installed AND prompt matches (prevent|block|guard|rule)"
-        },
-        {
-          "mcp_server": "atlassian",
-          "text": "Use Jira MCP to ground brainstorming in real requirements, not assumed ones",
-          "when": "installed"
         }
       ]
     },
     "PLAN": {
       "driver": "writing-plans",
-      "parallel": [
-        {
-          "mcp_server": "atlassian",
-          "use": "mcp:getJiraIssue",
-          "when": "installed",
-          "purpose": "Re-read Jira AC to validate plan steps map to acceptance criteria"
-        },
-        {
-          "plugin": "github",
-          "use": "mcp:get_pull_request",
-          "when": "installed",
-          "purpose": "Inspect known related PRs for implementation patterns and pitfalls"
-        }
-      ],
-      "hints": [
-        {
-          "mcp_server": "atlassian",
-          "text": "Verify each plan step traces to a Jira acceptance criterion",
-          "when": "installed"
-        }
-      ]
+      "parallel": [],
+      "hints": []
     },
     "IMPLEMENT": {
       "driver": "executing-plans",
@@ -717,12 +552,6 @@
           "use": "mcp:get_pull_request + add_issue_comment",
           "when": "installed AND reviewing a PR",
           "purpose": "Read PR details and post review comments directly via GitHub API"
-        },
-        {
-          "mcp_server": "atlassian",
-          "use": "mcp:getJiraIssue",
-          "when": "installed",
-          "purpose": "Cross-check PR changes against Jira AC during review"
         }
       ],
       "hints": [
@@ -736,24 +565,6 @@
     "SHIP": {
       "driver": "verification-before-completion",
       "sequence": [
-        {
-          "mcp_server": "gcp-observability",
-          "use": "mcp:list_log_entries",
-          "when": "installed",
-          "purpose": "Check logs for deployment window errors"
-        },
-        {
-          "mcp_server": "gcp-observability",
-          "use": "mcp:list_error_groups",
-          "when": "installed",
-          "purpose": "Verify no new error groups"
-        },
-        {
-          "mcp_server": "gcp-observability",
-          "use": "mcp:list_time_series",
-          "when": "installed",
-          "purpose": "Confirm metrics didn't regress"
-        },
         {
           "plugin": "commit-commands",
           "use": "commands:/commit",
@@ -781,11 +592,6 @@
           "plugin": "github",
           "text": "Use GitHub MCP tools (create_pull_request) for programmatic PR creation with labels and reviewers",
           "when": "installed"
-        },
-        {
-          "mcp_server": "gcp-observability",
-          "text": "Include runtime verification evidence in PR: log window, error delta, metric delta",
-          "when": "installed"
         }
       ]
     },
@@ -797,21 +603,9 @@
           "use": "mcp:get-library-docs",
           "when": "installed AND debugging library-related issues",
           "purpose": "Check current library docs for known issues, breaking changes, or correct API usage"
-        },
-        {
-          "mcp_server": "gcp-observability",
-          "use": "mcp:list_log_entries + list_error_groups",
-          "when": "installed",
-          "purpose": "Runtime signals for the error window to ground debugging hypotheses"
         }
       ],
-      "hints": [
-        {
-          "mcp_server": "gcp-observability",
-          "text": "Scope debug queries to service + environment + narrow time window. Avoid broad log dumps.",
-          "when": "installed"
-        }
-      ]
+      "hints": []
     }
   }
 }
