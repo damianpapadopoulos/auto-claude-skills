@@ -478,32 +478,50 @@ EOF
 UNAVAILABLE_COUNT=$((SKILL_COUNT - AVAILABLE_COUNT))
 
 # -----------------------------------------------------------------
-# Step 11: Detect missing companion plugins and features
+# Step 11: Detect missing companion plugins, MCPs, skills, and features
 # -----------------------------------------------------------------
-MISSING_PLUGINS=""
-MISSING_COUNT=0
 
-# Check companion plugins
-for _plugin in superpowers frontend-design claude-md-management pr-review-toolkit claude-code-setup commit-commands security-guidance hookify feature-dev code-review code-simplifier skill-creator context7 github atlassian; do
-    _found=0
-    case "${_plugin}" in
+# Helper: check if a plugin is installed in any marketplace cache
+_plugin_installed() {
+    local _name="$1"
+    case "${_name}" in
         superpowers)
-            if [ -d "${HOME}/.claude/plugins/cache/claude-plugins-official/superpowers" ] || \
-               [ -d "${HOME}/.claude/plugins/cache/superpowers-marketplace/superpowers" ]; then
-                _found=1
-            fi
+            [ -d "${HOME}/.claude/plugins/cache/claude-plugins-official/superpowers" ] || \
+            [ -d "${HOME}/.claude/plugins/cache/superpowers-marketplace/superpowers" ]
             ;;
         *)
-            [ -d "${HOME}/.claude/plugins/cache/claude-plugins-official/${_plugin}" ] && _found=1
+            [ -d "${HOME}/.claude/plugins/cache/claude-plugins-official/${_name}" ]
             ;;
     esac
-    if [ "${_found}" -eq 0 ]; then
-        if [ -n "${MISSING_PLUGINS}" ]; then
-            MISSING_PLUGINS="${MISSING_PLUGINS}, ${_plugin}"
-        else
-            MISSING_PLUGINS="${_plugin}"
-        fi
-        MISSING_COUNT=$((MISSING_COUNT + 1))
+}
+
+# Recommended plugins (core experience)
+MISSING_RECOMMENDED=""
+MISSING_RECOMMENDED_COUNT=0
+for _plugin in superpowers frontend-design claude-md-management claude-code-setup pr-review-toolkit; do
+    if ! _plugin_installed "${_plugin}"; then
+        MISSING_RECOMMENDED="${MISSING_RECOMMENDED:+${MISSING_RECOMMENDED}, }${_plugin}"
+        MISSING_RECOMMENDED_COUNT=$((MISSING_RECOMMENDED_COUNT + 1))
+    fi
+done
+
+# Recommended MCP plugins (SDLC integration)
+MISSING_MCP=""
+MISSING_MCP_COUNT=0
+for _plugin in context7 github atlassian; do
+    if ! _plugin_installed "${_plugin}"; then
+        MISSING_MCP="${MISSING_MCP:+${MISSING_MCP}, }${_plugin}"
+        MISSING_MCP_COUNT=$((MISSING_MCP_COUNT + 1))
+    fi
+done
+
+# Recommended skills (external)
+MISSING_SKILLS=""
+MISSING_SKILLS_COUNT=0
+for _skill in doc-coauthoring webapp-testing security-scanner; do
+    if [ ! -f "${HOME}/.claude/skills/${_skill}/SKILL.md" ]; then
+        MISSING_SKILLS="${MISSING_SKILLS:+${MISSING_SKILLS}, }${_skill}"
+        MISSING_SKILLS_COUNT=$((MISSING_SKILLS_COUNT + 1))
     fi
 done
 
@@ -516,13 +534,16 @@ else
     AGENT_TEAMS_MISSING=1
 fi
 
-# Build setup hints
+# Build setup hints (only for recommended items, not optional)
 SETUP_HINTS=""
-if [ "${MISSING_COUNT}" -gt 0 ]; then
-    SETUP_HINTS="\\nTip: ${MISSING_COUNT} companion plugin(s) not installed (${MISSING_PLUGINS}). Run /setup to install."
+if [ "${MISSING_RECOMMENDED_COUNT}" -gt 0 ]; then
+    SETUP_HINTS="\\nTip: ${MISSING_RECOMMENDED_COUNT} recommended plugin(s) not installed (${MISSING_RECOMMENDED}). Run /setup to install."
 fi
-if [ "${UNAVAILABLE_COUNT}" -gt 0 ] && [ "${MISSING_COUNT}" -eq 0 ]; then
-    SETUP_HINTS="\\nTip: ${UNAVAILABLE_COUNT} skill(s) unavailable (missing plugins or user skills). Run /setup to install."
+if [ "${MISSING_MCP_COUNT}" -gt 0 ]; then
+    SETUP_HINTS="${SETUP_HINTS}\\nTip: ${MISSING_MCP_COUNT} recommended MCP plugin(s) not installed (${MISSING_MCP}). Run /setup to install."
+fi
+if [ "${MISSING_SKILLS_COUNT}" -gt 0 ]; then
+    SETUP_HINTS="${SETUP_HINTS}\\nTip: ${MISSING_SKILLS_COUNT} recommended skill(s) not installed (${MISSING_SKILLS}). Run /setup to install."
 fi
 if [ "${AGENT_TEAMS_MISSING}" -eq 1 ]; then
     SETUP_HINTS="${SETUP_HINTS}\\nTip: Agent teams not enabled. Run /setup to configure."
