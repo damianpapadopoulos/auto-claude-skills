@@ -40,13 +40,13 @@ When companion plugins and MCP integrations are available (Jira, GitHub, Context
 
 **23 total routed skills** from superpowers, official plugins, and external skill sources — covering brainstorming, TDD, debugging, code review, planning, frontend design, security scanning, and more.
 
-**14 companion plugins** across three tiers, installed via `/setup`:
+**12 companion plugins** across three tiers, installed via `/setup`:
 
 | Tier | Plugins |
 |------|---------|
 | **Core** (5) | superpowers, frontend-design, claude-md-management, claude-code-setup, pr-review-toolkit |
 | **MCP** (2) | context7, github |
-| **Phase enhancers** (7) | commit-commands, security-guidance, code-review, code-simplifier, feature-dev, hookify, skill-creator |
+| **Phase enhancers** (5) | commit-commands, security-guidance, feature-dev, hookify, skill-creator |
 
 Atlassian (Jira/Confluence) is available as a claude.ai managed integration — connect via `/mcp`.
 

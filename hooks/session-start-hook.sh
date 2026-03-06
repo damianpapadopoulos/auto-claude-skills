@@ -520,7 +520,7 @@ done
 # Phase enhancer plugins (improve specific SDLC phases)
 MISSING_ENHANCERS=""
 MISSING_ENHANCERS_COUNT=0
-for _plugin in commit-commands security-guidance code-review code-simplifier feature-dev hookify skill-creator; do
+for _plugin in commit-commands security-guidance feature-dev hookify skill-creator; do
     if ! _plugin_installed "${_plugin}"; then
         MISSING_ENHANCERS="${MISSING_ENHANCERS:+${MISSING_ENHANCERS}, }${_plugin}"
         MISSING_ENHANCERS_COUNT=$((MISSING_ENHANCERS_COUNT + 1))
@@ -547,7 +547,7 @@ else
 fi
 
 # Count total and installed companion plugins (core + MCP + enhancers)
-TOTAL_COMPANIONS=14  # 5 core + 2 MCP + 7 enhancers
+TOTAL_COMPANIONS=12  # 5 core + 2 MCP + 5 enhancers
 MISSING_COMPANION_COUNT=$((MISSING_CORE_COUNT + MISSING_MCP_COUNT + MISSING_ENHANCERS_COUNT))
 INSTALLED_COMPANIONS=$((TOTAL_COMPANIONS - MISSING_COMPANION_COUNT))
 

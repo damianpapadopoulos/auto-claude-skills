@@ -38,8 +38,6 @@ Note: Atlassian (Jira/Confluence) is available as a claude.ai managed integratio
 |--------|--------|-------|-------------|
 | commit-commands | claude-plugins-official | SHIP | Structured commit workflows and branch-to-PR automation |
 | security-guidance | claude-plugins-official | IMPLEMENT | Write-time security guard (passive hook) |
-| code-review | claude-plugins-official | REVIEW | 5 parallel review agents with GitHub posting |
-| code-simplifier | claude-plugins-official | REVIEW | Post-review code clarity pass |
 | feature-dev | claude-plugins-official | DESIGN | Parallel exploration and architecture agents |
 | hookify | claude-plugins-official | DESIGN | Custom behavior rule authoring |
 | skill-creator | claude-plugins-official | DESIGN | Skill eval/improvement with benchmarking |

@@ -8,7 +8,13 @@
       "triggers": [
         "(debug|bug|broken|crash|regression|not.work|error|fail|hang|freeze|timeout|leak|corrupt|unexpected|wrong)"
       ],
-      "keywords": ["stuck", "something is off", "not right", "doesn't make sense", "confused by"],
+      "keywords": [
+        "stuck",
+        "something is off",
+        "not right",
+        "doesn't make sense",
+        "confused by"
+      ],
       "trigger_mode": "regex",
       "priority": 50,
       "precedes": [],
@@ -36,10 +42,18 @@
       "triggers": [
         "(build|create|implement|develop|scaffold|init|bootstrap|brainstorm|design|architect|strateg|scope|outline|approach|set.?up|wire.up|how.(should|would|could)|add|make|introduce|enable|new|start)"
       ],
-      "keywords": ["how should", "what approach", "best way to", "ideas for", "options for"],
+      "keywords": [
+        "how should",
+        "what approach",
+        "best way to",
+        "ideas for",
+        "options for"
+      ],
       "trigger_mode": "regex",
       "priority": 30,
-      "precedes": ["writing-plans"],
+      "precedes": [
+        "writing-plans"
+      ],
       "requires": [],
       "description": "Ask clarifying questions, explore options, and get user approval before planning. Activated for Build intents."
     },
@@ -51,8 +65,12 @@
       "keywords": [],
       "trigger_mode": "regex",
       "priority": 40,
-      "precedes": ["executing-plans"],
-      "requires": ["brainstorming"],
+      "precedes": [
+        "executing-plans"
+      ],
+      "requires": [
+        "brainstorming"
+      ],
       "description": "Break work into discrete tasks and confirm the plan with the user before execution begins."
     },
     {
@@ -66,7 +84,9 @@
       "trigger_mode": "regex",
       "priority": 35,
       "precedes": [],
-      "requires": ["writing-plans"],
+      "requires": [
+        "writing-plans"
+      ],
       "description": "Step-by-step execution of an approved plan. Triggered by explicit plan-continuation language."
     },
     {
@@ -117,7 +137,9 @@
       "keywords": [],
       "trigger_mode": "regex",
       "priority": 20,
-      "precedes": ["finishing-a-development-branch"],
+      "precedes": [
+        "finishing-a-development-branch"
+      ],
       "requires": [],
       "description": "Final verification checklist before shipping: tests pass, lint clean, no TODOs, docs updated."
     },
@@ -130,7 +152,9 @@
       "trigger_mode": "regex",
       "priority": 19,
       "precedes": [],
-      "requires": ["verification-before-completion"],
+      "requires": [
+        "verification-before-completion"
+      ],
       "description": "Branch cleanup and merge: squash commits, update changelog, merge to main."
     },
     {
@@ -270,7 +294,9 @@
       "trigger_mode": "regex",
       "priority": 22,
       "precedes": [],
-      "requires": ["writing-plans"],
+      "requires": [
+        "writing-plans"
+      ],
       "description": "Use when executing implementation plans with 3+ independent, file-disjoint tasks that benefit from parallel specialist agents."
     },
     {
@@ -318,12 +344,12 @@
     }
   ],
   "phase_guide": {
-    "DESIGN":    "brainstorming (ask questions, get approval)",
-    "PLAN":      "writing-plans (break into tasks, confirm before execution)",
+    "DESIGN": "brainstorming (ask questions, get approval)",
+    "PLAN": "writing-plans (break into tasks, confirm before execution)",
     "IMPLEMENT": "executing-plans or subagent-driven-development + TDD (offer agent-team-execution for 3+ independent tasks)",
-    "REVIEW":    "requesting-code-review",
-    "SHIP":      "verification-before-completion + finishing-a-development-branch",
-    "DEBUG":     "systematic-debugging, then return to current phase"
+    "REVIEW": "requesting-code-review",
+    "SHIP": "verification-before-completion + finishing-a-development-branch",
+    "DEBUG": "systematic-debugging, then return to current phase"
   },
   "methodology_hints": [
     {
@@ -360,7 +386,12 @@
       "trigger_mode": "regex",
       "hint": "GITHUB MCP: Use GitHub MCP tools for PR/issue context, workflow run status, and code history. During brainstorming/planning, search for related PRs and issues to ground decisions in engineering history.",
       "plugin": "github",
-      "phases": ["DESIGN", "PLAN", "REVIEW", "SHIP"]
+      "phases": [
+        "DESIGN",
+        "PLAN",
+        "REVIEW",
+        "SHIP"
+      ]
     },
     {
       "name": "atlassian-jira",
@@ -369,7 +400,10 @@
       ],
       "trigger_mode": "regex",
       "hint": "ATLASSIAN: If Atlassian MCP tools are available, use Jira (searchJiraIssuesUsingJql, getJiraIssue) to pull acceptance criteria and linked context before planning. Prefer targeted issue lookups over broad searches.",
-      "phases": ["DESIGN", "PLAN"]
+      "phases": [
+        "DESIGN",
+        "PLAN"
+      ]
     },
     {
       "name": "atlassian-confluence",
@@ -378,7 +412,10 @@
       ],
       "trigger_mode": "regex",
       "hint": "ATLASSIAN: If Confluence MCP tools are available, use them (getConfluencePage, searchConfluenceUsingCql) for design references. Keep searches narrow -- broad page search adds noise.",
-      "phases": ["DESIGN", "PLAN"]
+      "phases": [
+        "DESIGN",
+        "PLAN"
+      ]
     },
     {
       "name": "gcp-observability",
@@ -387,7 +424,10 @@
       ],
       "trigger_mode": "regex",
       "hint": "GCP OBSERVABILITY: If observability MCP tools are available, use them (list_log_entries, list_time_series, list_error_groups) to verify runtime state. Scope queries to service + environment + bounded time window (30-60 min).",
-      "phases": ["SHIP", "DEBUG"]
+      "phases": [
+        "SHIP",
+        "DEBUG"
+      ]
     },
     {
       "name": "gke",
@@ -396,7 +436,10 @@
       ],
       "trigger_mode": "regex",
       "hint": "GKE: If GKE MCP tools are available, use them (query_logs, list_clusters) for cluster context and log queries. Prefer LQL log queries over broad log dumps.",
-      "phases": ["SHIP", "DEBUG"]
+      "phases": [
+        "SHIP",
+        "DEBUG"
+      ]
     },
     {
       "name": "cloud-run",
@@ -405,7 +448,10 @@
       ],
       "trigger_mode": "regex",
       "hint": "CLOUD RUN: If Cloud Run MCP tools are available, use them (get_service, get_service_log) to check service state and logs after deployment.",
-      "phases": ["SHIP", "DEBUG"]
+      "phases": [
+        "SHIP",
+        "DEBUG"
+      ]
     },
     {
       "name": "firebase",
@@ -414,7 +460,11 @@
       ],
       "trigger_mode": "regex",
       "hint": "FIREBASE: If Firebase MCP tools are available, use them for read-only resource inspection (documents, auth, rules). Use CLI for deployment and mutations.",
-      "phases": ["IMPLEMENT", "SHIP", "DEBUG"]
+      "phases": [
+        "IMPLEMENT",
+        "SHIP",
+        "DEBUG"
+      ]
     },
     {
       "name": "playwright-mcp",
@@ -423,7 +473,12 @@
       ],
       "trigger_mode": "regex",
       "hint": "PLAYWRIGHT: If Playwright MCP tools are available (browser_navigate, browser_screenshot), use them for visual verification and interactive debugging. Captures what CLI test runners can't show.",
-      "phases": ["IMPLEMENT", "REVIEW", "DEBUG", "SHIP"]
+      "phases": [
+        "IMPLEMENT",
+        "REVIEW",
+        "DEBUG",
+        "SHIP"
+      ]
     }
   ],
   "plugins": [
@@ -431,12 +486,18 @@
       "name": "commit-commands",
       "source": "claude-plugins-official",
       "provides": {
-        "commands": ["/commit", "/commit-push-pr", "/clean_gone"],
+        "commands": [
+          "/commit",
+          "/commit-push-pr",
+          "/clean_gone"
+        ],
         "skills": [],
         "agents": [],
         "hooks": []
       },
-      "phase_fit": ["SHIP"],
+      "phase_fit": [
+        "SHIP"
+      ],
       "description": "Structured commit workflows and branch-to-PR automation"
     },
     {
@@ -446,69 +507,78 @@
         "commands": [],
         "skills": [],
         "agents": [],
-        "hooks": ["PreToolUse:security-patterns"]
+        "hooks": [
+          "PreToolUse:security-patterns"
+        ]
       },
-      "phase_fit": ["*"],
+      "phase_fit": [
+        "*"
+      ],
       "description": "Write-time security blocker for XSS, injection, unsafe deserialization"
     },
     {
       "name": "hookify",
       "source": "claude-plugins-official",
       "provides": {
-        "commands": ["/hookify", "/hookify:list", "/hookify:configure"],
-        "skills": ["writing-rules"],
-        "agents": ["conversation-analyzer"],
+        "commands": [
+          "/hookify",
+          "/hookify:list",
+          "/hookify:configure"
+        ],
+        "skills": [
+          "writing-rules"
+        ],
+        "agents": [
+          "conversation-analyzer"
+        ],
         "hooks": []
       },
-      "phase_fit": ["DESIGN"],
+      "phase_fit": [
+        "DESIGN"
+      ],
       "description": "Custom rule authoring for Claude behavior guards"
     },
     {
       "name": "feature-dev",
       "source": "claude-plugins-official",
       "provides": {
-        "commands": ["/feature-dev"],
+        "commands": [
+          "/feature-dev"
+        ],
         "skills": [],
-        "agents": ["code-explorer", "code-architect", "code-reviewer"],
+        "agents": [
+          "code-explorer",
+          "code-architect",
+          "code-reviewer"
+        ],
         "hooks": []
       },
-      "phase_fit": ["DESIGN", "IMPLEMENT", "REVIEW"],
+      "phase_fit": [
+        "DESIGN",
+        "IMPLEMENT",
+        "REVIEW"
+      ],
       "description": "Full feature pipeline with parallel exploration and architecture agents"
-    },
-    {
-      "name": "code-review",
-      "source": "claude-plugins-official",
-      "provides": {
-        "commands": ["/code-review"],
-        "skills": [],
-        "agents": [],
-        "hooks": []
-      },
-      "phase_fit": ["REVIEW"],
-      "description": "5 parallel review agents with confidence scoring, posts to GitHub"
-    },
-    {
-      "name": "code-simplifier",
-      "source": "claude-plugins-official",
-      "provides": {
-        "commands": [],
-        "skills": [],
-        "agents": ["code-simplifier"],
-        "hooks": []
-      },
-      "phase_fit": ["REVIEW"],
-      "description": "Post-review code clarity and simplification pass"
     },
     {
       "name": "skill-creator",
       "source": "claude-plugins-official",
       "provides": {
         "commands": [],
-        "skills": ["skill-creator"],
-        "agents": ["executor", "grader", "comparator", "analyzer"],
+        "skills": [
+          "skill-creator"
+        ],
+        "agents": [
+          "executor",
+          "grader",
+          "comparator",
+          "analyzer"
+        ],
         "hooks": []
       },
-      "phase_fit": ["DESIGN"],
+      "phase_fit": [
+        "DESIGN"
+      ],
       "description": "Skill eval/improvement loop with benchmarking"
     },
     {
@@ -519,9 +589,16 @@
         "skills": [],
         "agents": [],
         "hooks": [],
-        "mcp_tools": ["resolve-library-id", "get-library-docs"]
+        "mcp_tools": [
+          "resolve-library-id",
+          "get-library-docs"
+        ]
       },
-      "phase_fit": ["DESIGN", "IMPLEMENT", "DEBUG"],
+      "phase_fit": [
+        "DESIGN",
+        "IMPLEMENT",
+        "DEBUG"
+      ],
       "description": "Up-to-date library documentation via Context7 MCP. Resolves library IDs and fetches current docs, API references, and examples."
     },
     {
@@ -532,9 +609,21 @@
         "skills": [],
         "agents": [],
         "hooks": [],
-        "mcp_tools": ["create_pull_request", "get_pull_request", "list_issues", "create_issue", "add_issue_comment", "search_repositories"]
+        "mcp_tools": [
+          "create_pull_request",
+          "get_pull_request",
+          "list_issues",
+          "create_issue",
+          "add_issue_comment",
+          "search_repositories"
+        ]
       },
-      "phase_fit": ["DESIGN", "PLAN", "REVIEW", "SHIP"],
+      "phase_fit": [
+        "DESIGN",
+        "PLAN",
+        "REVIEW",
+        "SHIP"
+      ],
       "description": "GitHub MCP for repository management. Create/review PRs, manage issues, search repos, and interact with GitHub APIs programmatically."
     },
     {
@@ -545,9 +634,18 @@
         "skills": [],
         "agents": [],
         "hooks": [],
-        "mcp_tools": ["searchJiraIssuesUsingJql", "getJiraIssue", "getConfluencePage", "searchConfluenceUsingCql"]
+        "mcp_tools": [
+          "searchJiraIssuesUsingJql",
+          "getJiraIssue",
+          "getConfluencePage",
+          "searchConfluenceUsingCql"
+        ]
       },
-      "phase_fit": ["DESIGN", "PLAN", "REVIEW"],
+      "phase_fit": [
+        "DESIGN",
+        "PLAN",
+        "REVIEW"
+      ],
       "description": "Jira and Confluence integration via claude.ai managed MCP. Connect via /mcp in Claude Code. Pull acceptance criteria, search issues, read design docs."
     }
   ],
@@ -613,16 +711,10 @@
       "driver": "requesting-code-review",
       "parallel": [
         {
-          "plugin": "code-review",
-          "use": "commands:/code-review",
+          "plugin": "pr-review-toolkit",
+          "use": "agents:code-reviewer + silent-failure-hunter + code-simplifier",
           "when": "installed",
-          "purpose": "Run 5 parallel review agents and post findings to GitHub PR"
-        },
-        {
-          "plugin": "code-simplifier",
-          "use": "agents:code-simplifier",
-          "when": "installed",
-          "purpose": "Post-review simplification pass for clarity"
+          "purpose": "Parallel specialist review agents (code quality, silent failures, simplification)"
         },
         {
           "plugin": "github",
@@ -633,8 +725,8 @@
       ],
       "hints": [
         {
-          "plugin": "code-review",
-          "text": "Consider /code-review for automated multi-agent PR review",
+          "plugin": "pr-review-toolkit",
+          "text": "Consider /review-pr for structured multi-agent PR review",
           "when": "installed"
         }
       ]
