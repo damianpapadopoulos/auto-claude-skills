@@ -892,15 +892,36 @@ HINTS_DATA="$(printf '%s' "$REGISTRY" | jq -r '
     (.plugin as $p | [$plugins[] | select(.name == $p and .available == true)] | length > 0)
   else true end) as $available |
   select($available) |
-  ((.skill // "") + "\u001f" + .hint + "\u001f" + ((.triggers // []) | join("\u0001")))
+  ((.skill // "") + "\u001f" + .hint + "\u001f" + ((.triggers // []) | join("\u0001")) + "\u001f" + ((.phases // []) | join("\u0001")))
 ' 2>/dev/null)"
 
-while IFS="$FS" read -r hint_skill hint_text hint_triggers_joined; do
+while IFS="$FS" read -r hint_skill hint_text hint_triggers_joined hint_phases_joined; do
   [[ -z "$hint_text" ]] && continue
 
   # Suppress hint if its associated skill is already selected
   if [[ -n "$hint_skill" ]] && printf '%s' "$SELECTED" | grep -q "|${hint_skill}|"; then
     continue
+  fi
+
+  # Phase-scope check: if hint has phases, PRIMARY_PHASE must match one
+  if [[ -n "$hint_phases_joined" ]] && [[ -n "$PRIMARY_PHASE" ]]; then
+    _phase_match=0
+    _hp_remaining="$hint_phases_joined"
+    while [[ -n "$_hp_remaining" ]]; do
+      if [[ "$_hp_remaining" == *"${DELIM}"* ]]; then
+        _hp="${_hp_remaining%%${DELIM}*}"
+        _hp_remaining="${_hp_remaining#*${DELIM}}"
+      else
+        _hp="$_hp_remaining"
+        _hp_remaining=""
+      fi
+      [[ -z "$_hp" ]] && continue
+      if [[ "$_hp" == "$PRIMARY_PHASE" ]]; then
+        _phase_match=1
+        break
+      fi
+    done
+    [[ "$_phase_match" -eq 0 ]] && continue
   fi
 
   # Test hint triggers against prompt

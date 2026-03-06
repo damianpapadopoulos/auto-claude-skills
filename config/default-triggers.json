@@ -355,11 +355,75 @@
     {
       "name": "github-mcp",
       "triggers": [
-        "(pull.?request|issue|github|merge|branch|repo)"
+        "(pull.?request|issue|github|merge|branch|repo|related.pr|similar.change|previous.attempt|what.was.tried|prior.art|code.history)"
       ],
       "trigger_mode": "regex",
-      "hint": "GITHUB MCP: Use GitHub MCP tools for PR creation, issue management, and repository operations when available.",
-      "plugin": "github"
+      "hint": "GITHUB MCP: Use GitHub MCP tools for PR/issue context, workflow run status, and code history. During brainstorming/planning, search for related PRs and issues to ground decisions in engineering history.",
+      "plugin": "github",
+      "phases": ["DESIGN", "PLAN", "REVIEW", "SHIP"]
+    },
+    {
+      "name": "atlassian-jira",
+      "triggers": [
+        "(ticket|story|epic|acceptance.criter|definition.of.done|requirement|user.story|jira|sprint|backlog)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "ATLASSIAN: If Atlassian MCP tools are available, use Jira (searchJiraIssuesUsingJql, getJiraIssue) to pull acceptance criteria and linked context before planning. Prefer targeted issue lookups over broad searches.",
+      "phases": ["DESIGN", "PLAN"]
+    },
+    {
+      "name": "atlassian-confluence",
+      "triggers": [
+        "(confluence|wiki|knowledge.base|design.doc|architecture.doc|adr|decision.record)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "ATLASSIAN: If Confluence MCP tools are available, use them (getConfluencePage, searchConfluenceUsingCql) for design references. Keep searches narrow -- broad page search adds noise.",
+      "phases": ["DESIGN", "PLAN"]
+    },
+    {
+      "name": "gcp-observability",
+      "triggers": [
+        "(runtime.log|error.group|metric.regress|production.error|staging.error|verify.deploy|post.deploy|list.log|list.metric|trace.search)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "GCP OBSERVABILITY: If observability MCP tools are available, use them (list_log_entries, list_time_series, list_error_groups) to verify runtime state. Scope queries to service + environment + bounded time window (30-60 min).",
+      "phases": ["SHIP", "DEBUG"]
+    },
+    {
+      "name": "gke",
+      "triggers": [
+        "(cluster|kubernetes|k8s|pod|node|namespace|workload|gke)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "GKE: If GKE MCP tools are available, use them (query_logs, list_clusters) for cluster context and log queries. Prefer LQL log queries over broad log dumps.",
+      "phases": ["SHIP", "DEBUG"]
+    },
+    {
+      "name": "cloud-run",
+      "triggers": [
+        "(cloud.?run|serverless.deploy|revision|service.log|cloud.?run.service)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "CLOUD RUN: If Cloud Run MCP tools are available, use them (get_service, get_service_log) to check service state and logs after deployment.",
+      "phases": ["SHIP", "DEBUG"]
+    },
+    {
+      "name": "firebase",
+      "triggers": [
+        "(firebase|firestore|auth.user|security.rules|realtime.db|cloud.function|hosting)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "FIREBASE: If Firebase MCP tools are available, use them for read-only resource inspection (documents, auth, rules). Use CLI for deployment and mutations.",
+      "phases": ["IMPLEMENT", "SHIP", "DEBUG"]
+    },
+    {
+      "name": "playwright-mcp",
+      "triggers": [
+        "(screenshot|visual.test|browser.test|layout.regress|lighthouse|a11y|smoke.test|e2e|playwright)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "PLAYWRIGHT: If Playwright MCP tools are available (browser_navigate, browser_screenshot), use them for visual verification and interactive debugging. Captures what CLI test runners can't show.",
+      "phases": ["IMPLEMENT", "REVIEW", "DEBUG", "SHIP"]
     }
   ],
   "plugins": [
@@ -470,8 +534,21 @@
         "hooks": [],
         "mcp_tools": ["create_pull_request", "get_pull_request", "list_issues", "create_issue", "add_issue_comment", "search_repositories"]
       },
-      "phase_fit": ["REVIEW", "SHIP"],
+      "phase_fit": ["DESIGN", "PLAN", "REVIEW", "SHIP"],
       "description": "GitHub MCP for repository management. Create/review PRs, manage issues, search repos, and interact with GitHub APIs programmatically."
+    },
+    {
+      "name": "atlassian",
+      "source": "claude-plugins-official",
+      "provides": {
+        "commands": [],
+        "skills": [],
+        "agents": [],
+        "hooks": [],
+        "mcp_tools": ["searchJiraIssuesUsingJql", "getJiraIssue", "getConfluencePage", "searchConfluenceUsingCql"]
+      },
+      "phase_fit": ["DESIGN", "PLAN", "REVIEW"],
+      "description": "Jira and Confluence integration. Pull acceptance criteria, search issues, read design docs and knowledge base pages."
     }
   ],
   "phase_compositions": {

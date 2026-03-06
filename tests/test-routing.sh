@@ -270,6 +270,15 @@ install_registry() {
       "trigger_mode": "regex",
       "hint": "PR REVIEW: Consider /pr-review for structured review.",
       "skill": "requesting-code-review"
+    },
+    {
+      "name": "atlassian-jira",
+      "triggers": [
+        "(ticket|story|epic|acceptance.criter|definition.of.done|requirement|user.story|jira|sprint|backlog)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "ATLASSIAN: If Atlassian MCP tools are available, use Jira (searchJiraIssuesUsingJql, getJiraIssue) to pull acceptance criteria.",
+      "phases": ["DESIGN", "PLAN"]
     }
   ],
   "blocklist_patterns": [
@@ -806,6 +815,33 @@ test_methodology_hints() {
     output="$(run_hook "migrate all the legacy modules to the new framework and iterate until done")"
     context="$(extract_context "${output}")"
     assert_contains "Ralph loop hint present" "RALPH LOOP" "${context}"
+
+    teardown_test_env
+}
+
+test_phase_scoped_methodology_hints() {
+    echo "-- test: phase-scoped methodology hints --"
+    setup_test_env
+    install_registry
+
+    # Atlassian Jira hint has phases: ["DESIGN", "PLAN"].
+    # "design a ticket tracking system" triggers brainstorming (DESIGN phase)
+    # and also matches the Jira trigger "ticket" → hint should fire.
+    local output context
+    output="$(run_hook "design a ticket tracking system")"
+    context="$(extract_context "${output}")"
+    assert_contains "Jira hint fires in DESIGN phase" "ATLASSIAN" "${context}"
+
+    # "debug the ticket creation bug" triggers debugging (DEBUG phase)
+    # and matches "ticket" but DEBUG is not in Jira hint's phases → suppressed.
+    output="$(run_hook "debug the ticket creation bug")"
+    context="$(extract_context "${output}")"
+    assert_not_contains "Jira hint suppressed in DEBUG phase" "ATLASSIAN" "${context}"
+
+    # Hint without phases (ralph-loop) fires regardless of phase
+    output="$(run_hook "migrate all the legacy modules and iterate until done")"
+    context="$(extract_context "${output}")"
+    assert_contains "phaseless hint fires unconditionally" "RALPH LOOP" "${context}"
 
     teardown_test_env
 }
@@ -1358,6 +1394,7 @@ test_missing_registry_fallback
 test_output_valid_json
 test_zero_matches_phase_checkpoint
 test_methodology_hints
+test_phase_scoped_methodology_hints
 test_agent_team_execution_matches
 test_design_debate_as_domain
 test_agent_team_review_matches

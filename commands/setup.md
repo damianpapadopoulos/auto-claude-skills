@@ -26,6 +26,7 @@ claude plugin marketplace add obra/superpowers-marketplace
 | pr-review-toolkit | claude-plugins-official | Structured PR review with specialist agents |
 | context7 | claude-plugins-official | Up-to-date library/framework documentation via MCP |
 | github | claude-plugins-official | GitHub repository management, PR creation, issue tracking via MCP |
+| atlassian | claude-plugins-official | Jira and Confluence integration for requirements and design docs |
 
 For each plugin the user wants, run:
 ```bash
