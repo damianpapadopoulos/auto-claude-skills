@@ -45,6 +45,7 @@ The brainstorming skill should consider escalating when it detects:
    - User preferences expressed
 
 3. Round 1 (parallel):
+   - subagent_type: "general-purpose"
    - architect: Proposes approach with reasoning
    - critic: Identifies blind spots and alternatives
    - pragmatist: Evaluates feasibility and complexity cost
