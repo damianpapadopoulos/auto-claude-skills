@@ -375,7 +375,7 @@
         "(library|package|module|sdk|api|docs|documentation|reference|version|latest|upgrade|deprecat|migrat)"
       ],
       "trigger_mode": "regex",
-      "hint": "CONTEXT7: If working with external libraries, use Context7 MCP tools (resolve-library-id, get-library-docs) for up-to-date documentation instead of relying on training data.",
+      "hint": "CONTEXT7: If Context7 MCP tools are available, fetch up-to-date library documentation instead of relying on training data.",
       "plugin": "context7"
     },
     {
@@ -384,7 +384,7 @@
         "(pull.?request|issue|github|merge|branch|repo|related.pr|similar.change|previous.attempt|what.was.tried|prior.art|code.history)"
       ],
       "trigger_mode": "regex",
-      "hint": "GITHUB MCP: Use GitHub MCP tools for PR/issue context, workflow run status, and code history. During brainstorming/planning, search for related PRs and issues to ground decisions in engineering history.",
+      "hint": "GITHUB: If GitHub MCP tools are available, check for related PRs, issues, and workflow runs. Reference any GitHub context already discussed in this session.",
       "plugin": "github",
       "phases": [
         "DESIGN",
@@ -399,7 +399,7 @@
         "(ticket|story|epic|acceptance.criter|definition.of.done|requirement|user.story|jira|sprint|backlog)"
       ],
       "trigger_mode": "regex",
-      "hint": "ATLASSIAN: If Atlassian MCP tools are available, use Jira (searchJiraIssuesUsingJql, getJiraIssue) to pull acceptance criteria and linked context before planning. Prefer targeted issue lookups over broad searches.",
+      "hint": "ATLASSIAN: If Jira MCP tools are available, pull acceptance criteria and linked context for relevant tickets. Reference any Jira context already discussed in this session.",
       "phases": [
         "DESIGN",
         "PLAN"
@@ -411,7 +411,7 @@
         "(confluence|wiki|knowledge.base|design.doc|architecture.doc|adr|decision.record)"
       ],
       "trigger_mode": "regex",
-      "hint": "ATLASSIAN: If Confluence MCP tools are available, use them (getConfluencePage, searchConfluenceUsingCql) for design references. Keep searches narrow -- broad page search adds noise.",
+      "hint": "ATLASSIAN: If Confluence MCP tools are available, search for relevant design docs and references. Keep searches narrow by title or space.",
       "phases": [
         "DESIGN",
         "PLAN"
@@ -423,7 +423,7 @@
         "(runtime.log|error.group|metric.regress|production.error|staging.error|verify.deploy|post.deploy|list.log|list.metric|trace.search)"
       ],
       "trigger_mode": "regex",
-      "hint": "GCP OBSERVABILITY: If observability MCP tools are available, use them (list_log_entries, list_time_series, list_error_groups) to verify runtime state. Scope queries to service + environment + bounded time window (30-60 min).",
+      "hint": "GCP OBSERVABILITY: If observability MCP tools are available, verify runtime state. Scope queries to service + environment + narrow time window (30-60 min).",
       "phases": [
         "SHIP",
         "DEBUG"
@@ -435,7 +435,7 @@
         "(cluster|kubernetes|k8s|pod|node|namespace|workload|gke)"
       ],
       "trigger_mode": "regex",
-      "hint": "GKE: If GKE MCP tools are available, use them (query_logs, list_clusters) for cluster context and log queries. Prefer LQL log queries over broad log dumps.",
+      "hint": "GKE: If GKE MCP tools are available, query cluster context and logs. Prefer scoped LQL queries over broad log dumps.",
       "phases": [
         "SHIP",
         "DEBUG"
@@ -447,7 +447,7 @@
         "(cloud.?run|serverless.deploy|revision|service.log|cloud.?run.service)"
       ],
       "trigger_mode": "regex",
-      "hint": "CLOUD RUN: If Cloud Run MCP tools are available, use them (get_service, get_service_log) to check service state and logs after deployment.",
+      "hint": "CLOUD RUN: If Cloud Run MCP tools are available, check service state and recent logs.",
       "phases": [
         "SHIP",
         "DEBUG"
@@ -459,7 +459,7 @@
         "(firebase|firestore|auth.user|security.rules|realtime.db|cloud.function|hosting)"
       ],
       "trigger_mode": "regex",
-      "hint": "FIREBASE: If Firebase MCP tools are available, use them for read-only resource inspection (documents, auth, rules). Use CLI for deployment and mutations.",
+      "hint": "FIREBASE: If Firebase MCP tools are available, inspect resources read-only (documents, auth, rules). Use CLI for mutations.",
       "phases": [
         "IMPLEMENT",
         "SHIP",
@@ -472,7 +472,7 @@
         "(screenshot|visual.test|browser.test|layout.regress|lighthouse|a11y|smoke.test|e2e|playwright)"
       ],
       "trigger_mode": "regex",
-      "hint": "PLAYWRIGHT: If Playwright MCP tools are available (browser_navigate, browser_screenshot), use them for visual verification and interactive debugging. Captures what CLI test runners can't show.",
+      "hint": "PLAYWRIGHT: If Playwright MCP tools are available, use them for visual verification and interactive debugging.",
       "phases": [
         "IMPLEMENT",
         "REVIEW",
