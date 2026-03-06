@@ -304,6 +304,7 @@
     }
   ],
   "plugins": [],
+  "mcp_servers": [],
   "phase_compositions": {
     "DESIGN": {"driver": "brainstorming", "parallel": [], "hints": []},
     "PLAN": {"driver": "writing-plans", "parallel": [], "hints": []},
