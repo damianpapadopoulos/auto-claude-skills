@@ -733,8 +733,8 @@ ${SKILL_LINES}${COMPOSITION_CHAIN}${COMPOSITION_LINES}
 
 Evaluate: **Phase: [${EVAL_PHASE}]** | ${EVAL_SKILLS}${DOMAIN_HINT}${COMPOSITION_DIRECTIVE}"
 
-  elif [[ "$_PROMPT_COUNT" -le 5 ]] && [[ "$TOTAL_COUNT" -ge 3 ]]; then
-    # --- full format (3+ skills, depth 1-5) ---
+  elif [[ "$_PROMPT_COUNT" -le 1 ]] && [[ "$TOTAL_COUNT" -ge 3 ]]; then
+    # --- full format (3+ skills, prompt 1 only) ---
     # Build phase guide from registry (falls back to a minimal default)
     _PHASE_GUIDE="$(printf '%s' "$REGISTRY" | jq -r '
       .phase_guide // empty | to_entries | sort_by(.key) |

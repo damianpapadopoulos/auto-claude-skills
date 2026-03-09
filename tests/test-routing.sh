@@ -2556,4 +2556,60 @@ test_zero_match_emits_nothing() {
 }
 test_zero_match_emits_nothing
 
+# ---------------------------------------------------------------------------
+# Full format only on prompt 1 (3+ skills)
+# ---------------------------------------------------------------------------
+test_full_format_only_prompt_1() {
+    echo "-- test: full format only on prompt 1 --"
+    local prompt="build a new component and review the design for security"
+
+    # --- Sub-test A: prompt 1 (no prior counter) SHOULD show full format ---
+    setup_test_env
+    install_registry
+
+    # Ensure no session token or counter exists (fresh session = prompt 1)
+    rm -f "${HOME}/.claude/.skill-session-token"
+    rm -f "${HOME}/.claude/.skill-prompt-count-"*
+
+    local output ctx
+    output="$(run_hook "$prompt")"
+    ctx="$(extract_context "$output")"
+
+    if printf '%s' "$ctx" | grep -q "Step 1 -- ASSESS"; then
+        _record_pass "full format shown on prompt 1"
+    else
+        _record_fail "full format shown on prompt 1" "output missing 'Step 1 -- ASSESS': ${ctx}"
+    fi
+
+    teardown_test_env
+
+    # --- Sub-test B: prompt 3 (counter at 2) should NOT show full format ---
+    setup_test_env
+    install_registry
+
+    # Set up session token and depth counter so _PROMPT_COUNT will be 3
+    local token="test-full-fmt"
+    printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
+    printf '%s' "2" > "${HOME}/.claude/.skill-prompt-count-${token}"
+
+    output="$(run_hook "$prompt")"
+    ctx="$(extract_context "$output")"
+
+    if printf '%s' "$ctx" | grep -q "Step 1 -- ASSESS"; then
+        _record_fail "no full format on prompt 3" "output contains 'Step 1 -- ASSESS': ${ctx}"
+    else
+        _record_pass "no full format on prompt 3"
+    fi
+
+    # Verify we still got output (compact format, not empty)
+    if [[ -n "$ctx" ]]; then
+        _record_pass "prompt 3 still produces output (compact format)"
+    else
+        _record_fail "prompt 3 still produces output (compact format)" "output was empty"
+    fi
+
+    teardown_test_env
+}
+test_full_format_only_prompt_1
+
 print_summary
