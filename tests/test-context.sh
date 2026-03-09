@@ -176,21 +176,21 @@ REGISTRY
 }
 
 # ---------------------------------------------------------------------------
-# 1. 0 skills -> minimal output (phase checkpoint, no Step 2)
+# 1. 0 skills -> silent (no output at all)
 # ---------------------------------------------------------------------------
 test_zero_skills_minimal_output() {
-    echo "-- test: 0 skills -> minimal output --"
+    echo "-- test: 0 skills -> silent (no output) --"
     setup_test_env
     install_context_registry
 
     local output
     output="$(run_hook "tell me about the weather forecast for tomorrow please")"
-    local context
-    context="$(extract_context "${output}")"
 
-    assert_contains "0 skills has phase checkpoint" "phase checkpoint" "$(printf '%s' "${context}" | tr '[:upper:]' '[:lower:]')"
-    assert_not_contains "0 skills does NOT have Step 2" "Step 2" "${context}"
-    assert_contains "0 skills mentions 0 skills" "0 skills" "${context}"
+    if [[ -z "$output" ]]; then
+        _record_pass "0 skills produces empty output"
+    else
+        _record_fail "0 skills produces empty output" "got: ${output}"
+    fi
 
     teardown_test_env
 }
@@ -282,15 +282,18 @@ test_invocation_hints_present() {
 # 6. Output is valid hook JSON
 # ---------------------------------------------------------------------------
 test_output_valid_json_zero_match() {
-    echo "-- test: 0-match output is valid JSON --"
+    echo "-- test: 0-match output is empty (no JSON emitted) --"
     setup_test_env
     install_context_registry
 
     local output
     output="$(run_hook "tell me about the weather forecast for tomorrow please")"
-    local tmpfile="${TEST_TMPDIR}/output-zero.json"
-    printf '%s' "${output}" > "${tmpfile}"
-    assert_json_valid "0-match output is valid JSON" "${tmpfile}"
+
+    if [[ -z "$output" ]]; then
+        _record_pass "0-match output is empty (no JSON emitted)"
+    else
+        _record_fail "0-match output is empty (no JSON emitted)" "got: ${output}"
+    fi
 
     teardown_test_env
 }

@@ -817,18 +817,19 @@ test_output_valid_json() {
 # 13. Zero matches produce phase checkpoint
 # ---------------------------------------------------------------------------
 test_zero_matches_phase_checkpoint() {
-    echo "-- test: zero matches produce phase checkpoint --"
+    echo "-- test: zero matches produce no output --"
     setup_test_env
     install_registry
 
     # A prompt that won't match any triggers
     local output
     output="$(run_hook "tell me about the weather forecast for tomorrow please")"
-    local context
-    context="$(extract_context "${output}")"
 
-    assert_contains "zero match has phase checkpoint" "phase checkpoint" "$(printf '%s' "${context}" | tr '[:upper:]' '[:lower:]')"
-    assert_contains "zero match has 0 skills" "0 skills" "${context}"
+    if [[ -z "$output" ]]; then
+        _record_pass "zero match produces empty output"
+    else
+        _record_fail "zero match produces empty output" "got: ${output}"
+    fi
 
     teardown_test_env
 }
@@ -877,7 +878,8 @@ test_phase_scoped_methodology_hints() {
     assert_not_contains "Jira hint suppressed in DEBUG phase" "ATLASSIAN" "${context}"
 
     # Hint without phases (ralph-loop) fires regardless of phase
-    output="$(run_hook "migrate all the legacy modules and iterate until done")"
+    # Use a prompt that matches a skill ("build" → brainstorming) AND the ralph-loop hint ("iterate")
+    output="$(run_hook "build and iterate on the legacy modules until done")"
     context="$(extract_context "${output}")"
     assert_contains "phaseless hint fires unconditionally" "RALPH LOOP" "${context}"
 
@@ -2238,8 +2240,12 @@ KWSHORTREG
     output="$(run_hook "help me fix this bad code please")"
     context="$(extract_context "${output}")"
 
-    # All keywords are < 6 chars so none should score; expect 0 skills
-    assert_contains "short keywords produce 0 skills" "0 skills" "${context}"
+    # All keywords are < 6 chars so none should score; expect empty output
+    if [[ -z "$output" ]]; then
+        _record_pass "short keywords produce no output"
+    else
+        _record_fail "short keywords produce no output" "got: ${output}"
+    fi
 
     teardown_test_env
 }
@@ -2519,5 +2525,35 @@ REGISTRY
     teardown_test_env
 }
 test_opal_integration
+
+# ---------------------------------------------------------------------------
+# Zero-match emits nothing (no hookSpecificOutput)
+# ---------------------------------------------------------------------------
+test_zero_match_emits_nothing() {
+    echo "-- test: zero-match emits nothing --"
+    setup_test_env
+    install_registry
+
+    local output
+    output="$(run_hook "tell me about the weather forecast for tomorrow please")"
+
+    if [[ -z "$output" ]]; then
+        _record_pass "zero-match produces no output"
+    else
+        _record_fail "zero-match produces no output" "got: ${output}"
+    fi
+
+    # Counter should still be incremented
+    local zm_count
+    zm_count="$(cat "${HOME}/.claude/.skill-zero-match-count" 2>/dev/null)"
+    if [[ "$zm_count" =~ ^[0-9]+$ ]] && [[ "$zm_count" -ge 1 ]]; then
+        _record_pass "zero-match counter incremented"
+    else
+        _record_fail "zero-match counter incremented" "got: ${zm_count:-<empty>}"
+    fi
+
+    teardown_test_env
+}
+test_zero_match_emits_nothing
 
 print_summary

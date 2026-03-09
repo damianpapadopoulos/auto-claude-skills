@@ -710,10 +710,8 @@ _format_output() {
     [[ "$_zm" =~ ^[0-9]+$ ]] || _zm=0
     printf '%s' "$((_zm + 1))" > "$_ZM_FILE" 2>/dev/null || true
 
-    OUT="SKILL ACTIVATION (0 skills | phase checkpoint only)
-
-Phase: assess current phase (DESIGN/PLAN/IMPLEMENT/REVIEW/SHIP/DEBUG)
-and consider whether any installed skill applies."
+    # Zero-match: emit nothing (no additionalContext)
+    return
 
   elif [[ "$_PROMPT_COUNT" -gt 10 ]]; then
     # --- minimal format (depth 11+): skill list + eval only ---
