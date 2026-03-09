@@ -479,6 +479,19 @@
         "DEBUG",
         "SHIP"
       ]
+    },
+    {
+      "name": "claude-md-maintenance",
+      "triggers": [
+        "(refactor|restructur|new.convention|architecture.change|reorganize|rename.*(module|package|directory))"
+      ],
+      "trigger_mode": "regex",
+      "hint": "CLAUDE.MD: If this session changed project conventions or structure, consider /revise-claude-md",
+      "skill": "claude-md-improver",
+      "phases": [
+        "IMPLEMENT",
+        "SHIP"
+      ]
     }
   ],
   "plugins": [

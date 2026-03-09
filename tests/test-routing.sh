@@ -251,6 +251,19 @@ install_registry() {
       "invoke": "Skill(design-debate)",
       "available": true,
       "enabled": true
+    },
+    {
+      "name": "claude-md-improver",
+      "role": "domain",
+      "phase": "DESIGN",
+      "triggers": [
+        "(claude\\.md|claude.md|project.?memory|improve.*claude|audit.*claude|update.*claude.md)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 10,
+      "invoke": "Skill(superpowers:claude-md-improver)",
+      "available": true,
+      "enabled": true
     }
   ],
   "methodology_hints": [
@@ -279,6 +292,19 @@ install_registry() {
       "trigger_mode": "regex",
       "hint": "ATLASSIAN: If Atlassian MCP tools are available, use Jira (searchJiraIssuesUsingJql, getJiraIssue) to pull acceptance criteria.",
       "phases": ["DESIGN", "PLAN"]
+    },
+    {
+      "name": "claude-md-maintenance",
+      "triggers": [
+        "(refactor|restructur|new.convention|architecture.change|reorganize|rename.*(module|package|directory))"
+      ],
+      "trigger_mode": "regex",
+      "hint": "CLAUDE.MD: If this session changed project conventions or structure, consider /revise-claude-md",
+      "skill": "claude-md-improver",
+      "phases": [
+        "IMPLEMENT",
+        "SHIP"
+      ]
     }
   ],
   "blocklist_patterns": [
@@ -505,6 +531,17 @@ install_registry_v4() {
       "invoke": "Skill(design-debate)",
       "available": true,
       "enabled": true
+    },
+    {
+      "name": "claude-md-improver",
+      "role": "domain",
+      "phase": "DESIGN",
+      "triggers": ["(claude\\.md|claude.md|project.?memory|improve.*claude|audit.*claude|update.*claude.md)"],
+      "trigger_mode": "regex",
+      "priority": 10,
+      "invoke": "Skill(superpowers:claude-md-improver)",
+      "available": true,
+      "enabled": true
     }
   ],
   "plugins": [
@@ -524,7 +561,8 @@ install_registry_v4() {
   },
   "methodology_hints": [
     {"name": "ralph-loop", "triggers": ["(migrate|refactor.all|fix.all|batch|overnight|autonom|iterate|keep.(going|trying|fixing))"], "trigger_mode": "regex", "hint": "RALPH LOOP: Consider /ralph-loop for autonomous iteration."},
-    {"name": "pr-review", "triggers": ["(review|pull.?request|code.?review|(^|[^a-z])pr($|[^a-z]))"], "trigger_mode": "regex", "hint": "PR REVIEW: Consider /pr-review for structured review.", "skill": "requesting-code-review"}
+    {"name": "pr-review", "triggers": ["(review|pull.?request|code.?review|(^|[^a-z])pr($|[^a-z]))"], "trigger_mode": "regex", "hint": "PR REVIEW: Consider /pr-review for structured review.", "skill": "requesting-code-review"},
+    {"name": "claude-md-maintenance", "triggers": ["(refactor|restructur|new.convention|architecture.change|reorganize|rename.*(module|package|directory))"], "trigger_mode": "regex", "hint": "CLAUDE.MD: If this session changed project conventions or structure, consider /revise-claude-md", "skill": "claude-md-improver", "phases": ["IMPLEMENT", "SHIP"]}
   ],
   "blocklist_patterns": [
     {"pattern": "^(hi|hello|hey|thanks|thank.you|good.(morning|afternoon|evening)|bye|goodbye|ok|okay|yes|no|sure|yep|nope|got.it|sounds.good|cool|nice|great|perfect|awesome|understood)([[:space:]!.,]+.{0,20})?$", "description": "Greeting or short acknowledgement", "max_tail_length": 20}
@@ -842,6 +880,30 @@ test_phase_scoped_methodology_hints() {
     output="$(run_hook "migrate all the legacy modules and iterate until done")"
     context="$(extract_context "${output}")"
     assert_contains "phaseless hint fires unconditionally" "RALPH LOOP" "${context}"
+
+    teardown_test_env
+}
+
+test_claude_md_maintenance_hint() {
+    echo "-- test: claude-md maintenance hint --"
+    setup_test_env
+    install_registry
+
+    # "run tests after the refactoring" → TDD selected (IMPLEMENT phase) + matches "refactor" trigger
+    local output context
+    output="$(run_hook "run tests after the refactoring of the auth module")"
+    context="$(extract_context "${output}")"
+    assert_contains "claude-md hint fires in IMPLEMENT phase" "CLAUDE.MD" "${context}"
+
+    # "design a new refactored architecture" → DESIGN phase, hint should NOT fire
+    output="$(run_hook "design a new refactored architecture")"
+    context="$(extract_context "${output}")"
+    assert_not_contains "claude-md hint suppressed in DESIGN phase" "CLAUDE.MD" "${context}"
+
+    # When claude-md-improver is already selected, hint should be suppressed
+    output="$(run_hook "improve the claude.md and refactor conventions")"
+    context="$(extract_context "${output}")"
+    assert_not_contains "claude-md hint suppressed when skill selected" "CLAUDE.MD" "${context}"
 
     teardown_test_env
 }
@@ -1395,6 +1457,7 @@ test_output_valid_json
 test_zero_matches_phase_checkpoint
 test_methodology_hints
 test_phase_scoped_methodology_hints
+test_claude_md_maintenance_hint
 test_agent_team_execution_matches
 test_design_debate_as_domain
 test_agent_team_review_matches
