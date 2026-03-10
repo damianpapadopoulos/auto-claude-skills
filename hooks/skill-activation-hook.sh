@@ -491,18 +491,7 @@ EOF
 
     SKILL_LINES="${_SL_PROCESS}${_SL_DOMAIN}${_SL_WORKFLOW}${_SL_STANDALONE}"
 
-    # Overflow skills (relevant but didn't fit in top suggestions)
-    for _overflow_var in OVERFLOW_DOMAIN OVERFLOW_WORKFLOW; do
-      _overflow_val="${!_overflow_var}"
-      while IFS='|' read -r oname oinvoke; do
-        [[ -z "$oname" ]] && continue
-        SKILL_LINES="${SKILL_LINES}
-  Also relevant: ${oname} -> ${oinvoke}"
-        EVAL_SKILLS="${EVAL_SKILLS}, ${oname} YES/NO"
-      done <<EOF
-${_overflow_val}
-EOF
-    done
+    # Overflow skills intentionally not displayed — role caps are the signal.
   fi
 }
 

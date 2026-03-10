@@ -1024,24 +1024,23 @@ test_domain_invocation_instruction() {
 }
 
 # ---------------------------------------------------------------------------
-# 21. Overflow domain skills shown as "Also relevant"
+# 21. Overflow domain skills NOT shown (role caps are the signal)
 # ---------------------------------------------------------------------------
-test_overflow_domain_shown() {
-    echo "-- test: overflow domain skills shown --"
+test_overflow_domain_hidden() {
+    echo "-- test: overflow domain skills hidden --"
     setup_test_env
     install_registry
 
     # With max_suggestions=3 (default), process + 2 domain fills the cap.
-    # A third domain skill should appear as "Also relevant"
+    # A third domain skill should NOT appear as "Also relevant"
     # "build a secure responsive dashboard" triggers:
     #   brainstorming (process), security-scanner (domain, p102), frontend-design (domain, p101), design-debate (domain, p14)
-    # design-debate should overflow
+    # design-debate overflows but should not be displayed
     local output context
     output="$(run_hook "build a secure responsive dashboard with csrf protection")"
     context="$(extract_context "${output}")"
 
-    assert_contains "overflow domain shown" "Also relevant" "${context}"
-    assert_contains "overflow includes design-debate" "design-debate" "${context}"
+    assert_not_contains "overflow domain not shown" "Also relevant" "${context}"
 
     teardown_test_env
 }
@@ -1466,7 +1465,7 @@ test_agent_team_review_matches
 test_brainstorming_short_prompt
 test_skill_name_mention_boost
 test_domain_invocation_instruction
-test_overflow_domain_shown
+test_overflow_domain_hidden
 test_teammate_idle_guard
 test_review_emits_parallel_lines
 test_ship_emits_sequence_lines
@@ -2649,5 +2648,24 @@ test_name_boost_segment_reduced() {
     teardown_test_env
 }
 test_name_boost_segment_reduced
+
+# ---------------------------------------------------------------------------
+# Overflow skills should never appear in context output
+# ---------------------------------------------------------------------------
+test_no_overflow_display() {
+    echo "-- test: no overflow display --"
+    setup_test_env
+    install_registry
+
+    # Trigger many skills to force overflow
+    local output ctx
+    output="$(run_hook "build and debug this security issue then review and ship it")"
+    ctx="$(extract_context "$output")"
+
+    assert_not_contains "overflow skills should not appear" "Also relevant:" "$ctx"
+
+    teardown_test_env
+}
+test_no_overflow_display
 
 print_summary
