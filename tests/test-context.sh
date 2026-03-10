@@ -176,21 +176,88 @@ REGISTRY
 }
 
 # ---------------------------------------------------------------------------
-# 1. 0 skills -> minimal output (phase checkpoint, no Step 2)
+# Registry with composition chain skills: brainstorming -> writing-plans -> executing-plans
+# ---------------------------------------------------------------------------
+install_registry() {
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'REGISTRY'
+{
+  "version": "4.0.0",
+  "skills": [
+    {
+      "name": "brainstorming",
+      "role": "process",
+      "phase": "DESIGN",
+      "triggers": [
+        "(build|create|implement|develop|scaffold|brainstorm|design|architect|add|write|make|generate|new|start)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 30,
+      "precedes": ["writing-plans"],
+      "requires": [],
+      "invoke": "Skill(superpowers:brainstorming)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "writing-plans",
+      "role": "process",
+      "phase": "PLAN",
+      "triggers": [
+        "(plan|outline|break.?down|detail|spec|write.*(plan|spec))"
+      ],
+      "trigger_mode": "regex",
+      "priority": 40,
+      "precedes": ["executing-plans"],
+      "requires": ["brainstorming"],
+      "invoke": "Skill(superpowers:writing-plans)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "executing-plans",
+      "role": "process",
+      "phase": "IMPLEMENT",
+      "triggers": [
+        "(execute.*plan|run.the.plan|implement.the.plan|continue|follow.the.plan|resume|next.task|next.step)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 15,
+      "precedes": [],
+      "requires": ["writing-plans"],
+      "invoke": "Skill(superpowers:executing-plans)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "methodology_hints": [],
+  "phase_guide": {
+    "DESIGN":    "brainstorming (ask questions, get approval)",
+    "PLAN":      "writing-plans (break into tasks, confirm before execution)",
+    "IMPLEMENT": "executing-plans or subagent-driven-development + TDD"
+  },
+  "warnings": []
+}
+REGISTRY
+}
+
+# ---------------------------------------------------------------------------
+# 1. 0 skills -> silent (no output at all)
 # ---------------------------------------------------------------------------
 test_zero_skills_minimal_output() {
-    echo "-- test: 0 skills -> minimal output --"
+    echo "-- test: 0 skills -> silent (no output) --"
     setup_test_env
     install_context_registry
 
     local output
     output="$(run_hook "tell me about the weather forecast for tomorrow please")"
-    local context
-    context="$(extract_context "${output}")"
 
-    assert_contains "0 skills has phase checkpoint" "phase checkpoint" "$(printf '%s' "${context}" | tr '[:upper:]' '[:lower:]')"
-    assert_not_contains "0 skills does NOT have Step 2" "Step 2" "${context}"
-    assert_contains "0 skills mentions 0 skills" "0 skills" "${context}"
+    if [[ -z "$output" ]]; then
+        _record_pass "0 skills produces empty output"
+    else
+        _record_fail "0 skills produces empty output" "got: ${output}"
+    fi
 
     teardown_test_env
 }
@@ -282,15 +349,18 @@ test_invocation_hints_present() {
 # 6. Output is valid hook JSON
 # ---------------------------------------------------------------------------
 test_output_valid_json_zero_match() {
-    echo "-- test: 0-match output is valid JSON --"
+    echo "-- test: 0-match output is empty (no JSON emitted) --"
     setup_test_env
     install_context_registry
 
     local output
     output="$(run_hook "tell me about the weather forecast for tomorrow please")"
-    local tmpfile="${TEST_TMPDIR}/output-zero.json"
-    printf '%s' "${output}" > "${tmpfile}"
-    assert_json_valid "0-match output is valid JSON" "${tmpfile}"
+
+    if [[ -z "$output" ]]; then
+        _record_pass "0-match output is empty (no JSON emitted)"
+    else
+        _record_fail "0-match output is empty (no JSON emitted)" "got: ${output}"
+    fi
 
     teardown_test_env
 }
@@ -354,6 +424,98 @@ test_full_format_process_first() {
 }
 
 # ---------------------------------------------------------------------------
+# 8. Composition state written to file
+# ---------------------------------------------------------------------------
+test_composition_state_written() {
+    echo "-- test: composition state written to file --"
+    setup_test_env
+    install_registry
+
+    printf 'comp-test-session' > "${HOME}/.claude/.skill-session-token"
+    # Simulate brainstorming was invoked last
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' > "${HOME}/.claude/.skill-last-invoked-comp-test-session"
+
+    # Trigger writing-plans (next in chain)
+    run_hook "let's plan this out and write a detailed plan" >/dev/null
+
+    local state_file="${HOME}/.claude/.skill-composition-state-comp-test-session"
+    assert_file_exists "composition state file should be created" "$state_file"
+
+    # Verify JSON structure
+    local chain_len
+    chain_len="$(jq '.chain | length' "$state_file" 2>/dev/null)"
+    if [[ "$chain_len" -ge 2 ]]; then
+        _record_pass "composition state should have chain with 2+ skills"
+    else
+        _record_fail "composition state should have chain with 2+ skills" "got chain length: ${chain_len}"
+    fi
+
+    # Verify completed array exists
+    local has_completed
+    has_completed="$(jq 'has("completed")' "$state_file" 2>/dev/null)"
+    assert_equals "state should have completed field" "true" "$has_completed"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# 9. Composition recovery after compaction
+# ---------------------------------------------------------------------------
+test_composition_recovery_after_compaction() {
+    echo "-- test: composition recovery after compaction --"
+    setup_test_env
+    mkdir -p "${HOME}/.claude"
+
+    printf 'recovery-test-session' > "${HOME}/.claude/.skill-session-token"
+
+    # Create a composition state file
+    cat > "${HOME}/.claude/.skill-composition-state-recovery-test-session" <<'COMP'
+{"chain":["brainstorming","writing-plans","executing-plans"],"current_index":1,"completed":["brainstorming"],"updated_at":"2026-03-09T14:30:00Z"}
+COMP
+
+    # Run the compact-recovery hook (pipe empty JSON as stdin)
+    local output
+    output="$(echo '{}' | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" bash "${PROJECT_ROOT}/hooks/compact-recovery-hook.sh" 2>/dev/null)"
+
+    assert_contains "recovery should show composition header" "Composition Recovery" "$output"
+    assert_contains "recovery should show chain" "brainstorming -> writing-plans -> executing-plans" "$output"
+    assert_contains "recovery should show completed" "brainstorming" "$output"
+    assert_contains "recovery should show current step" "writing-plans" "$output"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# 10. Composition DONE vs DONE? uses persisted state
+# ---------------------------------------------------------------------------
+test_composition_done_not_done_question() {
+    echo "-- test: composition DONE uses persisted state --"
+    setup_test_env
+    install_registry
+
+    printf 'done-test-session' > "${HOME}/.claude/.skill-session-token"
+
+    # Create composition state showing brainstorming is confirmed complete
+    cat > "${HOME}/.claude/.skill-composition-state-done-test-session" <<'COMP'
+{"chain":["brainstorming","writing-plans","executing-plans"],"current_index":1,"completed":["brainstorming"],"updated_at":"2026-03-09T14:30:00Z"}
+COMP
+
+    # Simulate brainstorming was last invoked
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' > "${HOME}/.claude/.skill-last-invoked-done-test-session"
+
+    # Trigger writing-plans (next in chain after brainstorming)
+    local output ctx
+    output="$(run_hook "let's write the implementation plan now")"
+    ctx="$(extract_context "$output")"
+
+    # Should show [DONE] not [DONE?] for brainstorming
+    assert_contains "brainstorming should be marked DONE" "[DONE]" "$ctx"
+    assert_not_contains "should not show DONE?" "[DONE?]" "$ctx"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_zero_skills_minimal_output
@@ -365,5 +527,8 @@ test_output_valid_json_zero_match
 test_output_valid_json_single_match
 test_output_valid_json_multi_match
 test_full_format_process_first
+test_composition_state_written
+test_composition_recovery_after_compaction
+test_composition_done_not_done_question
 
 print_summary

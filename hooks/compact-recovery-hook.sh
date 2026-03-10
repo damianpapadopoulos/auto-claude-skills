@@ -26,6 +26,24 @@ if [ -f "$CHECKPOINT" ]; then
     echo "=== End Team State Recovery ==="
 fi
 
+# --- Re-inject composition state if it exists ---
+if [ -n "$_SESSION_TOKEN" ]; then
+    COMP_FILE="${HOME}/.claude/.skill-composition-state-${_SESSION_TOKEN}"
+    if [ -f "$COMP_FILE" ] && command -v jq >/dev/null 2>&1; then
+        _chain="$(jq -r '.chain | join(" -> ")' "$COMP_FILE" 2>/dev/null)"
+        _completed="$(jq -r '.completed | join(", ")' "$COMP_FILE" 2>/dev/null)"
+        _current="$(jq -r '.chain[.current_index] // "unknown"' "$COMP_FILE" 2>/dev/null)"
+        if [ -n "$_chain" ]; then
+            echo "=== Composition Recovery (from pre-compaction state) ==="
+            echo "Chain: ${_chain}"
+            echo "Completed: ${_completed}"
+            echo "Current step: ${_current}"
+            echo "Resume from: ${_current}"
+            echo "=== End Composition Recovery ==="
+        fi
+    fi
+fi
+
 # --- Log post-compaction event ---
 INPUT="$(cat)"
 TRANSCRIPT_PATH="$(printf '%s' "$INPUT" | jq -r '.transcript_path // empty' 2>/dev/null)"

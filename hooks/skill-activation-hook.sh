@@ -29,6 +29,9 @@ PROMPT=$(cat 2>/dev/null | jq -r '.prompt // empty' 2>/dev/null) || true
 # Skip slash commands — these are handled by the Skill tool directly
 [[ "$PROMPT" =~ ^[[:space:]]*/ ]] && exit 0
 (( ${#PROMPT} < 5 )) && exit 0
+# Escape hatch: [no-skills] marker or -- prefix suppresses all routing
+[[ "$PROMPT" == *"[no-skills]"* ]] && exit 0
+[[ "$PROMPT" =~ ^[[:space:]]*--[[:space:]] ]] && exit 0
 
 P=$(printf '%s' "$PROMPT" | tr '[:upper:]' '[:lower:]')
 
@@ -101,9 +104,9 @@ _score_skills() {
   while IFS="$FS" read -r skill_name skill_name_lower skill_role skill_priority skill_invoke skill_phase triggers_joined keywords_joined; do
     [[ -z "$skill_name" ]] && continue
 
-    # Name boost: full name match (100) or hyphen-segment match (40).
+    # Name boost: full name match (100) or hyphen-segment match (20).
     # Full: "frontend-design" as whole word in prompt -> 100
-    # Segment: "frontend" as whole word (segment of "frontend-design") -> 40
+    # Segment: "frontend" as whole word (segment of "frontend-design") -> 20
     name_boost=0
     if [[ "$P" =~ (^|[^a-z0-9-])${skill_name_lower}($|[^a-z0-9-]) ]]; then
       name_boost=100
@@ -121,7 +124,7 @@ _score_skills() {
         # common words like "test", "code", "plan" that are also trigger words
         [[ "${#_seg}" -lt 6 ]] && continue
         if [[ "$P" =~ (^|[^a-z0-9])${_seg}($|[^a-z0-9]) ]]; then
-          name_boost=40
+          name_boost=20
           break
         fi
       done
@@ -491,18 +494,7 @@ EOF
 
     SKILL_LINES="${_SL_PROCESS}${_SL_DOMAIN}${_SL_WORKFLOW}${_SL_STANDALONE}"
 
-    # Overflow skills (relevant but didn't fit in top suggestions)
-    for _overflow_var in OVERFLOW_DOMAIN OVERFLOW_WORKFLOW; do
-      _overflow_val="${!_overflow_var}"
-      while IFS='|' read -r oname oinvoke; do
-        [[ -z "$oname" ]] && continue
-        SKILL_LINES="${SKILL_LINES}
-  Also relevant: ${oname} -> ${oinvoke}"
-        EVAL_SKILLS="${EVAL_SKILLS}, ${oname} YES/NO"
-      done <<EOF
-${_overflow_val}
-EOF
-    done
+    # Overflow skills intentionally not displayed — role caps are the signal.
   fi
 }
 
@@ -627,6 +619,13 @@ EOF
         done
       fi
 
+      # Read persisted composition state for definitive DONE markers
+      _COMP_COMPLETED=""
+      _COMP_FILE="${HOME}/.claude/.skill-composition-state-${_SESSION_TOKEN:-default}"
+      if [[ -f "$_COMP_FILE" ]]; then
+        _COMP_COMPLETED="$(jq -r '.completed[]' "$_COMP_FILE" 2>/dev/null)" || _COMP_COMPLETED=""
+      fi
+
       # Build the chain display + phase labels in one pass
       _idx=0
       _chain_lines=""
@@ -637,7 +636,10 @@ EOF
         [[ -z "$_cname" ]] && continue
 
         if [[ "$_idx" -lt "$_current_idx" ]]; then
-          if [[ "$_last_skill_chain_idx" -ge 0 ]] && [[ "$_idx" -le "$_last_skill_chain_idx" ]]; then
+          # Check persisted state first, fall back to last-invoked signal
+          if [[ -n "$_COMP_COMPLETED" ]] && printf '%s\n' "$_COMP_COMPLETED" | grep -qx "$_cname" 2>/dev/null; then
+            _marker="DONE"
+          elif [[ "$_last_skill_chain_idx" -ge 0 ]] && [[ "$_idx" -le "$_last_skill_chain_idx" ]]; then
             _marker="DONE"
           else
             _marker="DONE?"
@@ -710,10 +712,18 @@ _format_output() {
     [[ "$_zm" =~ ^[0-9]+$ ]] || _zm=0
     printf '%s' "$((_zm + 1))" > "$_ZM_FILE" 2>/dev/null || true
 
-    OUT="SKILL ACTIVATION (0 skills | phase checkpoint only)
+    # Log the zero-match prompt for diagnostics (rotate at 100 entries)
+    _ZM_LOG="${HOME}/.claude/.skill-zero-match-log"
+    printf '%s\n' "$P" >> "$_ZM_LOG" 2>/dev/null || true
+    if [[ -f "$_ZM_LOG" ]]; then
+      _lc="$(wc -l < "$_ZM_LOG" 2>/dev/null | tr -d ' ')"
+      if [[ "$_lc" =~ ^[0-9]+$ ]] && [[ "$_lc" -gt 100 ]]; then
+        tail -n 100 "$_ZM_LOG" > "${_ZM_LOG}.tmp" 2>/dev/null && mv "${_ZM_LOG}.tmp" "$_ZM_LOG" 2>/dev/null || true
+      fi
+    fi
 
-Phase: assess current phase (DESIGN/PLAN/IMPLEMENT/REVIEW/SHIP/DEBUG)
-and consider whether any installed skill applies."
+    # Zero-match: emit nothing (no additionalContext)
+    return
 
   elif [[ "$_PROMPT_COUNT" -gt 10 ]]; then
     # --- minimal format (depth 11+): skill list + eval only ---
@@ -735,8 +745,8 @@ ${SKILL_LINES}${COMPOSITION_CHAIN}${COMPOSITION_LINES}
 
 Evaluate: **Phase: [${EVAL_PHASE}]** | ${EVAL_SKILLS}${DOMAIN_HINT}${COMPOSITION_DIRECTIVE}"
 
-  elif [[ "$_PROMPT_COUNT" -le 5 ]] && [[ "$TOTAL_COUNT" -ge 3 ]]; then
-    # --- full format (3+ skills, depth 1-5) ---
+  elif [[ "$_PROMPT_COUNT" -le 1 ]] && [[ "$TOTAL_COUNT" -ge 3 ]]; then
+    # --- full format (3+ skills, prompt 1 only) ---
     # Build phase guide from registry (falls back to a minimal default)
     _PHASE_GUIDE="$(printf '%s' "$REGISTRY" | jq -r '
       .phase_guide // empty | to_entries | sort_by(.key) |
@@ -784,6 +794,22 @@ ${HINTS}${COMPOSITION_HINTS}"
     if [[ -n "$_top_skill" ]]; then
       printf '{"skill":"%s","phase":"%s"}' "$_top_skill" "$_top_phase" \
         > "${HOME}/.claude/.skill-last-invoked-${_SESSION_TOKEN}" 2>/dev/null || true
+    fi
+  fi
+
+  # Write composition state for compaction resilience
+  if [[ -n "${_full_chain:-}" ]] && [[ "${_full_chain}" == *"|"* ]] && [[ -n "${_SESSION_TOKEN:-}" ]]; then
+    _comp_completed="[]"
+    if [[ "${_last_skill_chain_idx:--1}" -ge 0 ]]; then
+      _comp_completed="$(printf '%s' "$_full_chain" | tr '|' '\n' | head -n "$((_last_skill_chain_idx + 1))" | jq -R . | jq -s . 2>/dev/null)" || _comp_completed="[]"
+    fi
+    _comp_chain="$(printf '%s' "$_full_chain" | tr '|' '\n' | jq -R . | jq -s . 2>/dev/null)" || true
+    if [[ -n "$_comp_chain" ]]; then
+      jq -n --argjson chain "$_comp_chain" \
+            --argjson completed "$_comp_completed" \
+            --argjson idx "${_current_idx:-0}" \
+            '{chain:$chain, current_index:$idx, completed:$completed, updated_at:now|todate}' \
+        > "${HOME}/.claude/.skill-composition-state-${_SESSION_TOKEN}" 2>/dev/null || true
     fi
   fi
 }

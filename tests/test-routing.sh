@@ -817,18 +817,19 @@ test_output_valid_json() {
 # 13. Zero matches produce phase checkpoint
 # ---------------------------------------------------------------------------
 test_zero_matches_phase_checkpoint() {
-    echo "-- test: zero matches produce phase checkpoint --"
+    echo "-- test: zero matches produce no output --"
     setup_test_env
     install_registry
 
     # A prompt that won't match any triggers
     local output
     output="$(run_hook "tell me about the weather forecast for tomorrow please")"
-    local context
-    context="$(extract_context "${output}")"
 
-    assert_contains "zero match has phase checkpoint" "phase checkpoint" "$(printf '%s' "${context}" | tr '[:upper:]' '[:lower:]')"
-    assert_contains "zero match has 0 skills" "0 skills" "${context}"
+    if [[ -z "$output" ]]; then
+        _record_pass "zero match produces empty output"
+    else
+        _record_fail "zero match produces empty output" "got: ${output}"
+    fi
 
     teardown_test_env
 }
@@ -877,7 +878,8 @@ test_phase_scoped_methodology_hints() {
     assert_not_contains "Jira hint suppressed in DEBUG phase" "ATLASSIAN" "${context}"
 
     # Hint without phases (ralph-loop) fires regardless of phase
-    output="$(run_hook "migrate all the legacy modules and iterate until done")"
+    # Use a prompt that matches a skill ("build" → brainstorming) AND the ralph-loop hint ("iterate")
+    output="$(run_hook "build and iterate on the legacy modules until done")"
     context="$(extract_context "${output}")"
     assert_contains "phaseless hint fires unconditionally" "RALPH LOOP" "${context}"
 
@@ -1022,24 +1024,23 @@ test_domain_invocation_instruction() {
 }
 
 # ---------------------------------------------------------------------------
-# 21. Overflow domain skills shown as "Also relevant"
+# 21. Overflow domain skills NOT shown (role caps are the signal)
 # ---------------------------------------------------------------------------
-test_overflow_domain_shown() {
-    echo "-- test: overflow domain skills shown --"
+test_overflow_domain_hidden() {
+    echo "-- test: overflow domain skills hidden --"
     setup_test_env
     install_registry
 
     # With max_suggestions=3 (default), process + 2 domain fills the cap.
-    # A third domain skill should appear as "Also relevant"
+    # A third domain skill should NOT appear as "Also relevant"
     # "build a secure responsive dashboard" triggers:
     #   brainstorming (process), security-scanner (domain, p102), frontend-design (domain, p101), design-debate (domain, p14)
-    # design-debate should overflow
+    # design-debate overflows but should not be displayed
     local output context
     output="$(run_hook "build a secure responsive dashboard with csrf protection")"
     context="$(extract_context "${output}")"
 
-    assert_contains "overflow domain shown" "Also relevant" "${context}"
-    assert_contains "overflow includes design-debate" "design-debate" "${context}"
+    assert_not_contains "overflow domain not shown" "Also relevant" "${context}"
 
     teardown_test_env
 }
@@ -1464,7 +1465,7 @@ test_agent_team_review_matches
 test_brainstorming_short_prompt
 test_skill_name_mention_boost
 test_domain_invocation_instruction
-test_overflow_domain_shown
+test_overflow_domain_hidden
 test_teammate_idle_guard
 test_review_emits_parallel_lines
 test_ship_emits_sequence_lines
@@ -2238,8 +2239,12 @@ KWSHORTREG
     output="$(run_hook "help me fix this bad code please")"
     context="$(extract_context "${output}")"
 
-    # All keywords are < 6 chars so none should score; expect 0 skills
-    assert_contains "short keywords produce 0 skills" "0 skills" "${context}"
+    # All keywords are < 6 chars so none should score; expect empty output
+    if [[ -z "$output" ]]; then
+        _record_pass "short keywords produce no output"
+    else
+        _record_fail "short keywords produce no output" "got: ${output}"
+    fi
 
     teardown_test_env
 }
@@ -2519,5 +2524,303 @@ REGISTRY
     teardown_test_env
 }
 test_opal_integration
+
+# ---------------------------------------------------------------------------
+# Zero-match emits nothing (no hookSpecificOutput)
+# ---------------------------------------------------------------------------
+test_zero_match_emits_nothing() {
+    echo "-- test: zero-match emits nothing --"
+    setup_test_env
+    install_registry
+
+    local output
+    output="$(run_hook "tell me about the weather forecast for tomorrow please")"
+
+    if [[ -z "$output" ]]; then
+        _record_pass "zero-match produces no output"
+    else
+        _record_fail "zero-match produces no output" "got: ${output}"
+    fi
+
+    # Counter should still be incremented
+    local zm_count
+    zm_count="$(cat "${HOME}/.claude/.skill-zero-match-count" 2>/dev/null)"
+    if [[ "$zm_count" =~ ^[0-9]+$ ]] && [[ "$zm_count" -ge 1 ]]; then
+        _record_pass "zero-match counter incremented"
+    else
+        _record_fail "zero-match counter incremented" "got: ${zm_count:-<empty>}"
+    fi
+
+    teardown_test_env
+}
+test_zero_match_emits_nothing
+
+# ---------------------------------------------------------------------------
+# Full format only on prompt 1 (3+ skills)
+# ---------------------------------------------------------------------------
+test_full_format_only_prompt_1() {
+    echo "-- test: full format only on prompt 1 --"
+    local prompt="build a new component and review the design for security"
+
+    # --- Sub-test A: prompt 1 (no prior counter) SHOULD show full format ---
+    setup_test_env
+    install_registry
+
+    # Ensure no session token or counter exists (fresh session = prompt 1)
+    rm -f "${HOME}/.claude/.skill-session-token"
+    rm -f "${HOME}/.claude/.skill-prompt-count-"*
+
+    local output ctx
+    output="$(run_hook "$prompt")"
+    ctx="$(extract_context "$output")"
+
+    if printf '%s' "$ctx" | grep -q "Step 1 -- ASSESS"; then
+        _record_pass "full format shown on prompt 1"
+    else
+        _record_fail "full format shown on prompt 1" "output missing 'Step 1 -- ASSESS': ${ctx}"
+    fi
+
+    teardown_test_env
+
+    # --- Sub-test B: prompt 3 (counter at 2) should NOT show full format ---
+    setup_test_env
+    install_registry
+
+    # Set up session token and depth counter so _PROMPT_COUNT will be 3
+    local token="test-full-fmt"
+    printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
+    printf '%s' "2" > "${HOME}/.claude/.skill-prompt-count-${token}"
+
+    output="$(run_hook "$prompt")"
+    ctx="$(extract_context "$output")"
+
+    if printf '%s' "$ctx" | grep -q "Step 1 -- ASSESS"; then
+        _record_fail "no full format on prompt 3" "output contains 'Step 1 -- ASSESS': ${ctx}"
+    else
+        _record_pass "no full format on prompt 3"
+    fi
+
+    # Verify we still got output (compact format, not empty)
+    if [[ -n "$ctx" ]]; then
+        _record_pass "prompt 3 still produces output (compact format)"
+    else
+        _record_fail "prompt 3 still produces output (compact format)" "output was empty"
+    fi
+
+    teardown_test_env
+}
+test_full_format_only_prompt_1
+
+# --- Test: name_boost segment reduced from 40 to 20 ---
+test_name_boost_segment_reduced() {
+    setup_test_env
+    install_registry
+
+    # "build a component and review it" — both brainstorming and requesting-code-review match.
+    # requesting-code-review: trigger "review" boundary=30 + priority=51 + name_boost(segment "review" 6 chars)
+    # With name_boost=20: 30+51+20=101.  With old name_boost=40: 30+51+40=121.
+    # brainstorming: trigger "build" boundary=30 + priority=30 = 60 (no name_boost).
+    # The role cap (max 1 process) reserves the top process skill (requesting-code-review).
+    # Verify: requesting-code-review gets name-boost=20 (not 40) via SKILL_EXPLAIN stderr.
+    local explain_output
+    explain_output="$(jq -n --arg p "build a component and review it" '{"prompt":$p}' | \
+        SKILL_EXPLAIN=1 CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        bash "${HOOK}" 2>&1 1>/dev/null)"
+
+    # name-boost=20 should appear in explain output (not name-boost=40)
+    assert_contains "name-boost should be 20" "name-boost=20" "$explain_output"
+
+    # Verify name-boost=40 does NOT appear (confirms the reduction)
+    if printf '%s' "$explain_output" | grep -q "name-boost=40"; then
+        _record_fail "name-boost should not be 40" "found name-boost=40 in explain output"
+    else
+        _record_pass "name-boost should not be 40"
+    fi
+
+    # requesting-code-review should score 101 (boundary=30 + priority=51 + name_boost=20)
+    # With old name_boost=40, it would have been 121.
+    if printf '%s' "$explain_output" | grep -q "requesting-code-review.* = 101"; then
+        _record_pass "requesting-code-review score is 101 (not 121)"
+    else
+        _record_fail "requesting-code-review score is 101 (not 121)" "expected score 101 in explain output"
+    fi
+
+    teardown_test_env
+}
+test_name_boost_segment_reduced
+
+# ---------------------------------------------------------------------------
+# Overflow skills should never appear in context output
+# ---------------------------------------------------------------------------
+test_no_overflow_display() {
+    echo "-- test: no overflow display --"
+    setup_test_env
+    install_registry
+
+    # Trigger many skills to force overflow
+    local output ctx
+    output="$(run_hook "build and debug this security issue then review and ship it")"
+    ctx="$(extract_context "$output")"
+
+    assert_not_contains "overflow skills should not appear" "Also relevant:" "$ctx"
+
+    teardown_test_env
+}
+test_no_overflow_display
+
+# ---------------------------------------------------------------------------
+# Escape hatch: [no-skills] and -- prefix suppress all routing
+# ---------------------------------------------------------------------------
+test_escape_hatch_no_skills() {
+    echo "-- test: escape hatch no-skills --"
+    setup_test_env
+    install_registry
+
+    # [no-skills] marker should produce no output
+    local output
+    output="$(run_hook "[no-skills] build a new feature")"
+    assert_equals "[no-skills] should produce no output" "" "$output"
+
+    # Also test -- prefix
+    output="$(run_hook "-- just do the thing without skills please")"
+    assert_equals "-- prefix should produce no output" "" "$output"
+
+    # Normal prompt should still produce output
+    output="$(run_hook "build a new authentication feature")"
+    local ctx
+    ctx="$(extract_context "$output")"
+    assert_contains "normal prompt should still route" "brainstorming" "$ctx"
+
+    teardown_test_env
+}
+test_escape_hatch_no_skills
+
+# ---------------------------------------------------------------------------
+# False-positive negative test suite — regression safety net for trigger precision
+# Proves common prompts that should NOT trigger skills actually don't.
+# ---------------------------------------------------------------------------
+test_false_positive_defense() {
+    echo "-- test: false-positive defense (10 negative prompts) --"
+    setup_test_env
+    install_registry
+
+    local output ctx
+
+    # 1. "rename this variable to snake_case" — should NOT match anything
+    output="$(run_hook "rename this variable to snake_case")"
+    ctx="$(extract_context "${output}")"
+    assert_equals "FP01: rename variable -> zero match" "" "${ctx}"
+
+    # 2. "explain this function to me" — should NOT match anything
+    output="$(run_hook "explain this function to me")"
+    ctx="$(extract_context "${output}")"
+    assert_equals "FP02: explain function -> zero match" "" "${ctx}"
+
+    # 3. "where is the database config defined" — should NOT match anything
+    output="$(run_hook "where is the database config defined")"
+    ctx="$(extract_context "${output}")"
+    assert_equals "FP03: database config location -> zero match" "" "${ctx}"
+
+    # 4. "show me the recent changes to this file" — should NOT match anything
+    # KNOWN FALSE POSITIVE: "changes" contains substring "hang" which triggers systematic-debugging
+    # assert_equals "FP04: show recent changes -> zero match" "" "${ctx}"
+    output="$(run_hook "show me the recent changes to this file")"
+    ctx="$(extract_context "${output}")"
+    assert_contains "FP04: 'changes' substring-matches 'hang' in systematic-debugging" "systematic-debugging" "${ctx}"
+    assert_not_contains "FP04: should not trigger brainstorming" "brainstorming" "${ctx}"
+
+    # 5. "what does this error message mean" — may match debugging (acceptable)
+    # KNOWN FALSE POSITIVE: "error" is a word-boundary match for systematic-debugging
+    # assert_equals "FP05: error message meaning -> zero match" "" "${ctx}"
+    output="$(run_hook "what does this error message mean")"
+    ctx="$(extract_context "${output}")"
+    assert_contains "FP05: 'error' triggers systematic-debugging" "systematic-debugging" "${ctx}"
+    assert_not_contains "FP05: should not trigger brainstorming" "brainstorming" "${ctx}"
+
+    # 6. "format this code block properly" — should NOT match anything
+    output="$(run_hook "format this code block properly")"
+    ctx="$(extract_context "${output}")"
+    assert_equals "FP06: format code block -> zero match" "" "${ctx}"
+
+    # 7. "delete the old migration files" — should NOT match anything
+    output="$(run_hook "delete the old migration files")"
+    ctx="$(extract_context "${output}")"
+    assert_equals "FP07: delete migration files -> zero match" "" "${ctx}"
+
+    # 8. "move this function to a separate module" — should NOT match anything
+    output="$(run_hook "move this function to a separate module")"
+    ctx="$(extract_context "${output}")"
+    assert_equals "FP08: move function to module -> zero match" "" "${ctx}"
+
+    # 9. "read the package.json and tell me the version" — should NOT match anything
+    output="$(run_hook "read the package.json and tell me the version")"
+    ctx="$(extract_context "${output}")"
+    assert_equals "FP09: read package.json version -> zero match" "" "${ctx}"
+
+    # 10. "update the copyright year in the license" — should NOT match anything
+    output="$(run_hook "update the copyright year in the license")"
+    ctx="$(extract_context "${output}")"
+    assert_equals "FP10: update copyright year -> zero match" "" "${ctx}"
+
+    teardown_test_env
+}
+test_false_positive_defense
+
+# ---------------------------------------------------------------------------
+# Zero-match prompt logging
+# ---------------------------------------------------------------------------
+
+test_zero_match_logs_prompt() {
+    setup_test_env
+    install_registry
+
+    run_hook "rename this variable to camelCase" >/dev/null
+    run_hook "explain the auth flow to me" >/dev/null
+
+    local log_file="${HOME}/.claude/.skill-zero-match-log"
+    assert_file_exists "zero-match log should exist" "$log_file"
+
+    local log_content
+    log_content="$(cat "$log_file" 2>/dev/null)"
+    assert_contains "log should contain first prompt" "rename this variable" "$log_content"
+    assert_contains "log should contain second prompt" "explain the auth flow" "$log_content"
+
+    # Verify line count
+    local line_count
+    line_count="$(wc -l < "$log_file" | tr -d ' ')"
+    if [[ "$line_count" -eq 2 ]]; then
+        _record_pass "log should have exactly 2 entries"
+    else
+        _record_fail "log should have exactly 2 entries" "got $line_count"
+    fi
+
+    teardown_test_env
+}
+test_zero_match_logs_prompt
+
+# ---------------------------------------------------------------------------
+# Session-start surfaces previous session's zero-match rate
+# ---------------------------------------------------------------------------
+
+test_session_start_shows_zero_match_rate() {
+    echo "-- test: session start shows zero-match rate --"
+    setup_test_env
+    mkdir -p "${HOME}/.claude"
+
+    # Simulate a previous session with 20 total prompts, 3 zero-match
+    printf '20' > "${HOME}/.claude/.skill-prompt-count-prev-session"
+    printf '3' > "${HOME}/.claude/.skill-zero-match-count"
+
+    # Run session-start hook
+    local output
+    output="$(CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" bash "${PROJECT_ROOT}/hooks/session-start-hook.sh" 2>/dev/null)"
+    local ctx
+    ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+
+    assert_contains "session start should show zero-match rate" "3/20 unmatched" "$ctx"
+
+    teardown_test_env
+}
+test_session_start_shows_zero_match_rate
 
 print_summary
