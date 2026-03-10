@@ -2766,4 +2766,36 @@ test_false_positive_defense() {
 }
 test_false_positive_defense
 
+# ---------------------------------------------------------------------------
+# Zero-match prompt logging
+# ---------------------------------------------------------------------------
+
+test_zero_match_logs_prompt() {
+    setup_test_env
+    install_registry
+
+    run_hook "rename this variable to camelCase" >/dev/null
+    run_hook "explain the auth flow to me" >/dev/null
+
+    local log_file="${HOME}/.claude/.skill-zero-match-log"
+    assert_file_exists "zero-match log should exist" "$log_file"
+
+    local log_content
+    log_content="$(cat "$log_file" 2>/dev/null)"
+    assert_contains "log should contain first prompt" "rename this variable" "$log_content"
+    assert_contains "log should contain second prompt" "explain the auth flow" "$log_content"
+
+    # Verify line count
+    local line_count
+    line_count="$(wc -l < "$log_file" | tr -d ' ')"
+    if [[ "$line_count" -eq 2 ]]; then
+        _record_pass "log should have exactly 2 entries"
+    else
+        _record_fail "log should have exactly 2 entries" "got $line_count"
+    fi
+
+    teardown_test_env
+}
+test_zero_match_logs_prompt
+
 print_summary
