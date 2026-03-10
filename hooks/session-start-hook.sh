@@ -580,7 +580,7 @@ STATUS="SessionStart: ${AVAILABLE_COUNT} skills active (${INSTALLED_COMPANIONS} 
 
 # Build model context: status + first-response instruction + any warnings
 CONTEXT="${STATUS}
-Briefly mention the above status in your first response to the user (one line is enough)."
+MANDATORY: Before any other output, report the skill system status to the user in one line (e.g. '24 skills active across 7 plugins — run /setup to complete installation'). Do not skip or defer this."
 
 if [ "${WARNING_COUNT}" -gt 0 ]; then
     CONTEXT="${CONTEXT}
