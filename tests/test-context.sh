@@ -486,6 +486,36 @@ COMP
 }
 
 # ---------------------------------------------------------------------------
+# 10. Composition DONE vs DONE? uses persisted state
+# ---------------------------------------------------------------------------
+test_composition_done_not_done_question() {
+    echo "-- test: composition DONE uses persisted state --"
+    setup_test_env
+    install_registry
+
+    printf 'done-test-session' > "${HOME}/.claude/.skill-session-token"
+
+    # Create composition state showing brainstorming is confirmed complete
+    cat > "${HOME}/.claude/.skill-composition-state-done-test-session" <<'COMP'
+{"chain":["brainstorming","writing-plans","executing-plans"],"current_index":1,"completed":["brainstorming"],"updated_at":"2026-03-09T14:30:00Z"}
+COMP
+
+    # Simulate brainstorming was last invoked
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' > "${HOME}/.claude/.skill-last-invoked-done-test-session"
+
+    # Trigger writing-plans (next in chain after brainstorming)
+    local output ctx
+    output="$(run_hook "let's write the implementation plan now")"
+    ctx="$(extract_context "$output")"
+
+    # Should show [DONE] not [DONE?] for brainstorming
+    assert_contains "brainstorming should be marked DONE" "[DONE]" "$ctx"
+    assert_not_contains "should not show DONE?" "[DONE?]" "$ctx"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_zero_skills_minimal_output
@@ -499,5 +529,6 @@ test_output_valid_json_multi_match
 test_full_format_process_first
 test_composition_state_written
 test_composition_recovery_after_compaction
+test_composition_done_not_done_question
 
 print_summary

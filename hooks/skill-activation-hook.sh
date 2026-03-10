@@ -619,6 +619,13 @@ EOF
         done
       fi
 
+      # Read persisted composition state for definitive DONE markers
+      _COMP_COMPLETED=""
+      _COMP_FILE="${HOME}/.claude/.skill-composition-state-${_SESSION_TOKEN:-default}"
+      if [[ -f "$_COMP_FILE" ]]; then
+        _COMP_COMPLETED="$(jq -r '.completed[]' "$_COMP_FILE" 2>/dev/null)" || _COMP_COMPLETED=""
+      fi
+
       # Build the chain display + phase labels in one pass
       _idx=0
       _chain_lines=""
@@ -629,7 +636,10 @@ EOF
         [[ -z "$_cname" ]] && continue
 
         if [[ "$_idx" -lt "$_current_idx" ]]; then
-          if [[ "$_last_skill_chain_idx" -ge 0 ]] && [[ "$_idx" -le "$_last_skill_chain_idx" ]]; then
+          # Check persisted state first, fall back to last-invoked signal
+          if [[ -n "$_COMP_COMPLETED" ]] && printf '%s\n' "$_COMP_COMPLETED" | grep -qx "$_cname" 2>/dev/null; then
+            _marker="DONE"
+          elif [[ "$_last_skill_chain_idx" -ge 0 ]] && [[ "$_idx" -le "$_last_skill_chain_idx" ]]; then
             _marker="DONE"
           else
             _marker="DONE?"
