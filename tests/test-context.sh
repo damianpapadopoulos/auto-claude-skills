@@ -176,6 +176,73 @@ REGISTRY
 }
 
 # ---------------------------------------------------------------------------
+# Registry with composition chain skills: brainstorming -> writing-plans -> executing-plans
+# ---------------------------------------------------------------------------
+install_registry() {
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'REGISTRY'
+{
+  "version": "4.0.0",
+  "skills": [
+    {
+      "name": "brainstorming",
+      "role": "process",
+      "phase": "DESIGN",
+      "triggers": [
+        "(build|create|implement|develop|scaffold|brainstorm|design|architect|add|write|make|generate|new|start)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 30,
+      "precedes": ["writing-plans"],
+      "requires": [],
+      "invoke": "Skill(superpowers:brainstorming)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "writing-plans",
+      "role": "process",
+      "phase": "PLAN",
+      "triggers": [
+        "(plan|outline|break.?down|detail|spec|write.*(plan|spec))"
+      ],
+      "trigger_mode": "regex",
+      "priority": 40,
+      "precedes": ["executing-plans"],
+      "requires": ["brainstorming"],
+      "invoke": "Skill(superpowers:writing-plans)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "executing-plans",
+      "role": "process",
+      "phase": "IMPLEMENT",
+      "triggers": [
+        "(execute.*plan|run.the.plan|implement.the.plan|continue|follow.the.plan|resume|next.task|next.step)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 15,
+      "precedes": [],
+      "requires": ["writing-plans"],
+      "invoke": "Skill(superpowers:executing-plans)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "methodology_hints": [],
+  "phase_guide": {
+    "DESIGN":    "brainstorming (ask questions, get approval)",
+    "PLAN":      "writing-plans (break into tasks, confirm before execution)",
+    "IMPLEMENT": "executing-plans or subagent-driven-development + TDD"
+  },
+  "warnings": []
+}
+REGISTRY
+}
+
+# ---------------------------------------------------------------------------
 # 1. 0 skills -> silent (no output at all)
 # ---------------------------------------------------------------------------
 test_zero_skills_minimal_output() {
@@ -357,6 +424,41 @@ test_full_format_process_first() {
 }
 
 # ---------------------------------------------------------------------------
+# 8. Composition state written to file
+# ---------------------------------------------------------------------------
+test_composition_state_written() {
+    echo "-- test: composition state written to file --"
+    setup_test_env
+    install_registry
+
+    printf 'comp-test-session' > "${HOME}/.claude/.skill-session-token"
+    # Simulate brainstorming was invoked last
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' > "${HOME}/.claude/.skill-last-invoked-comp-test-session"
+
+    # Trigger writing-plans (next in chain)
+    run_hook "let's plan this out and write a detailed plan" >/dev/null
+
+    local state_file="${HOME}/.claude/.skill-composition-state-comp-test-session"
+    assert_file_exists "composition state file should be created" "$state_file"
+
+    # Verify JSON structure
+    local chain_len
+    chain_len="$(jq '.chain | length' "$state_file" 2>/dev/null)"
+    if [[ "$chain_len" -ge 2 ]]; then
+        _record_pass "composition state should have chain with 2+ skills"
+    else
+        _record_fail "composition state should have chain with 2+ skills" "got chain length: ${chain_len}"
+    fi
+
+    # Verify completed array exists
+    local has_completed
+    has_completed="$(jq 'has("completed")' "$state_file" 2>/dev/null)"
+    assert_equals "state should have completed field" "true" "$has_completed"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_zero_skills_minimal_output
@@ -368,5 +470,6 @@ test_output_valid_json_zero_match
 test_output_valid_json_single_match
 test_output_valid_json_multi_match
 test_full_format_process_first
+test_composition_state_written
 
 print_summary

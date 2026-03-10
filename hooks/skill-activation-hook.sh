@@ -786,6 +786,22 @@ ${HINTS}${COMPOSITION_HINTS}"
         > "${HOME}/.claude/.skill-last-invoked-${_SESSION_TOKEN}" 2>/dev/null || true
     fi
   fi
+
+  # Write composition state for compaction resilience
+  if [[ -n "${_full_chain:-}" ]] && [[ "${_full_chain}" == *"|"* ]] && [[ -n "${_SESSION_TOKEN:-}" ]]; then
+    _comp_completed="[]"
+    if [[ "${_last_skill_chain_idx:--1}" -ge 0 ]]; then
+      _comp_completed="$(printf '%s' "$_full_chain" | tr '|' '\n' | head -n "$((_last_skill_chain_idx + 1))" | jq -R . | jq -s . 2>/dev/null)" || _comp_completed="[]"
+    fi
+    _comp_chain="$(printf '%s' "$_full_chain" | tr '|' '\n' | jq -R . | jq -s . 2>/dev/null)" || true
+    if [[ -n "$_comp_chain" ]]; then
+      jq -n --argjson chain "$_comp_chain" \
+            --argjson completed "$_comp_completed" \
+            --argjson idx "${_current_idx:-0}" \
+            '{chain:$chain, current_index:$idx, completed:$completed, updated_at:now|todate}' \
+        > "${HOME}/.claude/.skill-composition-state-${_SESSION_TOKEN}" 2>/dev/null || true
+    fi
+  fi
 }
 
 # --- _emit_explain ------------------------------------------------
