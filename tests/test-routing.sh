@@ -2112,6 +2112,8 @@ test_depth_minimal_format_after_10() {
     assert_not_contains "depth11: minimal format has no DOMAIN_HINT" "Domain skills evaluated" "${ctx}"
     assert_contains "depth11: minimal format has Evaluate" "Evaluate:" "${ctx}"
     assert_contains "depth11: minimal format has skill names" "brainstorming" "${ctx}"
+    assert_contains "depth11: minimal format has IMPORTANT directive" "IMPORTANT:" "${ctx}"
+    assert_contains "depth11: minimal format has composition chain" "Composition:" "${ctx}"
 
     teardown_test_env
 }

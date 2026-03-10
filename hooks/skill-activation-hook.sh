@@ -751,9 +751,9 @@ _format_output() {
     [[ -z "$EVAL_PHASE" ]] && EVAL_PHASE="IMPLEMENT"
 
     OUT="SKILL ACTIVATION (${TOTAL_COUNT} skills | ${PLABEL})
-${SKILL_LINES}
+${SKILL_LINES}${COMPOSITION_CHAIN}
 
-Evaluate: **Phase: [${EVAL_PHASE}]** | ${EVAL_SKILLS}"
+Evaluate: **Phase: [${EVAL_PHASE}]** | ${EVAL_SKILLS}${COMPOSITION_DIRECTIVE}"
 
   elif [[ "$TOTAL_COUNT" -le 2 ]] && [[ "$_PROMPT_COUNT" -le 5 ]]; then
     # --- compact format (1-2 skills, depth 1-5) ---
