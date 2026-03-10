@@ -1613,11 +1613,56 @@ test_composition_workflow_chain() {
     teardown_test_env
 }
 
+test_composition_chain_fallback_on_broken_walk() {
+    echo "-- test: composition chain fallback when successor missing from registry --"
+    setup_test_env
+
+    # Install a registry where brainstorming has precedes=["writing-plans"]
+    # but writing-plans is NOT in the skills array (simulates broken walk)
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'REGISTRY'
+{
+  "version": "4.0.0",
+  "skills": [
+    {
+      "name": "brainstorming",
+      "role": "process",
+      "phase": "DESIGN",
+      "triggers": ["(build|create)"],
+      "trigger_mode": "regex",
+      "priority": 30,
+      "precedes": ["writing-plans"],
+      "requires": [],
+      "invoke": "Skill(superpowers:brainstorming)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "plugins": [],
+  "phase_guide": {},
+  "phase_compositions": {}
+}
+REGISTRY
+
+    local output context
+    output="$(run_hook "build a dashboard")"
+    context="$(extract_context "${output}")"
+
+    # Even with a broken walk, the fallback should produce a chain
+    assert_contains "fallback has Composition:" "Composition:" "${context}"
+    assert_contains "fallback has writing-plans" "writing-plans" "${context}"
+    assert_contains "fallback has IMPORTANT directive" "IMPORTANT:" "${context}"
+
+    teardown_test_env
+}
+
 test_composition_chain_forward
 test_composition_chain_midentry
 test_composition_no_chain_for_debug
 test_composition_domain_hint_during_step
 test_composition_workflow_chain
+test_composition_chain_fallback_on_broken_walk
 
 # ---------------------------------------------------------------------------
 # Trigger pattern validation tests (against default-triggers.json)

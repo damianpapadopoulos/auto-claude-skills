@@ -559,6 +559,17 @@ EOF
       walk_bwd($start)
     ' 2>/dev/null)"
 
+    # Fallback: if anchor has precedes but the walk returned only itself
+    # (successor skill missing from registry), build chain from precedes directly
+    if [[ -n "$_CHAIN_ANCHOR" ]] && [[ "$_fwd_chain" != *"|"* ]]; then
+      _precedes_list="$(printf '%s' "$REGISTRY" | jq -r --arg n "$_CHAIN_ANCHOR" '
+        .skills[] | select(.name == $n) | .precedes // [] | join("|")
+      ' 2>/dev/null)"
+      if [[ -n "$_precedes_list" ]]; then
+        _fwd_chain="${_CHAIN_ANCHOR}|${_precedes_list}"
+      fi
+    fi
+
     # Merge: backward chain gives predecessors, forward chain gives successors
     # Remove duplicates at the join point (the process skill itself)
     if [[ -n "$_bwd_chain" ]] && [[ "$_bwd_chain" == *"|"* ]]; then
@@ -601,9 +612,13 @@ EOF
         ($chain | split("|")) as $names |
         .skills as $all |
         $names[] as $n |
-        ($all[] | select(.name == $n)) as $s |
-        ($s.description // "" | split(".")[0]) as $desc |
-        "\($n)\u001f\($s.invoke // "Skill(\($n))")\u001f\($desc)\u001f\($s.phase // "")"
+        ([$all[] | select(.name == $n)] | first // null) as $s |
+        if $s then
+          ($s.description // "" | split(".")[0]) as $desc |
+          "\($n)\u001f\($s.invoke // "Skill(\($n))")\u001f\($desc)\u001f\($s.phase // "")"
+        else
+          "\($n)\u001fSkill(superpowers:\($n))\u001f\($n)\u001f"
+        end
       ' 2>/dev/null)"
 
       # Find position of last-invoked skill in chain (for DONE vs DONE? markers)
