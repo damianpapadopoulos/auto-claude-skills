@@ -45,6 +45,18 @@ fi
 # Clean up stale counter files from previous sessions first.
 _SESSION_TOKEN="$(date +%s)-$$"
 printf '%s' "$_SESSION_TOKEN" > "${HOME}/.claude/.skill-session-token" 2>/dev/null || true
+# Read previous session's zero-match stats before cleanup
+_PREV_ZM=0
+_PREV_TOTAL=0
+[[ -f "${HOME}/.claude/.skill-zero-match-count" ]] && _PREV_ZM="$(cat "${HOME}/.claude/.skill-zero-match-count" 2>/dev/null)"
+[[ "$_PREV_ZM" =~ ^[0-9]+$ ]] || _PREV_ZM=0
+# Sum all prompt counters from previous session
+for _pcf in "${HOME}/.claude/.skill-prompt-count-"*; do
+    [[ -f "$_pcf" ]] || continue
+    _pc="$(cat "$_pcf" 2>/dev/null)"
+    [[ "$_pc" =~ ^[0-9]+$ ]] && _PREV_TOTAL=$((_PREV_TOTAL + _pc))
+done
+rm -f "${HOME}/.claude/.skill-zero-match-count" 2>/dev/null || true
 rm -f "${HOME}/.claude/.skill-prompt-count-"* 2>/dev/null || true
 printf '0' > "${HOME}/.claude/.skill-prompt-count-${_SESSION_TOKEN}" 2>/dev/null || true
 
@@ -560,7 +572,11 @@ if [ "${MISSING_COMPANION_COUNT}" -gt 0 ] || [ "${MISSING_SKILLS_COUNT}" -gt 0 ]
 else
     SETUP_CTA=". Setup complete"
 fi
-MSG="SessionStart: ${AVAILABLE_COUNT} skills active (${INSTALLED_COMPANIONS} of ${TOTAL_COMPANIONS} plugins)${SETUP_CTA}"
+_ZM_STAT=""
+if [[ "$_PREV_TOTAL" -gt 10 ]] && [[ "$_PREV_ZM" -gt 0 ]]; then
+    _ZM_STAT=" | prev: ${_PREV_ZM}/${_PREV_TOTAL} unmatched"
+fi
+MSG="SessionStart: ${AVAILABLE_COUNT} skills active (${INSTALLED_COMPANIONS} of ${TOTAL_COMPANIONS} plugins)${_ZM_STAT}${SETUP_CTA}"
 printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' \
     "$(printf '%s' "${MSG}" | jq -Rs .)"
 

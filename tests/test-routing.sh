@@ -2798,4 +2798,29 @@ test_zero_match_logs_prompt() {
 }
 test_zero_match_logs_prompt
 
+# ---------------------------------------------------------------------------
+# Session-start surfaces previous session's zero-match rate
+# ---------------------------------------------------------------------------
+
+test_session_start_shows_zero_match_rate() {
+    echo "-- test: session start shows zero-match rate --"
+    setup_test_env
+    mkdir -p "${HOME}/.claude"
+
+    # Simulate a previous session with 20 total prompts, 3 zero-match
+    printf '20' > "${HOME}/.claude/.skill-prompt-count-prev-session"
+    printf '3' > "${HOME}/.claude/.skill-zero-match-count"
+
+    # Run session-start hook
+    local output
+    output="$(CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" bash "${PROJECT_ROOT}/hooks/session-start-hook.sh" 2>/dev/null)"
+    local ctx
+    ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+
+    assert_contains "session start should show zero-match rate" "3/20 unmatched" "$ctx"
+
+    teardown_test_env
+}
+test_session_start_shows_zero_match_rate
+
 print_summary
