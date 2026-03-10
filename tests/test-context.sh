@@ -459,6 +459,33 @@ test_composition_state_written() {
 }
 
 # ---------------------------------------------------------------------------
+# 9. Composition recovery after compaction
+# ---------------------------------------------------------------------------
+test_composition_recovery_after_compaction() {
+    echo "-- test: composition recovery after compaction --"
+    setup_test_env
+    mkdir -p "${HOME}/.claude"
+
+    printf 'recovery-test-session' > "${HOME}/.claude/.skill-session-token"
+
+    # Create a composition state file
+    cat > "${HOME}/.claude/.skill-composition-state-recovery-test-session" <<'COMP'
+{"chain":["brainstorming","writing-plans","executing-plans"],"current_index":1,"completed":["brainstorming"],"updated_at":"2026-03-09T14:30:00Z"}
+COMP
+
+    # Run the compact-recovery hook (pipe empty JSON as stdin)
+    local output
+    output="$(echo '{}' | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" bash "${PROJECT_ROOT}/hooks/compact-recovery-hook.sh" 2>/dev/null)"
+
+    assert_contains "recovery should show composition header" "Composition Recovery" "$output"
+    assert_contains "recovery should show chain" "brainstorming -> writing-plans -> executing-plans" "$output"
+    assert_contains "recovery should show completed" "brainstorming" "$output"
+    assert_contains "recovery should show current step" "writing-plans" "$output"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_zero_skills_minimal_output
@@ -471,5 +498,6 @@ test_output_valid_json_single_match
 test_output_valid_json_multi_match
 test_full_format_process_first
 test_composition_state_written
+test_composition_recovery_after_compaction
 
 print_summary
