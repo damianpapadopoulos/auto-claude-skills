@@ -1479,6 +1479,59 @@ test_trigger_boundary_excludes_dot
 test_domain_instruction_no_process
 
 # ---------------------------------------------------------------------------
+# SDLC enforcement: MUST INVOKE for process skills
+# ---------------------------------------------------------------------------
+test_must_invoke_for_build_intent() {
+    echo "-- test: build intent gets MUST INVOKE for brainstorming --"
+    setup_test_env
+    install_registry
+
+    local output context
+    output="$(run_hook "build a new user dashboard")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "brainstorming must invoke" "MUST INVOKE" "${context}"
+    assert_not_contains "brainstorming not YES/NO" "brainstorming YES/NO" "${context}"
+
+    teardown_test_env
+}
+
+test_must_invoke_for_debug_intent() {
+    echo "-- test: debug intent gets MUST INVOKE for debugging --"
+    setup_test_env
+    install_registry
+
+    local output context
+    output="$(run_hook "debug the authentication crash")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "debugging must invoke" "MUST INVOKE" "${context}"
+    assert_not_contains "debugging not YES/NO" "systematic-debugging YES/NO" "${context}"
+
+    teardown_test_env
+}
+
+test_domain_skills_keep_yes_no() {
+    echo "-- test: domain skills still have YES/NO --"
+    setup_test_env
+    install_registry
+
+    local output context
+    output="$(run_hook "build a secure authentication system with encryption")"
+    context="$(extract_context "${output}")"
+
+    # Process skill gets MUST INVOKE, domain gets YES/NO
+    assert_contains "brainstorming must invoke" "MUST INVOKE" "${context}"
+    assert_contains "domain has YES/NO" "YES/NO" "${context}"
+
+    teardown_test_env
+}
+
+test_must_invoke_for_build_intent
+test_must_invoke_for_debug_intent
+test_domain_skills_keep_yes_no
+
+# ---------------------------------------------------------------------------
 # Skill composition chain tests
 # ---------------------------------------------------------------------------
 test_composition_chain_forward() {
@@ -1973,7 +2026,7 @@ test_depth_full_format_first_prompt() {
 
     assert_contains "depth1: full format has ASSESS PHASE" "ASSESS PHASE" "${ctx}"
     assert_contains "depth1: full format has EVALUATE skills" "EVALUATE skills" "${ctx}"
-    assert_contains "depth1: full format has Step 3" "State your plan" "${ctx}"
+    assert_contains "depth1: full format has Step 3" "INVOKE the process skill" "${ctx}"
 
     teardown_test_env
 }
@@ -2035,7 +2088,7 @@ test_depth_verbose_override() {
 
     assert_contains "verbose override: full format has ASSESS PHASE" "ASSESS PHASE" "${ctx}"
     assert_contains "verbose override: full format has EVALUATE skills" "EVALUATE skills" "${ctx}"
-    assert_contains "verbose override: full format has State your plan" "State your plan" "${ctx}"
+    assert_contains "verbose override: full format has INVOKE process skill" "INVOKE the process skill" "${ctx}"
 
     teardown_test_env
 }

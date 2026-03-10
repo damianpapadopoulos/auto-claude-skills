@@ -469,10 +469,15 @@ _build_skill_lines() {
 
     while IFS='|' read -r score name role invoke phase; do
       [[ -z "$name" ]] && continue
-      if [[ -n "$EVAL_SKILLS" ]]; then
-        EVAL_SKILLS="${EVAL_SKILLS}, ${name} YES/NO"
+      if [[ "$role" == "process" ]]; then
+        _eval_tag="MUST INVOKE"
       else
-        EVAL_SKILLS="${name} YES/NO"
+        _eval_tag="YES/NO"
+      fi
+      if [[ -n "$EVAL_SKILLS" ]]; then
+        EVAL_SKILLS="${EVAL_SKILLS}, ${name} ${_eval_tag}"
+      else
+        EVAL_SKILLS="${name} ${_eval_tag}"
       fi
 
       if [[ -n "$PROCESS_SKILL" ]]; then
@@ -761,11 +766,11 @@ ${_PHASE_GUIDE}
 
 Step 2 -- EVALUATE skills against your phase assessment.${SKILL_LINES}${COMPOSITION_CHAIN}${COMPOSITION_LINES}
 You MUST print a brief evaluation for each skill above. Format:
-  **Phase: [PHASE]** | [skill1] YES/NO, [skill2] YES/NO
-Example: **Phase: IMPLEMENT** | test-driven-development YES, claude-md-improver NO (not editing CLAUDE.md)
+  **Phase: [PHASE]** | ${EVAL_SKILLS}
+Process skills marked MUST INVOKE are mandatory — invoke them. Domain/workflow skills marked YES/NO are optional.
 This line is MANDATORY -- do not skip it.
 
-Step 3 -- State your plan and proceed. Keep it to 1-2 sentences.${DOMAIN_HINT}${COMPOSITION_DIRECTIVE}"
+Step 3 -- INVOKE the process skill. Do not skip to a later phase.${DOMAIN_HINT}${COMPOSITION_DIRECTIVE}"
 
   else
     # --- compact format (depth 6-10, or any remaining cases) ---
