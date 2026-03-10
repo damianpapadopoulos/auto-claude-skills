@@ -66,6 +66,14 @@ Format the output as:
 - Depth counter: {current value from ~/.claude/.skill-prompt-count-* or "not set"}
 - Verbosity level: {full/compact/minimal based on counter}
 - Registry: {path to active registry file}
+
+### Zero-Match Diagnostics
+- Zero-match count: {read from ~/.claude/.skill-zero-match-count or "0"}
+- Total prompts: {read from ~/.claude/.skill-prompt-count-* files, sum all values}
+- Zero-match rate: {zero-match / total if both > 0, else "n/a"}
+- Recent unmatched prompts (last 10):
+  {read last 10 lines from ~/.claude/.skill-zero-match-log, display in a code block}
+  If the file doesn't exist or is empty, say "(no zero-match log found — prompts are matching well)"
 ```
 
 ### 5. Offer follow-up
