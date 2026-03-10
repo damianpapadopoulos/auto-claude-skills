@@ -576,8 +576,18 @@ _ZM_STAT=""
 if [[ "$_PREV_TOTAL" -gt 10 ]] && [[ "$_PREV_ZM" -gt 0 ]]; then
     _ZM_STAT=" | prev: ${_PREV_ZM}/${_PREV_TOTAL} unmatched"
 fi
-MSG="SessionStart: ${AVAILABLE_COUNT} skills active (${INSTALLED_COMPANIONS} of ${TOTAL_COMPANIONS} plugins)${_ZM_STAT}${SETUP_CTA}"
+STATUS="SessionStart: ${AVAILABLE_COUNT} skills active (${INSTALLED_COMPANIONS} of ${TOTAL_COMPANIONS} plugins)${_ZM_STAT}${SETUP_CTA}"
+
+# Build model context: status + first-response instruction + any warnings
+CONTEXT="${STATUS}
+Briefly mention the above status in your first response to the user (one line is enough)."
+
+if [ "${WARNING_COUNT}" -gt 0 ]; then
+    CONTEXT="${CONTEXT}
+Warnings: $(printf '%s' "${WARNINGS}" | jq -r '.[]')"
+fi
+
 printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' \
-    "$(printf '%s' "${MSG}" | jq -Rs .)"
+    "$(printf '%s' "${CONTEXT}" | jq -Rs .)"
 
 exit 0
