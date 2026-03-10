@@ -29,6 +29,9 @@ PROMPT=$(cat 2>/dev/null | jq -r '.prompt // empty' 2>/dev/null) || true
 # Skip slash commands — these are handled by the Skill tool directly
 [[ "$PROMPT" =~ ^[[:space:]]*/ ]] && exit 0
 (( ${#PROMPT} < 5 )) && exit 0
+# Escape hatch: [no-skills] marker or -- prefix suppresses all routing
+[[ "$PROMPT" == *"[no-skills]"* ]] && exit 0
+[[ "$PROMPT" =~ ^[[:space:]]*--[[:space:]] ]] && exit 0
 
 P=$(printf '%s' "$PROMPT" | tr '[:upper:]' '[:lower:]')
 

@@ -2668,4 +2668,31 @@ test_no_overflow_display() {
 }
 test_no_overflow_display
 
+# ---------------------------------------------------------------------------
+# Escape hatch: [no-skills] and -- prefix suppress all routing
+# ---------------------------------------------------------------------------
+test_escape_hatch_no_skills() {
+    echo "-- test: escape hatch no-skills --"
+    setup_test_env
+    install_registry
+
+    # [no-skills] marker should produce no output
+    local output
+    output="$(run_hook "[no-skills] build a new feature")"
+    assert_equals "[no-skills] should produce no output" "" "$output"
+
+    # Also test -- prefix
+    output="$(run_hook "-- just do the thing without skills please")"
+    assert_equals "-- prefix should produce no output" "" "$output"
+
+    # Normal prompt should still produce output
+    output="$(run_hook "build a new authentication feature")"
+    local ctx
+    ctx="$(extract_context "$output")"
+    assert_contains "normal prompt should still route" "brainstorming" "$ctx"
+
+    teardown_test_env
+}
+test_escape_hatch_no_skills
+
 print_summary
