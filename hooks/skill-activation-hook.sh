@@ -101,9 +101,9 @@ _score_skills() {
   while IFS="$FS" read -r skill_name skill_name_lower skill_role skill_priority skill_invoke skill_phase triggers_joined keywords_joined; do
     [[ -z "$skill_name" ]] && continue
 
-    # Name boost: full name match (100) or hyphen-segment match (40).
+    # Name boost: full name match (100) or hyphen-segment match (20).
     # Full: "frontend-design" as whole word in prompt -> 100
-    # Segment: "frontend" as whole word (segment of "frontend-design") -> 40
+    # Segment: "frontend" as whole word (segment of "frontend-design") -> 20
     name_boost=0
     if [[ "$P" =~ (^|[^a-z0-9-])${skill_name_lower}($|[^a-z0-9-]) ]]; then
       name_boost=100
@@ -121,7 +121,7 @@ _score_skills() {
         # common words like "test", "code", "plan" that are also trigger words
         [[ "${#_seg}" -lt 6 ]] && continue
         if [[ "$P" =~ (^|[^a-z0-9])${_seg}($|[^a-z0-9]) ]]; then
-          name_boost=40
+          name_boost=20
           break
         fi
       done

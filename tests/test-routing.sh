@@ -2612,4 +2612,42 @@ test_full_format_only_prompt_1() {
 }
 test_full_format_only_prompt_1
 
+# --- Test: name_boost segment reduced from 40 to 20 ---
+test_name_boost_segment_reduced() {
+    setup_test_env
+    install_registry
+
+    # "build a component and review it" — both brainstorming and requesting-code-review match.
+    # requesting-code-review: trigger "review" boundary=30 + priority=51 + name_boost(segment "review" 6 chars)
+    # With name_boost=20: 30+51+20=101.  With old name_boost=40: 30+51+40=121.
+    # brainstorming: trigger "build" boundary=30 + priority=30 = 60 (no name_boost).
+    # The role cap (max 1 process) reserves the top process skill (requesting-code-review).
+    # Verify: requesting-code-review gets name-boost=20 (not 40) via SKILL_EXPLAIN stderr.
+    local explain_output
+    explain_output="$(jq -n --arg p "build a component and review it" '{"prompt":$p}' | \
+        SKILL_EXPLAIN=1 CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        bash "${HOOK}" 2>&1 1>/dev/null)"
+
+    # name-boost=20 should appear in explain output (not name-boost=40)
+    assert_contains "name-boost should be 20" "name-boost=20" "$explain_output"
+
+    # Verify name-boost=40 does NOT appear (confirms the reduction)
+    if printf '%s' "$explain_output" | grep -q "name-boost=40"; then
+        _record_fail "name-boost should not be 40" "found name-boost=40 in explain output"
+    else
+        _record_pass "name-boost should not be 40"
+    fi
+
+    # requesting-code-review should score 101 (boundary=30 + priority=51 + name_boost=20)
+    # With old name_boost=40, it would have been 121.
+    if printf '%s' "$explain_output" | grep -q "requesting-code-review.* = 101"; then
+        _record_pass "requesting-code-review score is 101 (not 121)"
+    else
+        _record_fail "requesting-code-review score is 101 (not 121)" "expected score 101 in explain output"
+    fi
+
+    teardown_test_env
+}
+test_name_boost_segment_reduced
+
 print_summary
