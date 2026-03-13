@@ -489,6 +489,91 @@ EOF
     assert_equals "fallback skills all have phase fields" "" "${fallback_missing_phase}"
 }
 
+test_context_capabilities_detection() {
+    echo "-- test: context_capabilities detected in registry cache --"
+    setup_test_env
+
+    # Install context7 plugin (to simulate it being available)
+    mkdir -p "${HOME}/.claude/plugins/cache/claude-plugins-official/context7"
+
+    local output
+    output="$(run_hook)"
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    assert_json_valid "cache file is valid JSON" "${cache_file}"
+
+    # context_capabilities should exist in registry
+    local has_caps
+    has_caps="$(jq 'has("context_capabilities")' "${cache_file}" 2>/dev/null)"
+    assert_equals "registry has context_capabilities" "true" "${has_caps}"
+
+    # context7 should be true (plugin installed)
+    local ctx7
+    ctx7="$(jq -r '.context_capabilities.context7' "${cache_file}" 2>/dev/null)"
+    assert_equals "context7 detected as true" "true" "${ctx7}"
+
+    # context_hub_indexed should derive from context7
+    local hub_idx
+    hub_idx="$(jq -r '.context_capabilities.context_hub_indexed' "${cache_file}" 2>/dev/null)"
+    assert_equals "context_hub_indexed derived from context7" "true" "${hub_idx}"
+
+    # chub CLI not on PATH in test env
+    local chub_cli
+    chub_cli="$(jq -r '.context_capabilities.context_hub_cli' "${cache_file}" 2>/dev/null)"
+    assert_equals "context_hub_cli is false (not on PATH)" "false" "${chub_cli}"
+
+    # serena not installed
+    local serena
+    serena="$(jq -r '.context_capabilities.serena' "${cache_file}" 2>/dev/null)"
+    assert_equals "serena is false (not installed)" "false" "${serena}"
+
+    teardown_test_env
+}
+
+test_context_capabilities_all_false() {
+    echo "-- test: context_capabilities all false when nothing installed --"
+    setup_test_env
+
+    # No plugins installed at all
+    rm -rf "${HOME}/.claude/plugins"
+
+    local output
+    output="$(run_hook)"
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+
+    # All capabilities should be false
+    local all_false
+    all_false="$(jq '[.context_capabilities | to_entries[] | .value] | all(. == false)' "${cache_file}" 2>/dev/null)"
+    assert_equals "all capabilities false when nothing installed" "true" "${all_false}"
+
+    # unified-context-stack plugin should be unavailable
+    local ucs_avail
+    ucs_avail="$(jq -r '.plugins[] | select(.name == "unified-context-stack") | .available' "${cache_file}" 2>/dev/null)"
+    assert_equals "unified-context-stack unavailable when no caps" "false" "${ucs_avail}"
+
+    teardown_test_env
+}
+
+test_context_capabilities_in_health_output() {
+    echo "-- test: context_capabilities in session-start output --"
+    setup_test_env
+
+    # Install context7 plugin
+    mkdir -p "${HOME}/.claude/plugins/cache/claude-plugins-official/context7"
+
+    local output
+    output="$(run_hook)"
+
+    # additionalContext should contain the Context Stack line
+    local context
+    context="$(printf '%s' "${output}" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+    assert_contains "output has Context Stack line" "Context Stack:" "${context}"
+    assert_contains "output has context7=true" "context7=true" "${context}"
+
+    teardown_test_env
+}
+
 # ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
@@ -507,5 +592,8 @@ test_registry_includes_phase_compositions
 test_auto_discovers_unknown_plugins
 test_health_check_reports_new_plugins
 test_fallback_registry_skill_coverage
+test_context_capabilities_detection
+test_context_capabilities_all_false
+test_context_capabilities_in_health_output
 
 print_summary

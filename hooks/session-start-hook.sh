@@ -457,18 +457,77 @@ if [ -n "${_DISCOVERED_ENTRIES}" ]; then
 fi
 
 # -----------------------------------------------------------------
+# Step 8d: Detect context stack capabilities
+# -----------------------------------------------------------------
+# Check which tools in the Unified Context Stack are available.
+# Results written to registry as context_capabilities object.
+
+_has_context7=false
+_has_chub_cli=false
+_has_serena=false
+_has_forgetful=false
+
+# Context7: check if plugin is available in PLUGINS_JSON
+# (Simplification: checks plugin name, not MCP tool names. Covers the standard
+# install path via claude-plugins-official. If Context7 were ever provided by a
+# differently-named plugin, this would need MCP tool detection instead.)
+if printf '%s' "${PLUGINS_JSON}" | jq -e '.[] | select(.name == "context7" and .available == true)' >/dev/null 2>&1; then
+    _has_context7=true
+fi
+
+# Context Hub CLI: check PATH
+if command -v chub >/dev/null 2>&1; then
+    _has_chub_cli=true
+fi
+
+# Context Hub indexed: derived from context7
+_has_hub_indexed="${_has_context7}"
+
+# Serena: check for serena plugin in PLUGINS_JSON or auto-discovered
+if printf '%s' "${PLUGINS_JSON}" | jq -e '.[] | select(.name == "serena" and .available == true)' >/dev/null 2>&1; then
+    _has_serena=true
+fi
+
+# Forgetful Memory: check for forgetful plugin (auto-discovered or curated)
+if printf '%s' "${PLUGINS_JSON}" | jq -e '.[] | select(.name == "forgetful" and .available == true)' >/dev/null 2>&1; then
+    _has_forgetful=true
+fi
+
+# Build context_capabilities JSON
+CONTEXT_CAPS="$(jq -n \
+    --argjson c7 "${_has_context7}" \
+    --argjson chub "${_has_chub_cli}" \
+    --argjson idx "${_has_hub_indexed}" \
+    --argjson ser "${_has_serena}" \
+    --argjson fm "${_has_forgetful}" \
+    '{context7:$c7, context_hub_cli:$chub, context_hub_indexed:$idx, serena:$ser, forgetful_memory:$fm}'
+)"
+
+# Override unified-context-stack plugin available flag
+_any_cap=false
+if [ "${_has_context7}" = true ] || [ "${_has_chub_cli}" = true ] || [ "${_has_serena}" = true ] || [ "${_has_forgetful}" = true ]; then
+    _any_cap=true
+fi
+if [ "${_any_cap}" = true ]; then
+    PLUGINS_JSON="$(printf '%s' "${PLUGINS_JSON}" | jq '
+        map(if .name == "unified-context-stack" then .available = true else . end)
+    ')"
+fi
+
+# -----------------------------------------------------------------
 # Step 9+10: Build final registry JSON, extract stats, and cache
 # -----------------------------------------------------------------
 RESULT="$(jq -n \
     --arg version "4.0.0" \
     --argjson skills "${SKILLS_JSON}" \
     --argjson plugins "${PLUGINS_JSON}" \
+    --argjson caps "${CONTEXT_CAPS}" \
     --argjson pc "${PHASE_COMPOSITIONS}" \
     --argjson pg "${PHASE_GUIDE}" \
     --argjson mh "${METHODOLOGY_HINTS}" \
     --argjson warnings "${WARNINGS}" \
     '{
-        registry: {version:$version, skills:$skills, plugins:$plugins,
+        registry: {version:$version, skills:$skills, plugins:$plugins, context_capabilities:$caps,
                    phase_compositions:$pc, phase_guide:$pg,
                    methodology_hints:$mh, warnings:$warnings},
         stats: {
@@ -581,6 +640,17 @@ STATUS="SessionStart: ${AVAILABLE_COUNT} skills active (${INSTALLED_COMPANIONS} 
 # Build model context: status + first-response instruction + any warnings
 CONTEXT="${STATUS}
 MANDATORY: Before any other output, report the skill system status to the user in one line (e.g. '24 skills active across 7 plugins — run /setup to complete installation'). Do not skip or defer this."
+
+# Build context capabilities summary for model consumption
+_CAP_LINE=""
+if [ -n "${CONTEXT_CAPS:-}" ]; then
+    _CAP_LINE="$(printf '%s' "${CONTEXT_CAPS}" | jq -r 'to_entries | map("\(.key)=\(.value)") | "Context Stack: " + join(", ")')"
+fi
+
+if [ -n "${_CAP_LINE}" ]; then
+    CONTEXT="${CONTEXT}
+${_CAP_LINE}"
+fi
 
 if [ "${WARNING_COUNT}" -gt 0 ]; then
     CONTEXT="${CONTEXT}
