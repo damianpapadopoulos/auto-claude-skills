@@ -20,7 +20,7 @@ These are injected by the session-start hook as: `Context Stack: context7=true, 
 | Flag | Tool | What it enables |
 |------|------|----------------|
 | `context7` | Context7 MCP | Broad library doc retrieval |
-| `context_hub_indexed` | Context Hub via Context7 | High-trust curated docs (query `/andrewyng/context-hub`) |
+| `context_hub_available` | Context Hub via Context7 | High-trust curated docs — flag means Hub is *reachable*, not that it has docs for your library (query `/andrewyng/context-hub`) |
 | `context_hub_cli` | `chub` CLI | Local curated doc retrieval and annotations |
 | `serena` | Serena MCP | LSP-powered dependency mapping and AST edits |
 | `forgetful_memory` | Forgetful Memory | Persistent cross-session architectural knowledge |
