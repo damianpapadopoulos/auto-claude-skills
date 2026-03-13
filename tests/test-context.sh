@@ -516,6 +516,61 @@ COMP
 }
 
 # ---------------------------------------------------------------------------
+# 11. Unified context stack PARALLEL emission
+# ---------------------------------------------------------------------------
+install_registry_with_context_stack() {
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    # Use the actual default-triggers.json but inject available flags
+    CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" bash "${PROJECT_ROOT}/hooks/session-start-hook.sh" 2>/dev/null >/dev/null
+    # Mark unified-context-stack as available and key process skills as available
+    # so the routing hook emits output (TOTAL_COUNT>0 is required for hints to appear)
+    local tmp="${cache_file}.tmp"
+    jq '.plugins |= map(if .name == "unified-context-stack" then .available = true else . end) |
+        .context_capabilities = {context7:true,context_hub_cli:false,context_hub_indexed:true,serena:false,forgetful_memory:false} |
+        .skills |= map(
+            if .name == "brainstorming" then . + {available:true, enabled:true, invoke:"Skill(superpowers:brainstorming)"}
+            elif .name == "test-driven-development" then . + {available:true, enabled:true, invoke:"Skill(superpowers:test-driven-development)"}
+            elif .name == "systematic-debugging" then . + {available:true, enabled:true, invoke:"Skill(superpowers:systematic-debugging)"}
+            else . end
+        )' \
+        "${cache_file}" > "${tmp}" && mv "${tmp}" "${cache_file}"
+}
+
+test_context_stack_parallel_emission() {
+    echo "-- test: unified-context-stack emits PARALLEL line --"
+    setup_test_env
+    install_registry_with_context_stack
+
+    # "build a new stripe integration" should trigger DESIGN phase
+    local output ctx
+    output="$(run_hook "build a new stripe payment integration for our app")"
+    ctx="$(extract_context "${output}")"
+
+    assert_contains "context stack PARALLEL emitted" "unified-context-stack" "${ctx}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# 12. Unified context stack hint emission
+# ---------------------------------------------------------------------------
+test_context_stack_hint_emission() {
+    echo "-- test: unified-context-stack-hint fires on library keywords --"
+    setup_test_env
+    install_registry_with_context_stack
+
+    # "upgrade the stripe library" has library keyword
+    local output ctx
+    output="$(run_hook "upgrade the stripe library to the latest version")"
+    ctx="$(extract_context "${output}")"
+
+    assert_contains "context stack hint emitted" "CONTEXT STACK" "${ctx}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_zero_skills_minimal_output
@@ -530,5 +585,7 @@ test_full_format_process_first
 test_composition_state_written
 test_composition_recovery_after_compaction
 test_composition_done_not_done_question
+test_context_stack_parallel_emission
+test_context_stack_hint_emission
 
 print_summary
