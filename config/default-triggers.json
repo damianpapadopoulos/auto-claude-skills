@@ -375,7 +375,7 @@
         "(library|package|module|sdk|api|docs|documentation|reference|version|latest|upgrade|deprecat|migrat)"
       ],
       "trigger_mode": "regex",
-      "hint": "CONTEXT STACK: Use the unified-context-stack for tiered documentation retrieval. Query Context Hub via Context7 (libraryId=/andrewyng/context-hub) first for curated docs, then fall back to broad Context7, then chub CLI, then web search.",
+      "hint": "CONTEXT STACK: Use the unified-context-stack for tiered documentation retrieval. Query Context Hub via Context7 (libraryId=/andrewyng/context-hub) first for curated docs, then fall back to broad Context7, then chub CLI, then web search. Read the phase document for your current SDLC phase from the unified-context-stack skill (paths listed in the Context Stack session-start output).",
       "plugin": "unified-context-stack"
     },
     {
