@@ -11,7 +11,7 @@ The unified-context-stack was implemented as a plugin with tier/phase documents,
 
 | # | Gap | Impact |
 |---|-----|--------|
-| 1 | `context_hub_indexed` mirrors `context7` | Model attempts Tier 1 (curated) when only Tier 2 (web-scraped) may be available |
+| 1 | `context_hub_indexed` is always derived from `context7` (identical value), suggesting curated docs are indexed when only broad web-scraped docs are guaranteed | Model attempts Tier 1 (curated) when only Tier 2 (web-scraped) may be available |
 | 2 | Phase docs not linked from hook output | Model must discover phase guidance independently — often doesn't |
 | 3 | No conditional fallback in phase docs | Docs say "Use Serena" with no guidance when Serena is unavailable |
 | 4 | Memory consolidation not enforced | Learnings lost between sessions |
@@ -39,9 +39,7 @@ Memory consolidation uses advisory red flags + pull-based next-session checking,
 
 ### Activation hook must not grow
 
-All new logic goes in session-start output or static content. The activation hook (`skill-activation-hook.sh`) is already near the 50ms budget with ~10 jq forks. No code changes to the activation hook.
-
-**Exception**: One line added to the `verification-before-completion` red flags in `default-triggers.json` (registry data, not hook code).
+All new logic goes in session-start output or static content. The activation hook (`skill-activation-hook.sh`) is already near the 50ms budget with ~10 jq forks. No code changes to the activation hook. No exceptions.
 
 ### 50ms budget defense
 
@@ -55,7 +53,7 @@ The flag means "Context7 is installed, so Context Hub is *reachable*" — not "C
 
 Add a note to `external-truth.md` Tier 1: "This flag indicates Context Hub is reachable, not that it has docs for your specific library. If `resolve-library-id` returns no match, fall through to Tier 2 immediately."
 
-**Files**: `hooks/session-start-hook.sh` (~2 lines), `skills/unified-context-stack/tiers/external-truth.md` (~2 lines), `config/fallback-registry.json` (regenerate), `tests/test-context.sh` (update assertions)
+**Files**: `hooks/session-start-hook.sh` (~2 lines), `skills/unified-context-stack/tiers/external-truth.md` (~2 lines), `skills/unified-context-stack/SKILL.md` (update capability table), `config/fallback-registry.json` (regenerate), `tests/test-context.sh` (update assertions), `tests/test-registry.sh` (update assertions)
 
 ## Change 2: Phase Document Linking
 
@@ -93,33 +91,40 @@ The model matches directly against the `Context Stack:` flags in context. Same p
 
 Phase documents map to Superpowers SDLC phases:
 
-| Phase Doc | Superpowers Phase | Fires with |
-|-----------|-------------------|------------|
-| `triage-and-plan.md` | DESIGN + PLAN | brainstorming, writing-plans |
+| Phase Doc | Superpowers Phase | Relevant when active |
+|-----------|-------------------|---------------------|
+| `triage-and-plan.md` | DESIGN, PLAN | brainstorming (DESIGN), writing-plans (PLAN) — spans two phases |
 | `implementation.md` | IMPLEMENT | executing-plans, subagent-driven-development |
 | `testing-and-debug.md` | DEBUG | systematic-debugging |
 | `code-review.md` | REVIEW | requesting-code-review, receiving-code-review |
 | `ship-and-learn.md` | SHIP | verification-before-completion, finishing-a-development-branch |
 
-**Files**: All 5 phase docs (~16 lines total)
+**Files**: All 5 phase docs (~30 lines total across all truth dimensions)
 
 ## Change 4: Memory Consolidation Enforcement
 
 **Two advisory layers:**
 
-### Layer 1: SHIP phase red flag
+### Layer 1: SHIP phase gate in phase document
 
-Add to the `verification-before-completion` red flag list in `default-triggers.json`:
+Add a bold requirement block to `ship-and-learn.md`:
 
+```markdown
+**REQUIRED before completing session:** If you discovered any architectural rules, API quirks,
+or project conventions during this session, you MUST consolidate them using the highest
+available tier below before claiming the work is done. After consolidation, write the marker:
+`touch ~/.claude/.context-stack-consolidated-{project-hash}`
 ```
-- Completing a session without memory consolidation when learnings were discovered
-```
 
-Uses the proven red-flag pattern. Fires when `verification-before-completion` is selected AND unified-context-stack is available.
+This is static content in the phase document — read by the model when the SHIP composition fires. No activation hook changes needed. The instruction lives alongside the existing tier guidance in the same file.
+
+Note: The red flag list in `skill-activation-hook.sh` is hard-coded, not registry-driven. Adding to it would require an activation hook code change, which violates our architectural constraint. The phase document approach achieves the same effect through the existing composition PARALLEL/SEQUENCE mechanism.
 
 ### Layer 2: Pull-based next-session check
 
-At session-start, check for a consolidation marker file (`~/.claude/.context-stack-consolidated-{project-hash}`). If missing or older than the last git commit:
+At session-start, check for a consolidation marker file (`~/.claude/.context-stack-consolidated-{project-hash}`). The project hash is computed as `$(printf '%s' "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | md5)` — using the git root for repos or the working directory for non-repos.
+
+If the marker is missing or older than the last git commit (compared via `stat` epoch timestamps — using `stat -f %m` on macOS with `stat -c %Y` fallback for Linux):
 
 ```
 Context Stack: Previous session may have unconsolidated learnings. Consider reviewing recent changes.
@@ -127,14 +132,14 @@ Context Stack: Previous session may have unconsolidated learnings. Consider revi
 
 The model writes the marker during SHIP phase consolidation (`touch` command). Session-start reads it (`stat`). Cheap, robust, catches skipped consolidation.
 
-**Files**: `config/default-triggers.json` (~1 line), `hooks/session-start-hook.sh` (~8 lines), `skills/unified-context-stack/phases/ship-and-learn.md` (~2 lines), `tests/test-context.sh` (test marker)
+**Files**: `hooks/session-start-hook.sh` (~10 lines), `skills/unified-context-stack/phases/ship-and-learn.md` (~4 lines), `tests/test-context.sh` (test marker)
 
 ## Change 5: Strengthened Methodology Hint
 
 **Append phase doc pointer to the existing hint text** in `default-triggers.json`:
 
 ```
-"hint": "CONTEXT STACK: Use the unified-context-stack for tiered documentation retrieval. Query Context Hub via Context7 (libraryId=/andrewyng/context-hub) first for curated docs, then fall back to broad Context7, then chub CLI, then web search. Read the phase-specific guidance in skills/unified-context-stack/phases/ for your current SDLC phase."
+"hint": "CONTEXT STACK: Use the unified-context-stack for tiered documentation retrieval. Query Context Hub via Context7 (libraryId=/andrewyng/context-hub) first for curated docs, then fall back to broad Context7, then chub CLI, then web search. Read the phase document for your current SDLC phase from the unified-context-stack skill (paths listed in the Context Stack session-start output)."
 ```
 
 **Files**: `config/default-triggers.json` (~1 line)
@@ -151,11 +156,11 @@ The model writes the marker during SHIP phase consolidation (`touch` command). S
 
 | Change | Lines | Files |
 |--------|-------|-------|
-| Honest capability signaling | ~4 | 4 |
-| Phase document linking | ~5 | 2 |
-| Conditional fallbacks in phase docs | ~16 | 5 |
-| Memory consolidation enforcement | ~12 | 4 |
-| Strengthened hint text | ~1 | 1 |
-| **Total** | **~38** | **6 unique** |
+| Honest capability signaling | ~8 | 6 (`session-start-hook.sh`, `external-truth.md`, `SKILL.md`, `fallback-registry.json`, `test-context.sh`, `test-registry.sh`) |
+| Phase document linking | ~5 | 2 (`session-start-hook.sh`, `test-context.sh`) |
+| Conditional fallbacks in phase docs | ~30 | 5 (all phase docs) |
+| Memory consolidation enforcement | ~14 | 2 (`session-start-hook.sh`, `ship-and-learn.md`) + tests |
+| Strengthened hint text | ~1 | 1 (`default-triggers.json`) |
+| **Total** | **~58** | **11 unique** |
 
-No new hooks. No new role types. No activation hook changes. All improvements are to session-start output, static content, and registry data.
+No new hooks. No new role types. No activation hook code changes. All improvements are to session-start output, static content, and registry data.
