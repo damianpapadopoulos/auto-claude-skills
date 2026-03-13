@@ -698,10 +698,10 @@
           "purpose": "Parallel codebase exploration while brainstorming clarifies intent"
         },
         {
-          "plugin": "context7",
-          "use": "mcp:resolve-library-id + get-library-docs",
-          "when": "installed AND prompt mentions libraries/frameworks",
-          "purpose": "Fetch current library docs during design to inform technology choices"
+          "plugin": "unified-context-stack",
+          "use": "tiered context retrieval (external docs, blast-radius, memory)",
+          "when": "installed AND any context_capability is true",
+          "purpose": "Gather curated API docs, map dependencies, check institutional memory during design"
         }
       ],
       "hints": [
@@ -724,7 +724,14 @@
     },
     "PLAN": {
       "driver": "writing-plans",
-      "parallel": [],
+      "parallel": [
+        {
+          "plugin": "unified-context-stack",
+          "use": "tiered context retrieval (external docs, blast-radius, memory)",
+          "when": "installed AND any context_capability is true",
+          "purpose": "Gather curated API docs, map dependencies, check institutional memory before planning"
+        }
+      ],
       "hints": []
     },
     "IMPLEMENT": {
@@ -737,9 +744,9 @@
           "purpose": "Passive write-time security guard (always active, no explicit invocation)"
         },
         {
-          "plugin": "context7",
-          "use": "mcp:get-library-docs",
-          "when": "installed AND using external libraries",
+          "plugin": "unified-context-stack",
+          "use": "tiered context retrieval (mid-flight library lookups)",
+          "when": "installed AND any context_capability is true",
           "purpose": "Look up current API signatures and usage patterns during implementation"
         }
       ],
@@ -759,6 +766,12 @@
           "use": "mcp:get_pull_request + add_issue_comment",
           "when": "installed AND reviewing a PR",
           "purpose": "Read PR details and post review comments directly via GitHub API"
+        },
+        {
+          "plugin": "unified-context-stack",
+          "use": "tiered context retrieval (claim verification, dependency checks)",
+          "when": "installed AND any context_capability is true",
+          "purpose": "Verify reviewer claims against curated docs, check dependency impact"
         }
       ],
       "hints": [
@@ -772,6 +785,12 @@
     "SHIP": {
       "driver": "verification-before-completion",
       "sequence": [
+        {
+          "plugin": "unified-context-stack",
+          "use": "memory consolidation (annotate + memory-save)",
+          "when": "installed AND any context_capability is true",
+          "purpose": "Consolidate learnings via chub annotate and/or memory-save before session close"
+        },
         {
           "plugin": "commit-commands",
           "use": "commands:/commit",
@@ -806,10 +825,10 @@
       "driver": "systematic-debugging",
       "parallel": [
         {
-          "plugin": "context7",
-          "use": "mcp:get-library-docs",
-          "when": "installed AND debugging library-related issues",
-          "purpose": "Check current library docs for known issues, breaking changes, or correct API usage"
+          "plugin": "unified-context-stack",
+          "use": "tiered context retrieval (past solutions, live issue discovery)",
+          "when": "installed AND any context_capability is true",
+          "purpose": "Check past solutions via memory, and live library issues via curated docs"
         }
       ],
       "hints": []
