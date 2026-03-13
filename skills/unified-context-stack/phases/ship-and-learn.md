@@ -2,6 +2,12 @@
 
 Before completing the session, consolidate what was learned.
 
+**REQUIRED before completing session:** If you discovered any architectural rules, API quirks, or project conventions during this session, you MUST consolidate them using the highest available tier below before claiming the work is done. After consolidation, write the marker:
+
+```bash
+touch ~/.claude/.context-stack-consolidated-$(printf '%s' "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | shasum | cut -d' ' -f1)
+```
+
 ## Memory Consolidation
 
 Evaluate your available tools and execute the highest available tier:
