@@ -4,7 +4,9 @@ Capability: Fetch accurate, up-to-date API documentation for third-party librari
 
 ## Tier 1 (High Trust): Context Hub via Context7
 
-**Condition:** `context_hub_indexed = true`
+**Condition:** `context_hub_available = true`
+
+**Note:** This flag indicates Context Hub is reachable via Context7, not that it has docs for your specific library. If `resolve-library-id` returns no match, fall through to Tier 2 immediately.
 
 Use the Context7 MCP tools with the curated Context Hub repository:
 
