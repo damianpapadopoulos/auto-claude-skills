@@ -571,6 +571,39 @@ test_context_stack_hint_emission() {
 }
 
 # ---------------------------------------------------------------------------
+# 13b. Phase document conditional fallback content
+# ---------------------------------------------------------------------------
+test_phase_docs_have_conditional_fallbacks() {
+    echo "-- test: phase docs contain capability-conditional instructions --"
+    local phase_dir="${PROJECT_ROOT}/skills/unified-context-stack/phases"
+    local fail_count=0
+
+    for doc in triage-and-plan implementation testing-and-debug code-review; do
+        local content
+        content="$(cat "${phase_dir}/${doc}.md")"
+        if ! printf '%s' "${content}" | grep -q '=true\*\*:'; then
+            echo "  FAIL: ${doc}.md missing conditional fallback format"
+            fail_count=$((fail_count + 1))
+        fi
+    done
+
+    # ship-and-learn uses IF format instead of inline
+    local ship_content
+    ship_content="$(cat "${phase_dir}/ship-and-learn.md")"
+    if ! printf '%s' "${ship_content}" | grep -q 'REQUIRED before completing session'; then
+        echo "  FAIL: ship-and-learn.md missing consolidation gate"
+        fail_count=$((fail_count + 1))
+    fi
+
+    if [ "${fail_count}" -eq 0 ]; then
+        echo "  PASS: all phase docs have conditional fallbacks"
+    else
+        echo "  FAIL: ${fail_count} phase docs missing conditionals"
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_zero_skills_minimal_output
@@ -587,5 +620,6 @@ test_composition_recovery_after_compaction
 test_composition_done_not_done_question
 test_context_stack_parallel_emission
 test_context_stack_hint_emission
+test_phase_docs_have_conditional_fallbacks
 
 print_summary
