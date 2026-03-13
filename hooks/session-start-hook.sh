@@ -623,6 +623,27 @@ if [ -n "${_CAP_LINE}" ]; then
 ${_CAP_LINE}"
 fi
 
+# Check for stale/missing memory consolidation marker
+_PROJ_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+_PROJ_HASH="$(printf '%s' "${_PROJ_ROOT}" | shasum | cut -d' ' -f1)"
+_CONSOL_MARKER="${HOME}/.claude/.context-stack-consolidated-${_PROJ_HASH}"
+if [ -f "${_CONSOL_MARKER}" ]; then
+    # Compare marker mtime with last git commit time
+    _MARKER_TIME="$(stat -f %m "${_CONSOL_MARKER}" 2>/dev/null || stat -c %Y "${_CONSOL_MARKER}" 2>/dev/null || echo 0)"
+    _LAST_COMMIT="$(git -C "${_PROJ_ROOT}" log -1 --format=%ct 2>/dev/null || echo 0)"
+    if [ "${_MARKER_TIME}" -lt "${_LAST_COMMIT}" ]; then
+        CONTEXT="${CONTEXT}
+Context Stack: Previous session may have unconsolidated learnings. Consider reviewing recent changes."
+    fi
+else
+    # No marker at all — only warn if there are git commits (not a brand-new repo)
+    _COMMIT_COUNT="$(git -C "${_PROJ_ROOT}" rev-list --count HEAD 2>/dev/null || echo 0)"
+    if [ "${_COMMIT_COUNT}" -gt 1 ]; then
+        CONTEXT="${CONTEXT}
+Context Stack: Previous session may have unconsolidated learnings. Consider reviewing recent changes."
+    fi
+fi
+
 # Append phase document pointers for model navigation
 CONTEXT="${CONTEXT}
 Context guidance per phase: triage-and-plan.md | implementation.md | testing-and-debug.md | code-review.md | ship-and-learn.md (in skills/unified-context-stack/phases/)"

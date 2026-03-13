@@ -625,6 +625,51 @@ test_phase_docs_have_conditional_fallbacks() {
 }
 
 # ---------------------------------------------------------------------------
+# 14. Memory consolidation marker check
+# ---------------------------------------------------------------------------
+test_consolidation_marker_stale() {
+    echo "-- test: session-start warns when consolidation marker is stale --"
+    setup_test_env
+    install_registry_with_context_stack
+
+    # Initialize a git repo with 2+ commits so consolidation check fires
+    (cd "${HOME}" && git init -q && git -c user.name="test" -c user.email="test@test" commit --allow-empty -m "init" -q && git -c user.name="test" -c user.email="test@test" commit --allow-empty -m "second" -q)
+
+    # No marker file exists — should warn
+    local output ctx
+    output="$(cd "${HOME}" && CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" bash "${PROJECT_ROOT}/hooks/session-start-hook.sh" 2>/dev/null)"
+    ctx="$(printf '%s' "${output}" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+
+    assert_contains "stale marker warning" "unconsolidated learnings" "${ctx}"
+
+    teardown_test_env
+}
+
+test_consolidation_marker_fresh() {
+    echo "-- test: session-start no warning when marker is fresh --"
+    setup_test_env
+    install_registry_with_context_stack
+
+    # Initialize git repo with 2+ commits
+    (cd "${HOME}" && git init -q && git -c user.name="test" -c user.email="test@test" commit --allow-empty -m "init" -q && git -c user.name="test" -c user.email="test@test" commit --allow-empty -m "second" -q)
+
+    # Create a fresh marker (newer than last commit)
+    # Use git rev-parse to match how session-start computes the hash
+    local proj_root proj_hash
+    proj_root="$(cd "${HOME}" && git rev-parse --show-toplevel)"
+    proj_hash="$(printf '%s' "${proj_root}" | shasum | cut -d' ' -f1)"
+    touch "${HOME}/.claude/.context-stack-consolidated-${proj_hash}"
+
+    local output ctx
+    output="$(cd "${HOME}" && CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" bash "${PROJECT_ROOT}/hooks/session-start-hook.sh" 2>/dev/null)"
+    ctx="$(printf '%s' "${output}" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+
+    assert_not_contains "no stale warning with fresh marker" "unconsolidated learnings" "${ctx}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_zero_skills_minimal_output
@@ -643,5 +688,7 @@ test_context_stack_parallel_emission
 test_context_stack_hint_emission
 test_phase_doc_path_emission
 test_phase_docs_have_conditional_fallbacks
+test_consolidation_marker_stale
+test_consolidation_marker_fresh
 
 print_summary
