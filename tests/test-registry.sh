@@ -512,10 +512,10 @@ test_context_capabilities_detection() {
     ctx7="$(jq -r '.context_capabilities.context7' "${cache_file}" 2>/dev/null)"
     assert_equals "context7 detected as true" "true" "${ctx7}"
 
-    # context_hub_indexed should derive from context7
-    local hub_idx
-    hub_idx="$(jq -r '.context_capabilities.context_hub_indexed' "${cache_file}" 2>/dev/null)"
-    assert_equals "context_hub_indexed derived from context7" "true" "${hub_idx}"
+    # context_hub_available should derive from context7
+    local hub_avail
+    hub_avail="$(jq -r '.context_capabilities.context_hub_available' "${cache_file}" 2>/dev/null)"
+    assert_equals "context_hub_available derived from context7" "true" "${hub_avail}"
 
     # chub CLI not on PATH in test env
     local chub_cli
