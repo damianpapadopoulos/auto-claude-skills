@@ -571,6 +571,27 @@ test_context_stack_hint_emission() {
 }
 
 # ---------------------------------------------------------------------------
+# 13. Phase document path emission
+# ---------------------------------------------------------------------------
+test_phase_doc_path_emission() {
+    echo "-- test: session-start emits phase document paths --"
+    setup_test_env
+    install_registry_with_context_stack
+
+    # Run session-start hook to get the output with phase paths
+    local output
+    output="$(CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" bash "${PROJECT_ROOT}/hooks/session-start-hook.sh" 2>/dev/null)"
+    local ctx
+    ctx="$(printf '%s' "${output}" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+
+    assert_contains "phase guidance line present" "Context guidance per phase:" "${ctx}"
+    assert_contains "implementation.md referenced" "implementation.md" "${ctx}"
+    assert_contains "ship-and-learn.md referenced" "ship-and-learn.md" "${ctx}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # 13b. Phase document conditional fallback content
 # ---------------------------------------------------------------------------
 test_phase_docs_have_conditional_fallbacks() {
@@ -620,6 +641,7 @@ test_composition_recovery_after_compaction
 test_composition_done_not_done_question
 test_context_stack_parallel_emission
 test_context_stack_hint_emission
+test_phase_doc_path_emission
 test_phase_docs_have_conditional_fallbacks
 
 print_summary

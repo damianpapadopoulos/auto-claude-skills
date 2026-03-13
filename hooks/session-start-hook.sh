@@ -623,6 +623,10 @@ if [ -n "${_CAP_LINE}" ]; then
 ${_CAP_LINE}"
 fi
 
+# Append phase document pointers for model navigation
+CONTEXT="${CONTEXT}
+Context guidance per phase: triage-and-plan.md | implementation.md | testing-and-debug.md | code-review.md | ship-and-learn.md (in skills/unified-context-stack/phases/)"
+
 if [ "${WARNING_COUNT}" -gt 0 ]; then
     CONTEXT="${CONTEXT}
 Warnings: $(printf '%s' "${WARNINGS}" | jq -r '.[]')"
