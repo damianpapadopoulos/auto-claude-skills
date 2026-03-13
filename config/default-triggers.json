@@ -672,6 +672,19 @@
         "REVIEW"
       ],
       "description": "Jira and Confluence integration via claude.ai managed MCP. Connect via /mcp in Claude Code. Pull acceptance criteria, search issues, read design docs."
+    },
+    {
+      "name": "unified-context-stack",
+      "source": "auto-claude-skills",
+      "provides": {
+        "commands": [],
+        "skills": [],
+        "agents": [],
+        "hooks": [],
+        "mcp_tools": []
+      },
+      "phase_fit": ["DESIGN", "PLAN", "IMPLEMENT", "DEBUG", "REVIEW", "SHIP"],
+      "description": "Tiered context retrieval — curated docs (Context Hub via Context7), blast-radius mapping (Serena), institutional memory (Forgetful) with graceful degradation."
     }
   ],
   "phase_compositions": {
