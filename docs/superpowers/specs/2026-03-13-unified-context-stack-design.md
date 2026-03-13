@@ -51,8 +51,8 @@ The design separates **Detection** (deterministic, in the session-start hook) fr
 ┌─────────────────────────────────────────────────────────┐
 │           Orchestrator Skill Document                     │
 │  skills/unified-context-stack/SKILL.md                    │
-│  Reads context_capabilities → dispatches to tier docs     │
-│  + phase-specific guidance                                │
+│  Evaluates context_capabilities (injected by session-     │
+│  start hook) → dispatches to tier + phase guidance        │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -109,6 +109,17 @@ fi
 
 The `unified-context-stack` plugin's `available` flag is set to `true` if ANY capability in the stack is present. If all are `false`, the plugin is marked unavailable and all composition entries referencing it are suppressed.
 
+**Insertion point in session-start-hook.sh**: The capability detection block runs AFTER the plugin discovery step (step 8b/8c, which sets `available` flags on all plugins based on directory existence in `~/.claude/plugins/cache/`). Since `unified-context-stack` is a virtual plugin (no cache directory), the standard discovery would set `available: false`. The detection block explicitly overrides this by mutating the plugin's `available` field in `PLUGINS_JSON` after discovery completes:
+
+```bash
+# After step 8c (plugin discovery), override for virtual plugins
+if [ "$any_capability_present" = true ]; then
+  PLUGINS_JSON="$(printf '%s' "$PLUGINS_JSON" | jq '
+    map(if .name == "unified-context-stack" then .available = true else . end)
+  ')"
+fi
+```
+
 ## Component 2: Orchestrator Skill Document
 
 ### File Structure
@@ -139,7 +150,7 @@ Capability: Fetch accurate API documentation.
 ```
 Tier 1 (High Trust): IF context_hub_indexed = true
   → Use Context7 MCP: resolve-library-id first to confirm availability,
-    then query-docs with libraryId="/andrewyng/context-hub"
+    then get-library-docs with libraryId="/andrewyng/context-hub"
   → IMPORTANT: Your query parameter should describe the specific API/library
     you need (e.g., "Stripe payment intents API" or "React Router v7 route
     configuration"), NOT "Context Hub." The libraryId handles targeting;
@@ -247,20 +258,19 @@ IF NEITHER are available:
   "source": "auto-claude-skills",
   "provides": {
     "commands": [],
-    "skills": ["unified-context-stack"],
+    "skills": [],
     "agents": [],
     "hooks": [],
     "mcp_tools": []
   },
   "phase_fit": ["PLAN", "IMPLEMENT", "DEBUG", "REVIEW", "SHIP"],
-  "description": "Tiered context retrieval — curated docs (Context Hub via Context7), blast-radius mapping (Serena), institutional memory (Forgetful) with graceful degradation.",
-  "context_capabilities": true
+  "description": "Tiered context retrieval — curated docs (Context Hub via Context7), blast-radius mapping (Serena), institutional memory (Forgetful) with graceful degradation."
 }
 ```
 
 ### Phase Composition Entries
 
-These replace the individual Context7 entries across DESIGN/IMPLEMENT/DEBUG. Context7 is now one tier within the stack, not a standalone entry.
+These replace the individual Context7 composition entries in DESIGN, IMPLEMENT, and DEBUG, and add new entries for REVIEW and SHIP phases. Context7 is now one tier within the stack, not a standalone entry.
 
 **PLAN phase:**
 ```json
@@ -305,7 +315,7 @@ These replace the individual Context7 entries across DESIGN/IMPLEMENT/DEBUG. Con
 **SHIP phase** (sequence, not parallel — must run before session closes):
 ```json
 {
-  "skill": "unified-context-stack",
+  "plugin": "unified-context-stack",
   "use": "memory consolidation (annotate + memory-save)",
   "when": "installed AND any context_capability is true",
   "purpose": "Consolidate learnings via chub annotate and/or memory-save before session close"
@@ -366,9 +376,21 @@ Added after the registry merge step in `session-start-hook.sh`:
 
 ### Skill-Activation Hook Changes
 
-**No format changes required.** The existing composition processing loop already handles plugin-based entries. The unified-context-stack composition entries use the standard `plugin` field and are gated by the plugin's `available` flag, which session-start set based on capabilities.
+**No code changes required to `skill-activation-hook.sh`.** The existing composition processing loop already handles plugin-based entries. The unified-context-stack composition entries use the standard `plugin` field and are gated by the plugin's `available` flag, which session-start set based on capabilities.
 
-The only change is replacing the individual Context7 composition entries with unified-context-stack entries in `default-triggers.json`.
+Registry data changes (replacing Context7 composition entries with unified-context-stack entries, and replacing the `context7-docs` methodology hint) are in `default-triggers.json` only.
+
+### Delivering context_capabilities to the Model
+
+The orchestrator skill document (SKILL.md) uses conditional logic (`IF context7 = true`, `IF serena = false`) that the model must evaluate at runtime. Since skill documents are loaded as static markdown, the model cannot read `~/.claude/.skill-registry-cache.json` directly.
+
+**Solution**: The session-start hook injects a `CONTEXT_CAPABILITIES` summary into its `additionalContext` output, which persists in the model's conversation context for the entire session:
+
+```
+Context Stack: context7=true, context_hub_cli=false, context_hub_indexed=true, serena=false, forgetful_memory=true
+```
+
+This is a single line appended to the session-start greeting output. The SKILL.md tier documents reference these flags by name, and the model matches them against the injected summary to evaluate each tier's conditional.
 
 ## Graceful Degradation Matrix
 
