@@ -376,8 +376,8 @@
   "context_capabilities": {
     "context7": false,
     "context_hub_cli": false,
-    "context_hub_indexed": false,
     "serena": false,
-    "forgetful_memory": false
+    "forgetful_memory": false,
+    "context_hub_available": false
   }
 }
