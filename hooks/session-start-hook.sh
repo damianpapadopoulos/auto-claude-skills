@@ -478,7 +478,7 @@ CONTEXT_CAPS="$(printf '%s' "${PLUGINS_JSON}" | jq \
     ($avail | index("context7") != null) as $c7 |
     ($avail | index("serena") != null) as $ser |
     ($avail | index("forgetful") != null) as $fm |
-    {context7:$c7, context_hub_cli:$chub, context_hub_indexed:$c7, serena:$ser, forgetful_memory:$fm}'
+    {context7:$c7, context_hub_cli:$chub, context_hub_available:$c7, serena:$ser, forgetful_memory:$fm}'
 )"
 
 # Override unified-context-stack plugin available flag when any capability is present
