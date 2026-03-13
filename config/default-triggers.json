@@ -370,13 +370,13 @@
       "skill": "requesting-code-review"
     },
     {
-      "name": "context7-docs",
+      "name": "unified-context-stack-hint",
       "triggers": [
         "(library|package|module|sdk|api|docs|documentation|reference|version|latest|upgrade|deprecat|migrat)"
       ],
       "trigger_mode": "regex",
-      "hint": "CONTEXT7: If Context7 MCP tools are available, fetch up-to-date library documentation instead of relying on training data.",
-      "plugin": "context7"
+      "hint": "CONTEXT STACK: Use the unified-context-stack for tiered documentation retrieval. Query Context Hub via Context7 (libraryId=/andrewyng/context-hub) first for curated docs, then fall back to broad Context7, then chub CLI, then web search.",
+      "plugin": "unified-context-stack"
     },
     {
       "name": "github-mcp",

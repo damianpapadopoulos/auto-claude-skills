@@ -293,13 +293,13 @@ test_default_triggers_has_plugins_section() {
     local plugin_count
     plugin_count="$(jq '.plugins | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
 
-    # Should have 8 curated plugins (5 enhancers + context7 + github + atlassian)
-    assert_equals "default-triggers has 8 plugins" "8" "${plugin_count}"
+    # Should have 9 curated plugins (5 enhancers + context7 + github + atlassian + unified-context-stack)
+    assert_equals "default-triggers has 9 plugins" "9" "${plugin_count}"
 
     # Each plugin should have required fields
     local valid_count
     valid_count="$(jq '[.plugins[] | select(.name and .source and .provides and .phase_fit and .description)] | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "all plugins have required fields" "8" "${valid_count}"
+    assert_equals "all plugins have required fields" "9" "${valid_count}"
 
     teardown_test_env
 }
@@ -326,12 +326,12 @@ test_default_triggers_has_phase_compositions() {
     # REVIEW should have parallel entries
     local review_parallel
     review_parallel="$(jq '.phase_compositions.REVIEW.parallel | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "REVIEW has 2 parallel entries" "2" "${review_parallel}"
+    assert_equals "REVIEW has 3 parallel entries" "3" "${review_parallel}"
 
     # SHIP should have sequence entries
     local ship_sequence
     ship_sequence="$(jq '.phase_compositions.SHIP.sequence | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "SHIP has 3 sequence entries" "3" "${ship_sequence}"
+    assert_equals "SHIP has 4 sequence entries" "4" "${ship_sequence}"
 
     teardown_test_env
 }
