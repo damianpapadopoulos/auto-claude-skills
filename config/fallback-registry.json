@@ -46,7 +46,9 @@
       ],
       "trigger_mode": "regex",
       "priority": 30,
-      "precedes": ["writing-plans"],
+      "precedes": [
+        "writing-plans"
+      ],
       "requires": [],
       "invoke": "Skill(superpowers:brainstorming)",
       "available": true,
@@ -60,8 +62,12 @@
       "triggers": [],
       "trigger_mode": "regex",
       "priority": 40,
-      "precedes": ["executing-plans"],
-      "requires": ["brainstorming"],
+      "precedes": [
+        "executing-plans"
+      ],
+      "requires": [
+        "brainstorming"
+      ],
       "invoke": "Skill(superpowers:writing-plans)",
       "available": true,
       "enabled": true,
@@ -77,7 +83,9 @@
       "trigger_mode": "regex",
       "priority": 35,
       "precedes": [],
-      "requires": ["writing-plans"],
+      "requires": [
+        "writing-plans"
+      ],
       "invoke": "Skill(superpowers:executing-plans)",
       "available": true,
       "enabled": true,
@@ -136,7 +144,9 @@
       ],
       "trigger_mode": "regex",
       "priority": 20,
-      "precedes": ["finishing-a-development-branch"],
+      "precedes": [
+        "finishing-a-development-branch"
+      ],
       "requires": [],
       "invoke": "Skill(superpowers:verification-before-completion)",
       "available": true,
@@ -151,7 +161,9 @@
       "trigger_mode": "regex",
       "priority": 19,
       "precedes": [],
-      "requires": ["verification-before-completion"],
+      "requires": [
+        "verification-before-completion"
+      ],
       "invoke": "Skill(superpowers:finishing-a-development-branch)",
       "available": true,
       "enabled": true,
@@ -247,7 +259,9 @@
       "trigger_mode": "regex",
       "priority": 22,
       "precedes": [],
-      "requires": ["writing-plans"],
+      "requires": [
+        "writing-plans"
+      ],
       "invoke": "Skill(auto-claude-skills:agent-team-execution)",
       "available": true,
       "enabled": true,
@@ -303,14 +317,67 @@
       "description": "Bulk file operations using claude -p with manifest, dry-run, and log-based retry."
     }
   ],
-  "plugins": [],
+  "plugins": [
+    {
+      "name": "unified-context-stack",
+      "source": "auto-claude-skills",
+      "provides": {
+        "commands": [],
+        "skills": [],
+        "agents": [],
+        "hooks": [],
+        "mcp_tools": []
+      },
+      "phase_fit": [
+        "DESIGN",
+        "PLAN",
+        "IMPLEMENT",
+        "DEBUG",
+        "REVIEW",
+        "SHIP"
+      ],
+      "description": "Tiered context retrieval — curated docs (Context Hub via Context7), blast-radius mapping (Serena), institutional memory (Forgetful) with graceful degradation.",
+      "available": false
+    }
+  ],
   "methodology_hints": [],
   "phase_compositions": {
-    "DESIGN": {"driver": "brainstorming", "parallel": [], "hints": []},
-    "PLAN": {"driver": "writing-plans", "parallel": [], "hints": []},
-    "IMPLEMENT": {"driver": "executing-plans", "parallel": [], "hints": []},
-    "REVIEW": {"driver": "requesting-code-review", "parallel": [], "hints": []},
-    "SHIP": {"driver": "verification-before-completion", "sequence": [], "hints": []},
-    "DEBUG": {"driver": "systematic-debugging", "parallel": [], "hints": []}
+    "DESIGN": {
+      "driver": "brainstorming",
+      "parallel": [],
+      "hints": []
+    },
+    "PLAN": {
+      "driver": "writing-plans",
+      "parallel": [],
+      "hints": []
+    },
+    "IMPLEMENT": {
+      "driver": "executing-plans",
+      "parallel": [],
+      "hints": []
+    },
+    "REVIEW": {
+      "driver": "requesting-code-review",
+      "parallel": [],
+      "hints": []
+    },
+    "SHIP": {
+      "driver": "verification-before-completion",
+      "sequence": [],
+      "hints": []
+    },
+    "DEBUG": {
+      "driver": "systematic-debugging",
+      "parallel": [],
+      "hints": []
+    }
+  },
+  "context_capabilities": {
+    "context7": false,
+    "context_hub_cli": false,
+    "context_hub_indexed": false,
+    "serena": false,
+    "forgetful_memory": false
   }
 }
