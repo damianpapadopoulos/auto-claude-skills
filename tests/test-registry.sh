@@ -331,7 +331,7 @@ test_default_triggers_has_phase_compositions() {
     # SHIP should have sequence entries
     local ship_sequence
     ship_sequence="$(jq '.phase_compositions.SHIP.sequence | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "SHIP has 4 sequence entries" "4" "${ship_sequence}"
+    assert_equals "SHIP has 5 sequence entries" "5" "${ship_sequence}"
 
     teardown_test_env
 }
@@ -575,6 +575,32 @@ test_context_capabilities_in_health_output() {
 }
 
 # ---------------------------------------------------------------------------
+# openspec-ship chain rewires are consistent
+# ---------------------------------------------------------------------------
+test_openspec_ship_chain_consistency() {
+    echo "-- test: openspec-ship chain rewires are consistent --"
+    setup_test_env
+
+    local vbc_precedes
+    vbc_precedes="$(jq -r '.skills[] | select(.name == "verification-before-completion") | .precedes[0]' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+    assert_equals "vbc precedes openspec-ship" "openspec-ship" "${vbc_precedes}"
+
+    local os_requires
+    os_requires="$(jq -r '.skills[] | select(.name == "openspec-ship") | .requires[0]' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+    assert_equals "openspec-ship requires vbc" "verification-before-completion" "${os_requires}"
+
+    local os_precedes
+    os_precedes="$(jq -r '.skills[] | select(.name == "openspec-ship") | .precedes[0]' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+    assert_equals "openspec-ship precedes finishing" "finishing-a-development-branch" "${os_precedes}"
+
+    local fab_requires
+    fab_requires="$(jq -r '.skills[] | select(.name == "finishing-a-development-branch") | .requires[0]' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+    assert_equals "finishing requires openspec-ship" "openspec-ship" "${fab_requires}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_empty_env_produces_fallback
@@ -595,5 +621,6 @@ test_fallback_registry_skill_coverage
 test_context_capabilities_detection
 test_context_capabilities_all_false
 test_context_capabilities_in_health_output
+test_openspec_ship_chain_consistency
 
 print_summary

@@ -2,6 +2,24 @@
 
 Before completing the session, consolidate what was learned.
 
+## REQUIRED Before Memory Consolidation: As-Built Documentation
+
+If the session produced working code from a Superpowers plan, generate permanent "as-built" documentation before consolidating learnings:
+
+**Tier 1: OpenSpec CLI** (`command -v openspec` succeeds)
+- Execute the `openspec-ship` skill to create a retrospective change folder under `openspec/changes/<feature>/`
+- Use `/opsx:propose` (default profile) to scaffold and populate with schema-native templates
+- Run `openspec validate <feature>` to verify the change folder
+- Update `CHANGELOG.md` under `[Unreleased]`
+- Use `/opsx:archive` with delta-spec sync prompt: sync deltas to canonical `openspec/specs/<capability>/spec.md`, then move to archive
+
+**Tier 2: Claude-Native Fallback** (OpenSpec CLI not available)
+- Generate the same artifact contract using the templates in the `openspec-ship` skill
+- Same change-folder structure, same filenames, same required section headings, compatible content
+- Manually move change folder to `openspec/changes/archive/`. Create canonical spec only if none exists; skip canonical update with warning if one already exists
+
+**Skip Condition:** If the session was debugging, reviewing, or performing non-feature work (no Superpowers plan was executed), skip this step entirely.
+
 **REQUIRED before completing session:** If you discovered any architectural rules, API quirks, or project conventions during this session, you MUST consolidate them using the highest available tier below before claiming the work is done. After consolidation, write the marker:
 
 ```bash

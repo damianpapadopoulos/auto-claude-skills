@@ -409,7 +409,7 @@ _determine_label_phase() {
         # If no process skill sets the label, workflow skills set Ship / Complete
         if [[ -z "$PLABEL" ]]; then
           case "$name" in
-            verification-before-completion|finishing-a-development-branch) PLABEL="Ship / Complete" ;;
+            verification-before-completion|finishing-a-development-branch|openspec-ship) PLABEL="Ship / Complete" ;;
           esac
         fi
         ;;

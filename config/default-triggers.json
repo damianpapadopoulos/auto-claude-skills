@@ -138,7 +138,7 @@
       "trigger_mode": "regex",
       "priority": 20,
       "precedes": [
-        "finishing-a-development-branch"
+        "openspec-ship"
       ],
       "requires": [],
       "description": "Final verification checklist before shipping: tests pass, lint clean, no TODOs, docs updated."
@@ -153,9 +153,27 @@
       "priority": 19,
       "precedes": [],
       "requires": [
-        "verification-before-completion"
+        "openspec-ship"
       ],
       "description": "Branch cleanup and merge: squash commits, update changelog, merge to main."
+    },
+    {
+      "name": "openspec-ship",
+      "role": "workflow",
+      "phase": "SHIP",
+      "triggers": [
+        "(document.*built|as.?built|openspec|archive.*feature|shipping.*protocol)"
+      ],
+      "keywords": [],
+      "trigger_mode": "regex",
+      "priority": 18,
+      "precedes": [
+        "finishing-a-development-branch"
+      ],
+      "requires": [
+        "verification-before-completion"
+      ],
+      "description": "Create retrospective OpenSpec change, validate, archive, update changelog"
     },
     {
       "name": "dispatching-parallel-agents",
@@ -348,7 +366,7 @@
     "PLAN": "writing-plans (break into tasks, confirm before execution)",
     "IMPLEMENT": "executing-plans or subagent-driven-development + TDD (offer agent-team-execution for 3+ independent tasks)",
     "REVIEW": "requesting-code-review",
-    "SHIP": "verification-before-completion + finishing-a-development-branch",
+    "SHIP": "verification-before-completion + openspec-ship + finishing-a-development-branch",
     "DEBUG": "systematic-debugging, then return to current phase"
   },
   "methodology_hints": [
@@ -504,6 +522,15 @@
         "IMPLEMENT",
         "SHIP"
       ]
+    },
+    {
+      "name": "openspec-ship-reminder",
+      "triggers": [
+        "(ship|merge|deploy|push|release|finish|complete|wrap.?up|finalize)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "OPENSPEC: After verification-before-completion passes, invoke openspec-ship to generate as-built documentation before committing. This is mandatory for feature shipping.",
+      "phases": ["SHIP"]
     }
   ],
   "plugins": [
@@ -785,6 +812,10 @@
     "SHIP": {
       "driver": "verification-before-completion",
       "sequence": [
+        {
+          "step": "openspec-ship",
+          "purpose": "Create retrospective OpenSpec change, validate, archive, update changelog"
+        },
         {
           "plugin": "unified-context-stack",
           "use": "memory consolidation (annotate + memory-save)",

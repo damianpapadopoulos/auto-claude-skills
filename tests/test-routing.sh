@@ -155,9 +155,24 @@ install_registry() {
       ],
       "trigger_mode": "regex",
       "priority": 60,
-      "precedes": ["finishing-a-development-branch"],
+      "precedes": ["openspec-ship"],
       "requires": [],
       "invoke": "Skill(superpowers:verification-before-completion)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "openspec-ship",
+      "role": "workflow",
+      "phase": "SHIP",
+      "triggers": [
+        "(document.*built|as.?built|openspec|archive.*feature|shipping.*protocol)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 58,
+      "precedes": ["finishing-a-development-branch"],
+      "requires": ["verification-before-completion"],
+      "invoke": "Skill(auto-claude-skills:openspec-ship)",
       "available": true,
       "enabled": true
     },
@@ -171,7 +186,7 @@ install_registry() {
       "trigger_mode": "regex",
       "priority": 61,
       "precedes": [],
-      "requires": ["verification-before-completion"],
+      "requires": ["openspec-ship"],
       "invoke": "Skill(superpowers:finishing-a-development-branch)",
       "available": true,
       "enabled": true
@@ -305,6 +320,15 @@ install_registry() {
         "IMPLEMENT",
         "SHIP"
       ]
+    },
+    {
+      "name": "openspec-ship-reminder",
+      "triggers": [
+        "(ship|merge|deploy|push|release|finish|complete|wrap.?up|finalize)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "OPENSPEC: After verification-before-completion passes, invoke openspec-ship to generate as-built documentation before committing. This is mandatory for feature shipping.",
+      "phases": ["SHIP"]
     }
   ],
   "blocklist_patterns": [
@@ -449,9 +473,22 @@ install_registry_v4() {
       "triggers": ["(ship|merge|deploy|push|release|tag|publish|pr.ready|ready.to|wrap.?up|finalize|complete|finish)"],
       "trigger_mode": "regex",
       "priority": 60,
-      "precedes": ["finishing-a-development-branch"],
+      "precedes": ["openspec-ship"],
       "requires": [],
       "invoke": "Skill(superpowers:verification-before-completion)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "openspec-ship",
+      "role": "workflow",
+      "phase": "SHIP",
+      "triggers": ["(document.*built|as.?built|openspec|archive.*feature|shipping.*protocol)"],
+      "trigger_mode": "regex",
+      "priority": 58,
+      "precedes": ["finishing-a-development-branch"],
+      "requires": ["verification-before-completion"],
+      "invoke": "Skill(auto-claude-skills:openspec-ship)",
       "available": true,
       "enabled": true
     },
@@ -463,7 +500,7 @@ install_registry_v4() {
       "trigger_mode": "regex",
       "priority": 61,
       "precedes": [],
-      "requires": ["verification-before-completion"],
+      "requires": ["openspec-ship"],
       "invoke": "Skill(superpowers:finishing-a-development-branch)",
       "available": true,
       "enabled": true
@@ -556,13 +593,14 @@ install_registry_v4() {
     "PLAN": {"driver": "writing-plans", "parallel": [], "hints": []},
     "IMPLEMENT": {"driver": "executing-plans", "parallel": [{"plugin": "security-guidance", "use": "hooks:PreToolUse", "when": "installed", "purpose": "Passive write-time security guard"}], "hints": []},
     "REVIEW": {"driver": "requesting-code-review", "parallel": [{"plugin": "code-review", "use": "commands:/code-review", "when": "installed", "purpose": "5 parallel review agents, posts to GitHub PR"}, {"plugin": "code-simplifier", "use": "agents:code-simplifier", "when": "installed", "purpose": "Post-review simplification pass"}], "hints": [{"plugin": "code-review", "text": "Consider /code-review for automated multi-agent PR review", "when": "installed"}]},
-    "SHIP": {"driver": "verification-before-completion", "sequence": [{"plugin": "commit-commands", "use": "commands:/commit", "when": "installed", "purpose": "Execute structured commit after verification passes"}, {"step": "finishing-a-development-branch", "purpose": "Branch cleanup, merge, or PR"}, {"plugin": "commit-commands", "use": "commands:/commit-push-pr", "when": "installed AND user chooses PR option", "purpose": "Automated branch-to-PR flow"}], "hints": [{"plugin": "commit-commands", "text": "Consider /commit-push-pr for automated branch-to-PR workflow", "when": "installed"}]},
+    "SHIP": {"driver": "verification-before-completion", "sequence": [{"step": "openspec-ship", "purpose": "Create retrospective OpenSpec change, validate, archive, update changelog"}, {"plugin": "commit-commands", "use": "commands:/commit", "when": "installed", "purpose": "Execute structured commit after verification passes"}, {"step": "finishing-a-development-branch", "purpose": "Branch cleanup, merge, or PR"}, {"plugin": "commit-commands", "use": "commands:/commit-push-pr", "when": "installed AND user chooses PR option", "purpose": "Automated branch-to-PR flow"}], "hints": [{"plugin": "commit-commands", "text": "Consider /commit-push-pr for automated branch-to-PR workflow", "when": "installed"}]},
     "DEBUG": {"driver": "systematic-debugging", "parallel": [], "hints": []}
   },
   "methodology_hints": [
     {"name": "ralph-loop", "triggers": ["(migrate|refactor.all|fix.all|batch|overnight|autonom|iterate|keep.(going|trying|fixing))"], "trigger_mode": "regex", "hint": "RALPH LOOP: Consider /ralph-loop for autonomous iteration."},
     {"name": "pr-review", "triggers": ["(review|pull.?request|code.?review|(^|[^a-z])pr($|[^a-z]))"], "trigger_mode": "regex", "hint": "PR REVIEW: Consider /pr-review for structured review.", "skill": "requesting-code-review"},
-    {"name": "claude-md-maintenance", "triggers": ["(refactor|restructur|new.convention|architecture.change|reorganize|rename.*(module|package|directory))"], "trigger_mode": "regex", "hint": "CLAUDE.MD: If this session changed project conventions or structure, consider /revise-claude-md", "skill": "claude-md-improver", "phases": ["IMPLEMENT", "SHIP"]}
+    {"name": "claude-md-maintenance", "triggers": ["(refactor|restructur|new.convention|architecture.change|reorganize|rename.*(module|package|directory))"], "trigger_mode": "regex", "hint": "CLAUDE.MD: If this session changed project conventions or structure, consider /revise-claude-md", "skill": "claude-md-improver", "phases": ["IMPLEMENT", "SHIP"]},
+    {"name": "openspec-ship-reminder", "triggers": ["(ship|merge|deploy|push|release|finish|complete|wrap.?up|finalize)"], "trigger_mode": "regex", "hint": "OPENSPEC: After verification-before-completion passes, invoke openspec-ship to generate as-built documentation before committing. This is mandatory for feature shipping.", "phases": ["SHIP"]}
   ],
   "blocklist_patterns": [
     {"pattern": "^(hi|hello|hey|thanks|thank.you|good.(morning|afternoon|evening)|bye|goodbye|ok|okay|yes|no|sure|yep|nope|got.it|sounds.good|cool|nice|great|perfect|awesome|understood)([[:space:]!.,]+.{0,20})?$", "description": "Greeting or short acknowledgement", "max_tail_length": 20}
@@ -714,7 +752,8 @@ test_ship_prompt_matches() {
     context="$(extract_context "${output}")"
 
     # With no process skill, workflow skills listed without orchestration prefix
-    # finishing-a-development-branch has higher priority (61 vs 60), so it wins the single workflow slot
+    # finishing-a-development-branch has higher priority (61 vs 60 vs 58), so it wins the single workflow slot
+    # The full SHIP chain is: verification-before-completion → openspec-ship → finishing-a-development-branch
     assert_contains "ship matches workflow skill" "finishing-a-development-branch" "${context}"
     assert_contains "ship label has Ship / Complete" "Ship / Complete" "${context}"
 
@@ -2922,5 +2961,71 @@ test_session_start_shows_zero_match_rate() {
     teardown_test_env
 }
 test_session_start_shows_zero_match_rate
+
+# ---------------------------------------------------------------------------
+# openspec-ship triggers on its own terms, not on bare "ship"
+# ---------------------------------------------------------------------------
+test_openspec_ship_triggers() {
+    echo "-- test: openspec-ship triggers on own terms --"
+    setup_test_env
+    install_registry
+
+    local output
+    output="$(run_hook "generate as-built docs for this feature")"
+    local context
+    context="$(extract_context "${output}")"
+    assert_contains "openspec triggers on as-built" "openspec-ship" "${context}"
+
+    # "ship this" should NOT select openspec-ship as a routed skill (it appears in chain/hint but not as a selected skill)
+    output="$(run_hook "ship this")"
+    context="$(extract_context "${output}")"
+    # Check that openspec-ship is not in the skill activation lines (Workflow:/Domain:/Process:)
+    local skill_lines
+    skill_lines="$(printf '%s' "${context}" | grep -E '^\s*(Process|Domain|Workflow):' || true)"
+    assert_not_contains "openspec not in skill activation lines" "openspec-ship" "${skill_lines}"
+
+    teardown_test_env
+}
+test_openspec_ship_triggers
+
+# ---------------------------------------------------------------------------
+# SHIP chain renders three nodes: verification -> openspec-ship -> finishing
+# ---------------------------------------------------------------------------
+test_ship_chain_three_nodes() {
+    echo "-- test: SHIP chain has three nodes --"
+    setup_test_env
+    install_registry
+
+    local output
+    output="$(run_hook "ship this feature now")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "chain has verification" "verification-before-completion" "${context}"
+    assert_contains "chain has openspec-ship" "openspec-ship" "${context}"
+    assert_contains "chain has finishing" "finishing-a-development-branch" "${context}"
+
+    teardown_test_env
+}
+test_ship_chain_three_nodes
+
+# ---------------------------------------------------------------------------
+# openspec-ship-reminder methodology hint fires during SHIP
+# ---------------------------------------------------------------------------
+test_openspec_hint_fires_on_ship() {
+    echo "-- test: openspec-ship-reminder hint fires on ship prompt --"
+    setup_test_env
+    install_registry
+
+    local output
+    output="$(run_hook "let's ship this feature")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "openspec hint fires" "OPENSPEC" "${context}"
+
+    teardown_test_env
+}
+test_openspec_hint_fires_on_ship
 
 print_summary

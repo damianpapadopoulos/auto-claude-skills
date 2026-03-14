@@ -137,6 +137,7 @@ install_context_registry() {
       ],
       "trigger_mode": "regex",
       "priority": 60,
+      "precedes": ["openspec-ship"],
       "invoke": "Skill(superpowers:verification-before-completion)",
       "available": true,
       "enabled": true
@@ -149,7 +150,22 @@ install_context_registry() {
       ],
       "trigger_mode": "regex",
       "priority": 61,
+      "requires": ["openspec-ship"],
       "invoke": "Skill(superpowers:finishing-a-development-branch)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "openspec-ship",
+      "role": "workflow",
+      "triggers": [
+        "(document.*built|as.?built|openspec|archive.*feature|shipping.*protocol)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 58,
+      "precedes": ["finishing-a-development-branch"],
+      "requires": ["verification-before-completion"],
+      "invoke": "Skill(auto-claude-skills:openspec-ship)",
       "available": true,
       "enabled": true
     }
@@ -160,7 +176,7 @@ install_context_registry() {
     "PLAN":      "writing-plans (break into tasks, confirm before execution)",
     "IMPLEMENT": "executing-plans or subagent-driven-development + TDD",
     "REVIEW":    "requesting-code-review",
-    "SHIP":      "verification-before-completion + finishing-a-development-branch",
+    "SHIP":      "verification-before-completion + openspec-ship + finishing-a-development-branch",
     "DEBUG":     "systematic-debugging, then return to current phase"
   },
   "blocklist_patterns": [

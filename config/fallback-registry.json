@@ -1,9 +1,5 @@
 {
-  "version": "4.0.0-fallback",
-  "description": "Static fallback registry for degraded environments (no jq, missing plugin dirs)",
-  "warnings": [
-    "Using static fallback registry — dynamic discovery unavailable"
-  ],
+  "version": "4.0.0",
   "skills": [
     {
       "name": "systematic-debugging",
@@ -12,14 +8,20 @@
       "triggers": [
         "(debug|bug|broken|crash|regression|not.work|error|fail|hang|freeze|timeout|leak|corrupt|unexpected|wrong)"
       ],
+      "keywords": [
+        "stuck",
+        "something is off",
+        "not right",
+        "doesn't make sense",
+        "confused by"
+      ],
       "trigger_mode": "regex",
       "priority": 50,
       "precedes": [],
       "requires": [],
-      "invoke": "Skill(superpowers:systematic-debugging)",
-      "available": true,
-      "enabled": true,
-      "description": "Structured debugging: reproduce, hypothesise, isolate, fix, verify. Returns to the current phase after resolution."
+      "description": "Structured debugging: reproduce, hypothesise, isolate, fix, verify. Returns to the current phase after resolution.",
+      "available": false,
+      "enabled": true
     },
     {
       "name": "test-driven-development",
@@ -28,14 +30,14 @@
       "triggers": [
         "(test|tdd|run.tests|execute.tests|verify|validate|coverage|pass|green|assert|expect|spec|ensure.*pass|check.*(test|coverage|green))"
       ],
+      "keywords": [],
       "trigger_mode": "regex",
       "priority": 20,
       "precedes": [],
       "requires": [],
-      "invoke": "Skill(superpowers:test-driven-development)",
-      "available": true,
-      "enabled": true,
-      "description": "Write failing test first, then implement until green. Primary only for explicit test requests; other phases invoke TDD via skill chaining."
+      "description": "Write failing test first, then implement until green. Primary only for explicit test requests; other phases invoke TDD via skill chaining.",
+      "available": false,
+      "enabled": true
     },
     {
       "name": "brainstorming",
@@ -44,22 +46,29 @@
       "triggers": [
         "(build|create|implement|develop|scaffold|init|bootstrap|brainstorm|design|architect|strateg|scope|outline|approach|set.?up|wire.up|how.(should|would|could)|add|make|introduce|enable|new|start)"
       ],
+      "keywords": [
+        "how should",
+        "what approach",
+        "best way to",
+        "ideas for",
+        "options for"
+      ],
       "trigger_mode": "regex",
       "priority": 30,
       "precedes": [
         "writing-plans"
       ],
       "requires": [],
-      "invoke": "Skill(superpowers:brainstorming)",
-      "available": true,
-      "enabled": true,
-      "description": "Ask clarifying questions, explore options, and get user approval before planning. Activated for Build intents."
+      "description": "Ask clarifying questions, explore options, and get user approval before planning. Activated for Build intents.",
+      "available": false,
+      "enabled": true
     },
     {
       "name": "writing-plans",
       "role": "process",
       "phase": "PLAN",
       "triggers": [],
+      "keywords": [],
       "trigger_mode": "regex",
       "priority": 40,
       "precedes": [
@@ -68,10 +77,9 @@
       "requires": [
         "brainstorming"
       ],
-      "invoke": "Skill(superpowers:writing-plans)",
-      "available": true,
-      "enabled": true,
-      "description": "Break work into discrete tasks and confirm the plan with the user before execution begins."
+      "description": "Break work into discrete tasks and confirm the plan with the user before execution begins.",
+      "available": false,
+      "enabled": true
     },
     {
       "name": "executing-plans",
@@ -80,30 +88,30 @@
       "triggers": [
         "(execute.*plan|run.the.plan|implement.the.plan|implement.*(rest|remaining)|continue|follow.the.plan|pick.up|resume|next.task|next.step|carry.on|keep.going|where.were.we|what.s.next)"
       ],
+      "keywords": [],
       "trigger_mode": "regex",
       "priority": 35,
       "precedes": [],
       "requires": [
         "writing-plans"
       ],
-      "invoke": "Skill(superpowers:executing-plans)",
-      "available": true,
-      "enabled": true,
-      "description": "Step-by-step execution of an approved plan. Triggered by explicit plan-continuation language."
+      "description": "Step-by-step execution of an approved plan. Triggered by explicit plan-continuation language.",
+      "available": false,
+      "enabled": true
     },
     {
       "name": "subagent-driven-development",
       "role": "process",
       "phase": "IMPLEMENT",
       "triggers": [],
+      "keywords": [],
       "trigger_mode": "regex",
       "priority": 14,
       "precedes": [],
       "requires": [],
-      "invoke": "Skill(superpowers:subagent-driven-development)",
-      "available": true,
-      "enabled": true,
-      "description": "Delegate plan tasks to sub-agents for parallel implementation. Co-triggered with executing-plans."
+      "description": "Delegate plan tasks to sub-agents for parallel implementation. Co-triggered with executing-plans.",
+      "available": false,
+      "enabled": true
     },
     {
       "name": "requesting-code-review",
@@ -112,28 +120,28 @@
       "triggers": [
         "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|smell|tech.?debt|(^|[^a-z])pr($|[^a-z]))"
       ],
+      "keywords": [],
       "trigger_mode": "regex",
       "priority": 25,
       "precedes": [],
       "requires": [],
-      "invoke": "Skill(superpowers:requesting-code-review)",
-      "available": true,
-      "enabled": true,
-      "description": "Prepare and request a code review: summarise changes, highlight risks, open a PR."
+      "description": "Prepare and request a code review: summarise changes, highlight risks, open a PR.",
+      "available": false,
+      "enabled": true
     },
     {
       "name": "receiving-code-review",
       "role": "process",
       "phase": "REVIEW",
       "triggers": [],
+      "keywords": [],
       "trigger_mode": "regex",
       "priority": 24,
       "precedes": [],
       "requires": [],
-      "invoke": "Skill(superpowers:receiving-code-review)",
-      "available": true,
-      "enabled": true,
-      "description": "Process incoming review feedback: address comments, push fixes, re-request review."
+      "description": "Process incoming review feedback: address comments, push fixes, re-request review.",
+      "available": false,
+      "enabled": true
     },
     {
       "name": "verification-before-completion",
@@ -142,32 +150,53 @@
       "triggers": [
         "(ship|merge|deploy|push|release|tag|publish|pr.ready|ready.to|wrap.?up|all.(done|good|green|passing)|lgtm|finalize|complete|finish)"
       ],
+      "keywords": [],
       "trigger_mode": "regex",
       "priority": 20,
       "precedes": [
-        "finishing-a-development-branch"
+        "openspec-ship"
       ],
       "requires": [],
-      "invoke": "Skill(superpowers:verification-before-completion)",
-      "available": true,
-      "enabled": true,
-      "description": "Final verification checklist before shipping: tests pass, lint clean, no TODOs, docs updated."
+      "description": "Final verification checklist before shipping: tests pass, lint clean, no TODOs, docs updated.",
+      "available": false,
+      "enabled": true
     },
     {
       "name": "finishing-a-development-branch",
       "role": "workflow",
       "phase": "SHIP",
       "triggers": [],
+      "keywords": [],
       "trigger_mode": "regex",
       "priority": 19,
       "precedes": [],
       "requires": [
+        "openspec-ship"
+      ],
+      "description": "Branch cleanup and merge: squash commits, update changelog, merge to main.",
+      "available": false,
+      "enabled": true
+    },
+    {
+      "name": "openspec-ship",
+      "role": "workflow",
+      "phase": "SHIP",
+      "triggers": [
+        "(document.*built|as.?built|openspec|archive.*feature|shipping.*protocol)"
+      ],
+      "keywords": [],
+      "trigger_mode": "regex",
+      "priority": 18,
+      "precedes": [
+        "finishing-a-development-branch"
+      ],
+      "requires": [
         "verification-before-completion"
       ],
-      "invoke": "Skill(superpowers:finishing-a-development-branch)",
+      "description": "Create retrospective OpenSpec change, validate, archive, update changelog",
+      "invoke": "Skill(auto-claude-skills:openspec-ship)",
       "available": true,
-      "enabled": true,
-      "description": "Branch cleanup and merge: squash commits, update changelog, merge to main."
+      "enabled": true
     },
     {
       "name": "dispatching-parallel-agents",
@@ -176,28 +205,28 @@
       "triggers": [
         "(parallel|concurrent|multiple.*(failure|bug|issue|error|test)|independent.*(task|failure|bug|issue|test)|worktree)"
       ],
+      "keywords": [],
       "trigger_mode": "regex",
       "priority": 15,
       "precedes": [],
       "requires": [],
-      "invoke": "Skill(superpowers:dispatching-parallel-agents)",
-      "available": true,
-      "enabled": true,
-      "description": "Fan out independent tasks to parallel sub-agents and collect results."
+      "description": "Fan out independent tasks to parallel sub-agents and collect results.",
+      "available": false,
+      "enabled": true
     },
     {
       "name": "using-git-worktrees",
       "role": "workflow",
       "phase": "IMPLEMENT",
       "triggers": [],
+      "keywords": [],
       "trigger_mode": "regex",
       "priority": 14,
       "precedes": [],
       "requires": [],
-      "invoke": "Skill(superpowers:using-git-worktrees)",
-      "available": true,
-      "enabled": true,
-      "description": "Use git worktrees to enable parallel work on multiple branches without stashing."
+      "description": "Use git worktrees to enable parallel work on multiple branches without stashing.",
+      "available": false,
+      "enabled": true
     },
     {
       "name": "writing-skills",
@@ -206,14 +235,30 @@
       "triggers": [
         "(skill|write.*skill|create.*skill|edit.*skill|new.*skill|skill.*(file|md|template|format))"
       ],
+      "keywords": [],
       "trigger_mode": "regex",
       "priority": 15,
       "precedes": [],
       "requires": [],
-      "invoke": "Skill(superpowers:writing-skills)",
-      "available": true,
-      "enabled": true,
-      "description": "Author and maintain Claude Code skill files (SKILL.md). Meta-overlay for Claude tooling prompts."
+      "description": "Author and maintain Claude Code skill files (SKILL.md). Meta-overlay for Claude tooling prompts.",
+      "available": false,
+      "enabled": true
+    },
+    {
+      "name": "frontend-design",
+      "role": "domain",
+      "phase": "DESIGN",
+      "triggers": [
+        "(^|[^a-z])(ui|frontend|component|layout|style|css|tailwind|responsive|dashboard|landing.?page|mockup|wireframe)($|[^a-z])"
+      ],
+      "keywords": [],
+      "trigger_mode": "regex",
+      "priority": 15,
+      "precedes": [],
+      "requires": [],
+      "description": "UI/UX design guidance: component structure, responsive layout, styling, and visual prototyping.",
+      "available": false,
+      "enabled": true
     },
     {
       "name": "security-scanner",
@@ -222,14 +267,62 @@
       "triggers": [
         "(secur(e|ity)|vulnerab|owasp|pentest|attack|exploit|compliance|hipaa|gdpr|encrypt|auth(entication|orization)|inject|xss|csrf|sanitiz|supply.?chain)"
       ],
+      "keywords": [],
       "trigger_mode": "regex",
       "priority": 15,
       "precedes": [],
       "requires": [],
-      "invoke": "Skill(superpowers:security-scanner)",
-      "available": true,
-      "enabled": true,
-      "description": "Security analysis overlay: scan for vulnerabilities, OWASP risks, compliance issues, and supply-chain threats."
+      "description": "Security analysis overlay: scan for vulnerabilities, OWASP risks, compliance issues, and supply-chain threats.",
+      "available": false,
+      "enabled": true
+    },
+    {
+      "name": "webapp-testing",
+      "role": "domain",
+      "phase": "IMPLEMENT",
+      "triggers": [
+        "(playwright|e2e|browser.test|screenshot|visual.regress|accessibility|a11y|selenium|cypress|puppeteer|end.to.end)"
+      ],
+      "keywords": [],
+      "trigger_mode": "regex",
+      "priority": 12,
+      "precedes": [],
+      "requires": [],
+      "description": "Web application testing: browser automation, accessibility checks, visual regression, and E2E flows.",
+      "available": false,
+      "enabled": true
+    },
+    {
+      "name": "doc-coauthoring",
+      "role": "domain",
+      "phase": "DESIGN",
+      "triggers": [
+        "(proposal|spec[^a-z]|rfc|write.?up|technical.?doc|architecture.?doc|documentation)"
+      ],
+      "keywords": [],
+      "trigger_mode": "regex",
+      "priority": 15,
+      "precedes": [],
+      "requires": [],
+      "description": "Co-author technical documents: proposals, specs, RFCs, and architecture docs.",
+      "available": false,
+      "enabled": true
+    },
+    {
+      "name": "claude-automation-recommender",
+      "role": "domain",
+      "phase": "DESIGN",
+      "triggers": [
+        "(hook|mcp|plugin|automation|setup.*claude|configure.*claude|recommend.*claude|claude.*recommend)"
+      ],
+      "keywords": [],
+      "trigger_mode": "regex",
+      "priority": 12,
+      "precedes": [],
+      "requires": [],
+      "description": "Recommend Claude Code automation setups: hooks, MCP servers, plugins, and workflow optimisations.",
+      "available": false,
+      "enabled": true
     },
     {
       "name": "claude-md-improver",
@@ -238,14 +331,14 @@
       "triggers": [
         "(claude\\.md|claude.md|project.?memory|improve.*claude|audit.*claude|update.*claude.md)"
       ],
+      "keywords": [],
       "trigger_mode": "regex",
       "priority": 10,
       "precedes": [],
       "requires": [],
-      "invoke": "Skill(superpowers:claude-md-improver)",
-      "available": true,
-      "enabled": true,
-      "description": "Improve CLAUDE.md project files: structure, clarity, and completeness of project instructions."
+      "description": "Improve CLAUDE.md project files: structure, clarity, and completeness of project instructions.",
+      "available": false,
+      "enabled": true
     },
     {
       "name": "agent-team-execution",
@@ -256,16 +349,17 @@
         "(execute.*plan|run.the.plan|implement.the.plan|implement.*(rest|remaining)|continue|follow.the.plan|pick.up|resume|next.task|next.step|carry.on|keep.going|where.were.we|what.s.next)",
         "(build|create|implement|develop|scaffold|add|make|wire.up|connect|integrate|extend)"
       ],
+      "keywords": [],
       "trigger_mode": "regex",
       "priority": 22,
       "precedes": [],
       "requires": [
         "writing-plans"
       ],
+      "description": "Use when executing implementation plans with 3+ independent, file-disjoint tasks that benefit from parallel specialist agents.",
       "invoke": "Skill(auto-claude-skills:agent-team-execution)",
       "available": true,
-      "enabled": true,
-      "description": "Use when executing implementation plans with 3+ independent, file-disjoint tasks that benefit from parallel specialist agents."
+      "enabled": true
     },
     {
       "name": "agent-team-review",
@@ -275,14 +369,15 @@
         "(team.review|multi.*(perspective|reviewer|agent).*(review|check)|thorough.*review|comprehensive.*review|full.*review)",
         "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|(^|[^a-z])pr($|[^a-z]))"
       ],
+      "keywords": [],
       "trigger_mode": "regex",
       "priority": 20,
       "precedes": [],
       "requires": [],
+      "description": "Multi-perspective parallel code review with specialist reviewers (security, quality, spec compliance).",
       "invoke": "Skill(auto-claude-skills:agent-team-review)",
       "available": true,
-      "enabled": true,
-      "description": "Multi-perspective parallel code review with specialist reviewers (security, quality, spec compliance)."
+      "enabled": true
     },
     {
       "name": "design-debate",
@@ -291,14 +386,15 @@
       "triggers": [
         "(build|create|implement|develop|scaffold|brainstorm|design|architect|strateg|scope|outline|approach|trade.?off|debate|compare.*(option|approach|design)|weigh.*(option|approach)|pro.*con|alternative|add|make|new|start)"
       ],
+      "keywords": [],
       "trigger_mode": "regex",
       "priority": 18,
       "precedes": [],
       "requires": [],
+      "description": "Multi-Agent Debate for complex designs. Spawns architect, critic, and pragmatist for collaborative design exploration.",
       "invoke": "Skill(auto-claude-skills:design-debate)",
       "available": true,
-      "enabled": true,
-      "description": "Multi-Agent Debate for complex designs. Spawns architect, critic, and pragmatist for collaborative design exploration."
+      "enabled": true
     },
     {
       "name": "batch-scripting",
@@ -307,17 +403,205 @@
       "triggers": [
         "(batch|bulk|mass|across.*files|every.*file|all.*files|migrate.*all|transform.*all|refactor.*all|sweep|codemod|claude.?-p|headless|each.*file)"
       ],
+      "keywords": [],
       "trigger_mode": "regex",
       "priority": 15,
       "precedes": [],
       "requires": [],
+      "description": "Bulk file operations using claude -p with manifest, dry-run, and log-based retry.",
       "invoke": "Skill(auto-claude-skills:batch-scripting)",
       "available": true,
-      "enabled": true,
-      "description": "Bulk file operations using claude -p with manifest, dry-run, and log-based retry."
+      "enabled": true
+    },
+    {
+      "name": "unified-context-stack",
+      "role": "domain",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 200,
+      "precedes": [],
+      "requires": [],
+      "description": "User-installed skill",
+      "invoke": "Skill(auto-claude-skills:unified-context-stack)",
+      "available": true,
+      "enabled": true
     }
   ],
   "plugins": [
+    {
+      "name": "commit-commands",
+      "source": "claude-plugins-official",
+      "provides": {
+        "commands": [
+          "/commit",
+          "/commit-push-pr",
+          "/clean_gone"
+        ],
+        "skills": [],
+        "agents": [],
+        "hooks": []
+      },
+      "phase_fit": [
+        "SHIP"
+      ],
+      "description": "Structured commit workflows and branch-to-PR automation",
+      "available": false
+    },
+    {
+      "name": "security-guidance",
+      "source": "claude-plugins-official",
+      "provides": {
+        "commands": [],
+        "skills": [],
+        "agents": [],
+        "hooks": [
+          "PreToolUse:security-patterns"
+        ]
+      },
+      "phase_fit": [
+        "*"
+      ],
+      "description": "Write-time security blocker for XSS, injection, unsafe deserialization",
+      "available": false
+    },
+    {
+      "name": "hookify",
+      "source": "claude-plugins-official",
+      "provides": {
+        "commands": [
+          "/hookify",
+          "/hookify:list",
+          "/hookify:configure"
+        ],
+        "skills": [
+          "writing-rules"
+        ],
+        "agents": [
+          "conversation-analyzer"
+        ],
+        "hooks": []
+      },
+      "phase_fit": [
+        "DESIGN"
+      ],
+      "description": "Custom rule authoring for Claude behavior guards",
+      "available": false
+    },
+    {
+      "name": "feature-dev",
+      "source": "claude-plugins-official",
+      "provides": {
+        "commands": [
+          "/feature-dev"
+        ],
+        "skills": [],
+        "agents": [
+          "code-explorer",
+          "code-architect",
+          "code-reviewer"
+        ],
+        "hooks": []
+      },
+      "phase_fit": [
+        "DESIGN",
+        "IMPLEMENT",
+        "REVIEW"
+      ],
+      "description": "Full feature pipeline with parallel exploration and architecture agents",
+      "available": false
+    },
+    {
+      "name": "skill-creator",
+      "source": "claude-plugins-official",
+      "provides": {
+        "commands": [],
+        "skills": [
+          "skill-creator"
+        ],
+        "agents": [
+          "executor",
+          "grader",
+          "comparator",
+          "analyzer"
+        ],
+        "hooks": []
+      },
+      "phase_fit": [
+        "DESIGN"
+      ],
+      "description": "Skill eval/improvement loop with benchmarking",
+      "available": false
+    },
+    {
+      "name": "context7",
+      "source": "claude-plugins-official",
+      "provides": {
+        "commands": [],
+        "skills": [],
+        "agents": [],
+        "hooks": [],
+        "mcp_tools": [
+          "resolve-library-id",
+          "get-library-docs"
+        ]
+      },
+      "phase_fit": [
+        "DESIGN",
+        "IMPLEMENT",
+        "DEBUG"
+      ],
+      "description": "Up-to-date library documentation via Context7 MCP. Resolves library IDs and fetches current docs, API references, and examples.",
+      "available": false
+    },
+    {
+      "name": "github",
+      "source": "claude-plugins-official",
+      "provides": {
+        "commands": [],
+        "skills": [],
+        "agents": [],
+        "hooks": [],
+        "mcp_tools": [
+          "create_pull_request",
+          "get_pull_request",
+          "list_issues",
+          "create_issue",
+          "add_issue_comment",
+          "search_repositories"
+        ]
+      },
+      "phase_fit": [
+        "DESIGN",
+        "PLAN",
+        "REVIEW",
+        "SHIP"
+      ],
+      "description": "GitHub MCP for repository management. Create/review PRs, manage issues, search repos, and interact with GitHub APIs programmatically.",
+      "available": false
+    },
+    {
+      "name": "atlassian",
+      "source": "claude-ai-managed",
+      "provides": {
+        "commands": [],
+        "skills": [],
+        "agents": [],
+        "hooks": [],
+        "mcp_tools": [
+          "searchJiraIssuesUsingJql",
+          "getJiraIssue",
+          "getConfluencePage",
+          "searchConfluenceUsingCql"
+        ]
+      },
+      "phase_fit": [
+        "DESIGN",
+        "PLAN",
+        "REVIEW"
+      ],
+      "description": "Jira and Confluence integration via claude.ai managed MCP. Connect via /mcp in Claude Code. Pull acceptance criteria, search issues, read design docs.",
+      "available": false
+    },
     {
       "name": "unified-context-stack",
       "source": "auto-claude-skills",
@@ -340,44 +624,337 @@
       "available": false
     }
   ],
-  "methodology_hints": [],
+  "context_capabilities": {
+    "context7": false,
+    "context_hub_cli": false,
+    "context_hub_available": false,
+    "serena": false,
+    "forgetful_memory": false
+  },
   "phase_compositions": {
     "DESIGN": {
       "driver": "brainstorming",
-      "parallel": [],
-      "hints": []
+      "parallel": [
+        {
+          "plugin": "feature-dev",
+          "use": "agents:code-explorer",
+          "when": "installed",
+          "purpose": "Parallel codebase exploration while brainstorming clarifies intent"
+        },
+        {
+          "plugin": "unified-context-stack",
+          "use": "tiered context retrieval (external docs, blast-radius, memory)",
+          "when": "installed AND any context_capability is true",
+          "purpose": "Gather curated API docs, map dependencies, check institutional memory during design"
+        }
+      ],
+      "hints": [
+        {
+          "plugin": "feature-dev",
+          "text": "Consider /feature-dev for agent-parallel feature development",
+          "when": "installed"
+        },
+        {
+          "plugin": "skill-creator",
+          "text": "Consider Skill(skill-creator) to eval/benchmark skill quality",
+          "when": "installed AND prompt matches skill"
+        },
+        {
+          "plugin": "hookify",
+          "text": "Consider /hookify to create behavior rules",
+          "when": "installed AND prompt matches (prevent|block|guard|rule)"
+        }
+      ]
     },
     "PLAN": {
       "driver": "writing-plans",
-      "parallel": [],
+      "parallel": [
+        {
+          "plugin": "unified-context-stack",
+          "use": "tiered context retrieval (external docs, blast-radius, memory)",
+          "when": "installed AND any context_capability is true",
+          "purpose": "Gather curated API docs, map dependencies, check institutional memory before planning"
+        }
+      ],
       "hints": []
     },
     "IMPLEMENT": {
       "driver": "executing-plans",
-      "parallel": [],
+      "parallel": [
+        {
+          "plugin": "security-guidance",
+          "use": "hooks:PreToolUse",
+          "when": "installed",
+          "purpose": "Passive write-time security guard (always active, no explicit invocation)"
+        },
+        {
+          "plugin": "unified-context-stack",
+          "use": "tiered context retrieval (mid-flight library lookups)",
+          "when": "installed AND any context_capability is true",
+          "purpose": "Look up current API signatures and usage patterns during implementation"
+        }
+      ],
       "hints": []
     },
     "REVIEW": {
       "driver": "requesting-code-review",
-      "parallel": [],
-      "hints": []
+      "parallel": [
+        {
+          "plugin": "pr-review-toolkit",
+          "use": "agents:code-reviewer + silent-failure-hunter + code-simplifier",
+          "when": "installed",
+          "purpose": "Parallel specialist review agents (code quality, silent failures, simplification)"
+        },
+        {
+          "plugin": "github",
+          "use": "mcp:get_pull_request + add_issue_comment",
+          "when": "installed AND reviewing a PR",
+          "purpose": "Read PR details and post review comments directly via GitHub API"
+        },
+        {
+          "plugin": "unified-context-stack",
+          "use": "tiered context retrieval (claim verification, dependency checks)",
+          "when": "installed AND any context_capability is true",
+          "purpose": "Verify reviewer claims against curated docs, check dependency impact"
+        }
+      ],
+      "hints": [
+        {
+          "plugin": "pr-review-toolkit",
+          "text": "Consider /review-pr for structured multi-agent PR review",
+          "when": "installed"
+        }
+      ]
     },
     "SHIP": {
       "driver": "verification-before-completion",
-      "sequence": [],
-      "hints": []
+      "sequence": [
+        {
+          "step": "openspec-ship",
+          "purpose": "Create retrospective OpenSpec change, validate, archive, update changelog"
+        },
+        {
+          "plugin": "unified-context-stack",
+          "use": "memory consolidation (annotate + memory-save)",
+          "when": "installed AND any context_capability is true",
+          "purpose": "Consolidate learnings via chub annotate and/or memory-save before session close"
+        },
+        {
+          "plugin": "commit-commands",
+          "use": "commands:/commit",
+          "when": "installed",
+          "purpose": "Execute structured commit after verification passes"
+        },
+        {
+          "step": "finishing-a-development-branch",
+          "purpose": "Branch cleanup, merge, or PR creation"
+        },
+        {
+          "plugin": "commit-commands",
+          "use": "commands:/commit-push-pr",
+          "when": "installed AND user chooses PR option",
+          "purpose": "Automated branch-to-PR flow"
+        }
+      ],
+      "hints": [
+        {
+          "plugin": "commit-commands",
+          "text": "Consider /commit-push-pr for automated branch-to-PR workflow",
+          "when": "installed"
+        },
+        {
+          "plugin": "github",
+          "text": "Use GitHub MCP tools (create_pull_request) for programmatic PR creation with labels and reviewers",
+          "when": "installed"
+        }
+      ]
     },
     "DEBUG": {
       "driver": "systematic-debugging",
-      "parallel": [],
+      "parallel": [
+        {
+          "plugin": "unified-context-stack",
+          "use": "tiered context retrieval (past solutions, live issue discovery)",
+          "when": "installed AND any context_capability is true",
+          "purpose": "Check past solutions via memory, and live library issues via curated docs"
+        }
+      ],
       "hints": []
     }
   },
-  "context_capabilities": {
-    "context7": false,
-    "context_hub_cli": false,
-    "serena": false,
-    "forgetful_memory": false,
-    "context_hub_available": false
-  }
+  "phase_guide": {
+    "DESIGN": "brainstorming (ask questions, get approval)",
+    "PLAN": "writing-plans (break into tasks, confirm before execution)",
+    "IMPLEMENT": "executing-plans or subagent-driven-development + TDD (offer agent-team-execution for 3+ independent tasks)",
+    "REVIEW": "requesting-code-review",
+    "SHIP": "verification-before-completion + openspec-ship + finishing-a-development-branch",
+    "DEBUG": "systematic-debugging, then return to current phase"
+  },
+  "methodology_hints": [
+    {
+      "name": "ralph-loop",
+      "triggers": [
+        "(migrate|refactor.all|fix.all|batch|overnight|autonom|iterate|keep.(going|trying|fixing)|until.*(pass|work|complet|succeed)|make.*tests?.pass|run.*until|loop|coverage|greenfield)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "RALPH LOOP: Consider /ralph-loop for autonomous iteration."
+    },
+    {
+      "name": "pr-review",
+      "triggers": [
+        "(review|pull.?request|code.?review|(^|[^a-z])pr($|[^a-z]))"
+      ],
+      "trigger_mode": "regex",
+      "hint": "PR REVIEW: Consider /pr-review for structured review.",
+      "skill": "requesting-code-review"
+    },
+    {
+      "name": "unified-context-stack-hint",
+      "triggers": [
+        "(library|package|module|sdk|api|docs|documentation|reference|version|latest|upgrade|deprecat|migrat)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "CONTEXT STACK: Use the unified-context-stack for tiered documentation retrieval. Query Context Hub via Context7 (libraryId=/andrewyng/context-hub) first for curated docs, then fall back to broad Context7, then chub CLI, then web search. Read the phase document for your current SDLC phase from the unified-context-stack skill (paths listed in the Context Stack session-start output).",
+      "plugin": "unified-context-stack"
+    },
+    {
+      "name": "github-mcp",
+      "triggers": [
+        "(pull.?request|issue|github|merge|branch|repo|related.pr|similar.change|previous.attempt|what.was.tried|prior.art|code.history)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "GITHUB: If GitHub MCP tools are available, check for related PRs, issues, and workflow runs. Reference any GitHub context already discussed in this session.",
+      "plugin": "github",
+      "phases": [
+        "DESIGN",
+        "PLAN",
+        "REVIEW",
+        "SHIP"
+      ]
+    },
+    {
+      "name": "atlassian-jira",
+      "triggers": [
+        "(ticket|story|epic|acceptance.criter|definition.of.done|requirement|user.story|jira|sprint|backlog)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "ATLASSIAN: If Jira MCP tools are available, pull acceptance criteria and linked context for relevant tickets. Reference any Jira context already discussed in this session.",
+      "phases": [
+        "DESIGN",
+        "PLAN"
+      ]
+    },
+    {
+      "name": "atlassian-confluence",
+      "triggers": [
+        "(confluence|wiki|knowledge.base|design.doc|architecture.doc|adr|decision.record)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "ATLASSIAN: If Confluence MCP tools are available, search for relevant design docs and references. Keep searches narrow by title or space.",
+      "phases": [
+        "DESIGN",
+        "PLAN"
+      ]
+    },
+    {
+      "name": "gcp-observability",
+      "triggers": [
+        "(runtime.log|error.group|metric.regress|production.error|staging.error|verify.deploy|post.deploy|list.log|list.metric|trace.search)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "GCP OBSERVABILITY: If observability MCP tools are available, verify runtime state. Scope queries to service + environment + narrow time window (30-60 min).",
+      "phases": [
+        "SHIP",
+        "DEBUG"
+      ]
+    },
+    {
+      "name": "gke",
+      "triggers": [
+        "(cluster|kubernetes|k8s|pod|node|namespace|workload|gke)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "GKE: If GKE MCP tools are available, query cluster context and logs. Prefer scoped LQL queries over broad log dumps.",
+      "phases": [
+        "SHIP",
+        "DEBUG"
+      ]
+    },
+    {
+      "name": "cloud-run",
+      "triggers": [
+        "(cloud.?run|serverless.deploy|revision|service.log|cloud.?run.service)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "CLOUD RUN: If Cloud Run MCP tools are available, check service state and recent logs.",
+      "phases": [
+        "SHIP",
+        "DEBUG"
+      ]
+    },
+    {
+      "name": "firebase",
+      "triggers": [
+        "(firebase|firestore|auth.user|security.rules|realtime.db|cloud.function|hosting)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "FIREBASE: If Firebase MCP tools are available, inspect resources read-only (documents, auth, rules). Use CLI for mutations.",
+      "phases": [
+        "IMPLEMENT",
+        "SHIP",
+        "DEBUG"
+      ]
+    },
+    {
+      "name": "playwright-mcp",
+      "triggers": [
+        "(screenshot|visual.test|browser.test|layout.regress|lighthouse|a11y|smoke.test|e2e|playwright)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "PLAYWRIGHT: If Playwright MCP tools are available, use them for visual verification and interactive debugging.",
+      "phases": [
+        "IMPLEMENT",
+        "REVIEW",
+        "DEBUG",
+        "SHIP"
+      ]
+    },
+    {
+      "name": "frontend-playwright",
+      "triggers": [
+        "(component|page|form|modal|dialog|sidebar|navbar|header|footer|button|dropdown|tooltip|tab|card|widget|dashboard|landing.?page|login.?page|signup|onboard|checkout|ui|frontend|layout|style|css|tailwind|responsive)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "PLAYWRIGHT TESTING: Frontend changes detected. Include Playwright E2E tests covering the changed UI behavior. Use the webapp-testing skill.",
+      "phases": [
+        "DESIGN",
+        "IMPLEMENT"
+      ]
+    },
+    {
+      "name": "claude-md-maintenance",
+      "triggers": [
+        "(refactor|restructur|new.convention|architecture.change|reorganize|rename.*(module|package|directory))"
+      ],
+      "trigger_mode": "regex",
+      "hint": "CLAUDE.MD: If this session changed project conventions or structure, consider /revise-claude-md",
+      "skill": "claude-md-improver",
+      "phases": [
+        "IMPLEMENT",
+        "SHIP"
+      ]
+    },
+    {
+      "name": "openspec-ship-reminder",
+      "triggers": [
+        "(ship|merge|deploy|push|release|finish|complete|wrap.?up|finalize)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "OPENSPEC: After verification-before-completion passes, invoke openspec-ship to generate as-built documentation before committing. This is mandatory for feature shipping.",
+      "phases": [
+        "SHIP"
+      ]
+    }
+  ],
+  "warnings": []
 }
