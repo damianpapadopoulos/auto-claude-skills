@@ -468,17 +468,24 @@ if command -v chub >/dev/null 2>&1; then
     _has_chub_cli=true
 fi
 
+# OpenSpec CLI: check PATH
+_has_openspec=false
+if command -v openspec >/dev/null 2>&1; then
+    _has_openspec=true
+fi
+
 # Single jq call: detect all plugin capabilities, derive bindings, build CONTEXT_CAPS
 # (Context7 detection checks plugin name, not MCP tool names. Covers the standard
 # install path via claude-plugins-official. If Context7 were ever provided by a
 # differently-named plugin, this would need MCP tool detection instead.)
 CONTEXT_CAPS="$(printf '%s' "${PLUGINS_JSON}" | jq \
     --argjson chub "${_has_chub_cli}" \
+    --argjson openspec "${_has_openspec}" \
     '[.[] | select(.available == true) | .name] as $avail |
     ($avail | index("context7") != null) as $c7 |
     ($avail | index("serena") != null) as $ser |
     ($avail | index("forgetful") != null) as $fm |
-    {context7:$c7, context_hub_cli:$chub, context_hub_available:$c7, serena:$ser, forgetful_memory:$fm}'
+    {context7:$c7, context_hub_cli:$chub, context_hub_available:$c7, serena:$ser, forgetful_memory:$fm, openspec:$openspec}'
 )"
 
 # Override unified-context-stack plugin available flag when any capability is present
