@@ -116,10 +116,10 @@ IF the task references a known feature or capability, check for specification co
 
 ### Implementation (`implementation.md`) — Minimal On-Demand Gate
 
-Insert as a new numbered step in the existing "On-Demand" section (parallel to how External Truth already has an on-demand lookup pattern):
+Insert as step 3, after the existing `### 2. External Truth (On-Demand)`:
 
 ```markdown
-### N. Intent Truth (On-Demand)
+### 3. Intent Truth (On-Demand)
 
 IF you encounter a design ambiguity not covered in the plan:
 - **IF `openspec/specs/<capability>/spec.md` or `openspec/changes/<feature>/` exists:** Check for the specific edge case or requirement. Do NOT re-read the full spec — query only for the specific ambiguity.
@@ -137,8 +137,8 @@ Insert as the first numbered step:
 
 IF reviewing changes to a specified capability:
 
-- **IF `openspec/specs/<capability>/spec.md` exists:** Read it. Verify the implementation satisfies all acceptance scenarios. Flag any specified requirement that is missing from the implementation or tests.
-- **ELSE IF `openspec/changes/<feature>/specs/` exists:** Read delta specs for the active change. Verify the implementation matches the specified scenarios.
+- **IF `openspec/changes/<feature>/specs/` exists:** Read delta specs for the active change. These are the most current intent during development. Verify the implementation matches the specified scenarios.
+- **ELSE IF `openspec/specs/<capability>/spec.md` exists:** Read the canonical spec. Verify the implementation satisfies all acceptance scenarios. Flag any specified requirement that is missing from the implementation or tests.
 - **ELSE IF `docs/superpowers/specs/` has a matching design spec:** Reference it for design intent verification, but note that SP specs may have diverged from implementation.
 - **IF no artifacts found:** Review based on code quality and internal consistency only.
 - **IF the PR intentionally diverges from spec:** Note this as a spec update candidate — the spec should be revised to match the new intent after shipping.
@@ -158,11 +158,13 @@ Already has OpenSpec documentation tier from Spec A's `openspec-ship` integratio
 
 ### Capability Flags Table
 
-Add a new row to the table in `skills/unified-context-stack/SKILL.md`:
+Add a new row to the table in `skills/unified-context-stack/SKILL.md`. The `Context Stack:` line already contains an `openspec` boolean flag (added by Spec A). Document it:
 
 ```markdown
-| `openspec_surface` | OpenSpec bootstrap | Intent retrieval source selection — `none` means no OpenSpec CLI, but artifacts may still exist in the workspace. Check artifact presence for retrieval. |
+| `openspec` | OpenSpec CLI | Whether the `openspec` binary is available. See the separate `OpenSpec:` capability line for detailed surface/command info. Intent Truth retrieval does NOT require this flag — it checks artifact presence directly. |
 ```
+
+Note: The `OpenSpec:` capability line (emitted separately from `Context Stack:`) contains `binary`, `surface`, and `commands`. These are used by `openspec-ship` for write operations. Intent Truth retrieval only needs artifact presence checks (file reads), not capability flags.
 
 ### Tier Documents List
 
@@ -185,7 +187,7 @@ Add a brief note after the tier documents list:
 | File | Change |
 |------|--------|
 | `skills/unified-context-stack/tiers/intent-truth.md` | New file: Intent Truth tier document (~40 lines) |
-| `skills/unified-context-stack/SKILL.md` | Add capability flag row + tier doc link + artifact note |
+| `skills/unified-context-stack/SKILL.md` | Update frontmatter description to include Intent Truth; add capability flag row + tier doc link + artifact note |
 | `skills/unified-context-stack/phases/triage-and-plan.md` | Add Step 0: Intent Truth (full gate) |
 | `skills/unified-context-stack/phases/implementation.md` | Add on-demand Intent Truth step (~5 lines) |
 | `skills/unified-context-stack/phases/code-review.md` | Add Step 0: Intent Truth (full gate) |
@@ -199,7 +201,8 @@ Lightweight content assertions in `tests/test-context.sh`:
 2. **SKILL.md references intent-truth** — Assert `skills/unified-context-stack/SKILL.md` contains `intent-truth.md`.
 3. **Triage-and-plan has openspec gate** — Assert `phases/triage-and-plan.md` contains `openspec`.
 4. **Code-review has openspec gate** — Assert `phases/code-review.md` contains `openspec`.
-5. **Existing conditional fallback test still passes** — The existing test "phase docs contain capability-conditional instructions" should continue to pass.
+5. **Implementation has openspec gate** — Assert `phases/implementation.md` contains `openspec`.
+6. **Existing conditional fallback test still passes** — The existing test "phase docs contain capability-conditional instructions" continues to pass. Note: this test validates the existing `flag=true**:` pattern in the original steps, NOT the new Intent Truth gates (which use IF/ELSE IF syntax). Tests 3-5 cover the new gates.
 
 ## Non-Goals
 
