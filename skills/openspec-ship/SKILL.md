@@ -19,6 +19,14 @@ Before proceeding, verify that `verification-before-completion` has already run 
 
 Then invoke `Skill(superpowers:verification-before-completion)` before continuing. Defer to `verification-before-completion` for the exact command set appropriate to the project.
 
+## Session State
+
+When this skill starts, populate the session state file with linkage information:
+1. Read `~/.claude/.skill-session-token` for the session token.
+2. Source `hooks/lib/openspec-state.sh` from the auto-claude-skills plugin root.
+3. Call `openspec_state_upsert_change "<token>" "<change_slug>" "<plan_path>" "<spec_path>" "<capability_slug>"`.
+4. If the state file doesn't exist yet (verification-before-completion hasn't run), the helper creates it with `verification_seen: false`.
+
 ## Input
 
 The user should provide:
@@ -29,12 +37,27 @@ The user should provide:
 
 ### Step 1: Detect Environment
 
-Run `command -v openspec` to check for CLI availability.
+**Primary:** Read the session's `OpenSpec:` capability line from the session-start output (already in conversation context). Parse `surface=` to determine the OPSX surface level.
 
-- **If found:** Log `"OpenSpec CLI detected. Using OPSX commands."` Record for later steps.
-- **If not found:** Log `"OpenSpec CLI not detected. Proceeding with Claude-native documentation. Run 'npm install -g @fission-ai/openspec@latest' for advanced features."` Record for fallback path.
+**Fallback (if capability line not found):** Read `~/.claude/.skill-registry-cache.json` and extract `openspec_capabilities.surface`.
+
+**Last resort (backwards compatibility):** Run `command -v openspec` to check for CLI availability.
+
+Based on the detected surface:
+- `opsx-core` or `opsx-expanded`: Use OPSX commands in later steps.
+- `openspec-core`: Use CLI commands directly (no OPSX slash commands available).
+- `none`: Use Claude-native fallback templates.
 
 ### Step 2: Derive Slugs
+
+**Session state (primary):** Read `~/.claude/.skill-session-token` to get the session token. Then read `~/.claude/.skill-openspec-state-<token>` for pre-populated linkage:
+- `changes.<slug>.sp_plan_path` — use as `plan_path`
+- `changes.<slug>.sp_spec_path` — use as `spec_path`
+- `changes.<slug>.capability_slug` — use as capability
+
+If the state file exists and has the relevant change entry, use those values. Skip user prompts for fields that are already populated.
+
+**Fallback (no state file):** Use the existing user-input flow (unchanged from current behavior).
 
 **Change slug (`<feature-name>`):**
 - If `plan_path` is provided: strip the leading date prefix from the plan filename stem. E.g., `docs/superpowers/plans/2026-03-14-openspec-ship.md` → `openspec-ship`.
@@ -172,6 +195,14 @@ Use `/opsx:archive <feature-name>`. This:
 4. Remove only the specific moved files from `docs/superpowers/`. Do not delete directories or unrelated files.
 
 If `plan_path` is not provided: skip SP artifact archival. Log: `"No Superpowers plan path provided. Skipping SP artifact archival."`
+
+**Write provenance metadata:**
+
+After the archive path exists and SP artifacts (if any) have been moved:
+1. Read `~/.claude/.skill-session-token` for the session token.
+2. Run the `openspec_write_provenance` helper (source `hooks/lib/openspec-state.sh` from the auto-claude-skills plugin root, then call `openspec_write_provenance "<archive_path>" "<token>" "<change_slug>"`).
+3. This creates `<archive_path>/superpowers/source.json` with schema_version, paths, branch, commit, surface, and timestamp.
+4. If the write fails, log a warning but do not fail the archive.
 
 ## Graceful Degradation Summary
 
