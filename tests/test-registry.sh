@@ -615,6 +615,228 @@ test_openspec_ship_chain_consistency() {
 }
 
 # ---------------------------------------------------------------------------
+# OpenSpec bootstrap detection tests
+# ---------------------------------------------------------------------------
+test_openspec_binary_detected() {
+    echo "-- test: openspec binary detection --"
+    setup_test_env
+
+    # Create a fake openspec binary in PATH
+    mkdir -p "${HOME}/bin"
+    printf '#!/bin/sh\necho openspec' > "${HOME}/bin/openspec"
+    chmod +x "${HOME}/bin/openspec"
+    export PATH="${HOME}/bin:${PATH}"
+
+    local output
+    output="$(run_hook)"
+    local cache="${HOME}/.claude/.skill-registry-cache.json"
+
+    local binary
+    binary="$(jq -r '.openspec_capabilities.binary' "$cache" 2>/dev/null)"
+    assert_equals "openspec binary detected" "true" "$binary"
+
+    teardown_test_env
+}
+
+test_openspec_binary_absent() {
+    echo "-- test: openspec binary absent --"
+    setup_test_env
+
+    # Mask CLI tools from PATH so openspec appears uninstalled.
+    local _minimal_path="/usr/bin:/bin:/usr/sbin:/sbin"
+    local _jq_path
+    _jq_path="$(command -v jq 2>/dev/null)"
+    if [ -n "${_jq_path}" ]; then
+        _minimal_path="$(dirname "${_jq_path}"):${_minimal_path}"
+    fi
+
+    local output
+    output="$(PATH="${_minimal_path}" run_hook)"
+    local cache="${HOME}/.claude/.skill-registry-cache.json"
+
+    local binary
+    binary="$(jq -r '.openspec_capabilities.binary' "$cache" 2>/dev/null)"
+    assert_equals "openspec binary absent" "false" "$binary"
+
+    local surface
+    surface="$(jq -r '.openspec_capabilities.surface' "$cache" 2>/dev/null)"
+    assert_equals "surface is none" "none" "$surface"
+
+    teardown_test_env
+}
+
+test_openspec_opsx_core_detection() {
+    echo "-- test: OPSX core surface detection --"
+    setup_test_env
+
+    # Create fake binary + core commands
+    mkdir -p "${HOME}/bin"
+    printf '#!/bin/sh\necho openspec' > "${HOME}/bin/openspec"
+    chmod +x "${HOME}/bin/openspec"
+    export PATH="${HOME}/bin:${PATH}"
+
+    local ws_dir="${HOME}/workspace"
+    mkdir -p "${ws_dir}/.claude/commands/opsx"
+    touch "${ws_dir}/.claude/commands/opsx/propose.md"
+    touch "${ws_dir}/.claude/commands/opsx/apply.md"
+    touch "${ws_dir}/.claude/commands/opsx/archive.md"
+    touch "${ws_dir}/.claude/commands/opsx/explore.md"
+    export _OPENSPEC_WORKSPACE_OVERRIDE="${ws_dir}"
+
+    local output
+    output="$(run_hook)"
+    local cache="${HOME}/.claude/.skill-registry-cache.json"
+
+    local surface
+    surface="$(jq -r '.openspec_capabilities.surface' "$cache" 2>/dev/null)"
+    assert_equals "surface is opsx-core" "opsx-core" "$surface"
+
+    local cmd_count
+    cmd_count="$(jq '.openspec_capabilities.commands | length' "$cache" 2>/dev/null)"
+    assert_equals "4 commands detected" "4" "$cmd_count"
+
+    unset _OPENSPEC_WORKSPACE_OVERRIDE
+    teardown_test_env
+}
+
+test_openspec_opsx_expanded_detection() {
+    echo "-- test: OPSX expanded surface detection --"
+    setup_test_env
+
+    mkdir -p "${HOME}/bin"
+    printf '#!/bin/sh\necho openspec' > "${HOME}/bin/openspec"
+    chmod +x "${HOME}/bin/openspec"
+    export PATH="${HOME}/bin:${PATH}"
+
+    local ws_dir="${HOME}/workspace"
+    mkdir -p "${ws_dir}/.claude/commands/opsx"
+    touch "${ws_dir}/.claude/commands/opsx/propose.md"
+    touch "${ws_dir}/.claude/commands/opsx/apply.md"
+    touch "${ws_dir}/.claude/commands/opsx/archive.md"
+    touch "${ws_dir}/.claude/commands/opsx/new.md"
+    touch "${ws_dir}/.claude/commands/opsx/ff.md"
+    export _OPENSPEC_WORKSPACE_OVERRIDE="${ws_dir}"
+
+    local output
+    output="$(run_hook)"
+    local cache="${HOME}/.claude/.skill-registry-cache.json"
+
+    local surface
+    surface="$(jq -r '.openspec_capabilities.surface' "$cache" 2>/dev/null)"
+    assert_equals "surface is opsx-expanded" "opsx-expanded" "$surface"
+
+    unset _OPENSPEC_WORKSPACE_OVERRIDE
+    teardown_test_env
+}
+
+test_openspec_binary_only() {
+    echo "-- test: binary only, no OPSX commands --"
+    setup_test_env
+
+    mkdir -p "${HOME}/bin"
+    printf '#!/bin/sh\necho openspec' > "${HOME}/bin/openspec"
+    chmod +x "${HOME}/bin/openspec"
+    export PATH="${HOME}/bin:${PATH}"
+
+    # No workspace commands
+    export _OPENSPEC_WORKSPACE_OVERRIDE="${HOME}/empty-workspace"
+    mkdir -p "${HOME}/empty-workspace"
+
+    local output
+    output="$(run_hook)"
+    local cache="${HOME}/.claude/.skill-registry-cache.json"
+
+    local surface
+    surface="$(jq -r '.openspec_capabilities.surface' "$cache" 2>/dev/null)"
+    assert_equals "surface is openspec-core" "openspec-core" "$surface"
+
+    unset _OPENSPEC_WORKSPACE_OVERRIDE
+    teardown_test_env
+}
+
+test_openspec_commands_without_binary() {
+    echo "-- test: commands without binary (mismatch warning) --"
+    setup_test_env
+
+    # Mask CLI tools from PATH so openspec appears uninstalled.
+    local _minimal_path="/usr/bin:/bin:/usr/sbin:/sbin"
+    local _jq_path
+    _jq_path="$(command -v jq 2>/dev/null)"
+    if [ -n "${_jq_path}" ]; then
+        _minimal_path="$(dirname "${_jq_path}"):${_minimal_path}"
+    fi
+
+    # No binary, but create commands
+    local ws_dir="${HOME}/workspace"
+    mkdir -p "${ws_dir}/.claude/commands/opsx"
+    touch "${ws_dir}/.claude/commands/opsx/propose.md"
+    touch "${ws_dir}/.claude/commands/opsx/archive.md"
+    export _OPENSPEC_WORKSPACE_OVERRIDE="${ws_dir}"
+
+    local output
+    output="$(PATH="${_minimal_path}" run_hook)"
+    local cache="${HOME}/.claude/.skill-registry-cache.json"
+
+    local surface
+    surface="$(jq -r '.openspec_capabilities.surface' "$cache" 2>/dev/null)"
+    assert_equals "surface is none (no binary)" "none" "$surface"
+
+    local warnings
+    warnings="$(jq -r '.openspec_capabilities.warnings[0] // ""' "$cache" 2>/dev/null)"
+    assert_contains "mismatch warning" "binary missing" "$warnings"
+
+    unset _OPENSPEC_WORKSPACE_OVERRIDE
+    teardown_test_env
+}
+
+test_openspec_capability_line_emission() {
+    echo "-- test: OpenSpec capability line in session-start output --"
+    setup_test_env
+
+    local output
+    output="$(run_hook)"
+    local ctx
+    ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+
+    assert_contains "OpenSpec capability line emitted" "OpenSpec:" "$ctx"
+    assert_contains "has binary field" "binary=" "$ctx"
+    assert_contains "has surface field" "surface=" "$ctx"
+
+    teardown_test_env
+}
+
+test_openspec_workspace_only_discovery() {
+    echo "-- test: workspace-only command discovery --"
+    setup_test_env
+
+    # Binary present, commands only in workspace (not in any plugin root)
+    mkdir -p "${HOME}/bin"
+    printf '#!/bin/sh\necho openspec' > "${HOME}/bin/openspec"
+    chmod +x "${HOME}/bin/openspec"
+    export PATH="${HOME}/bin:${PATH}"
+
+    local ws_dir="${HOME}/workspace"
+    mkdir -p "${ws_dir}/.claude/commands/opsx"
+    touch "${ws_dir}/.claude/commands/opsx/propose.md"
+    touch "${ws_dir}/.claude/commands/opsx/apply.md"
+    touch "${ws_dir}/.claude/commands/opsx/archive.md"
+    export _OPENSPEC_WORKSPACE_OVERRIDE="${ws_dir}"
+
+    local output
+    output="$(run_hook)"
+    local cache="${HOME}/.claude/.skill-registry-cache.json"
+
+    local cmd_count
+    cmd_count="$(jq '.openspec_capabilities.commands | length' "$cache" 2>/dev/null)"
+    assert_equals "3 commands from workspace probe" "3" "$cmd_count"
+
+    assert_contains "propose discovered" "/opsx:propose" "$(jq -r '.openspec_capabilities.commands | join(",")' "$cache" 2>/dev/null)"
+
+    unset _OPENSPEC_WORKSPACE_OVERRIDE
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_empty_env_produces_fallback
@@ -636,5 +858,13 @@ test_context_capabilities_detection
 test_context_capabilities_all_false
 test_context_capabilities_in_health_output
 test_openspec_ship_chain_consistency
+test_openspec_binary_detected
+test_openspec_binary_absent
+test_openspec_opsx_core_detection
+test_openspec_opsx_expanded_detection
+test_openspec_binary_only
+test_openspec_commands_without_binary
+test_openspec_capability_line_emission
+test_openspec_workspace_only_discovery
 
 print_summary
