@@ -517,10 +517,14 @@ test_context_capabilities_detection() {
     hub_avail="$(jq -r '.context_capabilities.context_hub_available' "${cache_file}" 2>/dev/null)"
     assert_equals "context_hub_available derived from context7" "true" "${hub_avail}"
 
-    # chub CLI not on PATH in test env
+    # chub CLI: may or may not be on system PATH depending on test machine
     local chub_cli
     chub_cli="$(jq -r '.context_capabilities.context_hub_cli' "${cache_file}" 2>/dev/null)"
-    assert_equals "context_hub_cli is false (not on PATH)" "false" "${chub_cli}"
+    if command -v chub >/dev/null 2>&1; then
+        assert_equals "context_hub_cli is true (chub on PATH)" "true" "${chub_cli}"
+    else
+        assert_equals "context_hub_cli is false (chub not on PATH)" "false" "${chub_cli}"
+    fi
 
     # serena not installed
     local serena
@@ -537,8 +541,18 @@ test_context_capabilities_all_false() {
     # No plugins installed at all
     rm -rf "${HOME}/.claude/plugins"
 
+    # Mask CLI tools (chub, openspec) from PATH so they appear uninstalled.
+    # Keep only essential binaries (bash, jq, git, etc.) by using a minimal PATH.
+    local _minimal_path="/usr/bin:/bin:/usr/sbin:/sbin"
+    # Preserve jq location if it's outside the minimal path
+    local _jq_path
+    _jq_path="$(command -v jq 2>/dev/null)"
+    if [ -n "${_jq_path}" ]; then
+        _minimal_path="$(dirname "${_jq_path}"):${_minimal_path}"
+    fi
+
     local output
-    output="$(run_hook)"
+    output="$(PATH="${_minimal_path}" run_hook)"
 
     local cache_file="${HOME}/.claude/.skill-registry-cache.json"
 

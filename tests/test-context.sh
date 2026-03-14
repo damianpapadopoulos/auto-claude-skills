@@ -543,7 +543,7 @@ install_registry_with_context_stack() {
     # so the routing hook emits output (TOTAL_COUNT>0 is required for hints to appear)
     local tmp="${cache_file}.tmp"
     jq '.plugins |= map(if .name == "unified-context-stack" then .available = true else . end) |
-        .context_capabilities = {context7:true,context_hub_cli:false,context_hub_available:true,serena:false,forgetful_memory:false} |
+        .context_capabilities = {context7:true,context_hub_cli:false,context_hub_available:true,serena:false,forgetful_memory:false,openspec:false} |
         .skills |= map(
             if .name == "brainstorming" then . + {available:true, enabled:true, invoke:"Skill(superpowers:brainstorming)"}
             elif .name == "test-driven-development" then . + {available:true, enabled:true, invoke:"Skill(superpowers:test-driven-development)"}
