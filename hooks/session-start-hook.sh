@@ -603,11 +603,15 @@ TOTAL_COMPANIONS=12  # 5 core + 2 MCP + 5 enhancers
 MISSING_COMPANION_COUNT=$((MISSING_CORE_COUNT + MISSING_MCP_COUNT + MISSING_ENHANCERS_COUNT))
 INSTALLED_COMPANIONS=$((TOTAL_COMPANIONS - MISSING_COMPANION_COUNT))
 
+# Count missing context stack tools
+MISSING_CONTEXT_COUNT=$(printf '%s' "${CONTEXT_CAPS}" | jq '[to_entries[] | select(.value == false)] | length')
+
 # -----------------------------------------------------------------
 # Step 12: Emit health check
 # -----------------------------------------------------------------
 SETUP_CTA=""
-if [ "${MISSING_COMPANION_COUNT}" -gt 0 ] || [ "${MISSING_SKILLS_COUNT}" -gt 0 ] || [ "${AGENT_TEAMS_MISSING}" -eq 1 ]; then
+if [ "${MISSING_COMPANION_COUNT}" -gt 0 ] || [ "${MISSING_SKILLS_COUNT}" -gt 0 ] || \
+   [ "${AGENT_TEAMS_MISSING}" -eq 1 ] || [ "${MISSING_CONTEXT_COUNT}" -gt 0 ]; then
     SETUP_CTA=". Run /setup for the full experience"
 else
     SETUP_CTA=". Setup complete"
