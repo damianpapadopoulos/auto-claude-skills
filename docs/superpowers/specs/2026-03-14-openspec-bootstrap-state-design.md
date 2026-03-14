@@ -271,7 +271,7 @@ If the state file doesn't exist (e.g., user hasn't updated `verification-before-
 | `hooks/session-start-hook.sh` | Add targeted workspace OPSX command probe + `openspec_capabilities` detection block + `OpenSpec:` capability line emission |
 | `hooks/lib/openspec-state.sh` | New file: persistence helper functions (`openspec_state_mark_verified`, `openspec_state_upsert_change`, `openspec_state_read`, `openspec_write_provenance`) |
 | `skills/openspec-ship/SKILL.md` | Consume `OpenSpec:` capability line and session state; add `source.json` write at archive time; maintain backwards compatibility |
-| `verification-before-completion` (superpowers skill — not in this repo) | Add `openspec_state_mark_verified` call on successful completion. This is a cross-plugin change: the `verification-before-completion` skill lives in the superpowers plugin, not auto-claude-skills. Implementation option: instruct the skill to read `~/.claude/.skill-session-token` and call the helper, OR document as a manual integration step for the superpowers maintainer. |
+| `verification-before-completion` (superpowers plugin — separate repo) | Add a self-contained verification-state write on successful completion. The superpowers skill should NOT source `hooks/lib/openspec-state.sh` across plugin boundaries. Instead, use a tiny inline schema-compatible writer that creates/updates `~/.claude/.skill-openspec-state-<token>` with `verification_seen`, `verification_at`, and `openspec_surface`. This keeps the cross-plugin coupling at the file-schema level, not the code-import level. |
 | `config/fallback-registry.json` | Regenerate to include `openspec_capabilities` with all-false defaults |
 | `tests/test-registry.sh` | 8 bootstrap detection tests |
 | `tests/test-openspec-state.sh` | New file: 4+ state persistence and provenance tests |
@@ -300,11 +300,17 @@ If the state file doesn't exist (e.g., user hasn't updated `verification-before-
 
 **Spec B dependency:** Spec B will consume the `OpenSpec:` capability line and `openspec_capabilities` registry field. If Spec B changes how capability lines are consumed or adds a new reading pattern, the fallback chain described here (`OpenSpec:` line → registry cache → `command -v openspec`) may need adjustment. This is acceptable as a design dependency but is flagged here for tracking.
 
-**Cross-plugin dependency:** `verification-before-completion` lives in the superpowers plugin, not auto-claude-skills. The state file lifecycle requires that skill to call `openspec_state_mark_verified`. This is the only cross-plugin touch point in Spec A.
+**Cross-plugin dependency:** `verification-before-completion` lives in the superpowers plugin, not auto-claude-skills. The state file lifecycle requires that skill to write verification state. To avoid code-import coupling, the superpowers side uses a self-contained inline writer (schema-compatible, not source-dependent). The coupling is at the file-schema level only.
 
 ## Test Environment Notes
 
-**Workspace root control:** Test #8 (workspace-only command discovery) requires the hook to run in a context where `git rev-parse --show-toplevel` returns a known path. The test harness should initialize a git repo in the temp directory (`git init -q`) before running the hook, so `_WORKSPACE_ROOT` resolves predictably. Tests that create `.claude/commands/opsx/*.md` should place them relative to this initialized repo root.
+**Workspace root control:** Test #8 (workspace-only command discovery) requires the hook to resolve `_WORKSPACE_ROOT` to a known path. Since `test-registry.sh` runs the hook without changing cwd, add a test-only environment variable `_OPENSPEC_WORKSPACE_OVERRIDE` that, when set, overrides `git rev-parse --show-toplevel`. The detection block should use:
+
+```bash
+_WORKSPACE_ROOT="${_OPENSPEC_WORKSPACE_OVERRIDE:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+```
+
+Tests set `_OPENSPEC_WORKSPACE_OVERRIDE` to a temp directory containing `.claude/commands/opsx/*.md` fixtures. This avoids requiring cwd changes or git init in the test harness.
 
 **Concurrent write safety:** The helper functions use read-modify-write without locking. Within a single session, `verification-before-completion` and `openspec-ship` run sequentially (enforced by the SHIP chain), so concurrent writes do not occur in normal operation. Different sessions use different tokens. No locking mechanism is needed for Spec A.
 
