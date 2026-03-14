@@ -16,3 +16,8 @@ If the error involves a third-party library:
 - **context7=true** (no Hub match): Use broad Context7 for library-specific error documentation
 - **neither available**: Use WebSearch for the specific error message in the library's docs
 - For API errors (4xx/5xx), check for known outages or recently discovered bugs
+
+### 3. Internal Truth (Dependency Tracing)
+If the error involves internal code or unclear call chains:
+- **serena=true**: Use `find_symbol` to locate the failing function, `find_referencing_symbols` to trace callers and dependencies
+- **serena=false**: Use Grep to search for the function name and trace references manually

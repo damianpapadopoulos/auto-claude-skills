@@ -20,7 +20,8 @@
       "precedes": [],
       "requires": [],
       "description": "Structured debugging: reproduce, hypothesise, isolate, fix, verify. Returns to the current phase after resolution.",
-      "available": false,
+      "invoke": "Skill(superpowers:systematic-debugging)",
+      "available": true,
       "enabled": true
     },
     {
@@ -36,7 +37,8 @@
       "precedes": [],
       "requires": [],
       "description": "Write failing test first, then implement until green. Primary only for explicit test requests; other phases invoke TDD via skill chaining.",
-      "available": false,
+      "invoke": "Skill(superpowers:test-driven-development)",
+      "available": true,
       "enabled": true
     },
     {
@@ -60,7 +62,8 @@
       ],
       "requires": [],
       "description": "Ask clarifying questions, explore options, and get user approval before planning. Activated for Build intents.",
-      "available": false,
+      "invoke": "Skill(superpowers:brainstorming)",
+      "available": true,
       "enabled": true
     },
     {
@@ -78,7 +81,8 @@
         "brainstorming"
       ],
       "description": "Break work into discrete tasks and confirm the plan with the user before execution begins.",
-      "available": false,
+      "invoke": "Skill(superpowers:writing-plans)",
+      "available": true,
       "enabled": true
     },
     {
@@ -96,7 +100,8 @@
         "writing-plans"
       ],
       "description": "Step-by-step execution of an approved plan. Triggered by explicit plan-continuation language.",
-      "available": false,
+      "invoke": "Skill(superpowers:executing-plans)",
+      "available": true,
       "enabled": true
     },
     {
@@ -110,7 +115,8 @@
       "precedes": [],
       "requires": [],
       "description": "Delegate plan tasks to sub-agents for parallel implementation. Co-triggered with executing-plans.",
-      "available": false,
+      "invoke": "Skill(superpowers:subagent-driven-development)",
+      "available": true,
       "enabled": true
     },
     {
@@ -126,7 +132,8 @@
       "precedes": [],
       "requires": [],
       "description": "Prepare and request a code review: summarise changes, highlight risks, open a PR.",
-      "available": false,
+      "invoke": "Skill(superpowers:requesting-code-review)",
+      "available": true,
       "enabled": true
     },
     {
@@ -140,7 +147,8 @@
       "precedes": [],
       "requires": [],
       "description": "Process incoming review feedback: address comments, push fixes, re-request review.",
-      "available": false,
+      "invoke": "Skill(superpowers:receiving-code-review)",
+      "available": true,
       "enabled": true
     },
     {
@@ -158,7 +166,8 @@
       ],
       "requires": [],
       "description": "Final verification checklist before shipping: tests pass, lint clean, no TODOs, docs updated.",
-      "available": false,
+      "invoke": "Skill(superpowers:verification-before-completion)",
+      "available": true,
       "enabled": true
     },
     {
@@ -174,7 +183,8 @@
         "openspec-ship"
       ],
       "description": "Branch cleanup and merge: squash commits, update changelog, merge to main.",
-      "available": false,
+      "invoke": "Skill(superpowers:finishing-a-development-branch)",
+      "available": true,
       "enabled": true
     },
     {
@@ -211,7 +221,8 @@
       "precedes": [],
       "requires": [],
       "description": "Fan out independent tasks to parallel sub-agents and collect results.",
-      "available": false,
+      "invoke": "Skill(superpowers:dispatching-parallel-agents)",
+      "available": true,
       "enabled": true
     },
     {
@@ -225,7 +236,8 @@
       "precedes": [],
       "requires": [],
       "description": "Use git worktrees to enable parallel work on multiple branches without stashing.",
-      "available": false,
+      "invoke": "Skill(superpowers:using-git-worktrees)",
+      "available": true,
       "enabled": true
     },
     {
@@ -241,7 +253,8 @@
       "precedes": [],
       "requires": [],
       "description": "Author and maintain Claude Code skill files (SKILL.md). Meta-overlay for Claude tooling prompts.",
-      "available": false,
+      "invoke": "Skill(superpowers:writing-skills)",
+      "available": true,
       "enabled": true
     },
     {
@@ -257,7 +270,8 @@
       "precedes": [],
       "requires": [],
       "description": "UI/UX design guidance: component structure, responsive layout, styling, and visual prototyping.",
-      "available": false,
+      "invoke": "Call Skill(frontend-design:frontend-design)",
+      "available": true,
       "enabled": true
     },
     {
@@ -273,7 +287,8 @@
       "precedes": [],
       "requires": [],
       "description": "Security analysis overlay: scan for vulnerabilities, OWASP risks, compliance issues, and supply-chain threats.",
-      "available": false,
+      "invoke": "Skill(security-scanner)",
+      "available": true,
       "enabled": true
     },
     {
@@ -289,7 +304,8 @@
       "precedes": [],
       "requires": [],
       "description": "Web application testing: browser automation, accessibility checks, visual regression, and E2E flows.",
-      "available": false,
+      "invoke": "Skill(webapp-testing)",
+      "available": true,
       "enabled": true
     },
     {
@@ -305,7 +321,8 @@
       "precedes": [],
       "requires": [],
       "description": "Co-author technical documents: proposals, specs, RFCs, and architecture docs.",
-      "available": false,
+      "invoke": "Skill(doc-coauthoring)",
+      "available": true,
       "enabled": true
     },
     {
@@ -321,7 +338,8 @@
       "precedes": [],
       "requires": [],
       "description": "Recommend Claude Code automation setups: hooks, MCP servers, plugins, and workflow optimisations.",
-      "available": false,
+      "invoke": "Call Skill(claude-code-setup:claude-automation-recommender)",
+      "available": true,
       "enabled": true
     },
     {
@@ -337,7 +355,8 @@
       "precedes": [],
       "requires": [],
       "description": "Improve CLAUDE.md project files: structure, clarity, and completeness of project instructions.",
-      "available": false,
+      "invoke": "Call Skill(claude-md-management:claude-md-improver)",
+      "available": true,
       "enabled": true
     },
     {
@@ -412,19 +431,6 @@
       "invoke": "Skill(auto-claude-skills:batch-scripting)",
       "available": true,
       "enabled": true
-    },
-    {
-      "name": "unified-context-stack",
-      "role": "domain",
-      "triggers": [],
-      "trigger_mode": "regex",
-      "priority": 200,
-      "precedes": [],
-      "requires": [],
-      "description": "User-installed skill",
-      "invoke": "Skill(auto-claude-skills:unified-context-stack)",
-      "available": true,
-      "enabled": true
     }
   ],
   "plugins": [
@@ -445,7 +451,7 @@
         "SHIP"
       ],
       "description": "Structured commit workflows and branch-to-PR automation",
-      "available": false
+      "available": true
     },
     {
       "name": "security-guidance",
@@ -462,7 +468,7 @@
         "*"
       ],
       "description": "Write-time security blocker for XSS, injection, unsafe deserialization",
-      "available": false
+      "available": true
     },
     {
       "name": "hookify",
@@ -485,7 +491,7 @@
         "DESIGN"
       ],
       "description": "Custom rule authoring for Claude behavior guards",
-      "available": false
+      "available": true
     },
     {
       "name": "feature-dev",
@@ -508,7 +514,7 @@
         "REVIEW"
       ],
       "description": "Full feature pipeline with parallel exploration and architecture agents",
-      "available": false
+      "available": true
     },
     {
       "name": "skill-creator",
@@ -530,7 +536,7 @@
         "DESIGN"
       ],
       "description": "Skill eval/improvement loop with benchmarking",
-      "available": false
+      "available": true
     },
     {
       "name": "context7",
@@ -551,7 +557,7 @@
         "DEBUG"
       ],
       "description": "Up-to-date library documentation via Context7 MCP. Resolves library IDs and fetches current docs, API references, and examples.",
-      "available": false
+      "available": true
     },
     {
       "name": "github",
@@ -577,7 +583,7 @@
         "SHIP"
       ],
       "description": "GitHub MCP for repository management. Create/review PRs, manage issues, search repos, and interact with GitHub APIs programmatically.",
-      "available": false
+      "available": true
     },
     {
       "name": "atlassian",
@@ -621,7 +627,22 @@
         "SHIP"
       ],
       "description": "Tiered context retrieval — curated docs (Context Hub via Context7), blast-radius mapping (Serena), institutional memory (Forgetful) with graceful degradation.",
-      "available": false
+      "available": true
+    },
+    {
+      "name": "typescript-lsp",
+      "source": "auto-discovered",
+      "provides": {
+        "commands": [],
+        "skills": [],
+        "agents": [],
+        "hooks": []
+      },
+      "phase_fit": [
+        "*"
+      ],
+      "description": "Auto-discovered plugin",
+      "available": true
     }
   ],
   "context_capabilities": {
@@ -633,9 +654,9 @@
     "openspec": false
   },
   "openspec_capabilities": {
-    "binary": false,
+    "binary": true,
     "commands": [],
-    "surface": "none",
+    "surface": "openspec-core",
     "warnings": []
   },
   "phase_compositions": {
