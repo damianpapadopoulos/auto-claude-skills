@@ -474,6 +474,36 @@ if command -v openspec >/dev/null 2>&1; then
     _has_openspec=true
 fi
 
+# -----------------------------------------------------------------
+# Step 8e: Detect OpenSpec capabilities (workspace commands + surface)
+# -----------------------------------------------------------------
+_WORKSPACE_ROOT="${_OPENSPEC_WORKSPACE_OVERRIDE:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+_opsx_cmds=""
+if [ -d "${_WORKSPACE_ROOT}/.claude/commands/opsx" ]; then
+    for _cmd in "${_WORKSPACE_ROOT}/.claude/commands/opsx"/*.md; do
+        [ -f "${_cmd}" ] || continue
+        _opsx_cmds="${_opsx_cmds}${_opsx_cmds:+,}/opsx:$(basename "${_cmd}" .md)"
+    done
+fi
+
+# Build OPENSPEC_CAPS JSON: binary + commands + surface + warnings
+# Single jq call derives surface from command set
+OPENSPEC_CAPS="$(jq -n \
+    --argjson binary "${_has_openspec}" \
+    --arg cmds "${_opsx_cmds}" \
+    '($cmds | split(",") | map(select(. != ""))) as $commands |
+    ($commands | map(split(":")[1]) | map(select(. != null))) as $names |
+    (($names | index("propose") != null) and ($names | index("apply") != null) and ($names | index("archive") != null)) as $has_core |
+    (($names | index("new") != null) or ($names | index("ff") != null) or ($names | index("continue") != null) or ($names | index("verify") != null) or ($names | index("sync") != null)) as $has_expanded |
+    (if $binary and $has_core and $has_expanded then "opsx-expanded"
+     elif $binary and $has_core then "opsx-core"
+     elif $binary then "openspec-core"
+     else "none" end) as $surface |
+    (if ($binary | not) and ($commands | length) > 0 then ["OPSX command files found but openspec binary missing"]
+     else [] end) as $warnings |
+    {binary: $binary, commands: $commands, surface: $surface, warnings: $warnings}'
+)"
+
 # Single jq call: detect all plugin capabilities, derive bindings, build CONTEXT_CAPS
 # (Context7 detection checks plugin name, not MCP tool names. Covers the standard
 # install path via claude-plugins-official. If Context7 were ever provided by a
@@ -503,12 +533,14 @@ RESULT="$(jq -n \
     --argjson skills "${SKILLS_JSON}" \
     --argjson plugins "${PLUGINS_JSON}" \
     --argjson caps "${CONTEXT_CAPS}" \
+    --argjson openspec_caps "${OPENSPEC_CAPS}" \
     --argjson pc "${PHASE_COMPOSITIONS}" \
     --argjson pg "${PHASE_GUIDE}" \
     --argjson mh "${METHODOLOGY_HINTS}" \
     --argjson warnings "${WARNINGS}" \
     '{
         registry: {version:$version, skills:$skills, plugins:$plugins, context_capabilities:$caps,
+                   openspec_capabilities:$openspec_caps,
                    phase_compositions:$pc, phase_guide:$pg,
                    methodology_hints:$mh, warnings:$warnings},
         stats: {
@@ -632,6 +664,15 @@ _CAP_LINE="$(printf '%s' "${CONTEXT_CAPS}" | jq -r 'to_entries | map("\(.key)=\(
 if [ -n "${_CAP_LINE}" ]; then
     CONTEXT="${CONTEXT}
 ${_CAP_LINE}"
+fi
+
+# Append OpenSpec capabilities summary
+_OPENSPEC_LINE="$(printf '%s' "${OPENSPEC_CAPS}" | jq -r '
+    "OpenSpec: binary=\(.binary), surface=\(.surface), commands=\(.commands | join(","))"
+')"
+if [ -n "${_OPENSPEC_LINE}" ]; then
+    CONTEXT="${CONTEXT}
+${_OPENSPEC_LINE}"
 fi
 
 # Check for stale/missing memory consolidation marker
