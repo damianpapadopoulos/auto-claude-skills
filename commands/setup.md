@@ -92,9 +92,60 @@ cp -r /tmp/cervelli-llms/.claude/skills/security-scanner ~/.claude/skills/securi
 rm -rf /tmp/cervelli-llms
 ```
 
+### 5. Prerequisites (uv package manager)
+
+Serena and Forgetful Memory require the `uv` package manager (Python package installer).
+
+Check if `uv` is available:
+```bash
+command -v uv || command -v "$HOME/.local/bin/uv" || command -v "$HOME/.cargo/bin/uv"
+```
+
+If not found, **ask the user:** "Serena and Forgetful Memory require the `uv` package manager. Would you like to install it? (`curl -LsSf https://astral.sh/uv/install.sh | sh`)"
+
+If the user agrees:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+After installation, verify with `uv --version` (may need to add `~/.local/bin` to PATH for the current session).
+
+If the user declines, note that Serena and Forgetful Memory will be unavailable and proceed to Step 6.
+
+### 6. Context Stack tools
+
+These tools enhance context retrieval with library docs, code navigation, persistent memory, and post-execution documentation.
+
+Note: Context7 is already installed via Step 0 (marketplace plugin) and is not duplicated here.
+
+**Detection:** Before presenting the table, check which tools are already installed:
+- `chub`: `command -v chub`
+- `openspec`: `command -v openspec`
+- `serena`: run `claude mcp list` and check for a `serena` entry
+- `forgetful`: run `claude mcp list` and check for a `forgetful` entry
+
+Check `npm` availability. If `npm` is missing, note that chub and OpenSpec can't be installed.
+
+Present only the missing tools. If none are missing, skip this step.
+
+**Ask the user:** "Would you like to install the Context Stack tools? These enhance context retrieval with library docs, code navigation, persistent memory, and post-execution documentation."
+
+| Tool | Type | Install command | Scope | Prerequisite |
+|------|------|----------------|-------|-------------|
+| Context Hub CLI (`chub`) | npm global | `npm install -g @aisuite/chub` | Global | npm |
+| OpenSpec | npm global | `npm install -g @fission-ai/openspec@latest` | Global | npm |
+| Serena | MCP server | `claude mcp add serena -- uvx --from git+https://github.com/oraios/serena serena start-mcp-server --context claude-code --project "$(pwd)"` | Project-scoped | uv |
+| Forgetful Memory | MCP server | `claude mcp add forgetful --scope user -- uvx forgetful-ai` | User (global) | uv |
+
+If uv was not installed in Step 5, skip Serena and Forgetful Memory with a note.
+
+The Serena command captures the current working directory at install time, making it project-scoped. Check for an existing serena MCP registration before adding a duplicate.
+
+After installation, verify MCP servers with `claude mcp list` (look for "Connected" status) and CLIs with `command -v`.
+
 ## Execution
 
-Run each step in order. For steps 0 and 1, use AskUserQuestion to get the user's preference before taking action. For steps 2-4, if a skill directory already exists at the target path, skip it.
+Run each step in order. For steps 0 and 1, use AskUserQuestion to get the user's preference before taking action. For steps 2-4, if a skill directory already exists at the target path, skip it. For steps 5 and 6, use AskUserQuestion to get the user's preference before installing, and skip tools that are already installed.
 
 After setup, confirm what was configured:
 - Companion plugins: which were installed or skipped
@@ -103,3 +154,8 @@ After setup, confirm what was configured:
 - `~/.claude/skills/doc-coauthoring/SKILL.md` exists
 - `~/.claude/skills/webapp-testing/SKILL.md` exists
 - `~/.claude/skills/security-scanner/SKILL.md` exists
+- `uv`/`uvx`: available or skipped
+- `chub`: available or skipped
+- `openspec`: available or skipped
+- Serena MCP: connected or skipped
+- Forgetful Memory MCP: connected or skipped
