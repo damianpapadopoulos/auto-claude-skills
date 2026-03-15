@@ -66,20 +66,6 @@ install_context_registry() {
       "enabled": true
     },
     {
-      "name": "test-driven-development",
-      "role": "process",
-      "phase": "IMPLEMENT",
-      "triggers": [
-        "(build|create|implement|add|write|make)",
-        "(run|test|execute|verify|validate|check|coverage)"
-      ],
-      "trigger_mode": "regex",
-      "priority": 20,
-      "invoke": "Skill(superpowers:test-driven-development)",
-      "available": true,
-      "enabled": true
-    },
-    {
       "name": "executing-plans",
       "role": "process",
       "phase": "IMPLEMENT",
@@ -174,7 +160,7 @@ install_context_registry() {
   "phase_guide": {
     "DESIGN":    "brainstorming (ask questions, get approval)",
     "PLAN":      "writing-plans (break into tasks, confirm before execution)",
-    "IMPLEMENT": "executing-plans or subagent-driven-development + TDD",
+    "IMPLEMENT": "executing-plans or subagent-driven-development",
     "REVIEW":    "requesting-code-review",
     "SHIP":      "verification-before-completion + openspec-ship + finishing-a-development-branch",
     "DEBUG":     "systematic-debugging, then return to current phase"
@@ -251,7 +237,7 @@ install_registry() {
   "phase_guide": {
     "DESIGN":    "brainstorming (ask questions, get approval)",
     "PLAN":      "writing-plans (break into tasks, confirm before execution)",
-    "IMPLEMENT": "executing-plans or subagent-driven-development + TDD"
+    "IMPLEMENT": "executing-plans or subagent-driven-development"
   },
   "warnings": []
 }
@@ -328,7 +314,7 @@ test_many_skills_full_format() {
     install_context_registry
 
     # "build a secure frontend dashboard" triggers:
-    #   brainstorming (process, prio 30), test-driven-development (process, prio 20),
+    #   brainstorming (process, prio 30),
     #   security-scanner (domain, prio 102), frontend-design (domain, prio 101)
     # After role caps: 1 process + 2 domain = 3 selected -> full format
     local output
@@ -546,7 +532,6 @@ install_registry_with_context_stack() {
         .context_capabilities = {context7:true,context_hub_cli:false,context_hub_available:true,serena:false,forgetful_memory:false,openspec:false} |
         .skills |= map(
             if .name == "brainstorming" then . + {available:true, enabled:true, invoke:"Skill(superpowers:brainstorming)"}
-            elif .name == "test-driven-development" then . + {available:true, enabled:true, invoke:"Skill(superpowers:test-driven-development)"}
             elif .name == "systematic-debugging" then . + {available:true, enabled:true, invoke:"Skill(superpowers:systematic-debugging)"}
             else . end
         )' \

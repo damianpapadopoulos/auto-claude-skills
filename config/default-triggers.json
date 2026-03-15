@@ -22,20 +22,6 @@
       "description": "Structured debugging: reproduce, hypothesise, isolate, fix, verify. Returns to the current phase after resolution."
     },
     {
-      "name": "test-driven-development",
-      "role": "process",
-      "phase": "IMPLEMENT",
-      "triggers": [
-        "(test|tdd|run.tests|execute.tests|verify|validate|coverage|pass|green|assert|expect|spec|ensure.*pass|check.*(test|coverage|green))"
-      ],
-      "keywords": [],
-      "trigger_mode": "regex",
-      "priority": 20,
-      "precedes": [],
-      "requires": [],
-      "description": "Write failing test first, then implement until green. Primary only for explicit test requests; other phases invoke TDD via skill chaining."
-    },
-    {
       "name": "brainstorming",
       "role": "process",
       "phase": "DESIGN",

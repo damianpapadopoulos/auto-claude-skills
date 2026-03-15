@@ -51,20 +51,6 @@ install_registry() {
       "enabled": true
     },
     {
-      "name": "test-driven-development",
-      "role": "process",
-      "phase": "IMPLEMENT",
-      "triggers": [
-        "(build|create|implement|add|write|make)",
-        "(run|test|execute|verify|validate|check|coverage)"
-      ],
-      "trigger_mode": "regex",
-      "priority": 20,
-      "invoke": "Skill(superpowers:test-driven-development)",
-      "available": true,
-      "enabled": true
-    },
-    {
       "name": "brainstorming",
       "role": "process",
       "phase": "DESIGN",
@@ -380,17 +366,6 @@ install_registry_v4() {
       "trigger_mode": "regex",
       "priority": 10,
       "invoke": "Skill(superpowers:systematic-debugging)",
-      "available": true,
-      "enabled": true
-    },
-    {
-      "name": "test-driven-development",
-      "role": "process",
-      "phase": "IMPLEMENT",
-      "triggers": ["(build|create|implement|add|write|make)", "(run|test|execute|verify|validate|check|coverage)"],
-      "trigger_mode": "regex",
-      "priority": 20,
-      "invoke": "Skill(superpowers:test-driven-development)",
       "available": true,
       "enabled": true
     },
@@ -768,7 +743,7 @@ test_max_one_process() {
     setup_test_env
     install_registry
 
-    # "debug" triggers both systematic-debugging and test-driven-development (both process)
+    # "debug" triggers systematic-debugging (process); only 1 process skill should appear
     local output
     output="$(run_hook "debug and fix the broken authentication error in the module")"
     local context
@@ -930,9 +905,9 @@ test_claude_md_maintenance_hint() {
     setup_test_env
     install_registry
 
-    # "run tests after the refactoring" → TDD selected (IMPLEMENT phase) + matches "refactor" trigger
+    # "continue the plan and refactor the auth module" → executing-plans (IMPLEMENT phase) + "refactor" trigger
     local output context
-    output="$(run_hook "run tests after the refactoring of the auth module")"
+    output="$(run_hook "continue the plan and refactor the auth module")"
     context="$(extract_context "${output}")"
     assert_contains "claude-md hint fires in IMPLEMENT phase" "CLAUDE.MD" "${context}"
 
@@ -3027,5 +3002,26 @@ test_openspec_hint_fires_on_ship() {
     teardown_test_env
 }
 test_openspec_hint_fires_on_ship
+
+# ---------------------------------------------------------------------------
+# TDD should not appear as a scored process skill
+# ---------------------------------------------------------------------------
+test_tdd_not_scored_as_process() {
+    echo "-- test: TDD is not a scored process skill --"
+    setup_test_env
+    install_registry
+
+    local output
+    output="$(run_hook "run all the tests for the auth module")"
+    local context
+    context="$(extract_context "${output}")"
+
+    local process_tdd
+    process_tdd="$(printf '%s' "${context}" | grep -c 'Process:.*test-driven-development' 2>/dev/null)" || process_tdd=0
+    assert_equals "TDD not selected as process skill" "0" "${process_tdd}"
+
+    teardown_test_env
+}
+test_tdd_not_scored_as_process
 
 print_summary

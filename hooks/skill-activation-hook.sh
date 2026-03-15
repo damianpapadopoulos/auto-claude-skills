@@ -397,7 +397,6 @@ _determine_label_phase() {
           systematic-debugging)       PLABEL="Fix / Debug" ;;
           brainstorming)              PLABEL="Build New" ;;
           executing-plans|subagent-driven-development) PLABEL="Plan Execution" ;;
-          test-driven-development)    PLABEL="Run / Test" ;;
           requesting-code-review|receiving-code-review) PLABEL="Review" ;;
         esac
         ;;

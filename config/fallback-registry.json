@@ -25,23 +25,6 @@
       "enabled": true
     },
     {
-      "name": "test-driven-development",
-      "role": "process",
-      "phase": "IMPLEMENT",
-      "triggers": [
-        "(test|tdd|run.tests|execute.tests|verify|validate|coverage|pass|green|assert|expect|spec|ensure.*pass|check.*(test|coverage|green))"
-      ],
-      "keywords": [],
-      "trigger_mode": "regex",
-      "priority": 20,
-      "precedes": [],
-      "requires": [],
-      "description": "Write failing test first, then implement until green. Primary only for explicit test requests; other phases invoke TDD via skill chaining.",
-      "invoke": "Skill(superpowers:test-driven-development)",
-      "available": true,
-      "enabled": true
-    },
-    {
       "name": "brainstorming",
       "role": "process",
       "phase": "DESIGN",
