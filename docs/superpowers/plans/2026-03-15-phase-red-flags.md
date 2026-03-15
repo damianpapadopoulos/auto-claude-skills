@@ -261,11 +261,38 @@ Expected: PASS for both
 
 Run: `bash tests/run-tests.sh 2>&1 | tail -10`
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Update REVIEW phase_compositions.sequence with 3-step flow**
+
+Use jq to replace the current REVIEW sequence (single requesting-code-review entry) with the full 3-step flow:
+
+```bash
+cat config/default-triggers.json | jq '
+  .phase_compositions.REVIEW.sequence = [
+    {
+      "step": "requesting-code-review",
+      "purpose": "Get BASE_SHA and HEAD_SHA. Dispatch superpowers:code-reviewer subagent with diff and plan reference. Fix critical/important issues."
+    },
+    {
+      "step": "agent-team-review",
+      "purpose": "For substantial changes (3+ files, cross-module, security-sensitive): dispatch parallel specialist reviewers alongside code-reviewer."
+    },
+    {
+      "step": "receiving-code-review",
+      "purpose": "Process reviewer findings with technical rigor. Verify claims against codebase. Push back if wrong. Fix issues one at a time."
+    }
+  ]
+' > /tmp/dt-seq.json && cp /tmp/dt-seq.json config/default-triggers.json
+```
+
+- [ ] **Step 7: Run full test suite**
+
+Run: `bash tests/run-tests.sh 2>&1 | tail -10`
+
+- [ ] **Step 8: Commit**
 
 ```bash
 git add config/default-triggers.json tests/test-routing.sh
-git commit -m "feat: add phase-enforcement methodology hint for DESIGN/PLAN"
+git commit -m "feat: add phase-enforcement hint and REVIEW 3-step sequence"
 ```
 
 ### Task 4: Tighten security-scanner test assertion

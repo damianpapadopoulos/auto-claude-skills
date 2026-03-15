@@ -96,7 +96,44 @@ The existing SHIP RED FLAGS block (which checks for `verification-before-complet
 
 This fires only during DESIGN/PLAN phases when implementation-intent language appears in the prompt. It reinforces the RED FLAGS with a methodology-level reminder.
 
-## 3. Security-Scanner Test Fix (Issue 4)
+## 3. REVIEW Phase Sequencing Clarification
+
+### Problem
+
+The REVIEW phase has three skills but their relationship is unclear in the hook output:
+
+- `requesting-code-review` (process) — dispatches the code-reviewer subagent
+- `receiving-code-review` (process) — processes review feedback with technical rigor
+- `agent-team-review` (required, conditional) — dispatches parallel specialist reviewers
+
+The model doesn't know:
+- That `receiving-code-review` exists as a follow-up to `requesting-code-review`
+- Whether `agent-team-review` runs alongside or after `requesting-code-review`
+
+### Fix
+
+Update the REVIEW `phase_compositions.sequence` to describe the full flow:
+
+```json
+"sequence": [
+  {
+    "step": "requesting-code-review",
+    "purpose": "Get BASE_SHA and HEAD_SHA. Dispatch superpowers:code-reviewer subagent with diff and plan reference. Fix critical/important issues."
+  },
+  {
+    "step": "agent-team-review",
+    "purpose": "For substantial changes (3+ files, cross-module, security-sensitive): dispatch parallel specialist reviewers alongside code-reviewer."
+  },
+  {
+    "step": "receiving-code-review",
+    "purpose": "Process reviewer findings with technical rigor. Verify claims against codebase. Push back if wrong. Fix issues one at a time."
+  }
+]
+```
+
+This makes the ordering explicit: dispatch reviewers first (requesting + agent-team), then process their feedback (receiving).
+
+## 4. Security-Scanner Test Fix (Issue 4)
 
 ### Location
 
@@ -111,7 +148,7 @@ Tighten the PARALLEL assertion from `grep -c 'PARALLEL:.*security-scanner'` to `
 | File | Change |
 |------|--------|
 | `hooks/skill-activation-hook.sh` | Add phase-aware RED FLAGS in `_format_output()` for DESIGN, PLAN, IMPLEMENT, REVIEW |
-| `config/default-triggers.json` | Add `phase-enforcement` methodology hint |
+| `config/default-triggers.json` | Add `phase-enforcement` methodology hint; update REVIEW sequence with 3-step flow (requesting → agent-team → receiving) |
 | `tests/test-context.sh` | Tighten security-scanner assertion |
 | `tests/test-routing.sh` | Add tests verifying RED FLAGS appear at each phase |
 | `config/fallback-registry.json` | Regenerate |
@@ -125,6 +162,7 @@ Tighten the PARALLEL assertion from `grep -c 'PARALLEL:.*security-scanner'` to `
 5. **Phase enforcement hint fires** — DESIGN phase + implementation-intent prompt. Assert hint text present.
 6. **Phase enforcement hint does NOT fire at IMPLEMENT** — IMPLEMENT phase + implementation-intent prompt. Assert hint NOT present.
 7. **Security-scanner test tightened** — Assert PARALLEL line contains `Skill(security-scanner)`.
+8. **REVIEW sequence visible** — Assert REVIEW output contains SEQUENCE entries for requesting-code-review, agent-team-review, and receiving-code-review.
 
 ## Non-Goals
 
