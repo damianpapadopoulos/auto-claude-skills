@@ -3674,4 +3674,58 @@ test_agent_team_not_on_continuation() {
 }
 test_agent_team_not_on_continuation
 
+# ---------------------------------------------------------------------------
+# Phase-aware RED FLAGS
+# ---------------------------------------------------------------------------
+test_design_red_flags() {
+    echo "-- test: DESIGN phase has RED FLAGS --"
+    setup_test_env
+    install_registry_v4
+
+    local output
+    output="$(run_hook "build a new payment integration for our app")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "DESIGN red flags present" "HALT if any Red Flag" "${context}"
+    assert_contains "DESIGN red flag mentions brainstorming" "brainstorming" "${context}"
+
+    teardown_test_env
+}
+test_design_red_flags
+
+test_implement_red_flags() {
+    echo "-- test: IMPLEMENT phase has RED FLAGS --"
+    setup_test_env
+    install_registry_v4
+
+    local output
+    output="$(run_hook "continue with the next task in the plan")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "IMPLEMENT red flags present" "HALT if any Red Flag" "${context}"
+    assert_contains "IMPLEMENT red flag mentions worktree" "worktree" "${context}"
+
+    teardown_test_env
+}
+test_implement_red_flags
+
+test_review_red_flags() {
+    echo "-- test: REVIEW phase has RED FLAGS --"
+    setup_test_env
+    install_registry_v4
+
+    local output
+    output="$(run_hook "review this pull request for the auth module")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "REVIEW red flags present" "HALT if any Red Flag" "${context}"
+    assert_contains "REVIEW red flag mentions subagent" "code-reviewer subagent" "${context}"
+
+    teardown_test_env
+}
+test_review_red_flags
+
 print_summary
