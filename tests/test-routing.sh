@@ -3666,8 +3666,9 @@ test_agent_team_not_on_continuation() {
     local context
     context="$(extract_context "${output}")"
 
+    # Check skill selection lines only (Workflow:), not RED FLAGS text
     local ate_count
-    ate_count="$(printf '%s' "${context}" | grep -c 'agent-team-execution' 2>/dev/null)" || ate_count=0
+    ate_count="$(printf '%s' "${context}" | grep -cE '^Workflow:.*agent-team-execution' 2>/dev/null)" || ate_count=0
     assert_equals "agent-team not on continuation" "0" "${ate_count}"
 
     teardown_test_env

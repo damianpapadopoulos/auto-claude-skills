@@ -1232,13 +1232,48 @@ _build_skill_lines
 _walk_composition_chain
 
 # =================================================================
-# RED FLAGS: Anti-hallucination checklist for verification
+# RED FLAGS: Phase-aware enforcement checklists
 # =================================================================
-# When verification-before-completion is selected, append red flags
-# to the skill lines so the model sees them in additionalContext.
 RED_FLAGS=""
+case "${PRIMARY_PHASE}" in
+  DESIGN)
+    RED_FLAGS="
+HALT if any Red Flag is true:
+- Editing implementation files before invoking Skill(superpowers:brainstorming)
+- Skipping design presentation and user approval
+- Jumping to writing code without exploring approaches first
+- Not writing a design doc before transitioning to PLAN"
+    ;;
+  PLAN)
+    RED_FLAGS="
+HALT if any Red Flag is true:
+- Editing implementation files before invoking Skill(superpowers:writing-plans)
+- Implementing without an approved plan document
+- Skipping TDD steps in the plan
+- Not saving the plan to docs/superpowers/plans/ before executing"
+    ;;
+  IMPLEMENT)
+    RED_FLAGS="
+HALT if any Red Flag is true:
+- Implementing on main without setting up a git worktree first
+- Skipping TDD: writing implementation before writing the failing test
+- Not following the plan step by step
+- Jumping to SHIP without going through REVIEW (requesting-code-review) first
+- Use subagent-driven-development or agent-team-execution where appropriate"
+    ;;
+  REVIEW)
+    RED_FLAGS="
+HALT if any Red Flag is true:
+- Summarizing changes instead of dispatching superpowers:code-reviewer subagent
+- Not providing BASE_SHA and HEAD_SHA git diff range to the reviewer
+- Claiming review is complete without acting on critical/important findings
+- Skipping security-scanner during review"
+    ;;
+esac
+
+# SHIP: verification-specific RED FLAGS (appended, not replaced)
 if printf '%s' "${SELECTED}${OVERFLOW_WORKFLOW}" | grep -q 'verification-before-completion'; then
-  RED_FLAGS="
+  RED_FLAGS="${RED_FLAGS}
 HALT if any Red Flag is true:
 - Claiming 'tests pass' without showing test runner output
 - Claiming 'everything works' without running verification commands
@@ -1247,6 +1282,9 @@ HALT if any Red Flag is true:
 - Saying 'no changes needed' on code the user flagged as broken
 - Skipping verification steps listed in the skill
 - Generating placeholder/stub/TODO implementations as final output"
+fi
+
+if [[ -n "$RED_FLAGS" ]]; then
   SKILL_LINES="${SKILL_LINES}${RED_FLAGS}"
 fi
 
