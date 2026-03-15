@@ -692,4 +692,31 @@ test_phase_docs_have_conditional_fallbacks
 test_consolidation_marker_stale
 test_consolidation_marker_fresh
 
+# ---------------------------------------------------------------------------
+# Intent Truth tier integration tests
+# ---------------------------------------------------------------------------
+test_intent_truth_tier_exists() {
+    echo "-- test: Intent Truth tier document and phase gates --"
+
+    local tier_doc="${PROJECT_ROOT}/skills/unified-context-stack/tiers/intent-truth.md"
+    assert_equals "intent-truth.md exists" "true" "$([ -f "$tier_doc" ] && echo true || echo false)"
+
+    local skill_md
+    skill_md="$(cat "${PROJECT_ROOT}/skills/unified-context-stack/SKILL.md")"
+    assert_contains "SKILL.md references intent-truth" "intent-truth.md" "$skill_md"
+
+    local triage
+    triage="$(cat "${PROJECT_ROOT}/skills/unified-context-stack/phases/triage-and-plan.md")"
+    assert_contains "triage-and-plan has openspec gate" "openspec" "$triage"
+
+    local review
+    review="$(cat "${PROJECT_ROOT}/skills/unified-context-stack/phases/code-review.md")"
+    assert_contains "code-review has openspec gate" "openspec" "$review"
+
+    local impl
+    impl="$(cat "${PROJECT_ROOT}/skills/unified-context-stack/phases/implementation.md")"
+    assert_contains "implementation has openspec gate" "openspec" "$impl"
+}
+test_intent_truth_tier_exists
+
 print_summary
