@@ -1704,7 +1704,6 @@ test_agent_team_has_plan_triggers() {
     local ate_triggers
     ate_triggers="$(jq -r '.skills[] | select(.name == "agent-team-execution") | .triggers[]' "$triggers_file")"
 
-    assert_contains "agent-team has execute.*plan" "execute.*plan" "$ate_triggers"
     assert_contains "agent-team has team keywords" "agent.team" "$ate_triggers"
 }
 
@@ -3653,5 +3652,26 @@ test_stickiness_on_resume() {
     teardown_test_env
 }
 test_stickiness_on_resume
+
+# ---------------------------------------------------------------------------
+# agent-team-execution should not co-select on plain continuation
+# ---------------------------------------------------------------------------
+test_agent_team_not_on_continuation() {
+    echo "-- test: agent-team-execution does not co-select on plain continuation --"
+    setup_test_env
+    install_registry_v4
+
+    local output
+    output="$(run_hook "continue with the next task")"
+    local context
+    context="$(extract_context "${output}")"
+
+    local ate_count
+    ate_count="$(printf '%s' "${context}" | grep -c 'agent-team-execution' 2>/dev/null)" || ate_count=0
+    assert_equals "agent-team not on continuation" "0" "${ate_count}"
+
+    teardown_test_env
+}
+test_agent_team_not_on_continuation
 
 print_summary

@@ -289,8 +289,7 @@
       "role": "workflow",
       "phase": "IMPLEMENT",
       "triggers": [
-        "(agent.team|team.execute|parallel.team|swarm|fan.out|specialist|multi.agent)",
-        "(execute.*plan|run.the.plan|implement.the.plan|implement.*(rest|remaining)|continue|follow.the.plan|pick.up|resume|next.task|next.step|carry.on|keep.going|where.were.we|what.s.next)"
+        "(agent.team|team.execute|parallel.team|swarm|fan.out|specialist|multi.agent)"
       ],
       "keywords": [],
       "trigger_mode": "regex",
