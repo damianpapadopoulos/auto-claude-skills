@@ -871,13 +871,20 @@ _format_output() {
     [[ "$_zm" =~ ^[0-9]+$ ]] || _zm=0
     printf '%s' "$((_zm + 1))" > "$_ZM_FILE" 2>/dev/null || true
 
-    # Log the zero-match prompt for diagnostics (rotate at 100 entries)
+    # Log the zero-match prompt for diagnostics (rotate at 100 entries, cap at 50KB)
     _ZM_LOG="${HOME}/.claude/.skill-zero-match-log"
-    printf '%s\n' "$P" >> "$_ZM_LOG" 2>/dev/null || true
+    # Truncate prompt to 200 chars to prevent unbounded log growth
+    printf '%.200s\n' "$P" >> "$_ZM_LOG" 2>/dev/null || true
     if [[ -f "$_ZM_LOG" ]]; then
+      # Rotate by line count
       _lc="$(wc -l < "$_ZM_LOG" 2>/dev/null | tr -d ' ')"
       if [[ "$_lc" =~ ^[0-9]+$ ]] && [[ "$_lc" -gt 100 ]]; then
         tail -n 100 "$_ZM_LOG" > "${_ZM_LOG}.tmp" 2>/dev/null && mv "${_ZM_LOG}.tmp" "$_ZM_LOG" 2>/dev/null || true
+      fi
+      # Rotate by byte size (50KB cap)
+      _zm_size="$(wc -c < "$_ZM_LOG" 2>/dev/null | tr -d ' ')"
+      if [[ "$_zm_size" =~ ^[0-9]+$ ]] && [[ "$_zm_size" -gt 51200 ]]; then
+        tail -n 50 "$_ZM_LOG" > "${_ZM_LOG}.tmp" 2>/dev/null && mv "${_ZM_LOG}.tmp" "$_ZM_LOG" 2>/dev/null || true
       fi
     fi
 
