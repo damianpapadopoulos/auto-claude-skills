@@ -121,7 +121,7 @@
       "requires": [
         "executing-plans"
       ],
-      "description": "Prepare and request a code review: summarise changes, highlight risks, open a PR.",
+      "description": "Dispatch superpowers:code-reviewer subagent with git diff range and plan reference. Fix critical/important issues before proceeding.",
       "invoke": "Skill(superpowers:requesting-code-review)",
       "available": true,
       "enabled": true
@@ -138,7 +138,7 @@
       "priority": 33,
       "precedes": [],
       "requires": [],
-      "description": "Process incoming review feedback: address comments, push fixes, re-request review.",
+      "description": "Process review feedback with technical rigor: verify claims against codebase, push back if wrong, implement fixes one at a time.",
       "invoke": "Skill(superpowers:receiving-code-review)",
       "available": true,
       "enabled": true
@@ -791,6 +791,12 @@
           "plugin": "pr-review-toolkit",
           "text": "Consider /review-pr for structured multi-agent PR review",
           "when": "installed"
+        }
+      ],
+      "sequence": [
+        {
+          "step": "requesting-code-review",
+          "purpose": "Get BASE_SHA and HEAD_SHA for work range. Dispatch code-reviewer subagent with diff, plan reference, and review checklist. Fix critical/important issues before proceeding."
         }
       ]
     },
