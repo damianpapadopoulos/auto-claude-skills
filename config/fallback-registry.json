@@ -806,7 +806,15 @@
       "sequence": [
         {
           "step": "requesting-code-review",
-          "purpose": "Get BASE_SHA and HEAD_SHA for work range. Dispatch code-reviewer subagent with diff, plan reference, and review checklist. Fix critical/important issues before proceeding."
+          "purpose": "Get BASE_SHA and HEAD_SHA. Dispatch superpowers:code-reviewer subagent with diff and plan reference. Fix critical/important issues."
+        },
+        {
+          "step": "agent-team-review",
+          "purpose": "For substantial changes (3+ files, cross-module, security-sensitive): dispatch parallel specialist reviewers alongside code-reviewer."
+        },
+        {
+          "step": "receiving-code-review",
+          "purpose": "Process reviewer findings with technical rigor. Verify claims against codebase. Push back if wrong. Fix issues one at a time."
         }
       ]
     },
@@ -1042,6 +1050,18 @@
       "hint": "OPENSPEC: After verification-before-completion passes, invoke openspec-ship to generate as-built documentation before committing. This is mandatory for feature shipping.",
       "phases": [
         "SHIP"
+      ]
+    },
+    {
+      "name": "phase-enforcement",
+      "triggers": [
+        "(fix|change|update|rename|move|add a|modify|edit|refactor|implement|write the|create the)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "PHASE ENFORCEMENT: You are in DESIGN/PLAN phase. Complete the current phase skill before editing implementation files. Small changes still require the full flow — scaled down, not skipped.",
+      "phases": [
+        "DESIGN",
+        "PLAN"
       ]
     }
   ],
