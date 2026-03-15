@@ -69,7 +69,9 @@
       "keywords": [],
       "trigger_mode": "regex",
       "priority": 35,
-      "precedes": [],
+      "precedes": [
+        "requesting-code-review"
+      ],
       "requires": [
         "writing-plans"
       ],
@@ -97,8 +99,12 @@
       "keywords": [],
       "trigger_mode": "regex",
       "priority": 25,
-      "precedes": [],
-      "requires": [],
+      "precedes": [
+        "verification-before-completion"
+      ],
+      "requires": [
+        "executing-plans"
+      ],
       "description": "Prepare and request a code review: summarise changes, highlight risks, open a PR."
     },
     {
@@ -126,7 +132,9 @@
       "precedes": [
         "openspec-ship"
       ],
-      "requires": [],
+      "requires": [
+        "requesting-code-review"
+      ],
       "description": "Final verification checklist before shipping: tests pass, lint clean, no TODOs, docs updated."
     },
     {

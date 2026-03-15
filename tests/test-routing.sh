@@ -3024,4 +3024,205 @@ test_tdd_not_scored_as_process() {
 }
 test_tdd_not_scored_as_process
 
+# ---------------------------------------------------------------------------
+# SDLC chain bridging tests
+# ---------------------------------------------------------------------------
+# Fixture for chain bridging tests — includes precedes/requires links
+install_registry_with_chain() {
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'CHAIN_REG'
+{
+  "version": "4.0.0",
+  "skills": [
+    {
+      "name": "brainstorming",
+      "role": "process",
+      "phase": "DESIGN",
+      "triggers": ["(design|build|create|architect|new|brainstorm)"],
+      "trigger_mode": "regex",
+      "priority": 30,
+      "precedes": ["writing-plans"],
+      "requires": [],
+      "invoke": "Skill(superpowers:brainstorming)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "writing-plans",
+      "role": "process",
+      "phase": "PLAN",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 40,
+      "precedes": ["executing-plans"],
+      "requires": ["brainstorming"],
+      "invoke": "Skill(superpowers:writing-plans)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "executing-plans",
+      "role": "process",
+      "phase": "IMPLEMENT",
+      "triggers": ["(execute.*plan|implement|continue|build|create)"],
+      "trigger_mode": "regex",
+      "priority": 35,
+      "precedes": ["requesting-code-review"],
+      "requires": ["writing-plans"],
+      "invoke": "Skill(superpowers:executing-plans)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "requesting-code-review",
+      "role": "process",
+      "phase": "REVIEW",
+      "triggers": ["(review|pull.?request|code.?review|(^|[^a-z])pr($|[^a-z]))"],
+      "trigger_mode": "regex",
+      "priority": 25,
+      "precedes": ["verification-before-completion"],
+      "requires": ["executing-plans"],
+      "invoke": "Skill(superpowers:requesting-code-review)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "verification-before-completion",
+      "role": "workflow",
+      "phase": "SHIP",
+      "triggers": ["(ship|merge|deploy|push|release|finish|complete|wrap.?up)"],
+      "trigger_mode": "regex",
+      "priority": 20,
+      "precedes": ["openspec-ship"],
+      "requires": ["requesting-code-review"],
+      "invoke": "Skill(superpowers:verification-before-completion)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "openspec-ship",
+      "role": "workflow",
+      "phase": "SHIP",
+      "triggers": ["(openspec|as.?built|document.*built)"],
+      "trigger_mode": "regex",
+      "priority": 18,
+      "precedes": ["finishing-a-development-branch"],
+      "requires": ["verification-before-completion"],
+      "invoke": "Skill(auto-claude-skills:openspec-ship)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "finishing-a-development-branch",
+      "role": "workflow",
+      "phase": "SHIP",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 19,
+      "precedes": [],
+      "requires": ["openspec-ship"],
+      "invoke": "Skill(superpowers:finishing-a-development-branch)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "phase_guide": {},
+  "methodology_hints": [],
+  "plugins": [],
+  "phase_compositions": {}
+}
+CHAIN_REG
+}
+
+test_end_to_end_chain() {
+    echo "-- test: end-to-end SDLC chain from brainstorming --"
+    setup_test_env
+    install_registry_with_chain
+
+    local token="test-chain-session"
+    printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output
+    output="$(run_hook "let's design a new authentication module")"
+    local context
+    context="$(extract_context "${output}")"
+
+    local chain_steps
+    chain_steps="$(printf '%s' "${context}" | grep -c 'Step [0-9]' 2>/dev/null)" || chain_steps=0
+    assert_equals "chain has 7 steps" "7" "${chain_steps}"
+
+    assert_contains "chain includes requesting-code-review" "requesting-code-review" "${context}"
+    assert_contains "chain includes verification-before-completion" "verification-before-completion" "${context}"
+
+    teardown_test_env
+}
+test_end_to_end_chain
+
+test_mid_chain_entry_review() {
+    echo "-- test: mid-chain entry at REVIEW shows DONE for prior steps --"
+    setup_test_env
+    install_registry_with_chain
+
+    local token="test-midchain-session"
+    printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
+    printf '{"skill":"executing-plans","phase":"IMPLEMENT"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output
+    output="$(run_hook "review this pull request")"
+    local context
+    context="$(extract_context "${output}")"
+
+    # Use grep for regex patterns (assert_contains is literal)
+    if printf '%s' "${context}" | grep -q 'CURRENT.*requesting-code-review'; then
+        _record_pass "review is CURRENT"
+    else
+        _record_fail "review is CURRENT" "CURRENT marker not found for requesting-code-review"
+    fi
+    if printf '%s' "${context}" | grep -q 'NEXT.*verification-before-completion'; then
+        _record_pass "verification is NEXT"
+    else
+        _record_fail "verification is NEXT" "NEXT marker not found for verification-before-completion"
+    fi
+
+    teardown_test_env
+}
+test_mid_chain_entry_review
+
+test_skipped_step_markers() {
+    echo "-- test: skipped steps show DONE? marker --"
+    setup_test_env
+    install_registry_with_chain
+
+    local token="test-skip-session"
+    printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
+    printf '{"skill":"executing-plans","phase":"IMPLEMENT"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output
+    output="$(run_hook "ship this feature, everything is ready")"
+    local context
+    context="$(extract_context "${output}")"
+
+    if printf '%s' "${context}" | grep -q 'CURRENT.*verification-before-completion'; then
+        _record_pass "verification is CURRENT"
+    else
+        _record_fail "verification is CURRENT" "CURRENT marker not found for verification-before-completion"
+    fi
+
+    local done_q
+    done_q="$(printf '%s' "${context}" | grep -c 'DONE?.*requesting-code-review' 2>/dev/null)" || done_q=0
+    if [[ "$done_q" -gt 0 ]]; then
+        _record_pass "review shows DONE? marker"
+    else
+        _record_fail "review shows DONE? marker" "DONE? not found for requesting-code-review"
+    fi
+
+    teardown_test_env
+}
+test_skipped_step_markers
+
 print_summary
