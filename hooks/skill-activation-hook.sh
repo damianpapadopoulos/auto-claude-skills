@@ -292,8 +292,10 @@ EOF
   SORTED="$(printf '%s' "$_new_sorted" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
 
   # --- IMPLEMENT stickiness ---
-  # If last phase was IMPLEMENT and prompt uses continuation/edit verbs
-  # (not design-discovery cues), boost executing-plans above the top process skill.
+  # If last phase was IMPLEMENT and prompt uses EXPLICIT continuation language,
+  # boost executing-plans above the top process skill. Generic build verbs
+  # (add/build/create) are NOT matched — they may indicate new design intents
+  # that must go through brainstorming (superpowers HARD-GATE).
   local _last_phase
   _last_phase="$(jq -r '.phase // empty' "$_signal_file" 2>/dev/null)"
   if [[ "$_last_phase" == "IMPLEMENT" ]]; then
@@ -309,10 +311,8 @@ EOF
 ${SORTED}
 EOF
     if [[ "$_top_process_phase" == "DESIGN" ]] || [[ -z "$_top_process_phase" ]]; then
-      # Check if prompt has continuation/edit verbs
-      if [[ "$P" =~ (^|[^a-z])(add|build|create|implement|modify|change|refactor|wire.?up|connect|integrate|extend|update|rename|extract|move|replace)($|[^a-z]) ]]; then
-        # Check prompt does NOT have design/discovery cues
-        if ! [[ "$P" =~ (how.should|what.approach|best.way.to|ideas.for|options.for|trade.?off|compare|brainstorm|design|architect) ]]; then
+      # Only fire on EXPLICIT continuation language
+      if [[ "$P" =~ (continue|resume|next.task|next.step|pick.up|carry.on|keep.going|where.were.we|what.s.next|move.on|proceed|finish.up|wrap.up.this|remaining|back.to.it) ]]; then
           # Boost executing-plans above current top process
           local _top_score=0
           while IFS='|' read -r _bs_score _bs_name _bs_role _bs_invoke _bs_phase; do
@@ -348,7 +348,6 @@ ${_sticky_sorted}"
             fi
           fi
           SORTED="$(printf '%s' "$_sticky_sorted" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
-        fi
       fi
     fi
   fi

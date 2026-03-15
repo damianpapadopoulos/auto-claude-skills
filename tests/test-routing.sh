@@ -402,7 +402,7 @@ install_registry_v4() {
       "triggers": ["(execute.*plan|run.the.plan|implement.the.plan|continue|follow.the.plan|resume|next.task|next.step)"],
       "trigger_mode": "regex",
       "priority": 15,
-      "precedes": [],
+      "precedes": ["requesting-code-review"],
       "requires": ["writing-plans"],
       "invoke": "Skill(superpowers:executing-plans)",
       "available": true,
@@ -3483,7 +3483,7 @@ test_implement_stickiness() {
         > "${HOME}/.claude/.skill-last-invoked-${token}"
 
     local output
-    output="$(run_hook "build the authentication middleware for the API")"
+    output="$(run_hook "continue with the next task in the plan")"
     local context
     context="$(extract_context "${output}")"
 
@@ -3598,5 +3598,60 @@ test_design_debate_narrow_triggers() {
     teardown_test_env
 }
 test_design_debate_narrow_triggers
+
+# ---------------------------------------------------------------------------
+# New design intent during IMPLEMENT must route to brainstorming (HARD-GATE)
+# ---------------------------------------------------------------------------
+test_new_design_during_implement() {
+    echo "-- test: new design during IMPLEMENT respects HARD-GATE --"
+    setup_test_env
+    install_registry_v4
+
+    local token="test-hardgate-session"
+    printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
+    printf '{"skill":"executing-plans","phase":"IMPLEMENT"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output
+    output="$(run_hook "build a new authentication system for the app")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "brainstorming wins on new design" "brainstorming" "${context}"
+
+    if printf '%s' "${context}" | grep -q 'Process:.*executing-plans'; then
+        _record_fail "stickiness did not fire on new design" "executing-plans was selected"
+    else
+        _record_pass "stickiness did not fire on new design"
+    fi
+
+    teardown_test_env
+}
+test_new_design_during_implement
+
+test_stickiness_on_resume() {
+    echo "-- test: stickiness fires on resume language --"
+    setup_test_env
+    install_registry_v4
+
+    local token="test-resume-session"
+    printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
+    printf '{"skill":"executing-plans","phase":"IMPLEMENT"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output
+    output="$(run_hook "pick up where we left off")"
+    local context
+    context="$(extract_context "${output}")"
+
+    if printf '%s' "${context}" | grep -q 'executing-plans'; then
+        _record_pass "stickiness fires on resume language"
+    else
+        _record_fail "stickiness fires on resume language" "executing-plans not selected"
+    fi
+
+    teardown_test_env
+}
+test_stickiness_on_resume
 
 print_summary
