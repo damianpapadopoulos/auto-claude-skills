@@ -111,10 +111,10 @@ install_registry() {
       "role": "process",
       "phase": "REVIEW",
       "triggers": [
-        "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|tech.?debt|(^|[^a-z])pr($|[^a-z]))"
+        "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|smell|tech.?debt|(^|[^a-z])pr($|[^a-z]))"
       ],
       "trigger_mode": "regex",
-      "priority": 51,
+      "priority": 25,
       "invoke": "Skill(superpowers:requesting-code-review)",
       "available": true,
       "enabled": true
@@ -423,9 +423,9 @@ install_registry_v4() {
       "name": "requesting-code-review",
       "role": "process",
       "phase": "REVIEW",
-      "triggers": ["(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|tech.?debt|(^|[^a-z])pr($|[^a-z]))"],
+      "triggers": ["(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|smell|tech.?debt|(^|[^a-z])pr($|[^a-z]))"],
       "trigger_mode": "regex",
-      "priority": 51,
+      "priority": 25,
       "invoke": "Skill(superpowers:requesting-code-review)",
       "available": true,
       "enabled": true
@@ -949,9 +949,9 @@ test_design_debate_as_domain() {
     install_registry
 
     local output context
-    output="$(run_hook "build a new authentication system")"
+    output="$(run_hook "compare the two architecture approaches and weigh the trade-offs")"
     context="$(extract_context "$output")"
-    # brainstorming is process (higher priority), design-debate is domain
+    # brainstorming is process (triggers on "approach"), design-debate is domain (triggers on "trade-off"/"compare")
     assert_contains "has brainstorming" "brainstorming" "$context"
     assert_contains "has Domain: design-debate" "design-debate" "$context"
 
@@ -2749,12 +2749,11 @@ test_name_boost_segment_reduced() {
         _record_pass "name-boost should not be 40"
     fi
 
-    # requesting-code-review should score 101 (boundary=30 + priority=51 + name_boost=20)
-    # With old name_boost=40, it would have been 121.
-    if printf '%s' "$explain_output" | grep -q "requesting-code-review.* = 101"; then
-        _record_pass "requesting-code-review score is 101 (not 121)"
+    # requesting-code-review should score 75 (boundary=30 + priority=25 + name_boost=20)
+    if printf '%s' "$explain_output" | grep -q "requesting-code-review.* = 75"; then
+        _record_pass "requesting-code-review score is 75"
     else
-        _record_fail "requesting-code-review score is 101 (not 121)" "expected score 101 in explain output"
+        _record_fail "requesting-code-review score is 75" "expected score 75 in explain output"
     fi
 
     teardown_test_env
@@ -3553,5 +3552,69 @@ test_composition_state_no_corrupt() {
     teardown_test_env
 }
 test_composition_state_no_corrupt
+
+
+# ---------------------------------------------------------------------------
+# writing-plans should be reachable via direct plan triggers
+# ---------------------------------------------------------------------------
+test_writing_plans_direct_trigger() {
+    echo "-- test: direct PLAN prompt selects writing-plans --"
+    setup_test_env
+    install_registry_v4
+
+    local output
+    output="$(run_hook "let us plan this out and create the task list")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "writing-plans selected" "writing-plans" "${context}"
+
+    teardown_test_env
+}
+test_writing_plans_direct_trigger
+
+# ---------------------------------------------------------------------------
+# receiving-code-review should be reachable via feedback triggers
+# ---------------------------------------------------------------------------
+test_receiving_code_review_trigger() {
+    echo "-- test: review-feedback selects receiving-code-review --"
+    setup_test_env
+    install_registry_v4
+
+    local output
+    output="$(run_hook "address the review comments and fix the nits")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "receiving-code-review selected" "receiving-code-review" "${context}"
+
+    teardown_test_env
+}
+test_receiving_code_review_trigger
+
+# ---------------------------------------------------------------------------
+# design-debate should only fire on tradeoff language, not generic verbs
+# ---------------------------------------------------------------------------
+test_design_debate_narrow_triggers() {
+    echo "-- test: design-debate only fires on tradeoff language --"
+    setup_test_env
+    install_registry_v4
+
+    local output
+    output="$(run_hook "add a new endpoint to the auth module")"
+    local context
+    context="$(extract_context "${output}")"
+
+    local debate_count
+    debate_count="$(printf '%s' "${context}" | grep -c 'design-debate' 2>/dev/null)" || debate_count=0
+    assert_equals "design-debate not on generic add" "0" "${debate_count}"
+
+    output="$(run_hook "compare the two architecture approaches for the API")"
+    context="$(extract_context "${output}")"
+    assert_contains "design-debate on tradeoff" "design-debate" "${context}"
+
+    teardown_test_env
+}
+test_design_debate_narrow_triggers
 
 print_summary
