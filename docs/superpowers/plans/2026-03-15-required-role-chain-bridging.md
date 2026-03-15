@@ -42,7 +42,13 @@ test_security_scanner_review_parallel() {
     # Security-scanner should appear in PARALLEL composition line
     local parallel_scanner
     parallel_scanner="$(printf '%s' "${context}" | grep -c 'PARALLEL:.*security-scanner' 2>/dev/null)" || parallel_scanner=0
-    assert_not_equals "security-scanner in REVIEW parallel" "0" "${parallel_scanner}"
+    TESTS=$((TESTS + 1))
+    if [[ "$parallel_scanner" -gt 0 ]]; then
+        echo "  PASS: security-scanner in REVIEW parallel"
+    else
+        echo "  FAIL: security-scanner not found in REVIEW parallel"
+        FAILURES=$((FAILURES + 1))
+    fi
 
     # Security-scanner should NOT appear as a scored Domain skill
     local domain_scanner
@@ -61,7 +67,7 @@ Expected: FAIL — security-scanner still appears as domain, not in PARALLEL
 
 - [ ] **Step 3: Remove security-scanner from skills array in default-triggers.json**
 
-Remove the entire skill entry at lines 217-244 (the block starting with `"name": "security-scanner"`).
+Remove the entire skill entry at lines 218-231 (the `{...}` block containing `"name": "security-scanner"` and its trailing comma).
 
 - [ ] **Step 4: Add security-scanner as plugin-less parallel in REVIEW composition**
 
@@ -103,9 +109,121 @@ git commit -m "feat: promote security-scanner to always-on REVIEW composition pa
 - Modify: `config/default-triggers.json:90-102` (requesting-code-review: add precedes + requires)
 - Modify: `config/default-triggers.json:116-130` (verification-before-completion: add requires)
 
-- [ ] **Step 1: Write the failing test for end-to-end chain**
+- [ ] **Step 1: Add chain test fixture and write failing test for end-to-end chain**
 
-Add to `tests/test-routing.sh` before `print_summary`:
+First, add a dedicated `install_registry_with_chain` helper to `tests/test-routing.sh` that includes the chain links. This fixture extends `install_registry_v4` with `precedes`/`requires` on the chain skills, plus adds the SHIP skills needed for a full 7-step chain. Add this helper before the chain tests:
+
+```bash
+# Fixture for chain bridging tests — includes precedes/requires links
+install_registry_with_chain() {
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'CHAIN_REG'
+{
+  "version": "4.0.0",
+  "skills": [
+    {
+      "name": "brainstorming",
+      "role": "process",
+      "phase": "DESIGN",
+      "triggers": ["(design|build|create|architect|new|brainstorm)"],
+      "trigger_mode": "regex",
+      "priority": 30,
+      "precedes": ["writing-plans"],
+      "requires": [],
+      "invoke": "Skill(superpowers:brainstorming)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "writing-plans",
+      "role": "process",
+      "phase": "PLAN",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 40,
+      "precedes": ["executing-plans"],
+      "requires": ["brainstorming"],
+      "invoke": "Skill(superpowers:writing-plans)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "executing-plans",
+      "role": "process",
+      "phase": "IMPLEMENT",
+      "triggers": ["(execute.*plan|implement|continue|build|create)"],
+      "trigger_mode": "regex",
+      "priority": 35,
+      "precedes": ["requesting-code-review"],
+      "requires": ["writing-plans"],
+      "invoke": "Skill(superpowers:executing-plans)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "requesting-code-review",
+      "role": "process",
+      "phase": "REVIEW",
+      "triggers": ["(review|pull.?request|code.?review|(^|[^a-z])pr($|[^a-z]))"],
+      "trigger_mode": "regex",
+      "priority": 25,
+      "precedes": ["verification-before-completion"],
+      "requires": ["executing-plans"],
+      "invoke": "Skill(superpowers:requesting-code-review)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "verification-before-completion",
+      "role": "workflow",
+      "phase": "SHIP",
+      "triggers": ["(ship|merge|deploy|push|release|finish|complete|wrap.?up)"],
+      "trigger_mode": "regex",
+      "priority": 20,
+      "precedes": ["openspec-ship"],
+      "requires": ["requesting-code-review"],
+      "invoke": "Skill(superpowers:verification-before-completion)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "openspec-ship",
+      "role": "workflow",
+      "phase": "SHIP",
+      "triggers": ["(openspec|as.?built|document.*built)"],
+      "trigger_mode": "regex",
+      "priority": 18,
+      "precedes": ["finishing-a-development-branch"],
+      "requires": ["verification-before-completion"],
+      "invoke": "Skill(auto-claude-skills:openspec-ship)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "finishing-a-development-branch",
+      "role": "workflow",
+      "phase": "SHIP",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 19,
+      "precedes": [],
+      "requires": ["openspec-ship"],
+      "invoke": "Skill(superpowers:finishing-a-development-branch)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "phase_guide": {},
+  "methodology_hints": [],
+  "plugins": [],
+  "phase_compositions": {}
+}
+CHAIN_REG
+}
+```
+
+Then add the test:
 
 ```bash
 # ---------------------------------------------------------------------------
@@ -114,11 +232,13 @@ Add to `tests/test-routing.sh` before `print_summary`:
 test_end_to_end_chain() {
     echo "-- test: end-to-end SDLC chain from brainstorming --"
     setup_test_env
-    install_registry_v4
+    install_registry_with_chain
 
+    local token="test-chain-session"
+    printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
     # Set last-invoked to brainstorming so chain walks forward
     printf '{"skill":"brainstorming","phase":"DESIGN"}' \
-        > "${HOME}/.claude/.skill-last-invoked-${SESSION_TOKEN}"
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
 
     local output
     output="$(run_hook "let's design a new authentication module")"
@@ -147,11 +267,13 @@ Add to `tests/test-routing.sh`:
 test_mid_chain_entry_review() {
     echo "-- test: mid-chain entry at REVIEW shows DONE for prior steps --"
     setup_test_env
-    install_registry_v4
+    install_registry_with_chain
 
+    local token="test-midchain-session"
+    printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
     # Set last-invoked to executing-plans
     printf '{"skill":"executing-plans","phase":"IMPLEMENT"}' \
-        > "${HOME}/.claude/.skill-last-invoked-${SESSION_TOKEN}"
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
 
     local output
     output="$(run_hook "review this pull request")"
@@ -176,11 +298,13 @@ Add to `tests/test-routing.sh`:
 test_skipped_step_markers() {
     echo "-- test: skipped steps show DONE? marker --"
     setup_test_env
-    install_registry_v4
+    install_registry_with_chain
 
+    local token="test-skip-session"
+    printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
     # Set last-invoked to executing-plans (skip review)
     printf '{"skill":"executing-plans","phase":"IMPLEMENT"}' \
-        > "${HOME}/.claude/.skill-last-invoked-${SESSION_TOKEN}"
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
 
     local output
     output="$(run_hook "ship this feature, everything is ready")"
@@ -192,7 +316,13 @@ test_skipped_step_markers() {
     # requesting-code-review should show DONE? (skipped)
     local done_q
     done_q="$(printf '%s' "${context}" | grep -c 'DONE?.*requesting-code-review' 2>/dev/null)" || done_q=0
-    assert_not_equals "review shows DONE? marker" "0" "${done_q}"
+    TESTS=$((TESTS + 1))
+    if [[ "$done_q" -gt 0 ]]; then
+        echo "  PASS: review shows DONE? marker"
+    else
+        echo "  FAIL: review does not show DONE? marker"
+        FAILURES=$((FAILURES + 1))
+    fi
 
     teardown_test_env
 }
@@ -786,8 +916,8 @@ git commit -m "feat: add required role with pass 0 bypass, tentative phase, and 
 ### Task 5: Reclassify using-git-worktrees and agent-team-review in the registry
 
 **Files:**
-- Modify: `config/default-triggers.json:178-202` (using-git-worktrees)
-- Modify: `config/default-triggers.json:306-333` (agent-team-review)
+- Modify: `config/default-triggers.json:178-189` (using-git-worktrees)
+- Modify: `config/default-triggers.json:306-320` (agent-team-review)
 
 - [ ] **Step 1: Update using-git-worktrees**
 
