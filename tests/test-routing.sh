@@ -51,20 +51,6 @@ install_registry() {
       "enabled": true
     },
     {
-      "name": "test-driven-development",
-      "role": "process",
-      "phase": "IMPLEMENT",
-      "triggers": [
-        "(build|create|implement|add|write|make)",
-        "(run|test|execute|verify|validate|check|coverage)"
-      ],
-      "trigger_mode": "regex",
-      "priority": 20,
-      "invoke": "Skill(superpowers:test-driven-development)",
-      "available": true,
-      "enabled": true
-    },
-    {
       "name": "brainstorming",
       "role": "process",
       "phase": "DESIGN",
@@ -380,17 +366,6 @@ install_registry_v4() {
       "trigger_mode": "regex",
       "priority": 10,
       "invoke": "Skill(superpowers:systematic-debugging)",
-      "available": true,
-      "enabled": true
-    },
-    {
-      "name": "test-driven-development",
-      "role": "process",
-      "phase": "IMPLEMENT",
-      "triggers": ["(build|create|implement|add|write|make)", "(run|test|execute|verify|validate|check|coverage)"],
-      "trigger_mode": "regex",
-      "priority": 20,
-      "invoke": "Skill(superpowers:test-driven-development)",
       "available": true,
       "enabled": true
     },
@@ -768,7 +743,7 @@ test_max_one_process() {
     setup_test_env
     install_registry
 
-    # "debug" triggers both systematic-debugging and test-driven-development (both process)
+    # "debug" triggers systematic-debugging (process); only 1 process skill should appear
     local output
     output="$(run_hook "debug and fix the broken authentication error in the module")"
     local context
@@ -930,9 +905,9 @@ test_claude_md_maintenance_hint() {
     setup_test_env
     install_registry
 
-    # "run tests after the refactoring" → TDD selected (IMPLEMENT phase) + matches "refactor" trigger
+    # "continue the plan and refactor the auth module" → executing-plans (IMPLEMENT phase) + "refactor" trigger
     local output context
-    output="$(run_hook "run tests after the refactoring of the auth module")"
+    output="$(run_hook "continue the plan and refactor the auth module")"
     context="$(extract_context "${output}")"
     assert_contains "claude-md hint fires in IMPLEMENT phase" "CLAUDE.MD" "${context}"
 
@@ -3027,5 +3002,473 @@ test_openspec_hint_fires_on_ship() {
     teardown_test_env
 }
 test_openspec_hint_fires_on_ship
+
+# ---------------------------------------------------------------------------
+# TDD should not appear as a scored process skill
+# ---------------------------------------------------------------------------
+test_tdd_not_scored_as_process() {
+    echo "-- test: TDD is not a scored process skill --"
+    setup_test_env
+    install_registry
+
+    local output
+    output="$(run_hook "run all the tests for the auth module")"
+    local context
+    context="$(extract_context "${output}")"
+
+    local process_tdd
+    process_tdd="$(printf '%s' "${context}" | grep -c 'Process:.*test-driven-development' 2>/dev/null)" || process_tdd=0
+    assert_equals "TDD not selected as process skill" "0" "${process_tdd}"
+
+    teardown_test_env
+}
+test_tdd_not_scored_as_process
+
+# ---------------------------------------------------------------------------
+# SDLC chain bridging tests
+# ---------------------------------------------------------------------------
+# Fixture for chain bridging tests — includes precedes/requires links
+install_registry_with_chain() {
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'CHAIN_REG'
+{
+  "version": "4.0.0",
+  "skills": [
+    {
+      "name": "brainstorming",
+      "role": "process",
+      "phase": "DESIGN",
+      "triggers": ["(design|build|create|architect|new|brainstorm)"],
+      "trigger_mode": "regex",
+      "priority": 30,
+      "precedes": ["writing-plans"],
+      "requires": [],
+      "invoke": "Skill(superpowers:brainstorming)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "writing-plans",
+      "role": "process",
+      "phase": "PLAN",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 40,
+      "precedes": ["executing-plans"],
+      "requires": ["brainstorming"],
+      "invoke": "Skill(superpowers:writing-plans)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "executing-plans",
+      "role": "process",
+      "phase": "IMPLEMENT",
+      "triggers": ["(execute.*plan|implement|continue|build|create)"],
+      "trigger_mode": "regex",
+      "priority": 35,
+      "precedes": ["requesting-code-review"],
+      "requires": ["writing-plans"],
+      "invoke": "Skill(superpowers:executing-plans)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "requesting-code-review",
+      "role": "process",
+      "phase": "REVIEW",
+      "triggers": ["(review|pull.?request|code.?review|(^|[^a-z])pr($|[^a-z]))"],
+      "trigger_mode": "regex",
+      "priority": 25,
+      "precedes": ["verification-before-completion"],
+      "requires": ["executing-plans"],
+      "invoke": "Skill(superpowers:requesting-code-review)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "verification-before-completion",
+      "role": "workflow",
+      "phase": "SHIP",
+      "triggers": ["(ship|merge|deploy|push|release|finish|complete|wrap.?up)"],
+      "trigger_mode": "regex",
+      "priority": 20,
+      "precedes": ["openspec-ship"],
+      "requires": ["requesting-code-review"],
+      "invoke": "Skill(superpowers:verification-before-completion)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "openspec-ship",
+      "role": "workflow",
+      "phase": "SHIP",
+      "triggers": ["(openspec|as.?built|document.*built)"],
+      "trigger_mode": "regex",
+      "priority": 18,
+      "precedes": ["finishing-a-development-branch"],
+      "requires": ["verification-before-completion"],
+      "invoke": "Skill(auto-claude-skills:openspec-ship)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "finishing-a-development-branch",
+      "role": "workflow",
+      "phase": "SHIP",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 19,
+      "precedes": [],
+      "requires": ["openspec-ship"],
+      "invoke": "Skill(superpowers:finishing-a-development-branch)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "phase_guide": {},
+  "methodology_hints": [],
+  "plugins": [],
+  "phase_compositions": {}
+}
+CHAIN_REG
+}
+
+test_end_to_end_chain() {
+    echo "-- test: end-to-end SDLC chain from brainstorming --"
+    setup_test_env
+    install_registry_with_chain
+
+    local token="test-chain-session"
+    printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output
+    output="$(run_hook "let's design a new authentication module")"
+    local context
+    context="$(extract_context "${output}")"
+
+    local chain_steps
+    chain_steps="$(printf '%s' "${context}" | grep -c 'Step [0-9]' 2>/dev/null)" || chain_steps=0
+    assert_equals "chain has 7 steps" "7" "${chain_steps}"
+
+    assert_contains "chain includes requesting-code-review" "requesting-code-review" "${context}"
+    assert_contains "chain includes verification-before-completion" "verification-before-completion" "${context}"
+
+    teardown_test_env
+}
+test_end_to_end_chain
+
+test_mid_chain_entry_review() {
+    echo "-- test: mid-chain entry at REVIEW shows DONE for prior steps --"
+    setup_test_env
+    install_registry_with_chain
+
+    local token="test-midchain-session"
+    printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
+    printf '{"skill":"executing-plans","phase":"IMPLEMENT"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output
+    output="$(run_hook "review this pull request")"
+    local context
+    context="$(extract_context "${output}")"
+
+    # Use grep for regex patterns (assert_contains is literal)
+    if printf '%s' "${context}" | grep -q 'CURRENT.*requesting-code-review'; then
+        _record_pass "review is CURRENT"
+    else
+        _record_fail "review is CURRENT" "CURRENT marker not found for requesting-code-review"
+    fi
+    if printf '%s' "${context}" | grep -q 'NEXT.*verification-before-completion'; then
+        _record_pass "verification is NEXT"
+    else
+        _record_fail "verification is NEXT" "NEXT marker not found for verification-before-completion"
+    fi
+
+    teardown_test_env
+}
+test_mid_chain_entry_review
+
+test_skipped_step_markers() {
+    echo "-- test: skipped steps show DONE? marker --"
+    setup_test_env
+    install_registry_with_chain
+
+    local token="test-skip-session"
+    printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
+    printf '{"skill":"executing-plans","phase":"IMPLEMENT"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output
+    output="$(run_hook "ship this feature, everything is ready")"
+    local context
+    context="$(extract_context "${output}")"
+
+    if printf '%s' "${context}" | grep -q 'CURRENT.*verification-before-completion'; then
+        _record_pass "verification is CURRENT"
+    else
+        _record_fail "verification is CURRENT" "CURRENT marker not found for verification-before-completion"
+    fi
+
+    local done_q
+    done_q="$(printf '%s' "${context}" | grep -c 'DONE?.*requesting-code-review' 2>/dev/null)" || done_q=0
+    if [[ "$done_q" -gt 0 ]]; then
+        _record_pass "review shows DONE? marker"
+    else
+        _record_fail "review shows DONE? marker" "DONE? not found for requesting-code-review"
+    fi
+
+    teardown_test_env
+}
+test_skipped_step_markers
+
+# ---------------------------------------------------------------------------
+# Required role tests
+# ---------------------------------------------------------------------------
+install_registry_with_required() {
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" << 'REGISTRY'
+{
+  "version": "4.0.0",
+  "skills": [
+    {
+      "name": "executing-plans",
+      "role": "process",
+      "phase": "IMPLEMENT",
+      "triggers": ["(execute.*plan|implement|continue|build|create)"],
+      "trigger_mode": "regex",
+      "priority": 35,
+      "invoke": "Skill(superpowers:executing-plans)",
+      "precedes": ["requesting-code-review"],
+      "requires": ["writing-plans"],
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "using-git-worktrees",
+      "role": "required",
+      "phase": "IMPLEMENT",
+      "triggers": ["(parallel|concurrent|worktree|isolat|branch.*(work|switch))"],
+      "trigger_mode": "regex",
+      "priority": 14,
+      "invoke": "Skill(superpowers:using-git-worktrees)",
+      "precedes": [],
+      "requires": [],
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "agent-team-execution",
+      "role": "workflow",
+      "phase": "IMPLEMENT",
+      "triggers": ["(agent.team|team.execute|parallel.team|build|create|implement)"],
+      "trigger_mode": "regex",
+      "priority": 22,
+      "invoke": "Skill(auto-claude-skills:agent-team-execution)",
+      "precedes": [],
+      "requires": [],
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "agent-team-review",
+      "role": "required",
+      "phase": "REVIEW",
+      "required_when": "PR touches 3+ files, crosses module boundaries, or includes security-sensitive changes",
+      "triggers": ["(review|pull.?request|code.?review|check.*(code|changes|diff)|(^|[^a-z])pr($|[^a-z]))"],
+      "trigger_mode": "regex",
+      "priority": 20,
+      "invoke": "Skill(auto-claude-skills:agent-team-review)",
+      "precedes": [],
+      "requires": [],
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "requesting-code-review",
+      "role": "process",
+      "phase": "REVIEW",
+      "triggers": ["(review|pull.?request|code.?review|check.*(code|changes|diff)|(^|[^a-z])pr($|[^a-z]))"],
+      "trigger_mode": "regex",
+      "priority": 25,
+      "invoke": "Skill(superpowers:requesting-code-review)",
+      "precedes": ["verification-before-completion"],
+      "requires": ["executing-plans"],
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "frontend-design",
+      "role": "domain",
+      "phase": "DESIGN",
+      "triggers": ["(ui|frontend|component|layout|style|css)"],
+      "trigger_mode": "regex",
+      "priority": 15,
+      "invoke": "Skill(frontend-design:frontend-design)",
+      "precedes": [],
+      "requires": [],
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "design-debate",
+      "role": "domain",
+      "phase": "DESIGN",
+      "triggers": ["(design|architect|trade.?off|debate|build|create)"],
+      "trigger_mode": "regex",
+      "priority": 18,
+      "invoke": "Skill(auto-claude-skills:design-debate)",
+      "precedes": [],
+      "requires": [],
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "phase_guide": {},
+  "methodology_hints": [],
+  "plugins": [],
+  "phase_compositions": {}
+}
+REGISTRY
+}
+
+test_required_bypasses_workflow_cap() {
+    echo "-- test: required skill bypasses workflow cap --"
+    setup_test_env
+    install_registry_with_required
+
+    local output
+    output="$(run_hook "implement the feature using parallel worktrees")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "worktrees appears as Required" "Required:" "${context}"
+    assert_contains "worktrees in output" "using-git-worktrees" "${context}"
+    assert_contains "agent-team-execution appears as Workflow" "Workflow:" "${context}"
+    assert_contains "agent-team-execution in output" "agent-team-execution" "${context}"
+
+    teardown_test_env
+}
+test_required_bypasses_workflow_cap
+
+test_conditional_required_invoke_when() {
+    echo "-- test: conditional required shows INVOKE WHEN tag --"
+    setup_test_env
+    install_registry_with_required
+
+    local output
+    output="$(run_hook "review this pull request for the auth module")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "INVOKE WHEN tag present" "INVOKE WHEN:" "${context}"
+    assert_contains "condition text present" "3+ files" "${context}"
+
+    teardown_test_env
+}
+test_conditional_required_invoke_when
+
+test_required_skill_wrong_phase() {
+    echo "-- test: required skill does not activate at wrong phase --"
+    setup_test_env
+    install_registry_with_required
+
+    # worktrees is required at IMPLEMENT, but this triggers DESIGN only
+    # (avoid words like "create", "build", "implement" that match executing-plans)
+    local output
+    output="$(run_hook "discuss the parallel architecture approach for the frontend ui layout")"
+    local context
+    context="$(extract_context "${output}")"
+
+    local wt_count
+    wt_count="$(printf '%s' "${context}" | grep -c 'using-git-worktrees' 2>/dev/null)" || wt_count=0
+    assert_equals "worktrees not at wrong phase" "0" "${wt_count}"
+
+    teardown_test_env
+}
+test_required_skill_wrong_phase
+
+test_required_eval_tag() {
+    echo "-- test: REQUIRED eval tag present for unconditional required --"
+    setup_test_env
+    install_registry_with_required
+
+    local output
+    output="$(run_hook "implement the feature using parallel worktrees")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "REQUIRED tag in eval" "using-git-worktrees REQUIRED" "${context}"
+
+    teardown_test_env
+}
+test_required_eval_tag
+
+test_required_bypasses_total_cap() {
+    echo "-- test: required skill does not count against total cap --"
+    setup_test_env
+    install_registry_with_required
+
+    # Trigger process + workflow + required = should show all 3
+    local output
+    output="$(run_hook "implement the feature with parallel worktrees")"
+    local context
+    context="$(extract_context "${output}")"
+
+    # Count all skill lines
+    local skill_count
+    skill_count="$(printf '%s' "${context}" | grep -cE '(Required|Process|Workflow):' 2>/dev/null)" || skill_count=0
+    if [[ "$skill_count" -ge 3 ]]; then
+        _record_pass "required bypasses cap ($skill_count skills)"
+    else
+        _record_fail "required bypasses cap" "only $skill_count skills, expected >= 3"
+    fi
+
+    teardown_test_env
+}
+test_required_bypasses_total_cap
+
+test_required_no_plabel() {
+    echo "-- test: required skills alone do not set PLABEL --"
+    setup_test_env
+
+    local registry_file="${HOME}/.claude/.skill-registry-cache.json"
+    cat > "${registry_file}" << 'REGISTRY'
+{
+  "version": "4.0.0",
+  "skills": [
+    {
+      "name": "using-git-worktrees",
+      "role": "required",
+      "phase": "IMPLEMENT",
+      "triggers": ["(parallel|worktree)"],
+      "trigger_mode": "regex",
+      "priority": 14,
+      "invoke": "Skill(superpowers:using-git-worktrees)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "phase_guide": {},
+  "methodology_hints": [],
+  "plugins": [],
+  "phase_compositions": {}
+}
+REGISTRY
+
+    local output
+    output="$(run_hook "use parallel worktrees for this")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "assess intent fallback" "assess intent" "${context}"
+
+    teardown_test_env
+}
+test_required_no_plabel
 
 print_summary

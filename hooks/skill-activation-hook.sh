@@ -309,10 +309,32 @@ _select_by_role_caps() {
   TOTAL_COUNT=0
   _EXPLAIN_CAPS=""
 
+  # Pass 0: Collect required-role skills that match tentative phase.
+  # These bypass all caps. Since all required skills have triggers,
+  # they WILL be in SORTED when they match.
+  REQUIRED_SELECTED=""
+  REQUIRED_COUNT=0
+
+  while IFS='|' read -r score name role invoke phase; do
+    [[ -z "$name" ]] && continue
+    [[ "$role" != "required" ]] && continue
+    [[ "$phase" != "${_TENTATIVE_PHASE}" ]] && continue
+
+    REQUIRED_SELECTED="${REQUIRED_SELECTED}${score}|${name}|${role}|${invoke}|${phase}
+"
+    REQUIRED_COUNT=$((REQUIRED_COUNT + 1))
+    [[ -n "${SKILL_EXPLAIN:-}" ]] && _EXPLAIN_CAPS="${_EXPLAIN_CAPS}[skill-hook]   [required] ${name} (${score}) <- pass 0
+"
+  done <<EOF
+${SORTED}
+EOF
+
   # Pass 1: reserve the top process skill (if any)
   RESERVED_PROCESS_NAME=""
   while IFS='|' read -r score name role invoke phase; do
     [[ -z "$name" ]] && continue
+    # Skip skills already selected in pass 0
+    printf '%s' "$REQUIRED_SELECTED" | grep -q "|${name}|" && continue
     if [[ "$role" == "process" ]]; then
       RESERVED_PROCESS_NAME="$name"
       SELECTED="${score}|${name}|${role}|${invoke}|${phase}
@@ -327,11 +349,17 @@ _select_by_role_caps() {
 ${SORTED}
 EOF
 
-  # Pass 2: fill remaining slots, skipping the reserved process skill by name
+  # Pass 2: fill remaining slots, skipping reserved process and required skills
   while IFS='|' read -r score name role invoke phase; do
     [[ -z "$name" ]] && continue
+    # Skip skills already selected in pass 0
+    printf '%s' "$REQUIRED_SELECTED" | grep -q "|${name}|" && continue
 
     case "$role" in
+      required)
+        # Required skills not selected in pass 0 (wrong phase) — skip entirely
+        continue
+        ;;
       process)
         # Skip reserved process skill; cap additional process skills at 0
         [[ "$name" == "$RESERVED_PROCESS_NAME" ]] && continue
@@ -377,6 +405,12 @@ EOF
   done <<EOF
 ${SORTED}
 EOF
+
+  # Prepend required skills and update total count
+  if [[ -n "$REQUIRED_SELECTED" ]]; then
+    SELECTED="${REQUIRED_SELECTED}${SELECTED}"
+    TOTAL_COUNT=$((TOTAL_COUNT + REQUIRED_COUNT))
+  fi
 }
 
 # --- _determine_label_phase ---------------------------------------
@@ -387,6 +421,7 @@ _determine_label_phase() {
   PROCESS_SKILL=""
   HAS_DOMAIN=0
   HAS_WORKFLOW=0
+  HAS_REQUIRED=0
 
   while IFS='|' read -r score name role invoke phase; do
     [[ -z "$name" ]] && continue
@@ -412,6 +447,9 @@ _determine_label_phase() {
           esac
         fi
         ;;
+      required)
+        HAS_REQUIRED=1
+        ;;
     esac
   done <<EOF
 ${SELECTED}
@@ -420,12 +458,14 @@ EOF
   [[ -z "$PLABEL" ]] && PLABEL="(Claude: assess intent)"
   [[ "$HAS_DOMAIN" -eq 1 ]] && PLABEL="${PLABEL} + Domain"
   [[ "$HAS_WORKFLOW" -eq 1 ]] && PLABEL="${PLABEL} + Workflow"
+  [[ "$HAS_REQUIRED" -eq 1 ]] && PLABEL="${PLABEL} + Required"
 
-  # PRIMARY PHASE (process > workflow > domain > first non-empty)
+  # PRIMARY PHASE (process > workflow > domain > required > first non-empty)
   PRIMARY_PHASE=""
   _PHASE_PROCESS=""
   _PHASE_WORKFLOW=""
   _PHASE_DOMAIN=""
+  _PHASE_REQUIRED=""
   _PHASE_FIRST=""
 
   while IFS='|' read -r score name role invoke phase; do
@@ -437,6 +477,7 @@ EOF
       process)  [[ -z "$_PHASE_PROCESS" ]] && _PHASE_PROCESS="$phase" ;;
       workflow) [[ -z "$_PHASE_WORKFLOW" ]] && _PHASE_WORKFLOW="$phase" ;;
       domain)   [[ -z "$_PHASE_DOMAIN" ]] && _PHASE_DOMAIN="$phase" ;;
+      required) [[ -z "$_PHASE_REQUIRED" ]] && _PHASE_REQUIRED="$phase" ;;
     esac
   done <<EOF
 ${SELECTED}
@@ -448,6 +489,8 @@ EOF
     PRIMARY_PHASE="$_PHASE_WORKFLOW"
   elif [[ -n "$_PHASE_DOMAIN" ]]; then
     PRIMARY_PHASE="$_PHASE_DOMAIN"
+  elif [[ -n "$_PHASE_REQUIRED" ]]; then
+    PRIMARY_PHASE="$_PHASE_REQUIRED"
   else
     PRIMARY_PHASE="$_PHASE_FIRST"
   fi
@@ -461,15 +504,33 @@ _build_skill_lines() {
   EVAL_SKILLS=""
 
   if [[ "$TOTAL_COUNT" -gt 0 ]]; then
+    _SL_REQUIRED=""
     _SL_PROCESS=""
     _SL_DOMAIN=""
     _SL_WORKFLOW=""
     _SL_STANDALONE=""
 
+    # Build required_when lookup (one jq call)
+    _RW_LOOKUP="$(printf '%s' "$REGISTRY" | jq -r '
+      [.skills[] | select(.required_when != null and .required_when != "")] |
+      .[] | "\(.name)=\(.required_when)"
+    ' 2>/dev/null)"
+
     while IFS='|' read -r score name role invoke phase; do
       [[ -z "$name" ]] && continue
+      _rw=""
       if [[ "$role" == "process" ]]; then
         _eval_tag="MUST INVOKE"
+      elif [[ "$role" == "required" ]]; then
+        # Check if condition-gated
+        if [[ -n "$_RW_LOOKUP" ]]; then
+          _rw="$(printf '%s' "$_RW_LOOKUP" | grep "^${name}=" | head -1 | cut -d= -f2-)"
+        fi
+        if [[ -n "$_rw" ]]; then
+          _eval_tag="INVOKE WHEN: ${_rw}"
+        else
+          _eval_tag="REQUIRED"
+        fi
       else
         _eval_tag="YES/NO"
       fi
@@ -479,8 +540,17 @@ _build_skill_lines() {
         EVAL_SKILLS="${name} ${_eval_tag}"
       fi
 
-      if [[ -n "$PROCESS_SKILL" ]]; then
+      if [[ -n "$PROCESS_SKILL" ]] || [[ "$role" == "required" ]]; then
         case "$role" in
+          required)
+            if [[ -n "$_rw" ]]; then
+              _SL_REQUIRED="${_SL_REQUIRED}
+Required when ${_rw}: ${name} -> ${invoke}"
+            else
+              _SL_REQUIRED="${_SL_REQUIRED}
+Required: ${name} -> ${invoke}"
+            fi
+            ;;
           process)  _SL_PROCESS="
 Process: ${name} -> ${invoke}" ;;
           domain)   _SL_DOMAIN="${_SL_DOMAIN}
@@ -496,7 +566,7 @@ ${name} -> ${invoke}"
 ${SELECTED}
 EOF
 
-    SKILL_LINES="${_SL_PROCESS}${_SL_DOMAIN}${_SL_WORKFLOW}${_SL_STANDALONE}"
+    SKILL_LINES="${_SL_REQUIRED}${_SL_PROCESS}${_SL_DOMAIN}${_SL_WORKFLOW}${_SL_STANDALONE}"
 
     # Overflow skills intentionally not displayed — role caps are the signal.
   fi
@@ -915,12 +985,36 @@ SKILL_DATA="$(printf '%s' "$REGISTRY" | jq -r '
   [.skills[] | select(.available == true and .enabled == true)] | .[] |
   (.name + "\u001f" + (.name | ascii_downcase) + "\u001f" + .role + "\u001f" +
    (.priority // 0 | tostring) + "\u001f" + (.invoke // "SKIP") + "\u001f" +
-   (.phase // "") + "\u001f" + ((.triggers // []) | join("\u0001")) + "\u001f" + ((.keywords // []) | join("\u0001")))
+   (.phase // "") + "\u001f" + ((.triggers // []) | join("\u0001")) + "\u001f" + ((.keywords // []) | join("\u0001")) + "\u001f" + (.required_when // ""))
 ' 2>/dev/null)"
 
 # --- Score, select, label, build, compose, format ---
 _score_skills
 _apply_context_bonus
+
+# --- Compute tentative phase for required-role pass 0 ---
+# Priority: process > workflow > domain > first required skill.
+# Required skills are only used as last resort (when all scored skills are required).
+_TENTATIVE_PHASE=""
+_TENTATIVE_PHASE_REQUIRED=""
+while IFS='|' read -r _tp_score _tp_name _tp_role _tp_invoke _tp_phase; do
+  [[ -z "$_tp_name" ]] && continue
+  if [[ "$_tp_role" == "process" ]]; then
+    _TENTATIVE_PHASE="$_tp_phase"
+    break
+  fi
+  if [[ "$_tp_role" == "required" ]]; then
+    # Track first required phase as last-resort fallback
+    [[ -z "$_TENTATIVE_PHASE_REQUIRED" ]] && _TENTATIVE_PHASE_REQUIRED="$_tp_phase"
+    continue
+  fi
+  [[ -z "$_TENTATIVE_PHASE" ]] && _TENTATIVE_PHASE="$_tp_phase"
+done <<EOF
+${SORTED}
+EOF
+# Last resort: if only required skills scored, use their phase
+[[ -z "$_TENTATIVE_PHASE" ]] && _TENTATIVE_PHASE="$_TENTATIVE_PHASE_REQUIRED"
+
 _select_by_role_caps
 _determine_label_phase
 
