@@ -1008,8 +1008,12 @@ if [[ -n "$CURRENT_PHASE" ]]; then
     .phase_compositions[$ph] // empty |
     (
       (.parallel // [] | .[] |
-        select(.plugin as $p | $avail | any(. == $p)) |
-        "LINE:  PARALLEL: \(.use) -> \(.purpose) [\(.plugin)]"),
+        if .plugin then
+          select(.plugin as $p | $avail | any(. == $p)) |
+          "LINE:  PARALLEL: \(.use) -> \(.purpose) [\(.plugin)]"
+        else
+          "LINE:  PARALLEL: \(.use) \u2014 \(.purpose)"
+        end),
       (.sequence // [] | .[] |
         if .plugin then
           select(.plugin as $p | $avail | any(. == $p)) |
