@@ -1,8 +1,15 @@
 # Phase 1: Triage & Plan
 
-Before writing the implementation plan, gather context across all three dimensions.
+Before writing the implementation plan, gather context across all four dimensions.
 
 ## Steps
+
+### 0. Intent Truth
+IF the task references a known feature or capability, check for specification context before planning:
+- **IF `openspec/changes/<feature>/` exists:** Read `proposal.md`, `design.md`, and `specs/` for active change context. These represent the most current intent for this feature. Carry forward existing requirements and acceptance scenarios into the plan.
+- **ELSE IF `openspec/specs/<capability>/spec.md` exists:** Read the canonical spec for authoritative requirements. The plan must satisfy all specified scenarios unless the user explicitly says otherwise.
+- **ELSE IF `docs/superpowers/specs/` has a matching design spec:** Read it for design intent, but cross-reference with the current codebase — SP specs may be stale.
+- **IF no artifacts found:** Proceed without spec context. If the task scope is ambiguous, ask the user to clarify requirements.
 
 ### 1. Historical Truth
 Query institutional memory for past constraints in this area:

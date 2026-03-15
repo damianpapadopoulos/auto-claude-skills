@@ -1,6 +1,6 @@
 ---
 name: unified-context-stack
-description: Tiered context retrieval across External Truth (docs), Internal Truth (dependencies), and Historical Truth (memory) with graceful degradation based on installed tools.
+description: Tiered context retrieval across External Truth (docs), Internal Truth (dependencies), Historical Truth (memory), and Intent Truth (feature specs) with graceful degradation based on installed tools.
 ---
 
 # Unified Context Stack
@@ -24,12 +24,16 @@ These are injected by the session-start hook as: `Context Stack: context7=true, 
 | `context_hub_cli` | `chub` CLI | Local curated doc retrieval and annotations |
 | `serena` | Serena MCP | LSP-powered dependency mapping and AST edits |
 | `forgetful_memory` | Forgetful Memory | Persistent cross-session architectural knowledge |
+| `openspec` | OpenSpec CLI | Whether the `openspec` binary is available. See the separate `OpenSpec:` capability line for detailed surface/command info. Intent Truth retrieval does NOT require this flag — it checks artifact presence directly. |
 
 ## Tier Documents
 
 - [External Truth](tiers/external-truth.md) — API documentation retrieval
 - [Internal Truth](tiers/internal-truth.md) — Blast-radius mapping and safe code edits
 - [Historical Truth](tiers/historical-truth.md) — Institutional memory retrieval and storage
+- [Intent Truth](tiers/intent-truth.md) — Feature specification and design rationale retrieval
+
+**Note:** Intent Truth checks for artifact presence in the workspace (`openspec/specs/`, `openspec/changes/`, `docs/superpowers/specs/`). The `OpenSpec:` capability line from session-start indicates CLI availability for write operations (used by `openspec-ship`), but Intent Truth retrieval works regardless of CLI installation — it reads local files.
 
 ## Phase Documents
 
