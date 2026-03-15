@@ -216,20 +216,6 @@
       "description": "UI/UX design guidance: component structure, responsive layout, styling, and visual prototyping."
     },
     {
-      "name": "security-scanner",
-      "role": "domain",
-      "phase": "REVIEW",
-      "triggers": [
-        "(secur(e|ity)|vulnerab|owasp|pentest|attack|exploit|compliance|hipaa|gdpr|encrypt|auth(entication|orization)|inject|xss|csrf|sanitiz|supply.?chain)"
-      ],
-      "keywords": [],
-      "trigger_mode": "regex",
-      "priority": 15,
-      "precedes": [],
-      "requires": [],
-      "description": "Security analysis overlay: scan for vulnerabilities, OWASP risks, compliance issues, and supply-chain threats."
-    },
-    {
       "name": "webapp-testing",
       "role": "domain",
       "phase": "IMPLEMENT",
@@ -790,6 +776,11 @@
           "use": "tiered context retrieval (claim verification, dependency checks)",
           "when": "installed AND any context_capability is true",
           "purpose": "Verify reviewer claims against curated docs, check dependency impact"
+        },
+        {
+          "use": "security-scanner -> Skill(security-scanner)",
+          "when": "always",
+          "purpose": "Scan for vulnerabilities, OWASP risks, compliance issues. INVOKE during every review"
         }
       ],
       "hints": [

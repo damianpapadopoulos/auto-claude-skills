@@ -794,4 +794,44 @@ test_intent_truth_tier_exists() {
 }
 test_intent_truth_tier_exists
 
+# ---------------------------------------------------------------------------
+# Security-scanner should appear as REVIEW composition parallel, not scored domain
+# ---------------------------------------------------------------------------
+test_security_scanner_review_parallel() {
+    echo "-- test: security-scanner appears as REVIEW composition parallel --"
+    setup_test_env
+    install_registry_with_context_stack
+
+    # Enable requesting-code-review so REVIEW phase activates
+    local cache="${HOME}/.claude/.skill-registry-cache.json"
+    local tmp="${cache}.tmp"
+    jq '.skills |= map(
+        if .name == "requesting-code-review" then . + {available:true, enabled:true, invoke:"Skill(superpowers:requesting-code-review)"}
+        else . end
+    )' "${cache}" > "${tmp}" && mv "${tmp}" "${cache}"
+
+    # Trigger REVIEW phase
+    local output
+    output="$(run_hook "review the pull request for the auth module")"
+    local context
+    context="$(extract_context "${output}")"
+
+    # Security-scanner should appear in PARALLEL composition line
+    local parallel_scanner
+    parallel_scanner="$(printf '%s' "${context}" | grep -c 'PARALLEL:.*security-scanner' 2>/dev/null)" || parallel_scanner=0
+    if [[ "$parallel_scanner" -gt 0 ]]; then
+        _record_pass "security-scanner in REVIEW parallel"
+    else
+        _record_fail "security-scanner in REVIEW parallel" "not found in PARALLEL lines"
+    fi
+
+    # Security-scanner should NOT appear as a scored Domain skill
+    local domain_scanner
+    domain_scanner="$(printf '%s' "${context}" | grep -c 'Domain:.*security-scanner' 2>/dev/null)" || domain_scanner=0
+    assert_equals "security-scanner not scored as domain" "0" "${domain_scanner}"
+
+    teardown_test_env
+}
+test_security_scanner_review_parallel
+
 print_summary
