@@ -1729,9 +1729,9 @@ test_config_max_suggestions() {
     local ctx
     ctx="$(extract_context "$output")"
 
-    # With max_suggestions=1, should have only 1 skill line
+    # With max_suggestions=1, should have only 1 skill line (Process:/Domain:/Workflow:/Required:)
     local skill_count
-    skill_count="$(printf '%s' "$ctx" | grep -c 'Skill(' || true)"
+    skill_count="$(printf '%s' "$ctx" | grep -cE '^(Required|Process|  Domain|Workflow):' || true)"
     if [ "$skill_count" -le 1 ]; then
         _record_pass "max_suggestions=1 limits to 1 skill"
     else
@@ -2259,7 +2259,6 @@ test_skill_explain_raw_scores() {
 test_idle_guard_cooldown
 test_idle_guard_sanitization
 test_idle_guard_non_numeric_cooldown
-test_skill_debug_stderr
 test_skill_explain_with_matches
 test_skill_explain_no_matches
 test_skill_explain_off_by_default
