@@ -993,21 +993,27 @@ _score_skills
 _apply_context_bonus
 
 # --- Compute tentative phase for required-role pass 0 ---
-# Priority: process > workflow > domain > first non-required skill.
-# Required skills are excluded from fallback to avoid circular dependency.
+# Priority: process > workflow > domain > first required skill.
+# Required skills are only used as last resort (when all scored skills are required).
 _TENTATIVE_PHASE=""
+_TENTATIVE_PHASE_REQUIRED=""
 while IFS='|' read -r _tp_score _tp_name _tp_role _tp_invoke _tp_phase; do
   [[ -z "$_tp_name" ]] && continue
   if [[ "$_tp_role" == "process" ]]; then
     _TENTATIVE_PHASE="$_tp_phase"
     break
   fi
-  # Skip required skills for fallback — they depend on tentative phase
-  [[ "$_tp_role" == "required" ]] && continue
+  if [[ "$_tp_role" == "required" ]]; then
+    # Track first required phase as last-resort fallback
+    [[ -z "$_TENTATIVE_PHASE_REQUIRED" ]] && _TENTATIVE_PHASE_REQUIRED="$_tp_phase"
+    continue
+  fi
   [[ -z "$_TENTATIVE_PHASE" ]] && _TENTATIVE_PHASE="$_tp_phase"
 done <<EOF
 ${SORTED}
 EOF
+# Last resort: if only required skills scored, use their phase
+[[ -z "$_TENTATIVE_PHASE" ]] && _TENTATIVE_PHASE="$_TENTATIVE_PHASE_REQUIRED"
 
 _select_by_role_caps
 _determine_label_phase

@@ -185,15 +185,17 @@
     },
     {
       "name": "using-git-worktrees",
-      "role": "workflow",
+      "role": "required",
       "phase": "IMPLEMENT",
-      "triggers": [],
+      "triggers": [
+        "(parallel|concurrent|worktree|isolat|branch.*(work|switch))"
+      ],
       "keywords": [],
       "trigger_mode": "regex",
       "priority": 14,
       "precedes": [],
       "requires": [],
-      "description": "Use git worktrees to enable parallel work on multiple branches without stashing."
+      "description": "Use git worktrees for parallel branch work. Trigger-gated required: activates when parallel/isolation keywords match."
     },
     {
       "name": "writing-skills",
@@ -299,8 +301,9 @@
     },
     {
       "name": "agent-team-review",
-      "role": "workflow",
+      "role": "required",
       "phase": "REVIEW",
+      "required_when": "PR touches 3+ files, crosses module boundaries, or includes security-sensitive changes",
       "triggers": [
         "(team.review|multi.*(perspective|reviewer|agent).*(review|check)|thorough.*review|comprehensive.*review|full.*review)",
         "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|(^|[^a-z])pr($|[^a-z]))"
@@ -310,7 +313,7 @@
       "priority": 20,
       "precedes": [],
       "requires": [],
-      "description": "Multi-perspective parallel code review with specialist reviewers (security, quality, spec compliance)."
+      "description": "Multi-perspective parallel code review with specialist reviewers. Trigger-gated + condition-gated required."
     },
     {
       "name": "design-debate",
