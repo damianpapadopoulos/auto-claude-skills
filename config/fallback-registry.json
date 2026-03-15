@@ -78,7 +78,9 @@
       "keywords": [],
       "trigger_mode": "regex",
       "priority": 35,
-      "precedes": [],
+      "precedes": [
+        "requesting-code-review"
+      ],
       "requires": [
         "writing-plans"
       ],
@@ -112,8 +114,12 @@
       "keywords": [],
       "trigger_mode": "regex",
       "priority": 25,
-      "precedes": [],
-      "requires": [],
+      "precedes": [
+        "verification-before-completion"
+      ],
+      "requires": [
+        "executing-plans"
+      ],
       "description": "Prepare and request a code review: summarise changes, highlight risks, open a PR.",
       "invoke": "Skill(superpowers:requesting-code-review)",
       "available": true,
@@ -147,7 +153,9 @@
       "precedes": [
         "openspec-ship"
       ],
-      "requires": [],
+      "requires": [
+        "requesting-code-review"
+      ],
       "description": "Final verification checklist before shipping: tests pass, lint clean, no TODOs, docs updated.",
       "invoke": "Skill(superpowers:verification-before-completion)",
       "available": true,
@@ -210,15 +218,17 @@
     },
     {
       "name": "using-git-worktrees",
-      "role": "workflow",
+      "role": "required",
       "phase": "IMPLEMENT",
-      "triggers": [],
+      "triggers": [
+        "(parallel|concurrent|worktree|isolat|branch.*(work|switch))"
+      ],
       "keywords": [],
       "trigger_mode": "regex",
       "priority": 14,
       "precedes": [],
       "requires": [],
-      "description": "Use git worktrees to enable parallel work on multiple branches without stashing.",
+      "description": "Use git worktrees for parallel branch work. Trigger-gated required: activates when parallel/isolation keywords match.",
       "invoke": "Skill(superpowers:using-git-worktrees)",
       "available": true,
       "enabled": true
@@ -254,23 +264,6 @@
       "requires": [],
       "description": "UI/UX design guidance: component structure, responsive layout, styling, and visual prototyping.",
       "invoke": "Call Skill(frontend-design:frontend-design)",
-      "available": true,
-      "enabled": true
-    },
-    {
-      "name": "security-scanner",
-      "role": "domain",
-      "phase": "REVIEW",
-      "triggers": [
-        "(secur(e|ity)|vulnerab|owasp|pentest|attack|exploit|compliance|hipaa|gdpr|encrypt|auth(entication|orization)|inject|xss|csrf|sanitiz|supply.?chain)"
-      ],
-      "keywords": [],
-      "trigger_mode": "regex",
-      "priority": 15,
-      "precedes": [],
-      "requires": [],
-      "description": "Security analysis overlay: scan for vulnerabilities, OWASP risks, compliance issues, and supply-chain threats.",
-      "invoke": "Skill(security-scanner)",
       "available": true,
       "enabled": true
     },
@@ -365,8 +358,9 @@
     },
     {
       "name": "agent-team-review",
-      "role": "workflow",
+      "role": "required",
       "phase": "REVIEW",
+      "required_when": "PR touches 3+ files, crosses module boundaries, or includes security-sensitive changes",
       "triggers": [
         "(team.review|multi.*(perspective|reviewer|agent).*(review|check)|thorough.*review|comprehensive.*review|full.*review)",
         "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|(^|[^a-z])pr($|[^a-z]))"
@@ -376,7 +370,7 @@
       "priority": 20,
       "precedes": [],
       "requires": [],
-      "description": "Multi-perspective parallel code review with specialist reviewers (security, quality, spec compliance).",
+      "description": "Multi-perspective parallel code review with specialist reviewers. Trigger-gated + condition-gated required.",
       "invoke": "Skill(auto-claude-skills:agent-team-review)",
       "available": true,
       "enabled": true
@@ -412,6 +406,58 @@
       "requires": [],
       "description": "Bulk file operations using claude -p with manifest, dry-run, and log-based retry.",
       "invoke": "Skill(auto-claude-skills:batch-scripting)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "test-driven-development",
+      "role": "domain",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 200,
+      "precedes": [],
+      "requires": [],
+      "description": "User-installed skill",
+      "invoke": "Skill(superpowers:test-driven-development)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "using-superpowers",
+      "role": "domain",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 200,
+      "precedes": [],
+      "requires": [],
+      "description": "User-installed skill",
+      "invoke": "Skill(superpowers:using-superpowers)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "unified-context-stack",
+      "role": "domain",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 200,
+      "precedes": [],
+      "requires": [],
+      "description": "User-installed skill",
+      "invoke": "Skill(auto-claude-skills:unified-context-stack)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "security-scanner",
+      "role": "domain",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 200,
+      "precedes": [],
+      "requires": [],
+      "description": "User-installed skill",
+      "invoke": "Skill(security-scanner)",
       "available": true,
       "enabled": true
     }
@@ -629,12 +675,12 @@
     }
   ],
   "context_capabilities": {
-    "context7": false,
-    "context_hub_cli": false,
-    "context_hub_available": false,
+    "context7": true,
+    "context_hub_cli": true,
+    "context_hub_available": true,
     "serena": false,
     "forgetful_memory": false,
-    "openspec": false
+    "openspec": true
   },
   "openspec_capabilities": {
     "binary": true,
@@ -732,6 +778,11 @@
           "use": "tiered context retrieval (claim verification, dependency checks)",
           "when": "installed AND any context_capability is true",
           "purpose": "Verify reviewer claims against curated docs, check dependency impact"
+        },
+        {
+          "use": "security-scanner -> Skill(security-scanner)",
+          "when": "always",
+          "purpose": "Scan for vulnerabilities, OWASP risks, compliance issues. INVOKE during every review"
         }
       ],
       "hints": [
