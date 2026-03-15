@@ -124,10 +124,10 @@ install_registry() {
       "role": "process",
       "phase": "REVIEW",
       "triggers": [
-        "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|tech.?debt|(^|[^a-z])pr($|[^a-z]))"
+        "(review comments|pr comments|feedback|nits?|changes requested|address (the )?(review|comments|feedback)|respond to review|follow.?up review|re.?request review)"
       ],
       "trigger_mode": "regex",
-      "priority": 50,
+      "priority": 33,
       "invoke": "Skill(superpowers:receiving-code-review)",
       "available": true,
       "enabled": true
@@ -245,7 +245,7 @@ install_registry() {
       "role": "domain",
       "phase": "DESIGN",
       "triggers": [
-        "(build|create|implement|develop|scaffold|brainstorm|design|architect|strateg|scope|outline|approach|generate|set.?up|integrate|extend|new|start)"
+        "(trade.?off|debate|compare.*(option|approach|design)|weigh.*(option|approach)|pro.?con|alternative|architecture)"
       ],
       "trigger_mode": "regex",
       "priority": 14,
@@ -434,9 +434,9 @@ install_registry_v4() {
       "name": "receiving-code-review",
       "role": "process",
       "phase": "REVIEW",
-      "triggers": ["(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|tech.?debt|(^|[^a-z])pr($|[^a-z]))"],
+      "triggers": ["(review comments|pr comments|feedback|nits?|changes requested|address (the )?(review|comments|feedback)|respond to review|follow.?up review|re.?request review)"],
       "trigger_mode": "regex",
-      "priority": 50,
+      "priority": 33,
       "invoke": "Skill(superpowers:receiving-code-review)",
       "available": true,
       "enabled": true
@@ -537,7 +537,7 @@ install_registry_v4() {
       "name": "design-debate",
       "role": "domain",
       "phase": "DESIGN",
-      "triggers": ["(build|create|implement|develop|scaffold|brainstorm|design|architect|strateg|scope|outline|approach|generate|set.?up|integrate|extend|new|start)"],
+      "triggers": ["(trade.?off|debate|compare.*(option|approach|design)|weigh.*(option|approach)|pro.?con|alternative|architecture)"],
       "trigger_mode": "regex",
       "priority": 14,
       "invoke": "Skill(design-debate)",
