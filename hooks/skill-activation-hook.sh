@@ -915,7 +915,7 @@ SKILL_DATA="$(printf '%s' "$REGISTRY" | jq -r '
   [.skills[] | select(.available == true and .enabled == true)] | .[] |
   (.name + "\u001f" + (.name | ascii_downcase) + "\u001f" + .role + "\u001f" +
    (.priority // 0 | tostring) + "\u001f" + (.invoke // "SKIP") + "\u001f" +
-   (.phase // "") + "\u001f" + ((.triggers // []) | join("\u0001")) + "\u001f" + ((.keywords // []) | join("\u0001")))
+   (.phase // "") + "\u001f" + ((.triggers // []) | join("\u0001")) + "\u001f" + ((.keywords // []) | join("\u0001")) + "\u001f" + (.required_when // ""))
 ' 2>/dev/null)"
 
 # --- Score, select, label, build, compose, format ---
