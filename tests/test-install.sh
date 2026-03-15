@@ -116,8 +116,26 @@ assert_contains \
     "teammate-idle-guard.sh" \
     "${HOOKS_CONTENT}"
 
+# Test: hooks/openspec-guard.sh exists and is executable
+assert_file_exists \
+    "hooks/openspec-guard.sh exists" \
+    "${PLUGIN_ROOT}/hooks/openspec-guard.sh"
+
+if [ -x "${PLUGIN_ROOT}/hooks/openspec-guard.sh" ]; then
+    _record_pass "hooks/openspec-guard.sh is executable"
+else
+    _record_fail "hooks/openspec-guard.sh is executable" \
+        "file is not executable"
+fi
+
+# Verify hooks.json references openspec-guard.sh
+assert_contains \
+    "hooks.json references openspec-guard.sh" \
+    "openspec-guard.sh" \
+    "${HOOKS_CONTENT}"
+
 # Test 8: hooks.json registers all required hook events
-for event in SessionStart UserPromptSubmit PostToolUse PreCompact Stop TeammateIdle; do
+for event in SessionStart UserPromptSubmit PreToolUse PostToolUse PreCompact Stop TeammateIdle; do
     if printf '%s' "${HOOKS_CONTENT}" | jq -e ".hooks.${event}" >/dev/null 2>&1; then
         _record_pass "hooks.json registers ${event} event"
     else

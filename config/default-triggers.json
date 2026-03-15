@@ -22,20 +22,6 @@
       "description": "Structured debugging: reproduce, hypothesise, isolate, fix, verify. Returns to the current phase after resolution."
     },
     {
-      "name": "test-driven-development",
-      "role": "process",
-      "phase": "IMPLEMENT",
-      "triggers": [
-        "(test|tdd|run.tests|execute.tests|verify|validate|coverage|pass|green|assert|expect|spec|ensure.*pass|check.*(test|coverage|green))"
-      ],
-      "keywords": [],
-      "trigger_mode": "regex",
-      "priority": 20,
-      "precedes": [],
-      "requires": [],
-      "description": "Write failing test first, then implement until green. Primary only for explicit test requests; other phases invoke TDD via skill chaining."
-    },
-    {
       "name": "brainstorming",
       "role": "process",
       "phase": "DESIGN",
@@ -364,7 +350,7 @@
   "phase_guide": {
     "DESIGN": "brainstorming (ask questions, get approval)",
     "PLAN": "writing-plans (break into tasks, confirm before execution)",
-    "IMPLEMENT": "executing-plans or subagent-driven-development + TDD (offer agent-team-execution for 3+ independent tasks)",
+    "IMPLEMENT": "executing-plans or subagent-driven-development (offer agent-team-execution for 3+ independent tasks)",
     "REVIEW": "requesting-code-review",
     "SHIP": "verification-before-completion + openspec-ship + finishing-a-development-branch",
     "DEBUG": "systematic-debugging, then return to current phase"
@@ -775,6 +761,11 @@
           "use": "tiered context retrieval (mid-flight library lookups)",
           "when": "installed AND any context_capability is true",
           "purpose": "Look up current API signatures and usage patterns during implementation"
+        },
+        {
+          "use": "test-driven-development -> Skill(superpowers:test-driven-development)",
+          "when": "always",
+          "purpose": "Write failing test first, then minimal code to pass. INVOKE before writing production code"
         }
       ],
       "hints": []
@@ -860,6 +851,11 @@
           "use": "tiered context retrieval (past solutions, live issue discovery)",
           "when": "installed AND any context_capability is true",
           "purpose": "Check past solutions via memory, and live library issues via curated docs"
+        },
+        {
+          "use": "test-driven-development -> Skill(superpowers:test-driven-development)",
+          "when": "always",
+          "purpose": "Reproduce bug with failing test before fixing. INVOKE before writing fix code"
         }
       ],
       "hints": []

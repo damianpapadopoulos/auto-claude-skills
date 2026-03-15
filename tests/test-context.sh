@@ -66,20 +66,6 @@ install_context_registry() {
       "enabled": true
     },
     {
-      "name": "test-driven-development",
-      "role": "process",
-      "phase": "IMPLEMENT",
-      "triggers": [
-        "(build|create|implement|add|write|make)",
-        "(run|test|execute|verify|validate|check|coverage)"
-      ],
-      "trigger_mode": "regex",
-      "priority": 20,
-      "invoke": "Skill(superpowers:test-driven-development)",
-      "available": true,
-      "enabled": true
-    },
-    {
       "name": "executing-plans",
       "role": "process",
       "phase": "IMPLEMENT",
@@ -174,11 +160,33 @@ install_context_registry() {
   "phase_guide": {
     "DESIGN":    "brainstorming (ask questions, get approval)",
     "PLAN":      "writing-plans (break into tasks, confirm before execution)",
-    "IMPLEMENT": "executing-plans or subagent-driven-development + TDD",
+    "IMPLEMENT": "executing-plans or subagent-driven-development",
     "REVIEW":    "requesting-code-review",
     "SHIP":      "verification-before-completion + openspec-ship + finishing-a-development-branch",
     "DEBUG":     "systematic-debugging, then return to current phase"
   },
+  "phase_compositions": {
+      "IMPLEMENT": {
+        "driver": "executing-plans",
+        "parallel": [
+          {
+            "use": "test-driven-development -> Skill(superpowers:test-driven-development)",
+            "when": "always",
+            "purpose": "Write failing test first, then minimal code to pass. INVOKE before writing production code"
+          }
+        ]
+      },
+      "DEBUG": {
+        "driver": "systematic-debugging",
+        "parallel": [
+          {
+            "use": "test-driven-development -> Skill(superpowers:test-driven-development)",
+            "when": "always",
+            "purpose": "Reproduce bug with failing test before fixing. INVOKE before writing fix code"
+          }
+        ]
+      }
+    },
   "blocklist_patterns": [
     {
       "pattern": "^(hi|hello|hey|thanks|thank.you|good.(morning|afternoon|evening)|bye|goodbye|ok|okay|yes|no|sure|yep|nope|got.it|sounds.good|cool|nice|great|perfect|awesome|understood)([[:space:]!.,]+.{0,20})?$",
@@ -251,7 +259,7 @@ install_registry() {
   "phase_guide": {
     "DESIGN":    "brainstorming (ask questions, get approval)",
     "PLAN":      "writing-plans (break into tasks, confirm before execution)",
-    "IMPLEMENT": "executing-plans or subagent-driven-development + TDD"
+    "IMPLEMENT": "executing-plans or subagent-driven-development"
   },
   "warnings": []
 }
@@ -328,7 +336,7 @@ test_many_skills_full_format() {
     install_context_registry
 
     # "build a secure frontend dashboard" triggers:
-    #   brainstorming (process, prio 30), test-driven-development (process, prio 20),
+    #   brainstorming (process, prio 30),
     #   security-scanner (domain, prio 102), frontend-design (domain, prio 101)
     # After role caps: 1 process + 2 domain = 3 selected -> full format
     local output
@@ -546,7 +554,6 @@ install_registry_with_context_stack() {
         .context_capabilities = {context7:true,context_hub_cli:false,context_hub_available:true,serena:false,forgetful_memory:false,openspec:false} |
         .skills |= map(
             if .name == "brainstorming" then . + {available:true, enabled:true, invoke:"Skill(superpowers:brainstorming)"}
-            elif .name == "test-driven-development" then . + {available:true, enabled:true, invoke:"Skill(superpowers:test-driven-development)"}
             elif .name == "systematic-debugging" then . + {available:true, enabled:true, invoke:"Skill(superpowers:systematic-debugging)"}
             else . end
         )' \
@@ -706,6 +713,59 @@ test_phase_doc_path_emission
 test_phase_docs_have_conditional_fallbacks
 test_consolidation_marker_stale
 test_consolidation_marker_fresh
+
+# ---------------------------------------------------------------------------
+# 15. TDD PARALLEL emission in phase compositions
+# ---------------------------------------------------------------------------
+test_tdd_parallel_in_implement() {
+    echo "-- test: TDD emitted as PARALLEL in IMPLEMENT phase --"
+    setup_test_env
+    install_context_registry
+
+    # "execute the plan for the auth module" → executing-plans selected (IMPLEMENT phase)
+    local output context
+    output="$(run_hook "execute the plan for the auth module")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "TDD PARALLEL in IMPLEMENT" "test-driven-development" "${context}"
+    assert_contains "TDD has Skill() invocation" "Skill(superpowers:test-driven-development)" "${context}"
+
+    teardown_test_env
+}
+
+test_tdd_parallel_in_debug() {
+    echo "-- test: TDD emitted as PARALLEL in DEBUG phase --"
+    setup_test_env
+    install_context_registry
+
+    # "debug the broken authentication" → systematic-debugging selected (DEBUG phase)
+    local output context
+    output="$(run_hook "debug the broken authentication error")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "TDD PARALLEL in DEBUG" "test-driven-development" "${context}"
+
+    teardown_test_env
+}
+
+test_tdd_not_parallel_in_design() {
+    echo "-- test: TDD NOT emitted as PARALLEL in DESIGN phase --"
+    setup_test_env
+    install_context_registry
+
+    # "design a new authentication system" → brainstorming selected (DESIGN phase)
+    local output context
+    output="$(run_hook "design a new authentication system")"
+    context="$(extract_context "${output}")"
+
+    assert_not_contains "TDD absent in DESIGN" "test-driven-development" "${context}"
+
+    teardown_test_env
+}
+
+test_tdd_parallel_in_implement
+test_tdd_parallel_in_debug
+test_tdd_not_parallel_in_design
 
 # ---------------------------------------------------------------------------
 # Intent Truth tier integration tests
