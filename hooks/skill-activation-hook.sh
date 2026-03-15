@@ -734,6 +734,15 @@ EOF
         _idx=$((_idx + 1))
       done
 
+      # Guard: if anchor not found in chain, skip composition display and state write
+      if [[ "$_current_idx" -lt 0 ]]; then
+        _full_chain=""
+      fi
+    fi
+
+    # Only proceed with display if chain is still valid after guard
+    if [[ "$_full_chain" == *"|"* ]]; then
+
       # Batch-lookup all chain skills in a single jq call (avoids N forks)
       # Format: name<FS>invoke<FS>description<FS>phase (one per line, chain order)
       _chain_detail="$(printf '%s' "$REGISTRY" | jq -r --arg chain "$_full_chain" '

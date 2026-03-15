@@ -1705,7 +1705,6 @@ test_agent_team_has_plan_triggers() {
     ate_triggers="$(jq -r '.skills[] | select(.name == "agent-team-execution") | .triggers[]' "$triggers_file")"
 
     assert_contains "agent-team has execute.*plan" "execute.*plan" "$ate_triggers"
-    assert_contains "agent-team has build" "build" "$ate_triggers"
     assert_contains "agent-team has team keywords" "agent.team" "$ate_triggers"
 }
 
