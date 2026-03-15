@@ -15,3 +15,8 @@ If you encounter a library or API not covered in the original plan:
 - **context7=true** (no Hub match): Use broad Context7, verify method signatures before implementing
 - **neither available**: Use WebSearch, treat with high skepticism
 - Do not guess API signatures — look them up
+
+### 3. Intent Truth (On-Demand)
+IF you encounter a design ambiguity not covered in the plan:
+- **IF `openspec/specs/<capability>/spec.md` or `openspec/changes/<feature>/` exists:** Check for the specific edge case or requirement. Do NOT re-read the full spec — query only for the specific ambiguity.
+- **IF no artifacts found:** Rely on the plan from Phase 1, or ask the user.
