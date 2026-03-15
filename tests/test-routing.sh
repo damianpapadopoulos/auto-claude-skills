@@ -3470,4 +3470,56 @@ REGISTRY
 }
 test_required_no_plabel
 
+# ---------------------------------------------------------------------------
+# IMPLEMENT stickiness keeps phase during generic continuation verbs
+# ---------------------------------------------------------------------------
+test_implement_stickiness() {
+    echo "-- test: IMPLEMENT stickiness keeps phase during generic verbs --"
+    setup_test_env
+    install_registry_v4
+
+    local token="test-sticky-session"
+    printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
+    # Persist last phase as IMPLEMENT
+    printf '{"skill":"executing-plans","phase":"IMPLEMENT"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output
+    output="$(run_hook "build the authentication middleware for the API")"
+    local context
+    context="$(extract_context "${output}")"
+
+    # Should stay in IMPLEMENT (executing-plans), not snap to DESIGN (brainstorming)
+    if printf '%s' "${context}" | grep -q 'executing-plans'; then
+        _record_pass "IMPLEMENT stickiness: executing-plans selected"
+    else
+        _record_fail "IMPLEMENT stickiness: executing-plans selected" "got brainstorming instead"
+    fi
+
+    teardown_test_env
+}
+test_implement_stickiness
+
+test_implement_stickiness_respects_design_cues() {
+    echo "-- test: stickiness respects design cues --"
+    setup_test_env
+    install_registry_v4
+
+    local token="test-sticky-design-session"
+    printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
+    printf '{"skill":"executing-plans","phase":"IMPLEMENT"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output
+    output="$(run_hook "how should we architect the error handling approach?")"
+    local context
+    context="$(extract_context "${output}")"
+
+    # Design cue should override stickiness — brainstorming should win
+    assert_contains "design cue overrides stickiness" "brainstorming" "${context}"
+
+    teardown_test_env
+}
+test_implement_stickiness_respects_design_cues
+
 print_summary

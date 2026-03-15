@@ -290,6 +290,65 @@ ${SORTED}
 EOF
 
   SORTED="$(printf '%s' "$_new_sorted" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
+
+  # --- IMPLEMENT stickiness ---
+  # If last phase was IMPLEMENT and prompt uses continuation/edit verbs
+  # (not design-discovery cues), boost executing-plans above the top process skill.
+  local _last_phase
+  _last_phase="$(jq -r '.phase // empty' "$_signal_file" 2>/dev/null)"
+  if [[ "$_last_phase" == "IMPLEMENT" ]]; then
+    # Check top process phase in current SORTED
+    local _top_process_phase=""
+    while IFS='|' read -r _sp_score _sp_name _sp_role _sp_invoke _sp_phase; do
+      [[ -z "$_sp_name" ]] && continue
+      if [[ "$_sp_role" == "process" ]]; then
+        _top_process_phase="$_sp_phase"
+        break
+      fi
+    done <<EOF
+${SORTED}
+EOF
+    if [[ "$_top_process_phase" == "DESIGN" ]] || [[ -z "$_top_process_phase" ]]; then
+      # Check if prompt has continuation/edit verbs
+      if [[ "$P" =~ (^|[^a-z])(add|build|create|implement|modify|change|refactor|wire.?up|connect|integrate|extend|update|rename|extract|move|replace)($|[^a-z]) ]]; then
+        # Check prompt does NOT have design/discovery cues
+        if ! [[ "$P" =~ (how.should|what.approach|best.way.to|ideas.for|options.for|trade.?off|compare|brainstorm|design|architect) ]]; then
+          # Boost executing-plans above current top process
+          local _top_score=0
+          while IFS='|' read -r _bs_score _bs_name _bs_role _bs_invoke _bs_phase; do
+            [[ -z "$_bs_name" ]] && continue
+            [[ "$_bs_role" == "process" ]] && _top_score="$_bs_score" && break
+          done <<EOF
+${SORTED}
+EOF
+          local _sticky_score=$((_top_score + 5))
+          local _sticky_sorted=""
+          local _injected=0
+          while IFS='|' read -r _ss_score _ss_name _ss_role _ss_invoke _ss_phase; do
+            [[ -z "$_ss_name" ]] && continue
+            if [[ "$_ss_name" == "executing-plans" ]]; then
+              _sticky_sorted="${_sticky_sorted}${_sticky_score}|${_ss_name}|${_ss_role}|${_ss_invoke}|${_ss_phase}
+"
+              _injected=1
+            else
+              _sticky_sorted="${_sticky_sorted}${_ss_score}|${_ss_name}|${_ss_role}|${_ss_invoke}|${_ss_phase}
+"
+            fi
+          done <<EOF
+${SORTED}
+EOF
+          # If executing-plans wasn't in SORTED (no trigger match), inject it
+          if [[ "$_injected" -eq 0 ]]; then
+            local _ep_invoke
+            _ep_invoke="$(printf '%s' "$REGISTRY" | jq -r '.skills[] | select(.name == "executing-plans") | .invoke // "SKIP"' 2>/dev/null)"
+            _sticky_sorted="${_sticky_score}|executing-plans|process|${_ep_invoke}|IMPLEMENT
+${_sticky_sorted}"
+          fi
+          SORTED="$(printf '%s' "$_sticky_sorted" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
+        fi
+      fi
+    fi
+  fi
 }
 
 # --- _select_by_role_caps -----------------------------------------
