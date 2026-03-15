@@ -816,13 +816,13 @@ test_security_scanner_review_parallel() {
     local context
     context="$(extract_context "${output}")"
 
-    # Security-scanner should appear in PARALLEL composition line
+    # Security-scanner should appear in PARALLEL composition line with invoke pattern
     local parallel_scanner
-    parallel_scanner="$(printf '%s' "${context}" | grep -c 'PARALLEL:.*security-scanner' 2>/dev/null)" || parallel_scanner=0
+    parallel_scanner="$(printf '%s' "${context}" | grep -c 'PARALLEL:.*security-scanner.*Skill(security-scanner)' 2>/dev/null)" || parallel_scanner=0
     if [[ "$parallel_scanner" -gt 0 ]]; then
-        _record_pass "security-scanner in REVIEW parallel"
+        _record_pass "security-scanner in REVIEW parallel with invoke"
     else
-        _record_fail "security-scanner in REVIEW parallel" "not found in PARALLEL lines"
+        _record_fail "security-scanner in REVIEW parallel with invoke" "not found with Skill() invoke pattern"
     fi
 
     # Security-scanner should NOT appear as a scored Domain skill
