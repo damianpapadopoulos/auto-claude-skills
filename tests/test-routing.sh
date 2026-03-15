@@ -315,6 +315,13 @@ install_registry() {
       "trigger_mode": "regex",
       "hint": "OPENSPEC: After verification-before-completion passes, invoke openspec-ship to generate as-built documentation before committing. This is mandatory for feature shipping.",
       "phases": ["SHIP"]
+    },
+    {
+      "name": "phase-enforcement",
+      "triggers": ["(fix|change|update|rename|move|add a|modify|edit|refactor|implement|write the|create the)"],
+      "trigger_mode": "regex",
+      "hint": "PHASE ENFORCEMENT: You are in DESIGN/PLAN phase. Complete the current phase skill before editing implementation files. Small changes still require the full flow — scaled down, not skipped.",
+      "phases": ["DESIGN", "PLAN"]
     }
   ],
   "blocklist_patterns": [
@@ -3728,5 +3735,48 @@ test_review_red_flags() {
     teardown_test_env
 }
 test_review_red_flags
+
+# ---------------------------------------------------------------------------
+# Phase enforcement hint
+# ---------------------------------------------------------------------------
+test_phase_enforcement_hint() {
+    echo "-- test: phase enforcement hint fires at DESIGN with impl intent --"
+    setup_test_env
+    install_registry
+
+    # "create the" matches impl-intent, "new" matches brainstorming (DESIGN)
+    local output
+    output="$(run_hook "create the new payment module for our app")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "phase enforcement hint" "PHASE ENFORCEMENT" "${context}"
+
+    teardown_test_env
+}
+test_phase_enforcement_hint
+
+test_phase_enforcement_hint_not_at_implement() {
+    echo "-- test: phase enforcement hint does NOT fire at IMPLEMENT --"
+    setup_test_env
+    install_registry_v4
+
+    local token="test-enforce-impl"
+    printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
+    printf '{"skill":"executing-plans","phase":"IMPLEMENT"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output
+    output="$(run_hook "continue with the next task")"
+    local context
+    context="$(extract_context "${output}")"
+
+    local enforce_count
+    enforce_count="$(printf '%s' "${context}" | grep -c 'PHASE ENFORCEMENT' 2>/dev/null)" || enforce_count=0
+    assert_equals "no enforcement hint at IMPLEMENT" "0" "${enforce_count}"
+
+    teardown_test_env
+}
+test_phase_enforcement_hint_not_at_implement
 
 print_summary
