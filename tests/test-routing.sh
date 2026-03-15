@@ -3554,24 +3554,6 @@ test_composition_state_no_corrupt() {
 test_composition_state_no_corrupt
 
 
-# ---------------------------------------------------------------------------
-# writing-plans should be reachable via direct plan triggers
-# ---------------------------------------------------------------------------
-test_writing_plans_direct_trigger() {
-    echo "-- test: direct PLAN prompt selects writing-plans --"
-    setup_test_env
-    install_registry_v4
-
-    local output
-    output="$(run_hook "let us plan this out and create the task list")"
-    local context
-    context="$(extract_context "${output}")"
-
-    assert_contains "writing-plans selected" "writing-plans" "${context}"
-
-    teardown_test_env
-}
-test_writing_plans_direct_trigger
 
 # ---------------------------------------------------------------------------
 # receiving-code-review should be reachable via feedback triggers

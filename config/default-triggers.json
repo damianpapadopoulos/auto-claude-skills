@@ -48,9 +48,7 @@
       "name": "writing-plans",
       "role": "process",
       "phase": "PLAN",
-      "triggers": [
-        "(plan( it)? out|write.*plan|implementation plan|break.?down|outline|task list|spec( it)? out)"
-      ],
+      "triggers": [],
       "keywords": [],
       "trigger_mode": "regex",
       "priority": 40,

@@ -338,11 +338,14 @@ EOF
 ${SORTED}
 EOF
           # If executing-plans wasn't in SORTED (no trigger match), inject it
+          # Only if it is available and enabled in the registry
           if [[ "$_injected" -eq 0 ]]; then
             local _ep_invoke
-            _ep_invoke="$(printf '%s' "$REGISTRY" | jq -r '.skills[] | select(.name == "executing-plans") | .invoke // "SKIP"' 2>/dev/null)"
-            _sticky_sorted="${_sticky_score}|executing-plans|process|${_ep_invoke}|IMPLEMENT
+            _ep_invoke="$(printf '%s' "$REGISTRY" | jq -r '.skills[] | select(.name == "executing-plans" and .available == true and .enabled == true) | .invoke // "SKIP"' 2>/dev/null)"
+            if [[ -n "$_ep_invoke" ]]; then
+              _sticky_sorted="${_sticky_score}|executing-plans|process|${_ep_invoke}|IMPLEMENT
 ${_sticky_sorted}"
+            fi
           fi
           SORTED="$(printf '%s' "$_sticky_sorted" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
         fi
@@ -955,7 +958,8 @@ ${HINTS}${COMPOSITION_HINTS}"
   fi
 
   # Write composition state for compaction resilience
-  if [[ -n "${_full_chain:-}" ]] && [[ "${_full_chain}" == *"|"* ]] && [[ -n "${_SESSION_TOKEN:-}" ]]; then
+  # Guard: skip write if _current_idx is -1 (anchor not found in chain)
+  if [[ -n "${_full_chain:-}" ]] && [[ "${_full_chain}" == *"|"* ]] && [[ -n "${_SESSION_TOKEN:-}" ]] && [[ "${_current_idx:--1}" -ge 0 ]]; then
     _comp_completed="[]"
     if [[ "${_last_skill_chain_idx:--1}" -ge 0 ]]; then
       _comp_completed="$(printf '%s' "$_full_chain" | tr '|' '\n' | head -n "$((_last_skill_chain_idx + 1))" | jq -R . | jq -s . 2>/dev/null)" || _comp_completed="[]"
