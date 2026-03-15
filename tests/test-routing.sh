@@ -912,9 +912,10 @@ test_claude_md_maintenance_hint() {
     setup_test_env
     install_registry
 
-    # "continue the plan and refactor the auth module" → executing-plans (IMPLEMENT phase) + "refactor" trigger
+    # "continue and refactor the auth module" → executing-plans (IMPLEMENT phase) + "refactor" trigger
+    # Avoid "plan" in prompt which matches writing-plans trigger in fixture
     local output context
-    output="$(run_hook "continue the plan and refactor the auth module")"
+    output="$(run_hook "continue and refactor the auth module")"
     context="$(extract_context "${output}")"
     assert_contains "claude-md hint fires in IMPLEMENT phase" "CLAUDE.MD" "${context}"
 
