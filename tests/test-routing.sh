@@ -3521,4 +3521,37 @@ test_implement_stickiness_respects_design_cues() {
 }
 test_implement_stickiness_respects_design_cues
 
+# ---------------------------------------------------------------------------
+# Composition state should not corrupt with missing anchor
+# ---------------------------------------------------------------------------
+test_composition_state_no_corrupt() {
+    echo "-- test: missing chain anchor does not corrupt composition state --"
+    setup_test_env
+    install_registry_with_required
+
+    local token="test-corrupt-session"
+    printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
+    # Set last-invoked to a skill NOT in the registry (forces anchor miss)
+    printf '{"skill":"nonexistent-skill","phase":"IMPLEMENT"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    run_hook "implement the feature using parallel worktrees" >/dev/null
+
+    local state_file="${HOME}/.claude/.skill-composition-state-${token}"
+    if [[ -f "$state_file" ]]; then
+        local idx
+        idx="$(jq '.current_index' "$state_file" 2>/dev/null)"
+        if [[ "$idx" == "-1" ]]; then
+            _record_fail "composition state not corrupted" "current_index is -1"
+        else
+            _record_pass "composition state not corrupted"
+        fi
+    else
+        _record_pass "composition state not corrupted (no file written)"
+    fi
+
+    teardown_test_env
+}
+test_composition_state_no_corrupt
+
 print_summary
