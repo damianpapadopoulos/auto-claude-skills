@@ -1259,7 +1259,7 @@ HALT if any Red Flag is true:
 - Skipping TDD: writing implementation before writing the failing test
 - Not following the plan step by step
 - Jumping to SHIP without going through REVIEW (requesting-code-review) first
-- Use subagent-driven-development or agent-team-execution where appropriate"
+- Not using subagent-driven-development or agent-team-execution for parallelizable tasks"
     ;;
   REVIEW)
     RED_FLAGS="

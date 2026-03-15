@@ -69,7 +69,7 @@ install_registry() {
       "name": "writing-plans",
       "role": "process",
       "phase": "PLAN",
-      "triggers": [],
+      "triggers": ["(plan|outline|break.?down|spec)"],
       "trigger_mode": "regex",
       "priority": 40,
       "precedes": ["executing-plans"],
@@ -3778,5 +3778,55 @@ test_phase_enforcement_hint_not_at_implement() {
     teardown_test_env
 }
 test_phase_enforcement_hint_not_at_implement
+
+test_plan_red_flags() {
+    echo "-- test: PLAN phase has RED FLAGS --"
+    setup_test_env
+    install_registry
+
+    local token="test-plan-rf"
+    printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
+    # Set last-invoked to brainstorming so writing-plans gets chain bonus (+20)
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    # install_registry's writing-plans has triggers "(plan|outline|...)"
+    # Chain bonus (+20) from brainstorming state makes writing-plans win
+    local output
+    output="$(run_hook "let us plan this out")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "PLAN red flags present" "approved plan" "${context}"
+
+    teardown_test_env
+}
+test_plan_red_flags
+
+test_review_sequence_visible() {
+    echo "-- test: REVIEW sequence shows 3-step flow --"
+    setup_test_env
+
+    # Use the production fallback registry (has phase_compositions with REVIEW sequence)
+    local cache="${HOME}/.claude/.skill-registry-cache.json"
+    cp "${PROJECT_ROOT}/config/fallback-registry.json" "${cache}"
+    # Enable requesting-code-review in the fallback
+    local tmp="${cache}.tmp"
+    jq '.skills |= map(
+        if .name == "requesting-code-review" then . + {available:true, enabled:true, invoke:"Skill(superpowers:requesting-code-review)"}
+        else . end
+    )' "${cache}" > "${tmp}" && mv "${tmp}" "${cache}"
+
+    local output
+    output="$(run_hook "review the pull request for the auth module")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "REVIEW sequence has requesting" "SEQUENCE: requesting-code-review" "${context}"
+    assert_contains "REVIEW sequence has receiving" "SEQUENCE: receiving-code-review" "${context}"
+
+    teardown_test_env
+}
+test_review_sequence_visible
 
 print_summary
