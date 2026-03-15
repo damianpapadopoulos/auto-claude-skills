@@ -1040,6 +1040,16 @@ ${_comp_output}
 EOF
 fi
 
+# Fallback: ensure TDD PARALLEL is present for IMPLEMENT/DEBUG even without jq composition
+case "${CURRENT_PHASE:-}" in
+  IMPLEMENT|DEBUG)
+    if [[ -z "$COMPOSITION_LINES" ]] || ! printf '%s' "$COMPOSITION_LINES" | grep -q 'test-driven-development'; then
+      COMPOSITION_LINES="${COMPOSITION_LINES}
+  PARALLEL: test-driven-development -> Skill(superpowers:test-driven-development) — INVOKE before writing production code"
+    fi
+    ;;
+esac
+
 # --- Build skill display lines and walk composition chain ---
 _build_skill_lines
 _walk_composition_chain
