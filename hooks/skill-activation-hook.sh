@@ -1192,11 +1192,16 @@ if [[ -n "$CURRENT_PHASE" ]]; then
     )
   ' 2>/dev/null)"
 
+  _TDD_EMITTED=0
   while IFS= read -r _cline; do
     [[ -z "$_cline" ]] && continue
     case "$_cline" in
-      LINE:*)  COMPOSITION_LINES="${COMPOSITION_LINES}
-${_cline#LINE:}" ;;
+      LINE:*)
+        COMPOSITION_LINES="${COMPOSITION_LINES}
+${_cline#LINE:}"
+        # Track if TDD was emitted from jq composition
+        case "${_cline}" in *test-driven-development*) _TDD_EMITTED=1 ;; esac
+        ;;
       HINT:*)  COMPOSITION_HINTS="${COMPOSITION_HINTS}
 - ${_cline#HINT:}" ;;
     esac
@@ -1208,7 +1213,7 @@ fi
 # Fallback: ensure TDD PARALLEL is present for IMPLEMENT/DEBUG even without jq composition
 case "${CURRENT_PHASE:-}" in
   IMPLEMENT|DEBUG)
-    if [[ -z "$COMPOSITION_LINES" ]] || ! printf '%s' "$COMPOSITION_LINES" | grep -q 'test-driven-development'; then
+    if [[ "${_TDD_EMITTED:-0}" -eq 0 ]]; then
       COMPOSITION_LINES="${COMPOSITION_LINES}
   PARALLEL: test-driven-development -> Skill(superpowers:test-driven-development) — INVOKE before writing production code"
     fi
