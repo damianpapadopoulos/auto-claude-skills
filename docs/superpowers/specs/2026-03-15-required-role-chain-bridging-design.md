@@ -81,26 +81,43 @@ EOF
 
 ### Output Format
 
-Required skills appear before the process skill, with appropriate eval tags:
+**Display ordering:** All required skills appear before process/domain/workflow skills. Within required, phase-gated (unconditional) appear first, then trigger-gated, then condition-gated. This is the display order, which differs from the logical execution order described in Section 4.
+
+**Example at IMPLEMENT phase:**
 
 ```
 Required: test-driven-development -> Skill(superpowers:test-driven-development)
-Required: security-scanner -> Skill(security-scanner)
 Process: executing-plans -> Skill(superpowers:executing-plans)
   Domain: frontend-design -> Call Skill(frontend-design:frontend-design)
 Workflow: agent-team-execution -> Skill(auto-claude-skills:agent-team-execution)
+```
+
+Note: `security-scanner` (phase-gated to REVIEW) does NOT appear here — it only activates at the REVIEW phase.
+
+**Example at REVIEW phase:**
+
+```
+Required: security-scanner -> Skill(security-scanner)
 Required when multi-file/cross-module/security-sensitive: agent-team-review -> Skill(auto-claude-skills:agent-team-review)
+Process: requesting-code-review -> Skill(superpowers:requesting-code-review)
 ```
 
-Eval line:
+**Eval lines:**
 
+At IMPLEMENT:
 ```
-Evaluate: **Phase: [IMPLEMENT]** | test-driven-development REQUIRED, security-scanner REQUIRED,
-  executing-plans MUST INVOKE, frontend-design YES/NO, agent-team-execution YES/NO,
+Evaluate: **Phase: [IMPLEMENT]** | test-driven-development REQUIRED,
+  executing-plans MUST INVOKE, frontend-design YES/NO, agent-team-execution YES/NO
+```
+
+At REVIEW:
+```
+Evaluate: **Phase: [REVIEW]** | security-scanner REQUIRED,
+  requesting-code-review MUST INVOKE,
   agent-team-review INVOKE WHEN: PR touches 3+ files, crosses module boundaries, or includes security-sensitive changes
 ```
 
-Unconditional required skills use the tag `REQUIRED`. Conditional required skills use `INVOKE WHEN: <condition>`.
+Required skills without `required_when` use the tag `REQUIRED`. Required skills with `required_when` use `INVOKE WHEN: <condition>`.
 
 ## 2. Skills to Reclassify
 
@@ -173,7 +190,7 @@ With the new required skills, the REVIEW phase has internal ordering:
 2. **`agent-team-review`** (condition-gated required) — dispatch parallel specialist reviewers from pr-review-toolkit (code-reviewer, silent-failure-hunter, code-simplifier, comment-analyzer, pr-test-analyzer, type-design-analyzer)
 3. **`security-scanner`** (phase-gated required) — mandatory security gate
 
-This ordering is conveyed through the pass 0 output: required skills appear before process/domain/workflow in the output, with phase-gated skills listed first (always present), then trigger-gated skills. No new `required_sequence` field is needed in `phase_compositions` — the existing `parallel` entries for pr-review-toolkit remain as-is since they describe execution tools dispatched within `agent-team-review`, not competing skills.
+**Logical vs display ordering:** The numbered list above describes the logical execution order (process driver first, then required skills). The display ordering in the hook output is different: required skills appear before the process skill (see Section 1, Output Format). The model uses the logical ordering to sequence its work, not the display ordering. No new `required_sequence` field is needed in `phase_compositions` — the existing `parallel` entries for pr-review-toolkit remain as-is since they describe execution tools dispatched within `agent-team-review`, not competing skills.
 
 ## 5. Routing Engine Changes
 
@@ -184,20 +201,51 @@ Add **tentative phase computation** and **pass 0** before the existing process r
 ```
 Tentative phase: Scan SORTED for top process skill's phase (else top skill's phase).
 
-Pass 0: Scan SORTED for required-role skills.
-         Phase-gated (triggers empty): include if phase matches tentative phase.
-         Trigger-gated (triggers present): include if phase matches AND already scored > 0.
-         These go into REQUIRED_SELECTED, do not increment role counters,
+Pass 0: Collect required-role skills from TWO sources:
+         A. Phase-gated (triggers empty): Scan REGISTRY (not SORTED) for required
+            skills with empty triggers whose phase matches tentative phase. These
+            skills will NOT be in SORTED because _score_skills() only adds skills
+            that match at least one trigger/keyword/name. Phase-gated required
+            skills bypass scoring entirely.
+         B. Trigger-gated (triggers present): Scan SORTED for required-role skills
+            that scored > 0 AND whose phase matches tentative phase. These ARE in
+            SORTED because their triggers matched.
+         Both go into REQUIRED_SELECTED, do not increment role counters,
          do not count against MAX_SUGGESTIONS.
          Track count in REQUIRED_COUNT (for display).
 
-Pass 1: (existing) Reserve top process skill.
+Pass 1: (existing) Reserve top process skill. Skip any skill already in
+         REQUIRED_SELECTED.
 
 Pass 2: (existing) Fill remaining domain/workflow slots using CAPPED_COUNT
-         (excludes REQUIRED_COUNT) for the MAX_SUGGESTIONS check.
+         (excludes REQUIRED_COUNT) for the MAX_SUGGESTIONS check. Skip any
+         skill already in REQUIRED_SELECTED.
 ```
 
 Required skills are stored in `REQUIRED_SELECTED` and prepended to `SELECTED` for output formatting. `TOTAL_COUNT` includes required skills (for accurate display in the header). `CAPPED_COUNT` excludes them (for cap enforcement).
+
+### SKILL_DATA extraction
+
+The `SKILL_DATA` jq extraction (lines 914-919) must be extended to include `required_when` as a 9th field:
+
+```jq
+(.name + "\u001f" + (.name | ascii_downcase) + "\u001f" + .role + "\u001f" +
+ (.priority // 0 | tostring) + "\u001f" + (.invoke // "SKIP") + "\u001f" +
+ (.phase // "") + "\u001f" + ((.triggers // []) | join("\u0001")) + "\u001f" +
+ ((.keywords // []) | join("\u0001")) + "\u001f" + (.required_when // ""))
+```
+
+Pass 0 and `_build_skill_lines()` use this field to distinguish conditional from unconditional required skills and to render the `INVOKE WHEN:` tag.
+
+For pass 0 source A (phase-gated skills from REGISTRY), a separate jq call extracts required skills with empty triggers:
+
+```bash
+_PHASE_GATED_REQUIRED="$(printf '%s' "$REGISTRY" | jq -r --arg ph "$_TENTATIVE_PHASE" '
+  [.skills[] | select(.role == "required" and .phase == $ph and
+    ((.triggers // []) | length) == 0 and .available == true and .enabled == true)] |
+  .[] | "\(.priority // 0)|\(.name)|\(.role)|\(.invoke // "SKIP")|\(.phase // "")|\(.required_when // "")"
+' 2>/dev/null)"
+```
 
 ### `_build_skill_lines()` in `skill-activation-hook.sh`
 
@@ -334,8 +382,8 @@ Both TDD and security-scanner have empty triggers (phase-gated): they activate o
 |------|--------|
 | `config/default-triggers.json` | Add `test-driven-development` as NEW entry (role=required, triggers=[], phase=IMPLEMENT); reclassify `security-scanner` (role→required, triggers→[]); reclassify `using-git-worktrees` (role→required, ADD triggers); reclassify `agent-team-review` (role→required, ADD required_when); add chain links (precedes/requires) to `executing-plans`, `requesting-code-review`, `verification-before-completion` |
 | `config/fallback-registry.json` | Regenerate to reflect updated registry |
-| `hooks/skill-activation-hook.sh` | Add tentative phase computation before `_select_by_role_caps()`; add pass 0 for required skills (phase-gated and trigger-gated); add `REQUIRED_SELECTED`, `REQUIRED_COUNT`, `CAPPED_COUNT` variables; add `_SL_REQUIRED` to `_build_skill_lines()`; update eval tag generation in `_format_output()` for `REQUIRED` and `INVOKE WHEN:` tags; update `_determine_label_phase()` for `+ Required` suffix |
-| `tests/test-routing.sh` | Add 10 new tests (7 required role + 3 chain bridging); update existing `test_tdd_not_scored_as_process` to verify TDD appears as `Required:` instead |
+| `hooks/skill-activation-hook.sh` | Extend `SKILL_DATA` jq extraction to include `required_when` as 9th field; add tentative phase computation before `_select_by_role_caps()`; add pass 0 — source A: jq on REGISTRY for phase-gated (empty triggers), source B: scan SORTED for trigger-gated; add `REQUIRED_SELECTED`, `REQUIRED_COUNT`, `CAPPED_COUNT`; ensure passes 1-2 skip REQUIRED_SELECTED members; add `_SL_REQUIRED` to `_build_skill_lines()`; update eval tags in `_format_output()` for `REQUIRED` and `INVOKE WHEN:`; update `_determine_label_phase()` for `+ Required` suffix |
+| `tests/test-routing.sh` | Add 11 new tests (8 required role + 3 chain bridging); update existing `test_tdd_not_scored_as_process` to verify TDD appears as `Required:` instead |
 
 ## 8. Tests
 
