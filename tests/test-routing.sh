@@ -3225,4 +3225,250 @@ test_skipped_step_markers() {
 }
 test_skipped_step_markers
 
+# ---------------------------------------------------------------------------
+# Required role tests
+# ---------------------------------------------------------------------------
+install_registry_with_required() {
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" << 'REGISTRY'
+{
+  "version": "4.0.0",
+  "skills": [
+    {
+      "name": "executing-plans",
+      "role": "process",
+      "phase": "IMPLEMENT",
+      "triggers": ["(execute.*plan|implement|continue|build|create)"],
+      "trigger_mode": "regex",
+      "priority": 35,
+      "invoke": "Skill(superpowers:executing-plans)",
+      "precedes": ["requesting-code-review"],
+      "requires": ["writing-plans"],
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "using-git-worktrees",
+      "role": "required",
+      "phase": "IMPLEMENT",
+      "triggers": ["(parallel|concurrent|worktree|isolat|branch.*(work|switch))"],
+      "trigger_mode": "regex",
+      "priority": 14,
+      "invoke": "Skill(superpowers:using-git-worktrees)",
+      "precedes": [],
+      "requires": [],
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "agent-team-execution",
+      "role": "workflow",
+      "phase": "IMPLEMENT",
+      "triggers": ["(agent.team|team.execute|parallel.team|build|create|implement)"],
+      "trigger_mode": "regex",
+      "priority": 22,
+      "invoke": "Skill(auto-claude-skills:agent-team-execution)",
+      "precedes": [],
+      "requires": [],
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "agent-team-review",
+      "role": "required",
+      "phase": "REVIEW",
+      "required_when": "PR touches 3+ files, crosses module boundaries, or includes security-sensitive changes",
+      "triggers": ["(review|pull.?request|code.?review|check.*(code|changes|diff)|(^|[^a-z])pr($|[^a-z]))"],
+      "trigger_mode": "regex",
+      "priority": 20,
+      "invoke": "Skill(auto-claude-skills:agent-team-review)",
+      "precedes": [],
+      "requires": [],
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "requesting-code-review",
+      "role": "process",
+      "phase": "REVIEW",
+      "triggers": ["(review|pull.?request|code.?review|check.*(code|changes|diff)|(^|[^a-z])pr($|[^a-z]))"],
+      "trigger_mode": "regex",
+      "priority": 25,
+      "invoke": "Skill(superpowers:requesting-code-review)",
+      "precedes": ["verification-before-completion"],
+      "requires": ["executing-plans"],
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "frontend-design",
+      "role": "domain",
+      "phase": "DESIGN",
+      "triggers": ["(ui|frontend|component|layout|style|css)"],
+      "trigger_mode": "regex",
+      "priority": 15,
+      "invoke": "Skill(frontend-design:frontend-design)",
+      "precedes": [],
+      "requires": [],
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "design-debate",
+      "role": "domain",
+      "phase": "DESIGN",
+      "triggers": ["(design|architect|trade.?off|debate|build|create)"],
+      "trigger_mode": "regex",
+      "priority": 18,
+      "invoke": "Skill(auto-claude-skills:design-debate)",
+      "precedes": [],
+      "requires": [],
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "phase_guide": {},
+  "methodology_hints": [],
+  "plugins": [],
+  "phase_compositions": {}
+}
+REGISTRY
+}
+
+test_required_bypasses_workflow_cap() {
+    echo "-- test: required skill bypasses workflow cap --"
+    setup_test_env
+    install_registry_with_required
+
+    local output
+    output="$(run_hook "implement the feature using parallel worktrees")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "worktrees appears as Required" "Required:" "${context}"
+    assert_contains "worktrees in output" "using-git-worktrees" "${context}"
+    assert_contains "agent-team-execution appears as Workflow" "Workflow:" "${context}"
+    assert_contains "agent-team-execution in output" "agent-team-execution" "${context}"
+
+    teardown_test_env
+}
+test_required_bypasses_workflow_cap
+
+test_conditional_required_invoke_when() {
+    echo "-- test: conditional required shows INVOKE WHEN tag --"
+    setup_test_env
+    install_registry_with_required
+
+    local output
+    output="$(run_hook "review this pull request for the auth module")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "INVOKE WHEN tag present" "INVOKE WHEN:" "${context}"
+    assert_contains "condition text present" "3+ files" "${context}"
+
+    teardown_test_env
+}
+test_conditional_required_invoke_when
+
+test_required_skill_wrong_phase() {
+    echo "-- test: required skill does not activate at wrong phase --"
+    setup_test_env
+    install_registry_with_required
+
+    # worktrees is required at IMPLEMENT, but this triggers DESIGN only
+    # (avoid words like "create", "build", "implement" that match executing-plans)
+    local output
+    output="$(run_hook "discuss the parallel architecture approach for the frontend ui layout")"
+    local context
+    context="$(extract_context "${output}")"
+
+    local wt_count
+    wt_count="$(printf '%s' "${context}" | grep -c 'using-git-worktrees' 2>/dev/null)" || wt_count=0
+    assert_equals "worktrees not at wrong phase" "0" "${wt_count}"
+
+    teardown_test_env
+}
+test_required_skill_wrong_phase
+
+test_required_eval_tag() {
+    echo "-- test: REQUIRED eval tag present for unconditional required --"
+    setup_test_env
+    install_registry_with_required
+
+    local output
+    output="$(run_hook "implement the feature using parallel worktrees")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "REQUIRED tag in eval" "using-git-worktrees REQUIRED" "${context}"
+
+    teardown_test_env
+}
+test_required_eval_tag
+
+test_required_bypasses_total_cap() {
+    echo "-- test: required skill does not count against total cap --"
+    setup_test_env
+    install_registry_with_required
+
+    # Trigger process + workflow + required = should show all 3
+    local output
+    output="$(run_hook "implement the feature with parallel worktrees")"
+    local context
+    context="$(extract_context "${output}")"
+
+    # Count all skill lines
+    local skill_count
+    skill_count="$(printf '%s' "${context}" | grep -cE '(Required|Process|Workflow):' 2>/dev/null)" || skill_count=0
+    if [[ "$skill_count" -ge 3 ]]; then
+        _record_pass "required bypasses cap ($skill_count skills)"
+    else
+        _record_fail "required bypasses cap" "only $skill_count skills, expected >= 3"
+    fi
+
+    teardown_test_env
+}
+test_required_bypasses_total_cap
+
+test_required_no_plabel() {
+    echo "-- test: required skills alone do not set PLABEL --"
+    setup_test_env
+
+    local registry_file="${HOME}/.claude/.skill-registry-cache.json"
+    cat > "${registry_file}" << 'REGISTRY'
+{
+  "version": "4.0.0",
+  "skills": [
+    {
+      "name": "using-git-worktrees",
+      "role": "required",
+      "phase": "IMPLEMENT",
+      "triggers": ["(parallel|worktree)"],
+      "trigger_mode": "regex",
+      "priority": 14,
+      "invoke": "Skill(superpowers:using-git-worktrees)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "phase_guide": {},
+  "methodology_hints": [],
+  "plugins": [],
+  "phase_compositions": {}
+}
+REGISTRY
+
+    local output
+    output="$(run_hook "use parallel worktrees for this")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "assess intent fallback" "assess intent" "${context}"
+
+    teardown_test_env
+}
+test_required_no_plabel
+
 print_summary

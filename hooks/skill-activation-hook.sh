@@ -356,6 +356,10 @@ EOF
     printf '%s' "$REQUIRED_SELECTED" | grep -q "|${name}|" && continue
 
     case "$role" in
+      required)
+        # Required skills not selected in pass 0 (wrong phase) — skip entirely
+        continue
+        ;;
       process)
         # Skip reserved process skill; cap additional process skills at 0
         [[ "$name" == "$RESERVED_PROCESS_NAME" ]] && continue
@@ -989,6 +993,8 @@ _score_skills
 _apply_context_bonus
 
 # --- Compute tentative phase for required-role pass 0 ---
+# Priority: process > workflow > domain > first non-required skill.
+# Required skills are excluded from fallback to avoid circular dependency.
 _TENTATIVE_PHASE=""
 while IFS='|' read -r _tp_score _tp_name _tp_role _tp_invoke _tp_phase; do
   [[ -z "$_tp_name" ]] && continue
@@ -996,6 +1002,8 @@ while IFS='|' read -r _tp_score _tp_name _tp_role _tp_invoke _tp_phase; do
     _TENTATIVE_PHASE="$_tp_phase"
     break
   fi
+  # Skip required skills for fallback — they depend on tentative phase
+  [[ "$_tp_role" == "required" ]] && continue
   [[ -z "$_TENTATIVE_PHASE" ]] && _TENTATIVE_PHASE="$_tp_phase"
 done <<EOF
 ${SORTED}
