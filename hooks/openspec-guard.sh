@@ -76,6 +76,32 @@ if [ "${_consol_ok}" = "false" ]; then
     _WARNINGS="${_WARNINGS}CONSOLIDATION GUARD: Memory consolidation has not been performed this session. Learnings may be lost. Run the memory consolidation step from ship-and-learn before committing."
 fi
 
+# --- Check 3: Are archived delta specs synced to canonical? ---
+_unsynced=false
+if [ -d "${_proj_root}/openspec/changes/archive" ]; then
+    for _delta in "${_proj_root}/openspec/changes/archive"/*/specs/*/spec.md; do
+        [ -f "${_delta}" ] || continue
+        _cap="$(basename "$(dirname "${_delta}")")"
+        _canonical="${_proj_root}/openspec/specs/${_cap}/spec.md"
+        if [ -f "${_canonical}" ]; then
+            _canon_time="$(stat -f %m "${_canonical}" 2>/dev/null || stat -c %Y "${_canonical}" 2>/dev/null || echo 0)"
+            _delta_time="$(stat -f %m "${_delta}" 2>/dev/null || stat -c %Y "${_delta}" 2>/dev/null || echo 0)"
+            if [ "${_canon_time}" -lt "${_delta_time}" ]; then
+                _unsynced=true
+                break
+            fi
+        else
+            _unsynced=true
+            break
+        fi
+    done
+fi
+if [ "${_unsynced}" = "true" ]; then
+    [ -n "${_WARNINGS}" ] && _WARNINGS="${_WARNINGS}
+"
+    _WARNINGS="${_WARNINGS}OPENSPEC GUARD: Archived delta specs may not be synced to canonical specs at openspec/specs/. Consider running openspec validate or manually merging delta changes before committing."
+fi
+
 # --- Emit combined warnings ---
 if [ -n "${_WARNINGS}" ]; then
     if command -v jq >/dev/null 2>&1; then
