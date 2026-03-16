@@ -31,7 +31,7 @@ touch ~/.claude/.context-stack-consolidated-$(printf '%s' "$(git rev-parse --sho
 Evaluate your available tools and execute the highest available tier:
 
 ### IF forgetful_memory = true
-Execute `memory-save` to permanently store:
+Use Forgetful to permanently store (see `tiers/historical-truth.md` for tool mechanics):
 - New architectural rules or conventions discovered
 - Project-specific quirks that would be useful in future sessions
 - Decisions made and their rationale

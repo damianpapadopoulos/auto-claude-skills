@@ -13,7 +13,7 @@ IF the task references a known feature or capability, check for specification co
 
 ### 1. Historical Truth
 Query institutional memory for past constraints in this area:
-- **forgetful_memory=true**: Use `memory-search` to query past architectural decisions and known constraints
+- **forgetful_memory=true**: Query Forgetful for past architectural decisions and known constraints (see `tiers/historical-truth.md` for tool mechanics)
 - **forgetful_memory=false**: Read CLAUDE.md, docs/architecture.md, and .cursorrules for project context
 
 ### 2. External Truth

@@ -6,7 +6,7 @@ When tests fail or errors occur, use context to resolve efficiently.
 
 ### 1. Historical Truth (First Check)
 Before investigating from scratch:
-- **forgetful_memory=true**: Use `memory-search` for this exact error message or pattern
+- **forgetful_memory=true**: Query Forgetful for this exact error message or pattern (see `tiers/historical-truth.md` for tool mechanics)
 - **forgetful_memory=false**: Check CLAUDE.md and docs/learnings.md for known environmental quirks
 - Check if this is a known workaround with a documented fix
 
