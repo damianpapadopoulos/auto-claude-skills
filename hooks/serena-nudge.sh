@@ -38,5 +38,9 @@ case "${_PATTERN}" in
 esac
 
 _MSG="Serena is available. Consider find_symbol or get_symbols_overview for symbol lookups instead of Grep."
-jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":$msg}}'
+if command -v jq >/dev/null 2>&1; then
+    jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":$msg}}'
+else
+    printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"%s"}}\n' "${_MSG}"
+fi
 exit 0

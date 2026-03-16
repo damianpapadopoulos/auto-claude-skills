@@ -107,7 +107,7 @@ if [ -n "${_WARNINGS}" ]; then
     if command -v jq >/dev/null 2>&1; then
         jq -n --arg msg "${_WARNINGS}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":$msg}}'
     else
-        printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"%s"}}\n' "${_WARNINGS}"
+        printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"%s"}}\n' "$(printf '%s' "${_WARNINGS}" | tr '\n' ' ')"
     fi
 fi
 exit 0

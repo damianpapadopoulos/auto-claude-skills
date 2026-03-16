@@ -882,9 +882,9 @@
         },
         {
           "plugin": "unified-context-stack",
-          "use": "memory consolidation (annotate + memory-save)",
+          "use": "memory consolidation (annotate + Forgetful)",
           "when": "installed AND any context_capability is true",
-          "purpose": "Consolidate learnings via chub annotate and/or memory-save before session close"
+          "purpose": "Consolidate learnings via chub annotate and/or Forgetful before session close"
         },
         {
           "plugin": "commit-commands",
