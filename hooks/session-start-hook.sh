@@ -518,6 +518,25 @@ CONTEXT_CAPS="$(printf '%s' "${PLUGINS_JSON}" | jq \
     {context7:$c7, context_hub_cli:$chub, context_hub_available:$c7, serena:$ser, forgetful_memory:$fm, openspec:$openspec}'
 )"
 
+# MCP fallback: check ~/.claude.json for servers not detected via plugins
+_CLAUDE_JSON="${HOME}/.claude.json"
+if [ -f "${_CLAUDE_JSON}" ] && command -v jq >/dev/null 2>&1; then
+    CONTEXT_CAPS="$(printf '%s' "${CONTEXT_CAPS}" | jq \
+        --slurpfile cj "${_CLAUDE_JSON}" \
+        --arg proj "${_WORKSPACE_ROOT}" \
+        '# Check user-scoped mcpServers
+         ($cj[0].mcpServers // {}) as $user_mcp |
+         # Check project-scoped mcpServers
+         (($cj[0].projects[$proj].mcpServers // {}) ) as $proj_mcp |
+         # Merge: project overrides user
+         ($user_mcp + $proj_mcp) as $all_mcp |
+         # Augment: only upgrade false->true, never downgrade
+         if .serena == false and ($all_mcp | has("serena")) then .serena = true else . end |
+         if .forgetful_memory == false and ($all_mcp | has("forgetful")) then .forgetful_memory = true else . end |
+         if .context7 == false and ($all_mcp | has("context7")) then .context7 = true else . end'
+    )" || true
+fi
+
 # Override unified-context-stack plugin available flag when any capability is present
 if printf '%s' "${CONTEXT_CAPS}" | jq -e 'to_entries | any(.value == true)' >/dev/null 2>&1; then
     PLUGINS_JSON="$(printf '%s' "${PLUGINS_JSON}" | jq '
