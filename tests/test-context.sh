@@ -916,6 +916,9 @@ test_fallback_design_matches_default() {
     local use_field
     use_field="$(jq -r '.phase_compositions.DESIGN.parallel[] | select(.plugin == "unified-context-stack") | .use' "${fallback}")"
     assert_equals "fallback DESIGN use field" "tiered context retrieval (Intent Truth, Historical Truth)" "${use_field}"
+    local purpose_field
+    purpose_field="$(jq -r '.phase_compositions.DESIGN.parallel[] | select(.plugin == "unified-context-stack") | .purpose' "${fallback}")"
+    assert_equals "fallback DESIGN purpose field" "Check existing specs and past decisions before proposing approaches" "${purpose_field}"
 }
 test_fallback_design_matches_default
 

@@ -48,8 +48,8 @@ Narrow the parallel entry fields:
 - The `brainstorming` skill (upstream, not ours)
 - `triage-and-plan.md` (still covers all 4 tiers during plan-writing)
 - Hook emission logic (already reads `purpose` from `phase_compositions`)
-- Fallback registry (regenerated from default-triggers.json)
+- Fallback registry structure (manually mirrored from default-triggers.json — `use`/`purpose` fields updated in both)
 
 ## Scope
 
-3 files (1 new, 2 modified). No hook logic changes. No new capabilities.
+4 files (1 new, 3 modified). No hook logic changes. No new capabilities.
