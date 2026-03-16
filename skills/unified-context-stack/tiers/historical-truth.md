@@ -7,11 +7,11 @@ Capability: Retrieve and store project-specific rules, decisions, and quirks acr
 **Condition:** `forgetful_memory = true`
 
 ### Reading (all phases)
-- Use `memory-search` to query past architectural decisions
-- Use `memory-explore` to browse the knowledge graph for related context
+- Use `discover_forgetful_tools` to list available memory operations, then `execute_forgetful_tool` to query past architectural decisions
+- Browse related context by executing the exploration tool discovered above
 
 ### Writing (Phase 5: Ship & Learn)
-- Use `memory-save` to permanently store new architectural rules discovered during this session
+- Use `execute_forgetful_tool` to permanently store new architectural rules discovered during this session
 
 ## Tier 2: Flat Files (Fallback)
 
