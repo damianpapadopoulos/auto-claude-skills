@@ -22,7 +22,7 @@ After the existing `CONTEXT_CAPS` computation (line 519), add a fallback that re
 
 - Read `~/.claude.json` with a single `jq --slurpfile` call
 - Check user-scoped `mcpServers` (top-level key) for forgetful, serena, context7
-- Check project-scoped `projects.<project-path>.mcpServers` for the same
+- Check project-scoped `projects.<project-path>.mcpServers` for the same (use `_WORKSPACE_ROOT` variable, available at line 480)
 - Merge: project-scoped overrides user-scoped
 - Only upgrade `false` → `true`, never downgrade (additive to plugin detection)
 - Silent fallback if `~/.claude.json` missing or jq unavailable
@@ -105,7 +105,7 @@ Before accepting architectural changes:
 - Emits advisory hint: `"Serena is available. Consider find_symbol or get_symbols_overview for symbol lookups instead of Grep."`
 - Always exits 0 (fail-open, never blocking)
 
-**Registration:** Added to `.claude-plugin/plugin.json` hooks array as a PreToolUse hook.
+**Registration:** Added to `hooks/hooks.json` under the `PreToolUse` key with `"matcher": "Grep"`, alongside the existing `openspec-guard.sh` entry.
 
 ### Section 5: Forgetful Curated Plugin Entry
 
@@ -143,7 +143,7 @@ fi
 |------|-------------|
 | `hooks/session-start-hook.sh` | MCP fallback detection + Forgetful hint |
 | `hooks/serena-nudge.sh` | **New** — PreToolUse nudge guard |
-| `.claude-plugin/plugin.json` | Register serena-nudge hook |
+| `hooks/hooks.json` | Register serena-nudge PreToolUse hook (matcher: `Grep`) |
 | `config/default-triggers.json` | Add forgetful curated plugin entry |
 | `skills/unified-context-stack/tiers/internal-truth.md` | Fix `cross_reference` → `find_referencing_symbols` |
 | `skills/unified-context-stack/tiers/historical-truth.md` | Fix tool names to actual Forgetful MCP tools |
