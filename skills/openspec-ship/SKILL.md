@@ -11,6 +11,16 @@ Generate permanent "as-built" OpenSpec documentation from completed code, then a
 
 Invoke this skill during the SHIP phase after `verification-before-completion` passes and before `finishing-a-development-branch`. It runs automatically as part of the SHIP composition chain.
 
+## When to Skip
+
+Skip this skill ONLY when ALL of these are true:
+- No Superpowers plan was executed in this session (no `docs/superpowers/plans/` artifact)
+- The session was debugging, reviewing, or non-feature work
+
+**Scope and size are NOT skip criteria.** If a Superpowers plan was executed — regardless of how small the change — this skill MUST run. A 3-file config change that went through brainstorming → writing-plans → execution still needs as-built documentation.
+
+If you are uncertain whether to skip, run it. The cost of an unnecessary openspec-ship is minutes; the cost of missing documentation is permanent knowledge loss.
+
 ## Hard Precondition
 
 Before proceeding, verify that `verification-before-completion` has already run in this conversation. Look for fresh verification evidence appropriate to the project (e.g., test runner output, lint results, build confirmation — not all projects have all three). If no fresh verification evidence exists, STOP and inform the user:

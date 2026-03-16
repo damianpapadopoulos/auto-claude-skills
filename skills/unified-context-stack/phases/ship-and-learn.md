@@ -18,7 +18,7 @@ If the session produced working code from a Superpowers plan, generate permanent
 - Same change-folder structure, same filenames, same required section headings, compatible content
 - Manually move change folder to `openspec/changes/archive/`. Create canonical spec only if none exists; skip canonical update with warning if one already exists
 
-**Skip Condition:** If the session was debugging, reviewing, or performing non-feature work (no Superpowers plan was executed), skip this step entirely.
+**Skip Condition:** Skip ONLY if no Superpowers plan was executed (debugging, reviewing, or non-feature work). Scope and size of the change are NOT skip criteria — if a plan was executed, as-built documentation is required regardless of how small the change.
 
 **REQUIRED before completing session:** If you discovered any architectural rules, API quirks, or project conventions during this session, you MUST consolidate them using the highest available tier below before claiming the work is done. After consolidation, write the marker:
 
