@@ -44,6 +44,15 @@
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/openspec-guard.sh"
           }
         ]
+      },
+      {
+        "matcher": "Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/serena-nudge.sh"
+          }
+        ]
       }
     ],
     "PostToolUse": [
