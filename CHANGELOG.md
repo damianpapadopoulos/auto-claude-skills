@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Design phase document for unified-context-stack (Intent Truth + Historical Truth before brainstorming)
 - Phase-aware RED FLAGS for DESIGN, PLAN, IMPLEMENT, and REVIEW phases
 - Phase-enforcement methodology hint for DESIGN/PLAN phases
 - REVIEW 3-step sequence (requesting → agent-team → receiving code review)
@@ -18,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - IMPLEMENT stickiness rule for explicit continuation language
 
 ### Changed
+- Narrowed DESIGN phase activation hint from generic 4-tier to Intent Truth + Historical Truth
 - Narrowed brainstorming triggers to boundary-safe generic verbs
 - Narrowed design-debate triggers to tradeoff/comparison language only
 - Narrowed agent-team-execution triggers to team-specific language
