@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- MCP detection fallback: session-start hook reads ~/.claude.json for serena/forgetful/context7 MCP servers
+- Forgetful curated plugin entry in default-triggers.json with all-phase coverage
+- Forgetful session-start usage hint (parallel to existing Serena hint)
+- Serena PreToolUse nudge guard (hints when Grep used for symbol lookups)
+- Historical Truth step in Implementation phase (workaround check)
+- Historical Truth step in Code Review phase (convention check)
+- Memory consolidation enforcement in openspec-guard (commit-time warning)
+- Delta spec sync check in openspec-guard (warns on unsynced archived deltas)
+- Consolidation-stop.sh Stop hook with tier-specific guidance at session end
+
+### Fixed
+- Serena tool name: cross_reference corrected to find_referencing_symbols across all phase/tier docs
+- Forgetful tool names: memory-search/memory-save/memory-explore corrected to actual MCP tool pattern
+- openspec-guard refactored to accumulator pattern for multi-warning PreToolUse output
+- printf fallback in openspec-guard escapes newlines for valid JSON
+
+### Changed
 - Design phase document for unified-context-stack (Intent Truth + Historical Truth before brainstorming)
 - Phase-aware RED FLAGS for DESIGN, PLAN, IMPLEMENT, and REVIEW phases
 - Phase-enforcement methodology hint for DESIGN/PLAN phases
