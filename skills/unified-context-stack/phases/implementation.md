@@ -4,6 +4,12 @@ During file-by-file plan execution, use context as needed.
 
 ## Steps
 
+### 0. Historical Truth (Workaround Check)
+Before implementing each file, check for known patterns:
+- **forgetful_memory=true**: Query Forgetful for known workarounds, gotchas, or implementation patterns related to the current file or module
+- **forgetful_memory=false**: Check CLAUDE.md and docs/learnings.md for relevant notes
+- If a known workaround exists, apply it directly rather than rediscovering it
+
 ### 1. Internal Truth (Primary)
 For each file modification, verify current symbol locations:
 - **serena=true**: Use `find_symbol` / `find_referencing_symbols` for dependency mapping, `insert_after_symbol` for safe AST edits
