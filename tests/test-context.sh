@@ -834,4 +834,38 @@ test_security_scanner_review_parallel() {
 }
 test_security_scanner_review_parallel
 
+test_mcp_fallback_detection() {
+    echo "-- test: MCP fallback detects serena and forgetful from ~/.claude.json --"
+    setup_test_env
+    # HOME is now a temp dir (set by setup_test_env) — safe to write ~/.claude.json
+
+    # Write test config with MCP servers
+    local proj_root
+    proj_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+    python3 -c "
+import json, sys
+d = {}
+try:
+    d = json.load(open('${HOME}/.claude.json'))
+except: pass
+d.setdefault('mcpServers', {})['forgetful'] = {'type':'stdio','command':'echo'}
+d.setdefault('projects', {}).setdefault('${proj_root}', {}).setdefault('mcpServers', {})['serena'] = {'type':'stdio','command':'echo'}
+json.dump(d, open('${HOME}/.claude.json', 'w'))
+"
+
+    # Run session-start hook
+    CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" bash "${PROJECT_ROOT}/hooks/session-start-hook.sh" 2>/dev/null >/dev/null
+
+    # Check cached registry
+    local cache="${HOME}/.claude/.skill-registry-cache.json"
+    local ser fm
+    ser="$(jq -r '.context_capabilities.serena // false' "${cache}" 2>/dev/null)"
+    fm="$(jq -r '.context_capabilities.forgetful_memory // false' "${cache}" 2>/dev/null)"
+
+    assert_equals "serena should be true via MCP fallback" "true" "${ser}"
+    assert_equals "forgetful_memory should be true via MCP fallback" "true" "${fm}"
+    echo "   PASS"
+}
+test_mcp_fallback_detection
+
 print_summary
