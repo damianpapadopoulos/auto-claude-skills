@@ -583,9 +583,9 @@ test_context_stack_hint_emission() {
     setup_test_env
     install_registry_with_context_stack
 
-    # "upgrade the stripe library" has library keyword
+    # "build a stripe library integration" triggers brainstorming + library hint
     local output ctx
-    output="$(run_hook "upgrade the stripe library to the latest version")"
+    output="$(run_hook "build a new stripe library integration for payments")"
     ctx="$(extract_context "${output}")"
 
     assert_contains "context stack hint emitted" "CONTEXT STACK" "${ctx}"

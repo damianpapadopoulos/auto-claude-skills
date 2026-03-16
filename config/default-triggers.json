@@ -19,7 +19,8 @@
       "priority": 50,
       "precedes": [],
       "requires": [],
-      "description": "Structured debugging: reproduce, hypothesise, isolate, fix, verify. Returns to the current phase after resolution."
+      "description": "Structured debugging: reproduce, hypothesise, isolate, fix, verify. Returns to the current phase after resolution.",
+      "invoke": "Skill(superpowers:systematic-debugging)"
     },
     {
       "name": "brainstorming",
@@ -42,7 +43,8 @@
         "writing-plans"
       ],
       "requires": [],
-      "description": "Ask clarifying questions, explore options, and get user approval before planning. Activated for Build intents."
+      "description": "Ask clarifying questions, explore options, and get user approval before planning. Activated for Build intents.",
+      "invoke": "Skill(superpowers:brainstorming)"
     },
     {
       "name": "writing-plans",
@@ -58,7 +60,8 @@
       "requires": [
         "brainstorming"
       ],
-      "description": "Break work into discrete tasks and confirm the plan with the user before execution begins."
+      "description": "Break work into discrete tasks and confirm the plan with the user before execution begins.",
+      "invoke": "Skill(superpowers:writing-plans)"
     },
     {
       "name": "executing-plans",
@@ -76,7 +79,8 @@
       "requires": [
         "writing-plans"
       ],
-      "description": "Step-by-step execution of an approved plan. REQUIRED: set up git worktree first. If subagents available, use subagent-driven-development instead. Invoke finishing-a-development-branch after all tasks complete."
+      "description": "Step-by-step execution of an approved plan. REQUIRED: set up git worktree first. If subagents available, use subagent-driven-development instead. Invoke finishing-a-development-branch after all tasks complete.",
+      "invoke": "Skill(superpowers:executing-plans)"
     },
     {
       "name": "subagent-driven-development",
@@ -88,7 +92,8 @@
       "priority": 14,
       "precedes": [],
       "requires": [],
-      "description": "Fresh subagent per task with two-stage review (spec compliance then code quality). Preferred over executing-plans when subagents are available."
+      "description": "Fresh subagent per task with two-stage review (spec compliance then code quality). Preferred over executing-plans when subagents are available.",
+      "invoke": "Skill(superpowers:subagent-driven-development)"
     },
     {
       "name": "requesting-code-review",
@@ -106,7 +111,8 @@
       "requires": [
         "executing-plans"
       ],
-      "description": "Dispatch superpowers:code-reviewer subagent with git diff range and plan reference. Fix critical/important issues before proceeding."
+      "description": "Dispatch superpowers:code-reviewer subagent with git diff range and plan reference. Fix critical/important issues before proceeding.",
+      "invoke": "Skill(superpowers:requesting-code-review)"
     },
     {
       "name": "receiving-code-review",
@@ -120,7 +126,8 @@
       "priority": 33,
       "precedes": [],
       "requires": [],
-      "description": "Process review feedback with technical rigor: verify claims against codebase, push back if wrong, implement fixes one at a time."
+      "description": "Process review feedback with technical rigor: verify claims against codebase, push back if wrong, implement fixes one at a time.",
+      "invoke": "Skill(superpowers:receiving-code-review)"
     },
     {
       "name": "verification-before-completion",
@@ -138,7 +145,8 @@
       "requires": [
         "requesting-code-review"
       ],
-      "description": "Final verification checklist before shipping: tests pass, lint clean, no TODOs, docs updated."
+      "description": "Final verification checklist before shipping: tests pass, lint clean, no TODOs, docs updated.",
+      "invoke": "Skill(superpowers:verification-before-completion)"
     },
     {
       "name": "finishing-a-development-branch",
@@ -152,7 +160,8 @@
       "requires": [
         "openspec-ship"
       ],
-      "description": "Verify tests pass, present 4 options (merge local, create PR, keep branch, discard), execute chosen workflow, clean up worktree."
+      "description": "Verify tests pass, present 4 options (merge local, create PR, keep branch, discard), execute chosen workflow, clean up worktree.",
+      "invoke": "Skill(superpowers:finishing-a-development-branch)"
     },
     {
       "name": "openspec-ship",
@@ -170,7 +179,8 @@
       "requires": [
         "verification-before-completion"
       ],
-      "description": "Create retrospective OpenSpec change, validate, archive, update changelog"
+      "description": "Create retrospective OpenSpec change, validate, archive, update changelog",
+      "invoke": "Skill(auto-claude-skills:openspec-ship)"
     },
     {
       "name": "dispatching-parallel-agents",
@@ -184,7 +194,8 @@
       "priority": 15,
       "precedes": [],
       "requires": [],
-      "description": "Fan out independent tasks to parallel sub-agents and collect results."
+      "description": "Fan out independent tasks to parallel sub-agents and collect results.",
+      "invoke": "Skill(superpowers:dispatching-parallel-agents)"
     },
     {
       "name": "using-git-worktrees",
@@ -198,7 +209,8 @@
       "priority": 14,
       "precedes": [],
       "requires": [],
-      "description": "Use git worktrees for parallel branch work. Trigger-gated required: activates when parallel/isolation keywords match."
+      "description": "Use git worktrees for parallel branch work. Trigger-gated required: activates when parallel/isolation keywords match.",
+      "invoke": "Skill(superpowers:using-git-worktrees)"
     },
     {
       "name": "writing-skills",
@@ -212,7 +224,8 @@
       "priority": 15,
       "precedes": [],
       "requires": [],
-      "description": "Author and maintain Claude Code skill files (SKILL.md). Meta-overlay for Claude tooling prompts."
+      "description": "Author and maintain Claude Code skill files (SKILL.md). Meta-overlay for Claude tooling prompts.",
+      "invoke": "Skill(superpowers:writing-skills)"
     },
     {
       "name": "frontend-design",
@@ -226,7 +239,8 @@
       "priority": 15,
       "precedes": [],
       "requires": [],
-      "description": "UI/UX design guidance: component structure, responsive layout, styling, and visual prototyping."
+      "description": "UI/UX design guidance: component structure, responsive layout, styling, and visual prototyping.",
+      "invoke": "Skill(frontend-design:frontend-design)"
     },
     {
       "name": "webapp-testing",
@@ -240,7 +254,8 @@
       "priority": 12,
       "precedes": [],
       "requires": [],
-      "description": "Web application testing: browser automation, accessibility checks, visual regression, and E2E flows."
+      "description": "Web application testing: browser automation, accessibility checks, visual regression, and E2E flows.",
+      "invoke": "Skill(webapp-testing)"
     },
     {
       "name": "doc-coauthoring",
@@ -254,7 +269,8 @@
       "priority": 15,
       "precedes": [],
       "requires": [],
-      "description": "Co-author technical documents: proposals, specs, RFCs, and architecture docs."
+      "description": "Co-author technical documents: proposals, specs, RFCs, and architecture docs.",
+      "invoke": "Skill(doc-coauthoring)"
     },
     {
       "name": "claude-automation-recommender",
@@ -268,7 +284,8 @@
       "priority": 12,
       "precedes": [],
       "requires": [],
-      "description": "Recommend Claude Code automation setups: hooks, MCP servers, plugins, and workflow optimisations."
+      "description": "Recommend Claude Code automation setups: hooks, MCP servers, plugins, and workflow optimisations.",
+      "invoke": "Skill(claude-code-setup:claude-automation-recommender)"
     },
     {
       "name": "claude-md-improver",
@@ -282,7 +299,8 @@
       "priority": 10,
       "precedes": [],
       "requires": [],
-      "description": "Improve CLAUDE.md project files: structure, clarity, and completeness of project instructions."
+      "description": "Improve CLAUDE.md project files: structure, clarity, and completeness of project instructions.",
+      "invoke": "Skill(claude-md-management:claude-md-improver)"
     },
     {
       "name": "agent-team-execution",
@@ -298,7 +316,8 @@
       "requires": [
         "writing-plans"
       ],
-      "description": "Use when executing implementation plans with 3+ independent, file-disjoint tasks that benefit from parallel specialist agents."
+      "description": "Use when executing implementation plans with 3+ independent, file-disjoint tasks that benefit from parallel specialist agents.",
+      "invoke": "Skill(auto-claude-skills:agent-team-execution)"
     },
     {
       "name": "agent-team-review",
@@ -314,7 +333,8 @@
       "priority": 20,
       "precedes": [],
       "requires": [],
-      "description": "Multi-perspective parallel code review with specialist reviewers. Trigger-gated + condition-gated required."
+      "description": "Multi-perspective parallel code review with specialist reviewers. Trigger-gated + condition-gated required.",
+      "invoke": "Skill(auto-claude-skills:agent-team-review)"
     },
     {
       "name": "design-debate",
@@ -328,7 +348,8 @@
       "priority": 18,
       "precedes": [],
       "requires": [],
-      "description": "Multi-Agent Debate for complex designs. Spawns architect, critic, and pragmatist for collaborative design exploration."
+      "description": "Multi-Agent Debate for complex designs. Spawns architect, critic, and pragmatist for collaborative design exploration.",
+      "invoke": "Skill(auto-claude-skills:design-debate)"
     },
     {
       "name": "batch-scripting",
@@ -342,7 +363,8 @@
       "priority": 15,
       "precedes": [],
       "requires": [],
-      "description": "Bulk file operations using claude -p with manifest, dry-run, and log-based retry."
+      "description": "Bulk file operations using claude -p with manifest, dry-run, and log-based retry.",
+      "invoke": "Skill(auto-claude-skills:batch-scripting)"
     }
   ],
   "phase_guide": {

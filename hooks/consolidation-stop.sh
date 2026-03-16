@@ -33,8 +33,8 @@ fi
 
 _MSG="CONSOLIDATION REMINDER: Session ending without memory consolidation. Learnings from this session may be lost. ${_GUIDANCE}"
 if command -v jq >/dev/null 2>&1; then
-    jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":$msg}}'
+    jq -n --arg msg "${_MSG}" '{"stopReason":$msg}'
 else
-    printf '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":"%s"}}\n' "${_MSG}"
+    printf '{"stopReason":"%s"}\n' "${_MSG}"
 fi
 exit 0

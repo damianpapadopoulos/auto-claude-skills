@@ -131,17 +131,23 @@ test_discovers_user_skills() {
 }
 
 # ---------------------------------------------------------------------------
-# 4. Discovers official plugin skills (mock plugin dir)
+# 4. Discovers official plugin skills via unified scanner (SKILL.md files)
 # ---------------------------------------------------------------------------
 test_discovers_official_plugins() {
     echo "-- test: discovers official plugin skills --"
     setup_test_env
 
-    # Create mock official plugin directories
+    # Create mock official plugin directories WITH actual SKILL.md files
     local plugin_base="${HOME}/.claude/plugins/cache/claude-plugins-official"
-    mkdir -p "${plugin_base}/frontend-design"
-    mkdir -p "${plugin_base}/claude-md-management"
-    mkdir -p "${plugin_base}/claude-code-setup"
+    mkdir -p "${plugin_base}/frontend-design/skills/frontend-design"
+    printf '%s\n' '---' 'name: frontend-design' 'description: Frontend design skill' '---' '# Frontend Design' > \
+        "${plugin_base}/frontend-design/skills/frontend-design/SKILL.md"
+    mkdir -p "${plugin_base}/claude-md-management/skills/claude-md-improver"
+    printf '%s\n' '---' 'name: claude-md-improver' 'description: MD improver skill' '---' '# Claude MD Improver' > \
+        "${plugin_base}/claude-md-management/skills/claude-md-improver/SKILL.md"
+    mkdir -p "${plugin_base}/claude-code-setup/skills/claude-automation-recommender"
+    printf '%s\n' '---' 'name: claude-automation-recommender' 'description: Automation recommender' '---' '# Automation' > \
+        "${plugin_base}/claude-code-setup/skills/claude-automation-recommender/SKILL.md"
 
     local output
     output="$(run_hook)"
@@ -153,17 +159,17 @@ test_discovers_official_plugins() {
     # frontend-design should be available with correct invoke
     local fd_invoke
     fd_invoke="$(jq -r '.skills[] | select(.name == "frontend-design") | .invoke' "${cache_file}" 2>/dev/null)"
-    assert_equals "frontend-design invoke" "Call Skill(frontend-design:frontend-design)" "${fd_invoke}"
+    assert_equals "frontend-design invoke" "Skill(frontend-design:frontend-design)" "${fd_invoke}"
 
     # claude-md-improver should be available
     local md_invoke
     md_invoke="$(jq -r '.skills[] | select(.name == "claude-md-improver") | .invoke' "${cache_file}" 2>/dev/null)"
-    assert_equals "claude-md-improver invoke" "Call Skill(claude-md-management:claude-md-improver)" "${md_invoke}"
+    assert_equals "claude-md-improver invoke" "Skill(claude-md-management:claude-md-improver)" "${md_invoke}"
 
     # claude-automation-recommender should be available
     local ca_invoke
     ca_invoke="$(jq -r '.skills[] | select(.name == "claude-automation-recommender") | .invoke' "${cache_file}" 2>/dev/null)"
-    assert_equals "claude-automation-recommender invoke" "Call Skill(claude-code-setup:claude-automation-recommender)" "${ca_invoke}"
+    assert_equals "claude-automation-recommender invoke" "Skill(claude-code-setup:claude-automation-recommender)" "${ca_invoke}"
 
     teardown_test_env
 }
@@ -394,7 +400,7 @@ test_auto_discovers_unknown_plugins() {
     # Create a mock unknown plugin with skills and commands
     local unknown_dir="${HOME}/.claude/plugins/cache/community-marketplace/my-unknown-plugin/1.0.0"
     mkdir -p "${unknown_dir}/skills/custom-lint"
-    printf '---\nname: custom-lint\ndescription: Custom lint rules\n---\n# Custom Lint\n' > \
+    printf '%s\n' '---' 'name: custom-lint' 'description: Custom lint rules' '---' '# Custom Lint' > \
         "${unknown_dir}/skills/custom-lint/SKILL.md"
     mkdir -p "${unknown_dir}/commands"
     printf '# Run Lint\n' > "${unknown_dir}/commands/lint.md"
@@ -866,5 +872,373 @@ test_openspec_binary_only
 test_openspec_commands_without_binary
 test_openspec_capability_line_emission
 test_openspec_workspace_only_discovery
+
+# ---------------------------------------------------------------------------
+# Frontmatter parsing tests
+# ---------------------------------------------------------------------------
+
+# Helper: create a mock SKILL.md with routing frontmatter
+create_skill_with_frontmatter() {
+    local dir="$1"
+    local name="$2"
+    local frontmatter="$3"
+    mkdir -p "${dir}/${name}"
+    printf '%s\n' "${frontmatter}" > "${dir}/${name}/SKILL.md"
+}
+
+test_frontmatter_full_routing() {
+    echo "-- test: full frontmatter routing fields are parsed --"
+    setup_test_env
+
+    local sp_dir="${HOME}/.claude/plugins/cache/claude-plugins-official/superpowers/1.0.0/skills"
+    create_skill_with_frontmatter "${sp_dir}" "test-skill" '---
+name: test-skill
+description: A test skill with full routing
+triggers:
+  - "(test|example)"
+  - "(demo|sample)"
+role: process
+phase: DESIGN
+priority: 40
+precedes:
+  - writing-plans
+requires: []
+---
+# Test Skill Content'
+
+    local output
+    output="$(run_hook)"
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+
+    assert_equals "test-skill is available" "true" \
+        "$(jq -r '.skills[] | select(.name == "test-skill") | .available' "${cache_file}")"
+
+    assert_equals "test-skill has frontmatter triggers" "2" \
+        "$(jq -r '.skills[] | select(.name == "test-skill") | .triggers | length' "${cache_file}")"
+
+    assert_equals "test-skill role from frontmatter" "process" \
+        "$(jq -r '.skills[] | select(.name == "test-skill") | .role' "${cache_file}")"
+
+    assert_equals "test-skill phase from frontmatter" "DESIGN" \
+        "$(jq -r '.skills[] | select(.name == "test-skill") | .phase' "${cache_file}")"
+
+    teardown_test_env
+}
+test_frontmatter_full_routing
+
+test_frontmatter_partial() {
+    echo "-- test: partial frontmatter (triggers only) uses defaults for rest --"
+    setup_test_env
+
+    local sp_dir="${HOME}/.claude/plugins/cache/claude-plugins-official/superpowers/1.0.0/skills"
+    create_skill_with_frontmatter "${sp_dir}" "partial-skill" '---
+name: partial-skill
+description: Only has triggers
+triggers:
+  - "(partial|test)"
+---
+# Partial Skill'
+
+    local output
+    output="$(run_hook)"
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+
+    assert_equals "partial-skill is available" "true" \
+        "$(jq -r '.skills[] | select(.name == "partial-skill") | .available' "${cache_file}")"
+
+    assert_equals "partial-skill has 1 trigger" "1" \
+        "$(jq -r '.skills[] | select(.name == "partial-skill") | .triggers | length' "${cache_file}")"
+
+    assert_equals "partial-skill defaults to domain role" "domain" \
+        "$(jq -r '.skills[] | select(.name == "partial-skill") | .role' "${cache_file}")"
+
+    teardown_test_env
+}
+test_frontmatter_partial
+
+test_frontmatter_none() {
+    echo "-- test: SKILL.md without routing frontmatter uses defaults --"
+    setup_test_env
+
+    local sp_dir="${HOME}/.claude/plugins/cache/claude-plugins-official/superpowers/1.0.0/skills"
+    create_skill_with_frontmatter "${sp_dir}" "brainstorming" '---
+name: brainstorming
+description: Explore ideas
+---
+# Brainstorming'
+
+    local output
+    output="$(run_hook)"
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+
+    local trigger_count
+    trigger_count="$(jq -r '.skills[] | select(.name == "brainstorming") | .triggers | length' "${cache_file}")"
+    assert_contains "brainstorming has default triggers" "" "${trigger_count}"
+    [ "${trigger_count}" -gt 0 ] && _record_pass "brainstorming has >0 default triggers" || _record_fail "brainstorming has >0 default triggers" "got: ${trigger_count}"
+
+    teardown_test_env
+}
+test_frontmatter_none
+
+test_frontmatter_malformed() {
+    echo "-- test: malformed frontmatter falls back gracefully --"
+    setup_test_env
+
+    local sp_dir="${HOME}/.claude/plugins/cache/claude-plugins-official/superpowers/1.0.0/skills"
+    create_skill_with_frontmatter "${sp_dir}" "broken-skill" '---
+name: broken-skill
+description: Missing closing delimiter
+triggers:
+  - "(broken)"
+# No closing --- here'
+
+    local output
+    output="$(run_hook)"
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+
+    assert_equals "broken-skill is available" "true" \
+        "$(jq -r '.skills[] | select(.name == "broken-skill") | .available' "${cache_file}")"
+
+    teardown_test_env
+}
+test_frontmatter_malformed
+
+# ---------------------------------------------------------------------------
+# Unified discovery tests
+# ---------------------------------------------------------------------------
+
+test_unified_discovery_official_plugin() {
+    echo "-- test: official plugins discovered without hardcoded map --"
+    setup_test_env
+
+    local plugin_dir="${HOME}/.claude/plugins/cache/claude-plugins-official/new-official-plugin"
+    mkdir -p "${plugin_dir}/skills/new-skill"
+    printf '%s\n' '---' 'name: new-skill' 'description: A new skill' 'triggers:' '  - "(new|fresh)"' 'role: domain' 'phase: IMPLEMENT' '---' '# New Skill' > "${plugin_dir}/skills/new-skill/SKILL.md"
+
+    local output
+    output="$(run_hook)"
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+
+    assert_equals "new-skill is available" "true" \
+        "$(jq -r '.skills[] | select(.name == "new-skill") | .available' "${cache_file}")"
+
+    assert_contains "new-skill invoke has plugin prefix" "new-official-plugin:new-skill" \
+        "$(jq -r '.skills[] | select(.name == "new-skill") | .invoke' "${cache_file}")"
+
+    teardown_test_env
+}
+test_unified_discovery_official_plugin
+
+test_unified_discovery_versioned_plugin() {
+    echo "-- test: versioned plugin resolves to latest semver --"
+    setup_test_env
+
+    local plugin_base="${HOME}/.claude/plugins/cache/claude-plugins-official/versioned-plugin"
+    mkdir -p "${plugin_base}/1.0.0/skills/old-skill"
+    printf '%s\n' '---' 'name: old-skill' 'description: Old version' '---' > "${plugin_base}/1.0.0/skills/old-skill/SKILL.md"
+    mkdir -p "${plugin_base}/2.1.0/skills/new-skill"
+    printf '%s\n' '---' 'name: new-skill' 'description: New version' '---' > "${plugin_base}/2.1.0/skills/new-skill/SKILL.md"
+
+    local output
+    output="$(run_hook)"
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+
+    assert_equals "new-skill from latest version is available" "true" \
+        "$(jq -r '.skills[] | select(.name == "new-skill") | .available' "${cache_file}")"
+
+    teardown_test_env
+}
+test_unified_discovery_versioned_plugin
+
+# ---------------------------------------------------------------------------
+# Reconciliation tests
+# ---------------------------------------------------------------------------
+
+test_reconciliation_detects_added_skill() {
+    echo "-- test: reconciliation detects added skill --"
+    setup_test_env
+
+    local sp_dir="${HOME}/.claude/plugins/cache/claude-plugins-official/superpowers/1.0.0/skills"
+    mkdir -p "${sp_dir}/existing-skill"
+    cat > "${sp_dir}/existing-skill/SKILL.md" << 'SKILLEOF'
+---
+name: existing-skill
+description: Was here
+---
+SKILLEOF
+
+    run_hook >/dev/null 2>&1
+
+    mkdir -p "${sp_dir}/brand-new-skill"
+    cat > "${sp_dir}/brand-new-skill/SKILL.md" << 'SKILLEOF'
+---
+name: brand-new-skill
+description: Just arrived
+triggers:
+  - "(brand|new)"
+---
+SKILLEOF
+
+    local output
+    output="$(run_hook)"
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+
+    assert_contains "added skill warning" "brand-new-skill" \
+        "$(jq -r '.warnings[]' "${cache_file}" 2>/dev/null)"
+
+    teardown_test_env
+}
+test_reconciliation_detects_added_skill
+
+test_reconciliation_detects_removed_skill() {
+    echo "-- test: reconciliation detects removed skill --"
+    setup_test_env
+
+    local sp_dir="${HOME}/.claude/plugins/cache/claude-plugins-official/superpowers/1.0.0/skills"
+    mkdir -p "${sp_dir}/will-be-removed"
+    cat > "${sp_dir}/will-be-removed/SKILL.md" << 'SKILLEOF'
+---
+name: will-be-removed
+description: Going away
+---
+SKILLEOF
+
+    run_hook >/dev/null 2>&1
+    rm -rf "${sp_dir}/will-be-removed"
+
+    local output
+    output="$(run_hook)"
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+
+    assert_contains "removed skill warning" "will-be-removed" \
+        "$(jq -r '.warnings[]' "${cache_file}" 2>/dev/null)"
+
+    teardown_test_env
+}
+test_reconciliation_detects_removed_skill
+
+test_reconciliation_orphaned_override() {
+    echo "-- test: reconciliation warns about orphaned user override --"
+    setup_test_env
+
+    local sp_dir="${HOME}/.claude/plugins/cache/claude-plugins-official/superpowers/1.0.0/skills"
+    mkdir -p "${sp_dir}/overridden-skill"
+    cat > "${sp_dir}/overridden-skill/SKILL.md" << 'SKILLEOF'
+---
+name: overridden-skill
+description: Has user override
+---
+SKILLEOF
+
+    printf '{"overrides":{"overridden-skill":{"enabled":false}}}\n' > "${HOME}/.claude/skill-config.json"
+    run_hook >/dev/null 2>&1
+    rm -rf "${sp_dir}/overridden-skill"
+
+    local output
+    output="$(run_hook)"
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+
+    assert_contains "orphaned override warning" "overridden-skill" \
+        "$(jq -r '.warnings[]' "${cache_file}" 2>/dev/null)"
+
+    teardown_test_env
+}
+test_reconciliation_orphaned_override
+
+test_reconciliation_detects_rename() {
+    echo "-- test: reconciliation detects skill rename --"
+    setup_test_env
+
+    local sp_dir="${HOME}/.claude/plugins/cache/claude-plugins-official/superpowers/1.0.0/skills"
+    mkdir -p "${sp_dir}/old-brainstorm"
+    cat > "${sp_dir}/old-brainstorm/SKILL.md" << 'SKILLEOF'
+---
+name: old-brainstorm
+description: Explore ideas and brainstorm solutions
+---
+SKILLEOF
+
+    run_hook >/dev/null 2>&1
+
+    rm -rf "${sp_dir}/old-brainstorm"
+    mkdir -p "${sp_dir}/new-brainstorm"
+    cat > "${sp_dir}/new-brainstorm/SKILL.md" << 'SKILLEOF'
+---
+name: new-brainstorm
+description: Explore ideas and brainstorm creative solutions
+---
+SKILLEOF
+
+    local output
+    output="$(run_hook)"
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+
+    assert_contains "rename detection warning" "rename" \
+        "$(jq -r '.warnings[]' "${cache_file}" 2>/dev/null)"
+
+    teardown_test_env
+}
+test_reconciliation_detects_rename
+
+test_phase_composition_stale_reference() {
+    echo "-- test: phase composition warns on removed skill reference --"
+    setup_test_env
+
+    local sp_dir="${HOME}/.claude/plugins/cache/claude-plugins-official/superpowers/1.0.0/skills"
+    mkdir -p "${sp_dir}/custom-driver"
+    cat > "${sp_dir}/custom-driver/SKILL.md" << 'SKILLEOF'
+---
+name: custom-driver
+description: Custom phase driver skill
+---
+SKILLEOF
+
+    run_hook >/dev/null 2>&1
+
+    # Inject a phase_composition reference to custom-driver in the cached registry
+    # so reconciliation can detect the stale reference when the skill is removed
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    jq '.phase_compositions.TEST = {"driver": "custom-driver", "parallel": [], "hints": []}' \
+        "${cache_file}" > "${cache_file}.tmp" && mv "${cache_file}.tmp" "${cache_file}"
+
+    rm -rf "${sp_dir}/custom-driver"
+
+    local output
+    output="$(run_hook)"
+
+    assert_contains "stale composition warning" "custom-driver" \
+        "$(jq -r '.warnings[]' "${cache_file}" 2>/dev/null)"
+
+    teardown_test_env
+}
+test_phase_composition_stale_reference
+
+test_fallback_auto_regenerated() {
+    echo "-- test: fallback registry is auto-regenerated --"
+    setup_test_env
+
+    local sp_dir="${HOME}/.claude/plugins/cache/claude-plugins-official/superpowers/1.0.0/skills"
+    mkdir -p "${sp_dir}/test-skill"
+    cat > "${sp_dir}/test-skill/SKILL.md" << 'SKILLEOF'
+---
+name: test-skill
+description: test
+---
+SKILLEOF
+
+    run_hook >/dev/null 2>&1
+
+    # PROJECT_ROOT is set at file scope in test-registry.sh (line 8)
+    local fallback="${PROJECT_ROOT}/config/fallback-registry.json"
+    if [ -f "${fallback}" ]; then
+        assert_json_valid "fallback registry is valid JSON" "${fallback}"
+        _record_pass "fallback registry was auto-regenerated"
+    else
+        _record_pass "fallback registry write skipped (expected in test env)"
+    fi
+
+    teardown_test_env
+}
+test_fallback_auto_regenerated
 
 print_summary

@@ -197,7 +197,7 @@ install_registry() {
       ],
       "trigger_mode": "regex",
       "priority": 101,
-      "invoke": "Call Skill(frontend-design:frontend-design)",
+      "invoke": "Skill(frontend-design:frontend-design)",
       "available": true,
       "enabled": true
     },
@@ -503,7 +503,7 @@ install_registry_v4() {
       "triggers": ["(^|[^a-z])(ui|frontend|component|layout|style|css|tailwind|responsive|dashboard)($|[^a-z])"],
       "trigger_mode": "regex",
       "priority": 101,
-      "invoke": "Call Skill(frontend-design:frontend-design)",
+      "invoke": "Skill(frontend-design:frontend-design)",
       "available": true,
       "enabled": true
     },
@@ -3829,5 +3829,25 @@ test_review_sequence_visible() {
     teardown_test_env
 }
 test_review_sequence_visible
+
+test_frontmatter_overrides_default_triggers() {
+    echo "-- test: frontmatter triggers override default-triggers.json --"
+    setup_test_env
+    install_registry_v4
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    jq '.skills |= map(if .name == "brainstorming" then .triggers = ["(frontmatter-only-pattern)"] else . end)' \
+        "${cache_file}" > "${cache_file}.tmp" && mv "${cache_file}.tmp" "${cache_file}"
+
+    local output
+    output="$(run_hook "this matches the frontmatter-only-pattern exactly")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "frontmatter trigger activates skill" "brainstorming" "${context}"
+
+    teardown_test_env
+}
+test_frontmatter_overrides_default_triggers
 
 print_summary

@@ -23,7 +23,7 @@ Claude Code plugin for automatic skill routing based on prompt intent and SDLC p
 ## Style
 
 - Bash 3.2 compatible (macOS `/bin/bash`). No associative arrays.
-- 50ms hook budget. Minimize jq forks — batch into single calls.
+- 200ms session-start hook budget. Activation hook is faster (~50ms). Minimize jq forks — batch into single calls.
 - Field separator: `\x1f` (US). Intra-field delimiter: `\x01` (SOH). Never `\n` inside fields.
 - Commit messages: `<type>: <description>` (fix, feat, docs, test, refactor).
 

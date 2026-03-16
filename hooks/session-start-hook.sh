@@ -87,8 +87,6 @@ fi
 # Path constants
 # -----------------------------------------------------------------
 DEFAULT_TRIGGERS="${PLUGIN_ROOT}/config/default-triggers.json"
-SP_BASE="${HOME}/.claude/plugins/cache/claude-plugins-official/superpowers"
-PLUGIN_CACHE="${HOME}/.claude/plugins/cache/claude-plugins-official"
 USER_SKILLS_DIR="${HOME}/.claude/skills"
 USER_CONFIG="${HOME}/.claude/skill-config.json"
 
@@ -99,47 +97,100 @@ if [ -f "${DEFAULT_TRIGGERS}" ]; then
 fi
 
 # -----------------------------------------------------------------
-# Step 3: Discover superpowers plugin skills
+# Frontmatter parser: extract routing metadata from SKILL.md files
 # -----------------------------------------------------------------
-SP_SKILLS_DIR=""
-if [ -d "${SP_BASE}" ]; then
-    SP_VERSION="$(ls -1 "${SP_BASE}" 2>/dev/null | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)"
-    if [ -n "${SP_VERSION}" ]; then
-        SP_SKILLS_DIR="${SP_BASE}/${SP_VERSION}/skills"
-    fi
-fi
+# Usage: _parse_frontmatter file1 file2 ...
+# Output: JSON objects separated by \x1f, one per file
+# Each object has optional keys: triggers, role, phase, priority, precedes, requires
+# Malformed files produce empty objects.
+_parse_frontmatter() {
+    [ $# -eq 0 ] && return
+    awk '
+    BEGIN { first = 1 }
+    FNR == 1 {
+        if (!first) { emit(); printf "\x1f" }
+        first = 0
+        in_fm = 0; found_start = 0; done_fm = 0; cur_key = ""; obj = "{"
+    }
+    /^---[ \t]*$/ {
+        if (done_fm) next
+        if (!found_start) { found_start = 1; in_fm = 1; next }
+        else { in_fm = 0; done_fm = 1; next }
+    }
+    !in_fm { next }
+    /^  - / {
+        val = $0; sub(/^  - ["'"'"']?/, "", val); sub(/["'"'"']?[ \t]*$/, "", val)
+        if (cur_key != "") {
+            if (arr_started) arr = arr ","; else arr_started = 1
+            gsub(/"/, "\\\"", val)
+            arr = arr "\"" val "\""
+        }
+        next
+    }
+    /^[a-zA-Z_][a-zA-Z0-9_]*:/ {
+        if (cur_key != "" && arr_started) {
+            if (obj != "{") obj = obj ","
+            obj = obj "\"" cur_key "\":[" arr "]"
+        }
+        cur_key = $0; sub(/:.*/, "", cur_key)
+        val = $0; sub(/^[^:]*:[ \t]*/, "", val); sub(/[ \t]*$/, "", val)
+        arr = ""; arr_started = 0
+        if (val != "" && val !~ /^[ \t]*$/) {
+            sub(/^["'"'"']/, "", val); sub(/["'"'"']$/, "", val)
+            if (cur_key == "name" || cur_key == "description" || cur_key == "license") {
+                cur_key = ""
+            } else {
+                if (obj != "{") obj = obj ","
+                gsub(/"/, "\\\"", val)
+                obj = obj "\"" cur_key "\":\"" val "\""
+                cur_key = ""
+            }
+        } else if (cur_key == "name" || cur_key == "description" || cur_key == "license") {
+            cur_key = ""
+        }
+        next
+    }
+    function emit() {
+        if (cur_key != "" && arr_started) {
+            if (obj != "{") obj = obj ","
+            obj = obj "\"" cur_key "\":[" arr "]"
+        }
+        printf "%s", obj "}"
+    }
+    END { emit() }
+    ' "$@"
+}
 
-# Build a list of discovered superpowers skill names and paths
-# Format: name|invoke_path (one per line)
-SP_DISCOVERED=""
-if [ -n "${SP_SKILLS_DIR}" ] && [ -d "${SP_SKILLS_DIR}" ]; then
-    for skill_md in "${SP_SKILLS_DIR}"/*/SKILL.md; do
-        [ -f "${skill_md}" ] || continue
-        skill_name="$(basename "$(dirname "${skill_md}")")"
-        SP_DISCOVERED="${SP_DISCOVERED}${skill_name}|Skill(superpowers:${skill_name})
+# -----------------------------------------------------------------
+# Step 3: Discover all external plugin skills (unified scanner)
+# -----------------------------------------------------------------
+EXTERNAL_DISCOVERED=""
+for _mkt_dir in "${HOME}/.claude/plugins/cache"/*/; do
+    [ -d "${_mkt_dir}" ] || continue
+    for _plugin_dir in "${_mkt_dir}"*/; do
+        [ -d "${_plugin_dir}" ] || continue
+        _pname="$(basename "${_plugin_dir}")"
+        # Skip self (bundled skills handled separately in Step 4b)
+        [ "${_pname}" = "auto-claude-skills" ] && continue
+
+        # Resolve version dir: filter to strict semver, pick latest
+        _resolved="${_plugin_dir}"
+        _latest_ver="$(ls -1 "${_plugin_dir}" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)"
+        if [ -n "${_latest_ver}" ]; then
+            _resolved="${_plugin_dir}${_latest_ver}/"
+        fi
+
+        # Scan skills
+        if [ -d "${_resolved}skills" ]; then
+            for _smd in "${_resolved}skills"/*/SKILL.md; do
+                [ -f "${_smd}" ] || continue
+                _sname="$(basename "$(dirname "${_smd}")")"
+                EXTERNAL_DISCOVERED="${EXTERNAL_DISCOVERED}${_sname}|Skill(${_pname}:${_sname})
 "
+            done
+        fi
     done
-fi
-
-# -----------------------------------------------------------------
-# Step 4: Discover official plugin skills
-# -----------------------------------------------------------------
-# Official plugin directory -> skill-name|invoke-path mapping
-# Format: dir_name|skill_name|plugin:skill_invoke (one per line)
-OFFICIAL_PLUGIN_MAP="frontend-design|frontend-design|frontend-design:frontend-design
-claude-md-management|claude-md-improver|claude-md-management:claude-md-improver
-claude-code-setup|claude-automation-recommender|claude-code-setup:claude-automation-recommender"
-
-OFFICIAL_DISCOVERED=""
-while IFS='|' read -r _dir _skill _invoke; do
-    [ -z "${_dir}" ] && continue
-    if [ -d "${PLUGIN_CACHE}/${_dir}" ]; then
-        OFFICIAL_DISCOVERED="${OFFICIAL_DISCOVERED}${_skill}|Call Skill(${_invoke})
-"
-    fi
-done <<OPEOF
-${OFFICIAL_PLUGIN_MAP}
-OPEOF
+done
 
 # -----------------------------------------------------------------
 # Step 4b: Discover skills bundled with this plugin
@@ -176,17 +227,75 @@ fi
 # -----------------------------------------------------------------
 # Combine all discovered skills into one list
 # -----------------------------------------------------------------
-ALL_DISCOVERED="${SP_DISCOVERED}${OFFICIAL_DISCOVERED}${PLUGIN_DISCOVERED}${USER_DISCOVERED}"
+ALL_DISCOVERED="${EXTERNAL_DISCOVERED}${PLUGIN_DISCOVERED}${USER_DISCOVERED}"
 
 # Count sources
 SOURCE_COUNT=0
-if [ -n "${SP_DISCOVERED}" ]; then SOURCE_COUNT=$((SOURCE_COUNT + 1)); fi
-if [ -n "${OFFICIAL_DISCOVERED}" ]; then SOURCE_COUNT=$((SOURCE_COUNT + 1)); fi
+if [ -n "${EXTERNAL_DISCOVERED}" ]; then SOURCE_COUNT=$((SOURCE_COUNT + 1)); fi
 if [ -n "${PLUGIN_DISCOVERED}" ]; then SOURCE_COUNT=$((SOURCE_COUNT + 1)); fi
 if [ -n "${USER_DISCOVERED}" ]; then SOURCE_COUNT=$((SOURCE_COUNT + 1)); fi
 
 # -----------------------------------------------------------------
-# Step 6: Merge discovered skills with default-triggers.json
+# Step 5b: Extract frontmatter from all discovered SKILL.md files
+# -----------------------------------------------------------------
+_FM_FILES=""
+_FM_NAMES=""
+
+# Scan all external plugins (same traversal as unified scanner in Step 3)
+for _mkt_dir in "${HOME}/.claude/plugins/cache"/*/; do
+    [ -d "${_mkt_dir}" ] || continue
+    for _plugin_dir in "${_mkt_dir}"*/; do
+        [ -d "${_plugin_dir}" ] || continue
+        _pname="$(basename "${_plugin_dir}")"
+        [ "${_pname}" = "auto-claude-skills" ] && continue
+        _resolved="${_plugin_dir}"
+        _latest_ver="$(ls -1 "${_plugin_dir}" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)"
+        if [ -n "${_latest_ver}" ]; then
+            _resolved="${_plugin_dir}${_latest_ver}/"
+        fi
+        if [ -d "${_resolved}skills" ]; then
+            for _smd in "${_resolved}skills"/*/SKILL.md; do
+                [ -f "${_smd}" ] || continue
+                _FM_FILES="${_FM_FILES} ${_smd}"
+                _FM_NAMES="${_FM_NAMES}$(basename "$(dirname "${_smd}")")
+"
+            done
+        fi
+    done
+done
+
+if [ -d "${PLUGIN_SKILLS_DIR}" ]; then
+    for _smd in "${PLUGIN_SKILLS_DIR}"/*/SKILL.md; do
+        [ -f "${_smd}" ] || continue
+        _FM_FILES="${_FM_FILES} ${_smd}"
+        _FM_NAMES="${_FM_NAMES}$(basename "$(dirname "${_smd}")")
+"
+    done
+fi
+
+if [ -d "${USER_SKILLS_DIR}" ]; then
+    for _smd in "${USER_SKILLS_DIR}"/*/SKILL.md; do
+        [ -f "${_smd}" ] || continue
+        _FM_FILES="${_FM_FILES} ${_smd}"
+        _FM_NAMES="${_FM_NAMES}$(basename "$(dirname "${_smd}")")
+"
+    done
+fi
+
+FRONTMATTER_MAP="{}"
+if [ -n "${_FM_FILES}" ]; then
+    _fm_raw="$(_parse_frontmatter ${_FM_FILES})"
+    if [ -n "${_fm_raw}" ]; then
+        FRONTMATTER_MAP="$(printf '%s' "${_FM_NAMES}" | jq -Rn --argjson objs "[$(printf '%s' "${_fm_raw}" | tr $'\x1f' ',')]" '
+            [inputs | select(. != "")] as $names |
+            [range(0; [$names | length, ($objs | length)] | min) as $i |
+                {($names[$i]): $objs[$i]}] | add // {}
+        ')" || FRONTMATTER_MAP="{}"
+    fi
+fi
+
+# -----------------------------------------------------------------
+# Step 6: Three-tier merge — frontmatter > default-triggers > generic
 # -----------------------------------------------------------------
 # Build invoke map from ALL_DISCOVERED as a JSON object {"name":"invoke_path",...}
 # Single jq call instead of per-skill lookups
@@ -199,33 +308,43 @@ else
     INVOKE_MAP="{}"
 fi
 
-# Merge defaults + invoke map in a SINGLE jq call (replaces ~80 forks)
+# Three-tier merge: frontmatter overrides > default-triggers > generic defaults
 if [ -n "${DEFAULT_JSON}" ]; then
-    SKILLS_JSON="$(printf '%s' "${DEFAULT_JSON}" | jq --argjson imap "${INVOKE_MAP}" '
-        [.skills[] | . + (
-            if $imap[.name] then
-                {invoke: $imap[.name], available: true, enabled: true}
-            else
-                {available: false, enabled: true}
-            end
-        )]
+    SKILLS_JSON="$(printf '%s' "${DEFAULT_JSON}" | jq \
+        --argjson imap "${INVOKE_MAP}" \
+        --argjson fmap "${FRONTMATTER_MAP}" '
+        [.skills[] | . as $skill |
+            ($fmap[$skill.name] // {}) as $fm |
+            (if ($fm.triggers // null) then {triggers: $fm.triggers} else {} end) as $ft |
+            (if ($fm.role // null) then {role: $fm.role} else {} end) as $fr |
+            (if ($fm.phase // null) then {phase: $fm.phase} else {} end) as $fp |
+            (if ($fm.priority // null) then {priority: ($fm.priority | tonumber)} else {} end) as $fpri |
+            (if ($fm.precedes // null) then {precedes: $fm.precedes} else {} end) as $fprec |
+            (if ($fm.requires // null) then {requires: $fm.requires} else {} end) as $freq |
+            . + $ft + $fr + $fp + $fpri + $fprec + $freq + (
+                if $imap[$skill.name] then
+                    {invoke: $imap[$skill.name], available: true, enabled: true}
+                else
+                    {available: false, enabled: true} + (if .invoke then {invoke: .invoke} else {} end)
+                end
+            )
+        ]
     ')"
 else
     SKILLS_JSON="[]"
 fi
 
-# Extract default skill names once for custom-skill detection
+# Extract default skill + plugin names once for custom-skill detection
+# Exclude both: skills already in defaults AND names matching plugins (tracked separately)
 DEFAULT_NAMES=""
 if [ -n "${DEFAULT_JSON}" ]; then
-    DEFAULT_NAMES="$(printf '%s' "${DEFAULT_JSON}" | jq -r '.skills[].name')"
+    DEFAULT_NAMES="$(printf '%s' "${DEFAULT_JSON}" | jq -r '(.skills[].name), (.plugins[].name)')"
 fi
 
 # Collect custom skills (discovered but not in defaults) and batch-append
 # Build newline-delimited name|path pairs, then create all custom entries in one jq call
-CUSTOMS_INPUT=""
 printf '%s' "${ALL_DISCOVERED}" | while IFS='|' read -r sname spath; do
     [ -z "${sname}" ] && continue
-    # Check if name is in defaults using bash string matching
     _found=0
     while IFS= read -r _dn; do
         [ -z "${_dn}" ] && continue
@@ -242,19 +361,23 @@ DNAMES
 done > "${CACHE_FILE}.customs.$$" 2>/dev/null || true
 
 if [ -f "${CACHE_FILE}.customs.$$" ] && [ -s "${CACHE_FILE}.customs.$$" ]; then
-    CUSTOMS_JSON="$(jq -Rn '[inputs] | [range(0; length; 2) as $i | {
-        name: .[($i)],
-        role: "domain",
-        triggers: [],
-        trigger_mode: "regex",
-        priority: 200,
-        precedes: [],
-        requires: [],
-        description: "User-installed skill",
-        invoke: .[($i)+1],
-        available: true,
-        enabled: true
-    }]' < "${CACHE_FILE}.customs.$$")"
+    CUSTOMS_JSON="$(jq -Rn --argjson fmap "${FRONTMATTER_MAP}" '[inputs] | [range(0; length; 2) as $i |
+        (.[($i)]) as $name |
+        ($fmap[$name] // {}) as $fm |
+        {
+            name: $name,
+            role: ($fm.role // "domain"),
+            triggers: ($fm.triggers // []),
+            trigger_mode: "regex",
+            priority: (($fm.priority // "200") | tonumber),
+            phase: ($fm.phase // ""),
+            precedes: ($fm.precedes // []),
+            requires: ($fm.requires // []),
+            description: "Discovered skill",
+            invoke: .[($i)+1],
+            available: true,
+            enabled: true
+        }]' < "${CACHE_FILE}.customs.$$")"
     SKILLS_JSON="$(printf '%s' "${SKILLS_JSON}" | jq --argjson c "${CUSTOMS_JSON}" '. + $c')"
 fi
 rm -f "${CACHE_FILE}.customs.$$"
@@ -340,21 +463,17 @@ CURATED_EOF
 fi
 
 # -----------------------------------------------------------------
-# Step 8c: Auto-discover unknown plugins from all marketplaces
+# Step 8c: Auto-discover plugin metadata from all marketplaces
 # -----------------------------------------------------------------
-# Build list of curated plugin names for exclusion
+# Build exclusion list: curated plugins (already in PLUGINS_JSON) + self
+# External plugins discovered by the unified scanner are NOT excluded here
+# because Step 8c collects plugin-level metadata (commands, agents, hooks)
+# that the skill scanner does not capture.
 CURATED_NAMES="$(printf '%s' "${PLUGINS_JSON}" | jq -r '.[].name' 2>/dev/null)"
-# Also exclude plugins we already handle as skill sources
 KNOWN_NAMES="${CURATED_NAMES}
-superpowers
-frontend-design
-claude-md-management
-claude-code-setup
-pr-review-toolkit
-ralph-loop
 auto-claude-skills"
 
-# Collect all unknown plugin data bash-side, then merge in one jq call
+# Collect plugin metadata (commands, agents) bash-side, then merge in one jq call
 _DISCOVERED_ENTRIES=""
 _ENTRY_DELIM="@@ENTRY@@"
 _FIELD_DELIM="@@F@@"
@@ -365,7 +484,7 @@ for _mkt_dir in "${HOME}/.claude/plugins/cache"/*/; do
         [ -d "${_plugin_dir}" ] || continue
         _pname="$(basename "${_plugin_dir}")"
 
-        # Skip known/curated plugins
+        # Skip known/curated/already-discovered plugins
         _skip=0
         while IFS= read -r _kn; do
             [ -z "${_kn}" ] && continue
@@ -549,6 +668,7 @@ fi
 # -----------------------------------------------------------------
 RESULT="$(jq -n \
     --arg version "4.0.0" \
+    --arg fm_version "1" \
     --argjson skills "${SKILLS_JSON}" \
     --argjson plugins "${PLUGINS_JSON}" \
     --argjson caps "${CONTEXT_CAPS}" \
@@ -558,7 +678,7 @@ RESULT="$(jq -n \
     --argjson mh "${METHODOLOGY_HINTS}" \
     --argjson warnings "${WARNINGS}" \
     '{
-        registry: {version:$version, skills:$skills, plugins:$plugins, context_capabilities:$caps,
+        registry: {version:$version, frontmatter_schema_version: ($fm_version | tonumber), skills:$skills, plugins:$plugins, context_capabilities:$caps,
                    openspec_capabilities:$openspec_caps,
                    phase_compositions:$pc, phase_guide:$pg,
                    methodology_hints:$mh, warnings:$warnings},
@@ -571,8 +691,85 @@ RESULT="$(jq -n \
         }
     }')"
 
+# -----------------------------------------------------------------
+# Step 10b: Reconcile against previous registry
+# -----------------------------------------------------------------
+RECONCILIATION_WARNINGS="[]"
+
+if [ -f "${CACHE_FILE}" ]; then
+    RECONCILIATION_WARNINGS="$(jq -n \
+        --slurpfile prev "${CACHE_FILE}" \
+        --argjson curr "${SKILLS_JSON}" \
+        --argjson user_cfg "$([ -f "${USER_CONFIG}" ] && cat "${USER_CONFIG}" 2>/dev/null || echo '{}')" \
+        --argjson phase_comp "${PHASE_COMPOSITIONS}" \
+        '
+        # Compute previous and current skill name sets
+        ([$prev[0].skills // [] | .[].name] | sort | unique) as $prev_names |
+        ([$curr[] | .name] | sort | unique) as $curr_names |
+
+        # Added and removed skills
+        ([$curr_names[] | select(. as $n | $prev_names | index($n) | not)] |
+            map("+ " + . + " (newly discovered)")) as $added |
+        ([$prev_names[] | select(. as $n | $curr_names | index($n) | not)] |
+            map("- " + . + " (removed)")) as $removed |
+
+        # Orphaned user config overrides
+        (($user_cfg.overrides // {}) | keys) as $override_names |
+        ([$override_names[] | select(. as $n | $curr_names | index($n) | not)] |
+            map("orphan: override for \"" + . + "\" no longer matches any installed skill")) as $orphans |
+
+        # Rename detection: >=50% word overlap on description, same removed+added set
+        ([$prev[0].skills // [] | .[] | {(.name): (.description // "")}] | add // {}) as $prev_desc |
+        ([$curr[] | {(.name): (.description // "")}] | add // {}) as $curr_desc |
+        ([$removed[] | ltrimstr("- ") | split(" (")[0]]) as $rem_names |
+        ([$added[] | ltrimstr("+ ") | split(" (")[0]]) as $add_names |
+        ([($rem_names[]) as $old | ($add_names[]) as $new |
+          (($prev_desc[$old] // "") | ascii_downcase | split(" ") | map(select(length > 2))) as $old_words |
+          (($curr_desc[$new] // "") | ascii_downcase | split(" ") | map(select(length > 2))) as $new_words |
+          ([($old_words | length), ($new_words | length)] | max) as $max_len |
+          select($max_len > 0) |
+          ([$old_words[] | select(. as $w | $new_words | index($w) != null)] | length) as $overlap |
+          select(($overlap / $max_len) >= 0.5) |
+          "rename: possible rename " + $old + " \u2192 " + $new
+        ] | unique) as $renames |
+
+        # Phase composition resilience: warn about stale references to removed skills
+        ([$phase_comp | .. | strings] | unique) as $comp_refs |
+        ([$rem_names[] | select(. as $n | $comp_refs | index($n) != null)] |
+            map("stale-ref: phase composition references removed skill \"" + . + "\"")) as $stale_refs |
+
+        ($added + $removed + $orphans + $renames + $stale_refs)
+    ')" || RECONCILIATION_WARNINGS="[]"
+fi
+
+if [ "${RECONCILIATION_WARNINGS}" != "[]" ]; then
+    WARNINGS="$(printf '%s' "${WARNINGS}" | jq --argjson rw "${RECONCILIATION_WARNINGS}" '. + $rw')"
+    # Update RESULT with new warnings
+    RESULT="$(printf '%s' "${RESULT}" | jq --argjson w "${WARNINGS}" '.registry.warnings = $w')"
+fi
+
 # Write registry to cache (strip the stats wrapper)
 printf '%s' "${RESULT}" | jq '.registry' > "${CACHE_FILE}"
+
+# -----------------------------------------------------------------
+# Step 10c: Auto-regenerate fallback registry
+# -----------------------------------------------------------------
+_FALLBACK="${PLUGIN_ROOT}/config/fallback-registry.json"
+if [ -d "${PLUGIN_ROOT}/config" ]; then
+    _new_fallback="$(printf '%s' "${RESULT}" | jq '.registry')"
+    if [ -f "${_FALLBACK}" ]; then
+        _existing="$(cat "${_FALLBACK}" 2>/dev/null)"
+        if [ "${_new_fallback}" != "${_existing}" ]; then
+            printf '%s\n' "${_new_fallback}" > "${_FALLBACK}" 2>/dev/null || {
+                [ -n "${SKILL_EXPLAIN:-}" ] && printf '[session-start] fallback-registry write skipped: read-only PLUGIN_ROOT\n' >&2
+            }
+        fi
+    else
+        printf '%s\n' "${_new_fallback}" > "${_FALLBACK}" 2>/dev/null || {
+            [ -n "${SKILL_EXPLAIN:-}" ] && printf '[session-start] fallback-registry write skipped: read-only PLUGIN_ROOT\n' >&2
+        }
+    fi
+fi
 
 # Extract stats for health message
 read -r SKILL_COUNT AVAILABLE_COUNT WARNING_COUNT PLUGIN_COUNT PLUGIN_AVAILABLE <<EOF
