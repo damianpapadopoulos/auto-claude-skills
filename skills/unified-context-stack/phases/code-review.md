@@ -24,3 +24,9 @@ If a reviewer suggests an architectural change:
 - **serena=true**: Use `find_referencing_symbols` to map all downstream dependencies before implementing
 - **serena=false**: Use Grep to find all references, Read to verify each usage. Extra caution on complex hierarchies.
 - Flag any files that would break silently from the proposed change
+
+### 3. Historical Truth (Convention Check)
+Before accepting architectural changes:
+- **forgetful_memory=true**: Query Forgetful for prior architectural conventions or decisions related to the affected area
+- **forgetful_memory=false**: Check CLAUDE.md for documented conventions
+- If a reviewer's suggestion contradicts a documented convention, flag the conflict rather than silently applying the change
