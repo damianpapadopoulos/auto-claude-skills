@@ -40,28 +40,33 @@ else
 fi
 [ "${_PHASE}" = "SHIP" ] || exit 0
 
-# Detection: has openspec-ship run?
+# Compute project root unconditionally (needed by all checks)
+_proj_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+_WARNINGS=""
+
+# --- Check 1: Has openspec-ship run? ---
+_openspec_ok=false
 if command -v openspec >/dev/null 2>&1; then
-    # CLI available — check for actual artifacts
-    _proj_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
     if [ -d "${_proj_root}/openspec/changes" ]; then
-        # Check for any non-empty subdirectory (a change set) — glob avoids fork
         for _d in "${_proj_root}/openspec/changes"/*/; do
-            [ -d "${_d}" ] && exit 0
+            [ -d "${_d}" ] && _openspec_ok=true && break
         done
     fi
 else
-    # No CLI — check routing signal for openspec-ship (best-effort: only detects if it was the LAST routed skill)
     if grep -q "openspec-ship" "${_SIGNAL_FILE}" 2>/dev/null; then
-        exit 0
+        _openspec_ok=true
     fi
 fi
+if [ "${_openspec_ok}" = "false" ]; then
+    _WARNINGS="OPENSPEC GUARD: openspec-ship has not run this session. As-built documentation will be lost if you commit now. Invoke Skill(auto-claude-skills:openspec-ship) first, or proceed if documentation is not needed for this change."
+fi
 
-# Neither check passed — emit warning via jq for safe JSON encoding (or printf fallback)
-_MSG="OPENSPEC GUARD: openspec-ship has not run this session. As-built documentation will be lost if you commit now. Invoke Skill(auto-claude-skills:openspec-ship) first, or proceed if documentation is not needed for this change."
-if command -v jq >/dev/null 2>&1; then
-    jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":$msg}}'
-else
-    printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"%s"}}\n' "${_MSG}"
+# --- Emit combined warnings ---
+if [ -n "${_WARNINGS}" ]; then
+    if command -v jq >/dev/null 2>&1; then
+        jq -n --arg msg "${_WARNINGS}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":$msg}}'
+    else
+        printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"%s"}}\n' "${_WARNINGS}"
+    fi
 fi
 exit 0
