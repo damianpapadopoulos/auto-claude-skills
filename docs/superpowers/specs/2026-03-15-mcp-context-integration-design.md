@@ -143,15 +143,21 @@ Two enforcement points ensure learnings are not lost when a session ends.
 
 #### 6a: Consolidation check in openspec-guard.sh
 
-Extend the existing `hooks/openspec-guard.sh` (which already fires on `git commit/push` in SHIP phase) with a second check after the openspec-ship check:
+Extend the existing `hooks/openspec-guard.sh` (which already fires on `git commit/push` in SHIP phase) with a second check after the openspec-ship check.
 
-- Compute project hash: `_PROJ_HASH="$(printf '%s' "${_proj_root}" | shasum | cut -d' ' -f1)"`
-- Check for consolidation marker: `~/.claude/.context-stack-consolidated-${_PROJ_HASH}`
-- If marker exists, compare its mtime with the latest git commit time
-- If marker is fresh (mtime >= last commit time), pass silently
-- If marker is stale or missing, emit: `"CONSOLIDATION GUARD: Memory consolidation has not been performed this session. Learnings may be lost. Run the memory consolidation step from ship-and-learn before committing."`
-- Both the openspec-ship check and consolidation check run independently — both warnings can fire on the same commit
-- Remains fail-open (exit 0 always)
+**Structural refactor required:** The current openspec-guard uses early `exit 0` on success and falls through to a single warning. Since a PreToolUse hook can only emit one JSON output, the guard must be refactored to an **accumulator pattern**:
+- Replace early `exit 0` returns with a `_WARNINGS=""` accumulator variable
+- Each check (openspec-ship, consolidation, delta sync) appends its warning to `_WARNINGS` if triggered
+- At the end, emit a single combined JSON message if `_WARNINGS` is non-empty, or exit silently if empty
+
+**Variable scoping fix:** The existing `_proj_root` is defined only inside the `if command -v openspec` branch (line 46). Hoist it to the top of the guard, unconditionally: `_proj_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"`. Use lowercase consistently to match existing openspec-guard style.
+
+**Consolidation check logic:**
+- Compute project hash: `_proj_hash="$(printf '%s' "${_proj_root}" | shasum | cut -d' ' -f1)"`
+- Check for consolidation marker: `~/.claude/.context-stack-consolidated-${_proj_hash}`
+- If marker exists, compare its mtime with the latest git commit time (use `stat -f %m` macOS / `stat -c %Y` Linux fallback pattern from session-start-hook.sh line 690)
+- If marker is fresh (mtime >= last commit time), skip this warning
+- If marker is stale or missing, append to `_WARNINGS`: `"CONSOLIDATION GUARD: Memory consolidation has not been performed this session. Learnings may be lost. Run the memory consolidation step from ship-and-learn before committing."`
 
 #### 6b: New `consolidation-stop.sh` Stop hook
 
@@ -168,23 +174,36 @@ Fires when the session ends. Logic:
    - Neither: `"Append findings to docs/learnings.md before ending the session."`
 6. Always exit 0 (advisory, never blocking)
 
-**Registration:** Add to `hooks/hooks.json` Stop array alongside existing cozempic checkpoint entry.
+**Registration:** Add as a second hook within the existing Stop entry's `hooks` array in `hooks/hooks.json` (matching the SessionStart pattern where multiple hooks share one entry):
+
+```json
+"Stop": [
+  {
+    "hooks": [
+      { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/cozempic-wrapper.sh checkpoint" },
+      { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/consolidation-stop.sh" }
+    ]
+  }
+]
+```
 
 ### Section 7: Delta Spec Sync Check in openspec-guard.sh
 
 Extend `hooks/openspec-guard.sh` with a third check: after the openspec-ship check and consolidation check, verify that archived delta specs have been synced to canonical specs.
 
 **Logic:**
+- Guard: `[ -d "${_proj_root}/openspec/changes/archive" ] || skip` (directory may not exist on fresh projects)
 - Iterate through `openspec/changes/archive/*/specs/*/spec.md` (delta specs in archived change folders)
-- For each delta spec, extract the capability name from the path structure
+- For each delta spec file, extract the capability name from the path structure (`basename "$(dirname "${_delta}")"`)
 - Check if `openspec/specs/<capability>/spec.md` (canonical) exists
-- If canonical exists, compare mtimes: if canonical is older than the archive folder, the delta was not synced
+- If canonical exists, compare mtimes: if canonical spec.md **file** mtime is older than the delta spec.md **file** mtime, the delta was not synced (file-to-file comparison, not folder-to-file)
 - If no canonical exists at all, the delta was never synced
-- If any unsynced delta is found, emit: `"OPENSPEC GUARD: Archived delta specs may not be synced to canonical specs at openspec/specs/. Consider running openspec validate or manually merging delta changes before committing."`
+- If any unsynced delta is found, append to `_WARNINGS`: `"OPENSPEC GUARD: Archived delta specs may not be synced to canonical specs at openspec/specs/. Consider running openspec validate or manually merging delta changes before committing."`
+- Loop body must check `[ -f "${_delta}" ] || continue` to handle Bash 3.2 non-matching globs (no `nullglob`)
 
 **Key properties:**
 - Only checks `openspec/changes/archive/` (not in-progress changes — those are caught by the existing openspec-ship check)
-- Runs inside the existing `openspec-guard.sh`, same SHIP-phase gate, same fail-open behavior
+- Runs inside the existing `openspec-guard.sh`, same SHIP-phase gate, same fail-open behavior, same accumulator pattern
 - No new hook file needed for this check
 - Uses file mtime comparison (no git history needed, fast)
 
