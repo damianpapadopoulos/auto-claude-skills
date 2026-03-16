@@ -61,6 +61,21 @@ if [ "${_openspec_ok}" = "false" ]; then
     _WARNINGS="OPENSPEC GUARD: openspec-ship has not run this session. As-built documentation will be lost if you commit now. Invoke Skill(auto-claude-skills:openspec-ship) first, or proceed if documentation is not needed for this change."
 fi
 
+# --- Check 2: Has memory consolidation been performed? ---
+_proj_hash="$(printf '%s' "${_proj_root}" | shasum | cut -d' ' -f1)"
+_consol_marker="${HOME}/.claude/.context-stack-consolidated-${_proj_hash}"
+_consol_ok=false
+if [ -f "${_consol_marker}" ]; then
+    _marker_time="$(stat -f %m "${_consol_marker}" 2>/dev/null || stat -c %Y "${_consol_marker}" 2>/dev/null || echo 0)"
+    _last_commit="$(git -C "${_proj_root}" log -1 --format=%ct 2>/dev/null || echo 0)"
+    [ "${_marker_time}" -ge "${_last_commit}" ] && _consol_ok=true
+fi
+if [ "${_consol_ok}" = "false" ]; then
+    [ -n "${_WARNINGS}" ] && _WARNINGS="${_WARNINGS}
+"
+    _WARNINGS="${_WARNINGS}CONSOLIDATION GUARD: Memory consolidation has not been performed this session. Learnings may be lost. Run the memory consolidation step from ship-and-learn before committing."
+fi
+
 # --- Emit combined warnings ---
 if [ -n "${_WARNINGS}" ]; then
     if command -v jq >/dev/null 2>&1; then
