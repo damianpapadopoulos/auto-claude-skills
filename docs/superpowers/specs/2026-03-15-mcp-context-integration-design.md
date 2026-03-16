@@ -2,7 +2,7 @@
 
 **Date:** 2026-03-15
 **Status:** Approved
-**Scope:** Fix MCP tool detection, correct tool name references, fill phase coverage gaps, add serena nudge guard
+**Scope:** Fix MCP tool detection, correct tool name references, fill phase coverage gaps, add serena nudge guard, enforce memory consolidation, enforce delta spec sync
 
 ## Problem
 
@@ -137,13 +137,66 @@ Forgetful: Use discover_forgetful_tools to list available memory operations, the
 fi
 ```
 
+### Section 6: Memory Consolidation Enforcement
+
+Two enforcement points ensure learnings are not lost when a session ends.
+
+#### 6a: Consolidation check in openspec-guard.sh
+
+Extend the existing `hooks/openspec-guard.sh` (which already fires on `git commit/push` in SHIP phase) with a second check after the openspec-ship check:
+
+- Compute project hash: `_PROJ_HASH="$(printf '%s' "${_proj_root}" | shasum | cut -d' ' -f1)"`
+- Check for consolidation marker: `~/.claude/.context-stack-consolidated-${_PROJ_HASH}`
+- If marker exists, compare its mtime with the latest git commit time
+- If marker is fresh (mtime >= last commit time), pass silently
+- If marker is stale or missing, emit: `"CONSOLIDATION GUARD: Memory consolidation has not been performed this session. Learnings may be lost. Run the memory consolidation step from ship-and-learn before committing."`
+- Both the openspec-ship check and consolidation check run independently — both warnings can fire on the same commit
+- Remains fail-open (exit 0 always)
+
+#### 6b: New `consolidation-stop.sh` Stop hook
+
+**New file:** `hooks/consolidation-stop.sh`
+
+Fires when the session ends. Logic:
+1. Read session token from `~/.claude/.skill-session-token`
+2. Compute project hash and check consolidation marker freshness (same logic as 6a)
+3. If marker is fresh, exit silently
+4. If stale/missing, read `~/.claude/.skill-registry-cache.json` for available capabilities
+5. Emit tier-specific guidance based on available tools:
+   - `forgetful_memory=true`: `"Use discover_forgetful_tools → execute_forgetful_tool to store architectural learnings from this session."`
+   - `context_hub_cli=true`: `"Use chub annotate to record API workarounds discovered."`
+   - Neither: `"Append findings to docs/learnings.md before ending the session."`
+6. Always exit 0 (advisory, never blocking)
+
+**Registration:** Add to `hooks/hooks.json` Stop array alongside existing cozempic checkpoint entry.
+
+### Section 7: Delta Spec Sync Check in openspec-guard.sh
+
+Extend `hooks/openspec-guard.sh` with a third check: after the openspec-ship check and consolidation check, verify that archived delta specs have been synced to canonical specs.
+
+**Logic:**
+- Iterate through `openspec/changes/archive/*/specs/*/spec.md` (delta specs in archived change folders)
+- For each delta spec, extract the capability name from the path structure
+- Check if `openspec/specs/<capability>/spec.md` (canonical) exists
+- If canonical exists, compare mtimes: if canonical is older than the archive folder, the delta was not synced
+- If no canonical exists at all, the delta was never synced
+- If any unsynced delta is found, emit: `"OPENSPEC GUARD: Archived delta specs may not be synced to canonical specs at openspec/specs/. Consider running openspec validate or manually merging delta changes before committing."`
+
+**Key properties:**
+- Only checks `openspec/changes/archive/` (not in-progress changes — those are caught by the existing openspec-ship check)
+- Runs inside the existing `openspec-guard.sh`, same SHIP-phase gate, same fail-open behavior
+- No new hook file needed for this check
+- Uses file mtime comparison (no git history needed, fast)
+
 ## Files Modified
 
 | File | Change Type |
 |------|-------------|
 | `hooks/session-start-hook.sh` | MCP fallback detection + Forgetful hint |
 | `hooks/serena-nudge.sh` | **New** — PreToolUse nudge guard |
-| `hooks/hooks.json` | Register serena-nudge PreToolUse hook (matcher: `Grep`) |
+| `hooks/consolidation-stop.sh` | **New** — Stop hook for session-end consolidation reminder |
+| `hooks/openspec-guard.sh` | Add consolidation check + delta spec sync check |
+| `hooks/hooks.json` | Register serena-nudge PreToolUse hook + consolidation-stop Stop hook |
 | `config/default-triggers.json` | Add forgetful curated plugin entry |
 | `skills/unified-context-stack/tiers/internal-truth.md` | Fix `cross_reference` → `find_referencing_symbols` |
 | `skills/unified-context-stack/tiers/historical-truth.md` | Fix tool names to actual Forgetful MCP tools |
@@ -155,13 +208,17 @@ fi
 
 ## Non-Goals
 
-- No changes to OpenSpec integration (already fully functional)
 - No PreToolUse guard for Forgetful (meta-tool API makes pattern matching impractical)
 - No changes to the skill-activation-hook routing logic
 - No MCP health-check verification (`claude mcp list` is 3.7s — too slow for any hook)
+- No changes to the openspec-ship skill itself (enforcement is via guards, not skill changes)
+- No CI-level OpenSpec validation (out of scope — this is session-level enforcement only)
 
 ## Testing
 
 - `bash tests/test-context.sh` — update existing test for new capability detection path
 - Manual verification: start a new session and confirm `serena=true, forgetful_memory=true` in Context Stack line
 - Manual verification: Grep for a CamelCase symbol and confirm serena nudge appears
+- Manual verification: git commit in SHIP phase without consolidation marker — confirm consolidation warning
+- Manual verification: end session without consolidation — confirm Stop hook tier-specific guidance
+- Manual verification: git commit with unsynced archived delta specs — confirm delta spec sync warning
