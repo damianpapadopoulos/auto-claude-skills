@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Fix MCP tool detection so Serena and Forgetful are recognized, correct all tool name references, fill phase coverage gaps, and add a serena nudge guard.
+**Goal:** Fix MCP tool detection so Serena and Forgetful are recognized, correct all tool name references, fill phase coverage gaps, add a serena nudge guard, enforce memory consolidation, and enforce delta spec sync.
 
-**Architecture:** Augment plugin-based detection with MCP config file fallback. Fix doc references to match actual MCP tool names. Add lightweight PreToolUse hook for serena nudge.
+**Architecture:** Augment plugin-based detection with MCP config file fallback. Fix doc references to match actual MCP tool names. Add lightweight PreToolUse hook for serena nudge. Extend openspec-guard with accumulator pattern for consolidation and delta spec sync warnings. Add Stop hook for session-end consolidation reminder.
 
 **Tech Stack:** Bash 3.2, jq, Claude Code hooks system
 
@@ -480,7 +480,7 @@ git add tests/test-context.sh
 git commit -m "test: add MCP fallback detection test"
 ```
 
-### Task 12: Run full test suite
+### Task 12: Run full test suite (Chunks 1-3)
 
 - [ ] **Step 1: Run all tests**
 
@@ -496,4 +496,300 @@ If tests fail, identify and fix the issue before proceeding.
 ```bash
 git add -A
 git commit -m "fix: address test regressions from MCP integration changes"
+```
+
+---
+
+## Chunk 5: Consolidation and Delta Spec Enforcement
+
+### Task 13: Refactor openspec-guard.sh to accumulator pattern
+
+**Files:**
+- Modify: `hooks/openspec-guard.sh`
+
+- [ ] **Step 1: Hoist `_proj_root` and add `_WARNINGS` accumulator**
+
+Replace lines 43-66 (from `# Detection: has openspec-ship run?` to the JSON output) with the refactored version. The key structural changes:
+
+1. Hoist `_proj_root` before the openspec-ship check (unconditionally):
+```bash
+_proj_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+```
+
+2. Initialize accumulator:
+```bash
+_WARNINGS=""
+```
+
+3. Replace the openspec-ship check's `exit 0` returns with a conditional append to `_WARNINGS`, and remove the early exits:
+```bash
+# --- Check 1: Has openspec-ship run? ---
+_openspec_ok=false
+if command -v openspec >/dev/null 2>&1; then
+    if [ -d "${_proj_root}/openspec/changes" ]; then
+        for _d in "${_proj_root}/openspec/changes"/*/; do
+            [ -d "${_d}" ] && _openspec_ok=true && break
+        done
+    fi
+else
+    if grep -q "openspec-ship" "${_SIGNAL_FILE}" 2>/dev/null; then
+        _openspec_ok=true
+    fi
+fi
+if [ "${_openspec_ok}" = "false" ]; then
+    _WARNINGS="OPENSPEC GUARD: openspec-ship has not run this session. As-built documentation will be lost if you commit now. Invoke Skill(auto-claude-skills:openspec-ship) first, or proceed if documentation is not needed for this change."
+fi
+```
+
+4. Replace the final JSON emission with the accumulator output:
+```bash
+# --- Emit combined warnings ---
+if [ -n "${_WARNINGS}" ]; then
+    if command -v jq >/dev/null 2>&1; then
+        jq -n --arg msg "${_WARNINGS}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":$msg}}'
+    else
+        printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"%s"}}\n' "${_WARNINGS}"
+    fi
+fi
+exit 0
+```
+
+- [ ] **Step 2: Syntax-check**
+
+Run: `bash -n hooks/openspec-guard.sh`
+Expected: No output (clean parse)
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add hooks/openspec-guard.sh
+git commit -m "refactor: openspec-guard accumulator pattern for multi-warning support"
+```
+
+### Task 14: Add consolidation check to openspec-guard.sh
+
+**Files:**
+- Modify: `hooks/openspec-guard.sh` (insert after Check 1, before emit block)
+
+- [ ] **Step 1: Add Check 2 — consolidation marker**
+
+Insert after the openspec-ship check block and before the emit block:
+
+```bash
+# --- Check 2: Has memory consolidation been performed? ---
+_proj_hash="$(printf '%s' "${_proj_root}" | shasum | cut -d' ' -f1)"
+_consol_marker="${HOME}/.claude/.context-stack-consolidated-${_proj_hash}"
+_consol_ok=false
+if [ -f "${_consol_marker}" ]; then
+    _marker_time="$(stat -f %m "${_consol_marker}" 2>/dev/null || stat -c %Y "${_consol_marker}" 2>/dev/null || echo 0)"
+    _last_commit="$(git -C "${_proj_root}" log -1 --format=%ct 2>/dev/null || echo 0)"
+    [ "${_marker_time}" -ge "${_last_commit}" ] && _consol_ok=true
+fi
+if [ "${_consol_ok}" = "false" ]; then
+    [ -n "${_WARNINGS}" ] && _WARNINGS="${_WARNINGS}
+"
+    _WARNINGS="${_WARNINGS}CONSOLIDATION GUARD: Memory consolidation has not been performed this session. Learnings may be lost. Run the memory consolidation step from ship-and-learn before committing."
+fi
+```
+
+- [ ] **Step 2: Syntax-check**
+
+Run: `bash -n hooks/openspec-guard.sh`
+Expected: No output
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add hooks/openspec-guard.sh
+git commit -m "feat: add consolidation check to openspec-guard"
+```
+
+### Task 15: Add delta spec sync check to openspec-guard.sh
+
+**Files:**
+- Modify: `hooks/openspec-guard.sh` (insert after Check 2, before emit block)
+
+- [ ] **Step 1: Add Check 3 — delta spec sync**
+
+Insert after the consolidation check and before the emit block:
+
+```bash
+# --- Check 3: Are archived delta specs synced to canonical? ---
+_unsynced=false
+if [ -d "${_proj_root}/openspec/changes/archive" ]; then
+    for _delta in "${_proj_root}/openspec/changes/archive"/*/specs/*/spec.md; do
+        [ -f "${_delta}" ] || continue
+        _cap="$(basename "$(dirname "${_delta}")")"
+        _canonical="${_proj_root}/openspec/specs/${_cap}/spec.md"
+        if [ -f "${_canonical}" ]; then
+            _canon_time="$(stat -f %m "${_canonical}" 2>/dev/null || stat -c %Y "${_canonical}" 2>/dev/null || echo 0)"
+            _delta_time="$(stat -f %m "${_delta}" 2>/dev/null || stat -c %Y "${_delta}" 2>/dev/null || echo 0)"
+            if [ "${_canon_time}" -lt "${_delta_time}" ]; then
+                _unsynced=true
+                break
+            fi
+        else
+            _unsynced=true
+            break
+        fi
+    done
+fi
+if [ "${_unsynced}" = "true" ]; then
+    [ -n "${_WARNINGS}" ] && _WARNINGS="${_WARNINGS}
+"
+    _WARNINGS="${_WARNINGS}OPENSPEC GUARD: Archived delta specs may not be synced to canonical specs at openspec/specs/. Consider running openspec validate or manually merging delta changes before committing."
+fi
+```
+
+- [ ] **Step 2: Syntax-check**
+
+Run: `bash -n hooks/openspec-guard.sh`
+Expected: No output
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add hooks/openspec-guard.sh
+git commit -m "feat: add delta spec sync check to openspec-guard"
+```
+
+### Task 16: Create consolidation-stop.sh Stop hook
+
+**Files:**
+- Create: `hooks/consolidation-stop.sh`
+
+- [ ] **Step 1: Write the Stop hook script**
+
+```bash
+#!/bin/bash
+# Consolidation stop hook — reminds about memory consolidation when session ends
+# Stop hook. Bash 3.2 compatible. Exits 0 always (advisory, fail-open).
+trap 'exit 0' ERR
+
+# Check session token
+[ -f "${HOME}/.claude/.skill-session-token" ] || exit 0
+
+# Check consolidation marker freshness
+_proj_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+_proj_hash="$(printf '%s' "${_proj_root}" | shasum | cut -d' ' -f1)"
+_consol_marker="${HOME}/.claude/.context-stack-consolidated-${_proj_hash}"
+
+if [ -f "${_consol_marker}" ]; then
+    _marker_time="$(stat -f %m "${_consol_marker}" 2>/dev/null || stat -c %Y "${_consol_marker}" 2>/dev/null || echo 0)"
+    _last_commit="$(git -C "${_proj_root}" log -1 --format=%ct 2>/dev/null || echo 0)"
+    [ "${_marker_time}" -ge "${_last_commit}" ] && exit 0
+fi
+
+# Marker is stale or missing — build tier-specific guidance
+_CACHE="${HOME}/.claude/.skill-registry-cache.json"
+_GUIDANCE="Append findings to docs/learnings.md before ending the session."
+
+if [ -f "${_CACHE}" ] && command -v jq >/dev/null 2>&1; then
+    _fm="$(jq -r '.context_capabilities.forgetful_memory // false' "${_CACHE}" 2>/dev/null)" || true
+    _chub="$(jq -r '.context_capabilities.context_hub_cli // false' "${_CACHE}" 2>/dev/null)" || true
+    if [ "${_fm}" = "true" ]; then
+        _GUIDANCE="Use discover_forgetful_tools then execute_forgetful_tool to store architectural learnings from this session."
+    elif [ "${_chub}" = "true" ]; then
+        _GUIDANCE="Use chub annotate to record API workarounds discovered."
+    fi
+fi
+
+_MSG="CONSOLIDATION REMINDER: Session ending without memory consolidation. Learnings from this session may be lost. ${_GUIDANCE}"
+if command -v jq >/dev/null 2>&1; then
+    jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":$msg}}'
+else
+    printf '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":"%s"}}\n' "${_MSG}"
+fi
+exit 0
+```
+
+- [ ] **Step 2: Make executable**
+
+Run: `chmod +x hooks/consolidation-stop.sh`
+
+- [ ] **Step 3: Syntax-check**
+
+Run: `bash -n hooks/consolidation-stop.sh`
+Expected: No output
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add hooks/consolidation-stop.sh
+git commit -m "feat: add consolidation-stop.sh Stop hook with tier-specific guidance"
+```
+
+### Task 17: Register consolidation-stop in hooks.json
+
+**Files:**
+- Modify: `hooks/hooks.json:79-88` (add to existing Stop entry)
+
+- [ ] **Step 1: Add consolidation-stop to Stop hooks array**
+
+Replace the existing Stop entry:
+
+```json
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/cozempic-wrapper.sh checkpoint"
+          }
+        ]
+      }
+    ],
+```
+
+With:
+
+```json
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/cozempic-wrapper.sh checkpoint"
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/consolidation-stop.sh"
+          }
+        ]
+      }
+    ],
+```
+
+- [ ] **Step 2: Validate JSON syntax**
+
+Run: `jq empty hooks/hooks.json && echo "Valid JSON"`
+Expected: `Valid JSON`
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add hooks/hooks.json
+git commit -m "feat: register consolidation-stop in hooks.json Stop"
+```
+
+---
+
+## Chunk 6: Final Verification
+
+### Task 18: Run full test suite
+
+- [ ] **Step 1: Run all tests**
+
+Run: `bash tests/run-tests.sh`
+Expected: All test suites pass
+
+- [ ] **Step 2: Fix any regressions**
+
+If tests fail, identify and fix the issue before proceeding.
+
+- [ ] **Step 3: Final commit if any fixes were needed**
+
+```bash
+git add -A
+git commit -m "fix: address test regressions from enforcement changes"
 ```
