@@ -756,9 +756,9 @@
         },
         {
           "plugin": "unified-context-stack",
-          "use": "tiered context retrieval (external docs, blast-radius, memory)",
+          "use": "tiered context retrieval (Intent Truth, Historical Truth)",
           "when": "installed AND any context_capability is true",
-          "purpose": "Gather curated API docs, map dependencies, check institutional memory during design"
+          "purpose": "Check existing specs and past decisions before proposing approaches"
         }
       ],
       "hints": [

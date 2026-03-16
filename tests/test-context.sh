@@ -868,4 +868,55 @@ json.dump(d, open('${HOME}/.claude.json', 'w'))
 }
 test_mcp_fallback_detection
 
+# ---------------------------------------------------------------------------
+# Design phase context stack integration
+# ---------------------------------------------------------------------------
+test_design_phase_doc() {
+    echo "-- test: design.md exists with correct tiers --"
+    local phase_doc="${PROJECT_ROOT}/skills/unified-context-stack/phases/design.md"
+    assert_equals "design.md exists" "true" "$([ -f "$phase_doc" ] && echo true || echo false)"
+
+    local content
+    content="$(cat "${phase_doc}")"
+    assert_contains "design.md has Intent Truth" "Intent Truth" "${content}"
+    assert_contains "design.md has Historical Truth" "Historical Truth" "${content}"
+
+    # External Truth and Internal Truth should NOT be step headings
+    local ext_heading int_heading
+    ext_heading="$(grep -c '^###.*External Truth' "${phase_doc}" 2>/dev/null)" || ext_heading=0
+    int_heading="$(grep -c '^###.*Internal Truth' "${phase_doc}" 2>/dev/null)" || int_heading=0
+    assert_equals "no External Truth step heading" "0" "${ext_heading}"
+    assert_equals "no Internal Truth step heading" "0" "${int_heading}"
+}
+test_design_phase_doc
+
+test_skill_md_references_design() {
+    echo "-- test: SKILL.md references design.md --"
+    local skill_md
+    skill_md="$(cat "${PROJECT_ROOT}/skills/unified-context-stack/SKILL.md")"
+    assert_contains "SKILL.md references design.md" "phases/design.md" "${skill_md}"
+}
+test_skill_md_references_design
+
+test_design_composition_narrowed() {
+    echo "-- test: DESIGN composition uses narrowed text --"
+    local triggers="${PROJECT_ROOT}/config/default-triggers.json"
+    local use_field
+    use_field="$(jq -r '.phase_compositions.DESIGN.parallel[] | select(.plugin == "unified-context-stack") | .use' "${triggers}")"
+    assert_equals "DESIGN use field narrowed" "tiered context retrieval (Intent Truth, Historical Truth)" "${use_field}"
+    local purpose_field
+    purpose_field="$(jq -r '.phase_compositions.DESIGN.parallel[] | select(.plugin == "unified-context-stack") | .purpose' "${triggers}")"
+    assert_equals "DESIGN purpose field narrowed" "Check existing specs and past decisions before proposing approaches" "${purpose_field}"
+}
+test_design_composition_narrowed
+
+test_fallback_design_matches_default() {
+    echo "-- test: fallback registry DESIGN composition matches --"
+    local fallback="${PROJECT_ROOT}/config/fallback-registry.json"
+    local use_field
+    use_field="$(jq -r '.phase_compositions.DESIGN.parallel[] | select(.plugin == "unified-context-stack") | .use' "${fallback}")"
+    assert_equals "fallback DESIGN use field" "tiered context retrieval (Intent Truth, Historical Truth)" "${use_field}"
+}
+test_fallback_design_matches_default
+
 print_summary

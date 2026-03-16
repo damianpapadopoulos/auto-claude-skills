@@ -37,6 +37,7 @@ These are injected by the session-start hook as: `Context Stack: context7=true, 
 
 ## Phase Documents
 
+- [Design](phases/design.md) — Intent and historical context before proposing approaches
 - [Triage & Plan](phases/triage-and-plan.md) — Context gathering before writing plans
 - [Implementation](phases/implementation.md) — Mid-flight lookups during execution
 - [Testing & Debug](phases/testing-and-debug.md) — Error resolution and live issue discovery
