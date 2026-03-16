@@ -48,11 +48,41 @@ Add `frontmatter_schema_version: 1` to the registry output so we can evolve the 
 
 ### Parsing Strategy
 
-During discovery, extract frontmatter from all discovered SKILL.md files using a single `awk` pass over all file paths. Pipe the extracted YAML into one `jq` call for JSON conversion. For jq-less environments, skip frontmatter parsing entirely and use `default-triggers.json` as today.
+Frontmatter is restricted to **flat key-value pairs and simple YAML lists** (no nested objects). This allows parsing with `awk` alone — no YAML library, no `yq`, no Python dependency.
 
-### Performance
+**Extraction:** A single `awk` pass over all discovered SKILL.md file paths:
+1. Read lines between `---` delimiters
+2. Emit key-value pairs as JSON: scalar values become strings, lines starting with `  - ` become JSON array elements
+3. Output one JSON object per skill, delimited by `\x1f` (existing field separator)
 
-~30 skills × 1 `awk` multi-file pass ≈ 10-20ms + 1 `jq` batch parse ≈ 5ms. Well within the 200ms hook budget.
+**Example awk output for one skill:**
+```json
+{"name":"brainstorming","triggers":["(brainstorm|ideate)","(explore.*idea)"],"role":"process","phase":"DESIGN","priority":"50"}
+```
+
+**Batch merge:** Pipe all extracted JSON objects into a single `jq` call that builds the frontmatter lookup map (keyed by skill name).
+
+**Jq-less environments:** Skip frontmatter parsing entirely. Use `default-triggers.json` as today. No degradation — frontmatter is an enhancement, not a requirement.
+
+**Malformed frontmatter handling:** If a SKILL.md has no closing `---`, invalid syntax, or binary content, the awk parser emits an empty object for that skill. The merge falls through to `default-triggers.json` for that skill. A warning is added: `"Malformed frontmatter in plugin/skill-name/SKILL.md — falling back to default triggers"`.
+
+### Performance Budget
+
+Complete pipeline timing estimate (200ms budget):
+
+| Step | Forks | Estimated Time |
+|------|-------|---------------|
+| Existing discovery (dir scanning, version sort) | ~5 | 30-50ms |
+| Frontmatter awk extraction (all skills, 1 pass) | 1 | 10-15ms |
+| Frontmatter→JSON jq batch | 1 | 5-10ms |
+| Three-tier merge (single jq call) | 1 | 10-15ms |
+| Reconciliation diff (single jq call) | 1 | 5-10ms |
+| Phase composition reference scan (part of merge jq) | 0 | included above |
+| Fallback registry write + diff check | 1 | 5-10ms |
+| Existing user-config overrides | 1 | 5-10ms |
+| **Total** | **~11** | **70-120ms** |
+
+This leaves 80-130ms headroom. The existing hook runs ~10 jq calls in ~60-80ms on macOS, so adding ~4-5 new forks is within budget. If timing is tight during implementation, the reconciliation diff and fallback write can be deferred to a background process (write a marker file, process next session).
 
 ## 2. Unified Dynamic Discovery
 
@@ -84,7 +114,11 @@ During discovery, extract frontmatter from all discovered SKILL.md files using a
 
 ### Version Resolution
 
-All plugins use the same version resolution: if the plugin directory contains semver-named subdirectories, pick the latest via `sort -t. -k1,1n -k2,2n -k3,3n | tail -1`. If no versioned subdirectories, use the directory directly.
+All plugins use the same version resolution: list subdirectories, filter to those matching `^[0-9]+\.[0-9]+\.[0-9]+$` (strict semver), pick the latest via `sort -t. -k1,1n -k2,2n -k3,3n | tail -1`. If no semver-named subdirectories exist, use the plugin directory directly (no version nesting).
+
+### Invoke Path Construction
+
+External plugin skills use: `Skill(plugin-name:skill-name)` or `Call Skill(plugin-name:skill-name)`. Bundled skills use: `Skill(auto-claude-skills:skill-name)`. User-installed skills use: `Skill(skill-name)`. The invoke path format is determined by the discovery code path (external vs. bundled vs. user), not by frontmatter. Frontmatter never specifies invoke paths.
 
 ## 3. Three-Tier Merge Logic
 
@@ -108,6 +142,14 @@ For each discovered skill:
 ### Key Behavior
 
 If superpowers' `brainstorming/SKILL.md` ships `triggers: ["(brainstorm|ideate)"]` and `default-triggers.json` also has triggers for `brainstorming`, the **frontmatter wins**. When superpowers refines its routing, it takes effect automatically next session. `default-triggers.json` only provides triggers for skills that don't declare their own.
+
+### User Override Interaction
+
+User overrides in `skill-config.json` apply **on top of whichever triggers are active** (frontmatter or default-triggers). If a skill's triggers come from frontmatter, additive (`+pattern`) and subtractive (`-pattern`) overrides operate on the frontmatter triggers. This matches the existing behavior — overrides modify the final merged trigger set, regardless of source.
+
+### Phase Validation
+
+If a SKILL.md declares a `phase` value not in the known enum (`DESIGN`, `PLAN`, `IMPLEMENT`, `REVIEW`, `SHIP`, `DEBUG`), the value is passed through to the registry without validation. Unknown phases will not match any `phase_compositions` entry and will not participate in SDLC sequence enforcement, but the skill is still discoverable and routable via its triggers.
 
 ### Migration Path
 
@@ -153,7 +195,7 @@ At session-start, after discovery but before the merge, compare current discover
 |-------------|-----------|---------|
 | **Skill added** | In current, not in previous | `superpowers` shipped `new-workflow` |
 | **Skill removed** | In previous, not in current | `superpowers` dropped `old-skill` |
-| **Skill renamed** | Removed + added in same plugin, similar description | `brainstorming` → `ideation` |
+| **Skill renamed** | Detected heuristically (see below) | `brainstorming` → `ideation` |
 | **Triggers changed** | Frontmatter triggers differ from previous frontmatter | Plugin refined its routing |
 | **Plugin version changed** | Version dir differs from previous | `superpowers/5.0.2` → `5.1.0` |
 | **Plugin added/removed** | Plugin in one set but not the other | User installed `feature-dev` |
@@ -180,13 +222,26 @@ Plugin updates detected:
 - Orphaned user overrides
 - Skill name collisions after update
 
+### Rename Detection
+
+Rename detection is **best-effort heuristic**, not guaranteed. Algorithm:
+
+1. Compute the set of removed skills and added skills per plugin
+2. For each (removed, added) pair in the same plugin, check if the `description` field shares ≥50% of its words (case-insensitive, stop-words excluded)
+3. If exactly one candidate pair matches, flag as a likely rename
+4. If multiple candidates match or none do, skip — treat as independent add + remove
+
+**Implementation:** The word-overlap check is done in `jq` using `split(" ")` and array intersection. No external dependencies.
+
+**False positive mitigation:** Rename detection is advisory only. It produces a warning (`"Possible rename: old-skill → new-skill in plugin-name"`), never auto-patches silently. Phase composition auto-patching (Section 6) only applies when the rename confidence is high (single candidate, ≥70% word overlap). If rename detection proves unreliable in practice, it can be disabled without affecting any other functionality — the system degrades to separate add + remove warnings.
+
 ### Storage
 
 The changeset is ephemeral — computed at session-start, surfaced, then discarded. The comparison baseline is the existing cache file from the previous session. No new persistent files needed.
 
 ### Performance
 
-Single `jq` call comparing two JSON arrays by skill name. Both objects already in memory. Negligible within 200ms budget.
+Included in the reconciliation diff jq call (see Section 1 performance budget). Both old and new skill lists are already in memory.
 
 ## 6. Phase Composition Resilience
 
@@ -226,6 +281,14 @@ The file stays committed and tracked. Changes show up in `git status` as a modif
 
 Continue to use whatever `fallback-registry.json` is on disk. Since it is now regularly refreshed by jq-capable sessions, it stays reasonably current.
 
+### Write Failure Handling
+
+The auto-regeneration writes to `PLUGIN_ROOT/config/fallback-registry.json`. If `PLUGIN_ROOT` points to a read-only location (e.g., installed plugin cache), the write silently fails — this is acceptable because the fallback file is a convenience optimization, not a correctness requirement. The hook logs a debug message (`"fallback-registry write skipped: read-only PLUGIN_ROOT"`) visible in `SKILL_EXPLAIN=1` mode.
+
+### Hook Budget Applicability
+
+The 200ms budget applies to `session-start-hook.sh` (runs once per session). The activation hook (`skill-activation-hook.sh`, runs per prompt) is unaffected by this design — it reads the pre-built registry cache and does not perform discovery or reconciliation.
+
 ## 8. Frontmatter Schema Documentation
 
 Ship `docs/skill-frontmatter-schema.md` as a contract for partner plugin authors. Contains:
@@ -250,13 +313,51 @@ Update `CLAUDE.md` line 26 from `50ms hook budget` to `200ms hook budget` to mat
 | `tests/test-registry.sh` | Tests for frontmatter merge, reconciliation, orphan detection |
 | `tests/test-routing.sh` | Tests for frontmatter-sourced triggers taking precedence |
 
+## Testing Strategy
+
+### Reconciliation Tests (Two-Run Pattern)
+
+Reconciliation requires comparing two sessions. Test pattern:
+
+```bash
+test_reconciliation_detects_added_skill() {
+    setup_test_env
+    # Run 1: establish baseline with skill A
+    create_mock_plugin "superpowers" "skill-a"
+    run_hook
+    # Mutate: add skill B
+    create_mock_plugin "superpowers" "skill-b"
+    # Run 2: detect change
+    run_hook
+    assert_output_contains "+ skill-b"
+    teardown_test_env
+}
+```
+
+The existing `run_hook` helper writes the registry cache, so the second invocation naturally picks up the first run's output as its baseline.
+
+### Frontmatter Parsing Tests
+
+Test matrix for the awk parser:
+- Skill with full frontmatter (all routing fields)
+- Skill with partial frontmatter (only `triggers`)
+- Skill with no routing frontmatter (only `name` and `description`)
+- Skill with malformed frontmatter (no closing `---`, binary content)
+- Skill with unknown frontmatter fields (forward-compatibility)
+
+### Merge Precedence Tests
+
+- Frontmatter triggers override `default-triggers.json` triggers
+- User `skill-config.json` overrides override frontmatter triggers
+- Additive (`+`) user overrides apply on top of frontmatter triggers
+
 ## Risks and Mitigations
 
 | Risk | Mitigation |
 |------|-----------|
 | Frontmatter parsing adds latency | Single `awk` + `jq` batch; measured within 200ms budget |
 | Partner plugins ship bad triggers | `default-triggers.json` can override via `skill-config.json` pattern; user overrides always win |
-| Rename detection false positives | Only flag renames when removed + added happen in the same plugin with matching description similarity; conservative matching |
+| Rename detection false positives | Advisory only — never auto-patches silently. Uses ≥50% word overlap in same plugin. Can be disabled without affecting other functionality |
 | Breaking change in frontmatter schema | `frontmatter_schema_version` field enables migration logic; unknown fields ignored |
 | Fallback registry diverges from default-triggers structure | Existing test `test_fallback_registry_skill_coverage` catches this; auto-regen reduces window |
 
