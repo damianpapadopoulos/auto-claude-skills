@@ -25,6 +25,6 @@ If the task involves third-party services or libraries:
 
 ### 3. Internal Truth
 Map the blast radius before committing to a plan:
-- **serena=true**: Use `find_symbol` / `cross_reference` to map all dependent files
+- **serena=true**: Use `find_symbol` / `find_referencing_symbols` to map all dependent files
 - **serena=false**: Use Grep to find references across the codebase, Read to verify context
 - List these files in the plan so the implementer knows the full scope

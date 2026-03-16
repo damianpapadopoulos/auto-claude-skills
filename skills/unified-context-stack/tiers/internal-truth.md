@@ -7,7 +7,7 @@ Capability: Understand local file dependencies and inject code safely.
 **Condition:** `serena = true`
 
 - Use `find_symbol` to locate definitions and references
-- Use `cross_reference` to map which files depend on a symbol
+- Use `find_referencing_symbols` to map which files depend on a symbol
 - Use `insert_after_symbol` for safe AST-level code injection without breaking formatting
 
 ## Tier 2: Standard Tools (Fallback)

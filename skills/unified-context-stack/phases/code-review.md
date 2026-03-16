@@ -21,6 +21,6 @@ If a reviewer claims incorrect API usage:
 
 ### 2. Internal Truth (Dependency Safety)
 If a reviewer suggests an architectural change:
-- **serena=true**: Use `cross_reference` to map all downstream dependencies before implementing
+- **serena=true**: Use `find_referencing_symbols` to map all downstream dependencies before implementing
 - **serena=false**: Use Grep to find all references, Read to verify each usage. Extra caution on complex hierarchies.
 - Flag any files that would break silently from the proposed change

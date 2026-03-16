@@ -6,7 +6,7 @@ During file-by-file plan execution, use context as needed.
 
 ### 1. Internal Truth (Primary)
 For each file modification, verify current symbol locations:
-- **serena=true**: Use `find_symbol` / `cross_reference` for dependency mapping, `insert_after_symbol` for safe AST edits
+- **serena=true**: Use `find_symbol` / `find_referencing_symbols` for dependency mapping, `insert_after_symbol` for safe AST edits
 - **serena=false**: Use Grep to find references, Read to verify context. Extra caution on large files (>500 lines) and symbol renames — grep may miss dynamic references. Always verify changes compile after editing.
 
 ### 2. External Truth (On-Demand)
