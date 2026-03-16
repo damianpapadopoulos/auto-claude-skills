@@ -699,6 +699,31 @@
       "description": "Jira and Confluence integration via claude.ai managed MCP. Connect via /mcp in Claude Code. Pull acceptance criteria, search issues, read design docs."
     },
     {
+      "name": "forgetful",
+      "source": "mcp-server",
+      "provides": {
+        "commands": [],
+        "skills": [],
+        "agents": [],
+        "hooks": [],
+        "mcp_tools": [
+          "discover_forgetful_tools",
+          "execute_forgetful_tool",
+          "how_to_use_forgetful_tool"
+        ]
+      },
+      "phase_fit": [
+        "DESIGN",
+        "PLAN",
+        "IMPLEMENT",
+        "DEBUG",
+        "REVIEW",
+        "SHIP"
+      ],
+      "description": "Persistent cross-session memory via Forgetful Memory MCP — stores and retrieves architectural decisions, conventions, and workarounds",
+      "available": false
+    },
+    {
       "name": "unified-context-stack",
       "source": "auto-claude-skills",
       "provides": {
