@@ -664,12 +664,11 @@ if printf '%s' "${CONTEXT_CAPS}" | jq -e 'to_entries | any(.value == true)' >/de
 fi
 
 # ── Step 8f: Detect security scanner capabilities ──────────────────
-_SEMGREP=false; _TRIVY=false; _BANDIT=false; _GITLEAKS=false
+_SEMGREP=false; _TRIVY=false; _GITLEAKS=false
 command -v semgrep  >/dev/null 2>&1 && _SEMGREP=true
 command -v trivy    >/dev/null 2>&1 && _TRIVY=true
-command -v bandit   >/dev/null 2>&1 && _BANDIT=true
 command -v gitleaks >/dev/null 2>&1 && _GITLEAKS=true
-SECURITY_CAPS="semgrep=${_SEMGREP}, trivy=${_TRIVY}, bandit=${_BANDIT}, gitleaks=${_GITLEAKS}"
+SECURITY_CAPS="semgrep=${_SEMGREP}, trivy=${_TRIVY}, gitleaks=${_GITLEAKS}"
 
 # -----------------------------------------------------------------
 # Step 9+10: Build final registry JSON, extract stats, and cache
