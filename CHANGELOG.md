@@ -8,6 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- README rewritten as end-user product page with decision-funnel structure, SDLC phase table, example prompts, and boundary-setting section
+- Bundled `security-scanner` skill with hybrid Semgrep/Trivy/Gitleaks scanning via Bash
+- Session-start `security_capabilities` detection (Step 8f: semgrep, trivy, bandit, gitleaks)
+- `deterministic-security-scan` methodology hint (REVIEW phase, security keywords)
+- Setup guidance for CLI tool installation and first-run configuration
+
+### Changed
+- REVIEW composition invoke path migrated to `Skill(auto-claude-skills:security-scanner)`
+- security-scanner removed from external skills check (now bundled)
+- setup.md: matteocervelli install replaced with built-in notice + CLI tool setup
+
+### Fixed
+- Gitleaks output sanitized to prevent partial secret leakage into LLM context (uses Description instead of Match)
+- Fast scan uses null-delimited xargs for safe filename handling
+- Fast scan scope uses git merge-base for branch-level changes
+
+## [3.9.2] - 2026-03-17
+
+### Added
 - MCP detection fallback: session-start hook reads ~/.claude.json for serena/forgetful/context7 MCP servers
 - Forgetful curated plugin entry in default-triggers.json with all-phase coverage
 - Forgetful session-start usage hint (parallel to existing Serena hint)

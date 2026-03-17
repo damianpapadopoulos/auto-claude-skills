@@ -105,7 +105,7 @@ Then a PARALLEL entry for test-driven-development appears
 #### Scenario: Security-scanner parallel at REVIEW
 Given phase is REVIEW
 When the hook output is generated
-Then a PARALLEL entry for security-scanner with Skill(security-scanner) invoke appears
+Then a PARALLEL entry for security-scanner with Skill(auto-claude-skills:security-scanner) invoke appears
 
 ### Requirement: REVIEW 3-step sequence
 The REVIEW phase composition MUST display 3 sequential steps in the hook output.
