@@ -185,7 +185,7 @@ install_registry() {
       ],
       "trigger_mode": "regex",
       "priority": 102,
-      "invoke": "Skill(security-scanner)",
+      "invoke": "Skill(auto-claude-skills:security-scanner)",
       "available": true,
       "enabled": true
     },
@@ -493,7 +493,7 @@ install_registry_v4() {
       "triggers": ["(secur(e|ity)|vulnerab|owasp|pentest|attack|exploit|encrypt|inject|xss|csrf)"],
       "trigger_mode": "regex",
       "priority": 102,
-      "invoke": "Skill(security-scanner)",
+      "invoke": "Skill(auto-claude-skills:security-scanner)",
       "available": true,
       "enabled": true
     },
@@ -1291,7 +1291,7 @@ test_eval_phase_uses_process() {
       "phase": "IMPLEMENT",
       "triggers": ["(secur(e|ity)|encrypt)"],
       "priority": 102,
-      "invoke": "Skill(security-scanner)",
+      "invoke": "Skill(auto-claude-skills:security-scanner)",
       "available": true,
       "enabled": true
     }
@@ -1432,7 +1432,7 @@ test_domain_instruction_no_process() {
       "role": "domain",
       "triggers": ["(secur(e|ity)|vulnerab)"],
       "priority": 102,
-      "invoke": "Skill(security-scanner)",
+      "invoke": "Skill(auto-claude-skills:security-scanner)",
       "available": true,
       "enabled": true
     },

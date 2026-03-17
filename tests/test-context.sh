@@ -99,7 +99,7 @@ install_context_registry() {
       ],
       "trigger_mode": "regex",
       "priority": 102,
-      "invoke": "Skill(superpowers:security-scanner)",
+      "invoke": "Skill(auto-claude-skills:security-scanner)",
       "available": true,
       "enabled": true
     },
@@ -818,7 +818,7 @@ test_security_scanner_review_parallel() {
 
     # Security-scanner should appear in PARALLEL composition line with invoke pattern
     local parallel_scanner
-    parallel_scanner="$(printf '%s' "${context}" | grep -c 'PARALLEL:.*security-scanner.*Skill(security-scanner)' 2>/dev/null)" || parallel_scanner=0
+    parallel_scanner="$(printf '%s' "${context}" | grep -c 'PARALLEL:.*security-scanner.*Skill(auto-claude-skills:security-scanner)' 2>/dev/null)" || parallel_scanner=0
     if [[ "$parallel_scanner" -gt 0 ]]; then
         _record_pass "security-scanner in REVIEW parallel with invoke"
     else

@@ -1267,7 +1267,7 @@ HALT if any Red Flag is true:
 - Summarizing changes instead of dispatching superpowers:code-reviewer subagent
 - Not providing BASE_SHA and HEAD_SHA git diff range to the reviewer
 - Claiming review is complete without acting on critical/important findings
-- Skipping security-scanner during review"
+- Skipping security-scanner during review (Invoke Skill(auto-claude-skills:security-scanner) for deterministic scanning)"
     ;;
 esac
 
