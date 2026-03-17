@@ -93,29 +93,46 @@ If you have the old matteocervelli version at `~/.claude/skills/security-scanner
 rm -rf ~/.claude/skills/security-scanner
 ```
 
-For best results, install the CLI tools the skill orchestrates:
+For best results, install the CLI tools the skill orchestrates. Check which are missing:
+
 ```bash
-brew install semgrep   # SAST — code vulnerability scanning
-brew install trivy     # Dependency CVE scanning
-brew install gitleaks  # Secret detection
+command -v semgrep && echo "semgrep: installed" || echo "semgrep: MISSING"
+command -v trivy && echo "trivy: installed" || echo "trivy: MISSING"
+command -v gitleaks && echo "gitleaks: installed" || echo "gitleaks: MISSING"
 ```
 
-After installing, verify each tool works:
+For each missing tool, **ask the user:** "The security-scanner skill works best with [tool]. Would you like to install it?"
+
+If the user agrees, install and initialize each missing tool:
+
+**Semgrep** (SAST — code vulnerability scanning):
 ```bash
-semgrep --version
-trivy --version
-gitleaks version
+brew install semgrep
+```
+Then download rules (~30s):
+```bash
+semgrep --version && semgrep scan --config auto --test . 2>/dev/null; echo "Semgrep ready"
 ```
 
-**Semgrep first-run setup** (downloads rules, takes ~30s on first scan):
+**Trivy** (dependency CVE scanning):
 ```bash
-semgrep scan --config auto --test . 2>/dev/null; echo "Semgrep rules downloaded"
+brew install trivy
+```
+Then download vulnerability database (~60s):
+```bash
+trivy --version && trivy fs --download-db-only 2>/dev/null && echo "Trivy DB ready"
 ```
 
-**Trivy first-run setup** (downloads vulnerability database, takes ~60s):
+**Gitleaks** (secret detection):
 ```bash
-trivy fs --download-db-only 2>/dev/null && echo "Trivy DB ready"
+brew install gitleaks
 ```
+Then verify:
+```bash
+gitleaks version && echo "Gitleaks ready"
+```
+
+If the user declines any tool, note that the corresponding scan type will be unavailable and the skill will skip it gracefully. Semgrep is the highest-value tool — recommend it first.
 
 ### 5. Prerequisites (uv package manager)
 

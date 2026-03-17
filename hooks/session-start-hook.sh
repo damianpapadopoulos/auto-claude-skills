@@ -911,9 +911,13 @@ if [ -n "${_OPENSPEC_LINE}" ]; then
 ${_OPENSPEC_LINE}"
 fi
 
-# Append security scanner capabilities
+# Append security scanner capabilities (with setup hint if any are missing)
+_SEC_HINT=""
+case "${SECURITY_CAPS}" in
+    *"=false"*) _SEC_HINT=" — run /setup to install missing tools" ;;
+esac
 CONTEXT="${CONTEXT}
-Security tools: ${SECURITY_CAPS}"
+Security tools: ${SECURITY_CAPS}${_SEC_HINT}"
 
 # Check for stale/missing memory consolidation marker
 _PROJ_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
