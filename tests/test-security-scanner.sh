@@ -75,6 +75,15 @@ test_review_composition_invoke_path() {
     '"Skill(security-scanner)"' "$registry"
 }
 
+# ── Test: fallback registry has updated invoke path ──
+test_fallback_registry_parity() {
+  echo "--- test_fallback_registry_parity ---"
+  local fallback
+  fallback="$(cat config/fallback-registry.json)"
+  assert_contains "fallback has new invoke path" "auto-claude-skills:security-scanner" "$fallback"
+  assert_not_contains "fallback has no stale invoke path" '"Skill(security-scanner)"' "$fallback"
+}
+
 # ══════════════════════════════════════════════════════════════════
 # Run tests
 # ══════════════════════════════════════════════════════════════════
@@ -83,6 +92,7 @@ test_security_scanner_not_in_external_check
 test_methodology_hint_in_registry
 test_methodology_hint_phase_scoped
 test_review_composition_invoke_path
+test_fallback_registry_parity
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"

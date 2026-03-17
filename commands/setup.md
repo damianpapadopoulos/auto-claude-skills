@@ -84,12 +84,37 @@ cp -r /tmp/anthropic-skills/skills/webapp-testing ~/.claude/skills/webapp-testin
 rm -rf /tmp/anthropic-skills
 ```
 
-### 4. security-scanner (matteocervelli)
+### 4. security-scanner (built-in)
 
+The `security-scanner` skill is now bundled with auto-claude-skills. No external installation needed.
+
+If you have the old matteocervelli version at `~/.claude/skills/security-scanner/`, remove it:
 ```bash
-git clone --depth 1 https://github.com/matteocervelli/llms.git /tmp/cervelli-llms
-cp -r /tmp/cervelli-llms/.claude/skills/security-scanner ~/.claude/skills/security-scanner
-rm -rf /tmp/cervelli-llms
+rm -rf ~/.claude/skills/security-scanner
+```
+
+For best results, install the CLI tools the skill orchestrates:
+```bash
+brew install semgrep   # SAST — code vulnerability scanning
+brew install trivy     # Dependency CVE scanning
+brew install gitleaks  # Secret detection
+```
+
+After installing, verify each tool works:
+```bash
+semgrep --version
+trivy --version
+gitleaks version
+```
+
+**Semgrep first-run setup** (downloads rules, takes ~30s on first scan):
+```bash
+semgrep scan --config auto --dry-run . 2>/dev/null && echo "Semgrep ready"
+```
+
+**Trivy first-run setup** (downloads vulnerability database, takes ~60s):
+```bash
+trivy fs --download-db-only 2>/dev/null && echo "Trivy DB ready"
 ```
 
 ### 5. Prerequisites (uv package manager)
