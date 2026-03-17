@@ -55,12 +55,12 @@ test_methodology_hint_in_registry() {
     '"(review|security' "$registry"
 }
 
-# ── Test: methodology hint is phase-scoped to REVIEW only ──
+# ── Test: methodology hint fires in all phases ──
 test_methodology_hint_phase_scoped() {
   echo "--- test_methodology_hint_phase_scoped ---"
   local hint_block
   hint_block="$(jq '.methodology_hints[] | select(.name == "deterministic-security-scan")' config/default-triggers.json 2>/dev/null)" || true
-  assert_contains "hint is phase-scoped to REVIEW" '"REVIEW"' "$hint_block"
+  assert_contains "hint fires in all phases" '"*"' "$hint_block"
   assert_contains "hint references bundled skill" "auto-claude-skills:security-scanner" "$hint_block"
 }
 
