@@ -17,7 +17,7 @@ The plugin bundles a small set of skills and routes to many more from companion 
   | DESIGN | Activates brainstorming, explores requirements before coding |
   | PLAN | Structures implementation into discrete tasks with dependency ordering |
   | IMPLEMENT | Enforces TDD, routes to parallel agents for independent work |
-  | REVIEW | Triggers multi-perspective code review, processes feedback with rigor |
+  | REVIEW | Triggers multi-perspective code review with security scanning, processes feedback with rigor |
   | SHIP | Requires verification evidence, generates as-built docs, guides branch completion |
   | DEBUG | Scores highest priority, overrides the current phase with structured root-cause analysis |
 
