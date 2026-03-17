@@ -1220,7 +1220,7 @@
       "trigger_mode": "regex",
       "hint": "SECURITY SCAN: If semgrep/trivy are installed, run deterministic scans before LLM review. Invoke Skill(auto-claude-skills:security-scanner).",
       "phases": [
-        "REVIEW"
+        "*"
       ]
     }
   ],
