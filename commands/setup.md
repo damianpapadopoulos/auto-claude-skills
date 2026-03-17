@@ -109,7 +109,7 @@ gitleaks version
 
 **Semgrep first-run setup** (downloads rules, takes ~30s on first scan):
 ```bash
-semgrep scan --config auto --dry-run . 2>/dev/null && echo "Semgrep ready"
+semgrep scan --config auto --test . 2>/dev/null; echo "Semgrep rules downloaded"
 ```
 
 **Trivy first-run setup** (downloads vulnerability database, takes ~60s):
@@ -178,7 +178,7 @@ After setup, confirm what was configured:
 - Cozempic: installed or skipped
 - `~/.claude/skills/doc-coauthoring/SKILL.md` exists
 - `~/.claude/skills/webapp-testing/SKILL.md` exists
-- `~/.claude/skills/security-scanner/SKILL.md` exists
+- `security-scanner`: bundled with auto-claude-skills (no external install needed)
 - `uv`/`uvx`: available or skipped
 - `chub`: available or skipped
 - `openspec`: available or skipped

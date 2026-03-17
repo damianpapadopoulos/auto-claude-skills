@@ -663,7 +663,7 @@ if printf '%s' "${CONTEXT_CAPS}" | jq -e 'to_entries | any(.value == true)' >/de
     ')"
 fi
 
-# ── Step 8e: Detect security scanner capabilities ──────────────────
+# ── Step 8f: Detect security scanner capabilities ──────────────────
 _SEMGREP=false; _TRIVY=false; _BANDIT=false; _GITLEAKS=false
 command -v semgrep  >/dev/null 2>&1 && _SEMGREP=true
 command -v trivy    >/dev/null 2>&1 && _TRIVY=true

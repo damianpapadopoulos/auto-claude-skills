@@ -30,10 +30,12 @@ If **neither** semgrep nor trivy is installed, fall back to LLM-only code review
 
 If semgrep is available, scan for code vulnerabilities.
 
-**Fast scan (changed files only — prefer this for inner-loop reviews):**
+**Fast scan (changed files in current branch — prefer this for inner-loop reviews):**
 ```bash
-git diff --name-only HEAD | xargs semgrep scan --json --config auto --severity WARNING 2>/dev/null | jq '{count: (.results | length), results: [.results[] | {rule: .check_id, severity: .extra.severity, file: .path, line: .start.line, message: .extra.message}]}'
+git diff --name-only -z "$(git merge-base HEAD main)..HEAD" | xargs -0 semgrep scan --json --config auto --severity WARNING 2>/dev/null | jq '{count: (.results | length), results: [.results[] | {rule: .check_id, severity: .extra.severity, file: .path, line: .start.line, message: .extra.message}]}'
 ```
+
+Note: If `merge-base` fails (no main branch), fall back to `git diff --name-only -z HEAD~1 | xargs -0 ...` for the last commit only.
 
 **Full project scan (use for thorough reviews or when explicitly asked):**
 ```bash
@@ -64,7 +66,7 @@ trivy config --format json --severity HIGH,CRITICAL . 2>/dev/null | jq '.Results
 If gitleaks is available, scan for hardcoded secrets.
 
 ```bash
-gitleaks detect --source . --no-banner --report-format json 2>/dev/null | jq '{count: (. | length), results: [.[] | {rule: .RuleID, file: .File, line: .StartLine, match: .Match[:50]}]}'
+gitleaks detect --source . --no-banner --report-format json 2>/dev/null | jq '{count: (. | length), results: [.[] | {rule: .RuleID, file: .File, line: .StartLine, description: .Description}]}'
 ```
 
 ## Step 5: Triage and Fix
@@ -83,8 +85,8 @@ Present findings as a structured table:
 |----------|---------|-----------|-------|-----|-------|
 
 ### Gitleaks (Secrets) — N findings
-| Rule | File | Line | Match (truncated) |
-|------|------|------|-------------------|
+| Rule | File | Line | Description |
+|------|------|------|-------------|
 ```
 
 **Fix priority:** CRITICAL > HIGH > ERROR > WARNING
