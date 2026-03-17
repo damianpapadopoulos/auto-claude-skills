@@ -551,6 +551,17 @@
         "DESIGN",
         "PLAN"
       ]
+    },
+    {
+      "name": "deterministic-security-scan",
+      "triggers": [
+        "(security|vulnerabilit|owasp|cve|semgrep|trivy|sast|dast|dependency.audit)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "SECURITY SCAN: If semgrep/trivy are installed, run deterministic scans before LLM review. Invoke Skill(auto-claude-skills:security-scanner).",
+      "phases": [
+        "REVIEW"
+      ]
     }
   ],
   "plugins": [
@@ -868,9 +879,9 @@
           "purpose": "Verify reviewer claims against curated docs, check dependency impact"
         },
         {
-          "use": "security-scanner -> Skill(security-scanner)",
+          "use": "security-scanner -> Skill(auto-claude-skills:security-scanner)",
           "when": "always",
-          "purpose": "Scan for vulnerabilities, OWASP risks, compliance issues. INVOKE during every review"
+          "purpose": "Run semgrep/trivy deterministic scans first, then LLM triage. Self-healing loop: scan -> fix -> re-scan -> clean"
         }
       ],
       "hints": [

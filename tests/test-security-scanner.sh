@@ -42,11 +42,47 @@ test_security_scanner_not_in_external_check() {
     "doc-coauthoring webapp-testing security-scanner" "$hook_source"
 }
 
+# ── Test: methodology hint exists in registry with correct triggers ──
+test_methodology_hint_in_registry() {
+  echo "--- test_methodology_hint_in_registry ---"
+  local registry
+  registry="$(cat config/default-triggers.json)"
+  assert_contains "registry has deterministic-security-scan hint" \
+    "deterministic-security-scan" "$registry"
+  assert_contains "hint triggers include security keyword" \
+    "security|vulnerabilit" "$registry"
+  assert_not_contains "hint triggers exclude plain review" \
+    '"(review|security' "$registry"
+}
+
+# ── Test: methodology hint is phase-scoped to REVIEW only ──
+test_methodology_hint_phase_scoped() {
+  echo "--- test_methodology_hint_phase_scoped ---"
+  local hint_block
+  hint_block="$(jq '.methodology_hints[] | select(.name == "deterministic-security-scan")' config/default-triggers.json 2>/dev/null)" || true
+  assert_contains "hint is phase-scoped to REVIEW" '"REVIEW"' "$hint_block"
+  assert_contains "hint references bundled skill" "auto-claude-skills:security-scanner" "$hint_block"
+}
+
+# ── Test: REVIEW composition has updated invoke path ──
+test_review_composition_invoke_path() {
+  echo "--- test_review_composition_invoke_path ---"
+  local registry
+  registry="$(cat config/default-triggers.json)"
+  assert_contains "REVIEW composition uses bundled invoke path" \
+    "Skill(auto-claude-skills:security-scanner)" "$registry"
+  assert_not_contains "REVIEW composition has no stale external path" \
+    '"Skill(security-scanner)"' "$registry"
+}
+
 # ══════════════════════════════════════════════════════════════════
 # Run tests
 # ══════════════════════════════════════════════════════════════════
 test_security_capabilities_in_output
 test_security_scanner_not_in_external_check
+test_methodology_hint_in_registry
+test_methodology_hint_phase_scoped
+test_review_composition_invoke_path
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
