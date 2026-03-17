@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- README rewritten as end-user product page with decision-funnel structure, SDLC phase table, example prompts, and boundary-setting section
 - Bundled `security-scanner` skill with hybrid Semgrep/Trivy/Gitleaks scanning via Bash
 - Session-start `security_capabilities` detection (Step 8f: semgrep, trivy, bandit, gitleaks)
 - `deterministic-security-scan` methodology hint (REVIEW phase, security keywords)
