@@ -53,7 +53,7 @@ If trivy is available, scan for vulnerable dependencies and IaC misconfiguration
 
 **Dependency scan:**
 ```bash
-trivy fs --format json --severity HIGH,CRITICAL --ignore-unfixed . 2>/dev/null | jq '{count: (.Results // [] | map(.Vulnerabilities // [] | length) | add // 0), results: [.Results // [] | .[].Vulnerabilities // [] | .[] | {pkg: .PkgName, installed: .InstalledVersion, fixed: .FixedVersion, severity: .Severity, cve: .VulnerabilityID, title: .Title}]}'
+trivy fs --scanners vuln,misconfig --format json --severity HIGH,CRITICAL --ignore-unfixed . 2>/dev/null | jq '{count: (.Results // [] | map(.Vulnerabilities // [] | length) | add // 0), results: [.Results // [] | .[].Vulnerabilities // [] | .[] | {pkg: .PkgName, installed: .InstalledVersion, fixed: .FixedVersion, severity: .Severity, cve: .VulnerabilityID, title: .Title}]}'
 ```
 
 **If Dockerfile exists, also scan the image config:**
