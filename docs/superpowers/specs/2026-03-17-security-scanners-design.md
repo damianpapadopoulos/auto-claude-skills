@@ -45,10 +45,15 @@ Deterministic scanning is strictly better than LLM-only. AST-based analysis catc
 
 ### Components
 
-**1. `security-scanner/SKILL.md`** — New skill file
+**1. `skills/security-scanner/SKILL.md`** — New bundled plugin skill
+
+Location: `skills/security-scanner/SKILL.md` (bundled in auto-claude-skills plugin).
+Invoke path: `Skill(auto-claude-skills:security-scanner)`.
+
+**Migration note:** The existing REVIEW composition references `Skill(security-scanner)` (external user-skill pattern from the `matteocervelli/llms` placeholder). This must be updated to `Skill(auto-claude-skills:security-scanner)` in `default-triggers.json`, `fallback-registry.json`, and all test assertions. The external placeholder at `~/.claude/skills/security-scanner/` can be removed by users after plugin update.
 
 Teaches the agent a self-healing scan-fix-verify loop:
-- Detect installed tools (`command -v semgrep`, `command -v trivy`)
+- Detect installed tools at runtime (`command -v semgrep`, `command -v trivy` via Bash)
 - Run Semgrep SAST on changed files (scoped via `git diff`)
 - Run Trivy dependency/IaC scan on project root
 - Parse JSON output, triage by severity
@@ -56,31 +61,46 @@ Teaches the agent a self-healing scan-fix-verify loop:
 - Re-scan to verify fixes
 - Report results as structured table
 
+The SKILL.md runs its own `command -v` checks at invocation time for self-contained detection. The session-start capability detection (below) provides early awareness for routing decisions but is not required by the skill itself.
+
 **2. Session-start capability detection** — Addition to `session-start-hook.sh`
 
-Four `command -v` checks (~1ms total) to detect:
+Four `command -v` checks (~1ms total) added **after Step 8d** (context_capabilities detection), following the same pattern. Detects:
 - `semgrep` (SAST)
 - `trivy` (dependency/container scanning)
 - `bandit` (Python-specific, optional)
 - `gitleaks` (secret detection, optional)
 
-Results stored in registry context so the skill can adapt to available tools.
+**Registry placement:** New field `security_capabilities` as a sibling of `context_capabilities` in the `additionalContext` output, using the same boolean pattern:
+
+```json
+"security_capabilities": {
+  "semgrep": true,
+  "trivy": false,
+  "bandit": false,
+  "gitleaks": true
+}
+```
+
+Emitted in `additionalContext` string as: `Security tools: semgrep=true, trivy=false, bandit=false, gitleaks=true`
 
 **3. Methodology hint** — Addition to `config/default-triggers.json`
 
 ```json
 {
   "name": "deterministic-security-scan",
-  "triggers": ["(review|security|vulnerabilit|scan|owasp|cve|semgrep|trivy|sast|dast|dependency.audit)"],
+  "triggers": ["(security|vulnerabilit|owasp|cve|semgrep|trivy|sast|dast|dependency.audit)"],
   "trigger_mode": "regex",
-  "hint": "SECURITY SCAN: If semgrep/trivy are installed, run deterministic scans before LLM review. Invoke Skill(security-scanner).",
+  "hint": "SECURITY SCAN: If semgrep/trivy are installed, run deterministic scans before LLM review. Invoke Skill(auto-claude-skills:security-scanner).",
   "phases": ["REVIEW"]
 }
 ```
 
-**4. Updated REVIEW phase composition** — Existing entry enhanced
+Note: `review` excluded from triggers to avoid overlap with the existing `pr-review` methodology hint. The REVIEW phase composition already activates the skill independently of hint matching.
 
-Current (line 871-874 of default-triggers.json):
+**4. Updated REVIEW phase composition** — Invoke path migration
+
+Current:
 ```json
 {
   "use": "security-scanner -> Skill(security-scanner)",
@@ -89,10 +109,10 @@ Current (line 871-874 of default-triggers.json):
 }
 ```
 
-Updated to reference hybrid workflow:
+Updated:
 ```json
 {
-  "use": "security-scanner -> Skill(security-scanner)",
+  "use": "security-scanner -> Skill(auto-claude-skills:security-scanner)",
   "when": "always",
   "purpose": "Run semgrep/trivy deterministic scans first, then LLM triage. Self-healing loop: scan -> fix -> re-scan -> clean"
 }
@@ -102,17 +122,18 @@ Updated to reference hybrid workflow:
 
 ```
 Session Start
-  session-start-hook.sh
+  session-start-hook.sh (after Step 8d)
     -> command -v semgrep/trivy/bandit/gitleaks
-    -> emit security_capabilities in registry context
+    -> emit security_capabilities in additionalContext (sibling of context_capabilities)
+    -> format: "Security tools: semgrep=true, trivy=false, ..."
 
 REVIEW Phase
   skill-activation-hook.sh
-    -> routes to security-scanner skill (existing trigger)
-    -> methodology hint reminds agent to invoke
+    -> REVIEW composition fires Skill(auto-claude-skills:security-scanner)
+    -> methodology hint reinforces if security keywords present
 
   Agent loads SKILL.md
-    -> Checks security_capabilities
+    -> Runs own command -v checks via Bash (self-contained, does not read registry)
     -> If semgrep: Bash("semgrep scan --json --config auto --severity WARNING .")
     -> If trivy: Bash("trivy fs --format json --severity HIGH,CRITICAL .")
     -> Parse JSON findings
@@ -210,21 +231,13 @@ The skill instructs the agent to present findings as:
 
 ## Trigger Routing
 
-The skill integrates with existing routing via frontmatter:
+The skill is activated via **REVIEW phase composition only** (not via trigger scoring). This is consistent with the current architecture where security-scanner is a composition parallel, not a scored domain skill. The SKILL.md has no frontmatter triggers.
 
-```yaml
----
-name: security-scanner
-description: Hybrid deterministic security scanning with Semgrep SAST and Trivy dependency/CVE analysis
-role: domain
-phase: REVIEW
-priority: 25
-triggers:
-  - "(security|vulnerabilit|scan|owasp|cve|semgrep|trivy|sast|dast|dependency.audit)"
-requires: []
-precedes: []
----
-```
+The routing path is:
+1. Agent enters REVIEW phase
+2. REVIEW composition fires `Skill(auto-claude-skills:security-scanner)` as a parallel step
+3. Methodology hint `deterministic-security-scan` reinforces on security keywords
+4. No trigger scoring — the skill is not in the `skills[]` array of `default-triggers.json`
 
 ## Risks and Mitigations
 
@@ -254,11 +267,30 @@ Much later: IF tool interface becomes complex (custom rulesets, result caching,
 
 | File | Action | Description |
 |------|--------|-------------|
-| `skills/security-scanner/SKILL.md` | Create | Hybrid scan-fix-verify skill |
-| `hooks/session-start-hook.sh` | Modify | Add security_capabilities detection |
-| `config/default-triggers.json` | Modify | Add methodology hint + update REVIEW composition |
-| `config/fallback-registry.json` | Modify | Keep parity with default-triggers.json |
-| `tests/test-security-scanner.sh` | Create | Test capability detection + skill routing |
+| `skills/security-scanner/SKILL.md` | Create | Hybrid scan-fix-verify skill (bundled, invoke: `Skill(auto-claude-skills:security-scanner)`) |
+| `hooks/session-start-hook.sh` | Modify | (1) Add `security_capabilities` detection after Step 8d, same pattern as `context_capabilities`. (2) Remove `security-scanner` from the external missing-skills check (~line 833) since it is now bundled. |
+| `config/default-triggers.json` | Modify | (1) Add `deterministic-security-scan` methodology hint, (2) update REVIEW composition invoke path to `Skill(auto-claude-skills:security-scanner)`, (3) update purpose string |
+| `config/fallback-registry.json` | Modify | Must be regenerated after `default-triggers.json` changes. Run `session-start-hook.sh` once to auto-regenerate. Implementation step must verify parity (fallback contains `Skill(auto-claude-skills:security-scanner)`, not the stale external path). Include a test assertion for fallback parity. |
+| `tests/test-security-scanner.sh` | Create | See Test Strategy below |
+
+### Test Strategy
+
+`tests/test-security-scanner.sh` must cover:
+
+1. **Capability detection**: Mock `command -v` responses, verify `security_capabilities` appears in `additionalContext` output with correct boolean values
+2. **Methodology hint firing**: Feed security keywords to `skill-activation-hook.sh`, verify `deterministic-security-scan` hint appears in output
+3. **Methodology hint non-firing**: Feed non-security prompts, verify hint does NOT appear (no false positives from removed `review` trigger)
+4. **Composition invoke path**: Verify REVIEW phase composition references `Skill(auto-claude-skills:security-scanner)` (not the old external path)
+
+Existing tests to update (significant scope):
+- `tests/test-routing.sh`: ~14 references including mock registry entries and assertion patterns — update all `Skill(security-scanner)` to `Skill(auto-claude-skills:security-scanner)`
+- `tests/test-context.sh`: ~7 references including mock registry entries and assertion patterns — same invoke path migration
+
+Note: Mock registries embedded in test fixtures also need invoke path updates, not just assertion strings.
+
+### `security_capabilities` routing note
+
+The `security_capabilities` field in `additionalContext` is **informational for the model only**. The activation hook (`skill-activation-hook.sh`) does NOT consume it for routing decisions — the REVIEW composition fires unconditionally (`"when": "always"`). The field helps the model know which tools are available before loading the skill, but is not a routing gate.
 
 ## Decision
 
