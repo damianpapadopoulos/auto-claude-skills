@@ -27,7 +27,7 @@ The plugin bundles a small set of skills and routes to many more from companion 
 
 ## Example Prompts
 
-**"design a secure frontend component"** → DESIGN phase. Activates brainstorming (explore requirements before coding), frontend-design (UI patterns), and security-scanner (threat modeling). Companion tools query library docs for relevant API constraints.
+**"design a secure frontend component"** → DESIGN phase. Activates brainstorming (explore requirements before coding) and design-debate (multi-agent design exploration). With companion plugins, also activates frontend-design (UI patterns). Companion tools query library docs for relevant API constraints.
 
 **"debug this login bug"** → DEBUG phase. Activates systematic-debugging (structured root-cause analysis). TDD is injected as a mandatory parallel — reproduce with a failing test before fixing. If GCP Observability is installed, context hints toward runtime logs.
 
@@ -59,17 +59,17 @@ The plugin bundles a small set of skills and routes to many more from companion 
 /setup
 ```
 
-`/setup` walks you through installing companion plugins, skills, and MCP integrations. On each session start you'll see what's active:
+`/setup` walks you through installing companion plugins, skills, and MCP integrations. After setup, each session start shows what's active:
 
 ```
-SessionStart: 24 skills active (12 of 12 plugins). Setup complete.
+SessionStart: 24 skills active (12 of 12 plugins). Setup complete
 ```
 
 The plugin works without every companion integration — it discovers what's installed and routes accordingly. More tools installed means richer context at each phase.
 
 ## Optional Integrations
 
-All installed via `/setup`. The routing engine discovers these automatically and injects phase-appropriate context when they're present.
+Installed via `/setup` unless noted. The routing engine discovers these automatically and injects phase-appropriate context when they're present.
 
 **Core workflow plugins** — superpowers (brainstorming, TDD, debugging, planning, code review), frontend-design, claude-md-management, claude-code-setup, pr-review-toolkit.
 
