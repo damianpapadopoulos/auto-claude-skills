@@ -114,21 +114,22 @@ AND timestamp>="2026-03-19T10:00:00Z"
 QUERY
 
 gcloud logging read "$(cat "$LQL_FILE")" \
-  --project=my-project --format=json --limit=50
-rm -f "$LQL_FILE"
+  --project=my-project --format=json --limit=50 ; rm -f "$LQL_FILE"
 ```
 
-Using `mktemp` with a random suffix prevents concurrent sessions from overwriting each other's queries (consistent with the project's session-token scoping for `~/.claude/` shared state).
+The `;` operator ensures cleanup runs regardless of whether `gcloud` succeeds or fails (network timeout, bad project ID, etc.), preventing orphan temp files. Using `mktemp` with a random suffix prevents concurrent sessions from overwriting each other's queries (consistent with the project's session-token scoping for `~/.claude/` shared state).
 
-### 4. Token Flush on Phase Transitions
+### 4. Context Discipline on Stage Transitions
+
+Claude cannot literally clear its context window mid-session. This constraint is enforced **behaviorally** through prompt instructions:
 
 When transitioning from INVESTIGATE to POSTMORTEM, the agent must:
-1. Synthesize the timeline and root cause into a structured summary
-2. Stop querying logs or reading source code
-3. Discard raw JSON/log context from working memory
-4. Draft the postmortem from the synthesized summary only
+1. Write a synthesized summary of the timeline and root cause as an explicit output block
+2. From that point forward, the agent is **strictly forbidden from referencing the raw JSON log outputs** from earlier in the conversation
+3. The agent must draft the postmortem **ONLY from the synthesized summary**
+4. No further log queries or source code reads are permitted during POSTMORTEM
 
-This prevents the agent from "drowning in logs" and hallucinating during the writing phase.
+This prevents the agent from "drowning in logs" — referencing stale raw JSON that may be partially compressed or inconsistent, leading to hallucinated details in the postmortem.
 
 ## Skill State Machine
 
@@ -162,7 +163,8 @@ This prevents the agent from "drowning in logs" and hallucinating during the wri
    - Logic to change
    - Expected outcome
    Ask for explicit developer approval before proceeding.
-7. TOKEN FLUSH: Synthesize timeline + root cause into structured summary
+7. CONTEXT DISCIPLINE: Write a synthesized summary of timeline + root cause.
+   From this point forward, reference ONLY this summary (not raw log JSON).
 8. Transition to POSTMORTEM
 ```
 
@@ -172,7 +174,15 @@ This prevents the agent from "drowning in logs" and hallucinating during the wri
 1. Template discovery (ordered):
    a. docs/templates/postmortem.md (project convention)
    b. .github/ISSUE_TEMPLATE/postmortem.md (GitHub-native)
-   c. Built-in default template (embedded in skill)
+   c. Built-in default schema (embedded in skill — structural constraints only,
+      NOT a full boilerplate; ~50 tokens defining required section headers):
+      ## 1. Summary
+      ## 2. Impact (quantify user impact and duration)
+      ## 3. Timeline (markdown table: timestamp | event)
+      ## 4. Root Cause & Trigger
+      ## 5. Resolution and Recovery
+      ## 6. Lessons Learned (what went well, what went wrong, where we got lucky)
+      ## 7. Action Items (actionable, assignable, with suggested owners)
 2. Directory discovery:
    a. docs/postmortems/ or docs/incidents/ (check both)
    b. Create docs/postmortems/ if neither exists
@@ -182,9 +192,11 @@ This prevents the agent from "drowning in logs" and hallucinating during the wri
    - Impact (from error rates/metrics, quantified)
    - Root cause (from investigation hypothesis)
    - Action items (concrete, assignable, with suggested owners)
-4. Write to docs/postmortems/YYYY-MM-DD-<summary>.md
+4. Write to docs/postmortems/YYYY-MM-DD-<kebab-case-summary>.md
+   The summary portion MUST be lowercase kebab-case (e.g., `checkout-500s`,
+   `auth-timeout-spike`). No spaces, no mixed casing.
 5. Terminal output ONLY:
-   "Postmortem saved to docs/postmortems/YYYY-MM-DD-<summary>.md.
+   "Postmortem saved to docs/postmortems/YYYY-MM-DD-<kebab-case-summary>.md.
     Review the document and action items."
 ```
 
@@ -225,7 +237,9 @@ Observability tools: gcloud=${obs_gcloud}"
 
 This field is **informational for the model only** — it helps Claude know what's available before the skill loads, but is not a routing gate. The skill's own detection (Stage 1 above) is authoritative. MCP tool availability is not detectable at session-start (MCP tools are discovered by the runtime, not by hooks).
 
-### LQL Reference Patterns (Embedded in Skill)
+### LQL Reference Patterns (Embedded in Skill — "Cheat Sheet")
+
+These patterns are embedded directly in SKILL.md as few-shot examples (~100 tokens). This is non-negotiable: LLMs hallucinate syntax in specialized query languages (LQL, PromQL, KQL). Externalizing to a separate file would force a file read before every query. The embedded table gives Claude copy-pasteable, bulletproof patterns immediately.
 
 | Pattern | LQL Filter |
 |---------|-----------|
