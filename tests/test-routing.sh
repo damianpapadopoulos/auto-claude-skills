@@ -357,6 +357,34 @@ install_registry_with_batch() {
     }]' "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
 }
 
+# Helper: install registry extended with incident-analysis skill and gcp-observability hint
+install_registry_with_incident_analysis() {
+    install_registry
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    local tmp_file
+    tmp_file="$(mktemp)"
+    jq '.skills += [{
+      "name": "incident-analysis",
+      "role": "domain",
+      "phase": "DEBUG",
+      "triggers": ["(incident|postmortem|outage|root.cause|error.spike|log.analysis|production.error|staging.error)"],
+      "trigger_mode": "regex",
+      "priority": 20,
+      "precedes": [],
+      "requires": [],
+      "invoke": "Skill(auto-claude-skills:incident-analysis)",
+      "keywords": ["incident", "postmortem", "outage", "logs", "error spike"],
+      "available": true,
+      "enabled": true
+    }] | .methodology_hints += [{
+      "name": "gcp-observability",
+      "triggers": ["(runtime.log|error.group|metric.regress|production.error|staging.error|verify.deploy|post.deploy|list.log|list.metric|trace.search|incident|postmortem|root.cause|outage|error.spike|log.analysis|5[0-9][0-9].error)"],
+      "trigger_mode": "regex",
+      "hint": "INCIDENT ANALYSIS: Use Skill(auto-claude-skills:incident-analysis) for structured investigation. Stages: MITIGATE -> INVESTIGATE -> POSTMORTEM. Detect tool tier (MCP > gcloud > guidance). Scope all queries to specific service + environment + narrow time window.",
+      "phases": ["SHIP", "DEBUG"]
+    }]' "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
+}
+
 # Helper: install a v4 skill registry cache with plugins and phase_compositions
 install_registry_v4() {
     local cache_file="${HOME}/.claude/.skill-registry-cache.json"
@@ -1463,6 +1491,94 @@ DOMREG
 }
 
 # ---------------------------------------------------------------------------
+# 31. Incident-analysis routing tests
+# ---------------------------------------------------------------------------
+test_incident_analysis_hint_fires() {
+    echo "-- test: incident-analysis hint fires on incident keywords --"
+    setup_test_env
+    install_registry_with_incident_analysis
+
+    local output context
+
+    output="$(run_hook "debug this production incident in checkout service")"
+    context="$(extract_context "${output}")"
+    assert_contains "incident triggers gcp-observability hint" "INCIDENT ANALYSIS" "${context}"
+
+    output="$(run_hook "write a postmortem for the outage last night")"
+    context="$(extract_context "${output}")"
+    assert_contains "postmortem triggers gcp-observability hint" "INCIDENT ANALYSIS" "${context}"
+
+    teardown_test_env
+}
+
+test_incident_analysis_skill_scores() {
+    echo "-- test: incident-analysis skill entry scores on incident keywords --"
+    setup_test_env
+    install_registry_with_incident_analysis
+
+    local output context
+
+    output="$(run_hook "debug this production incident in the auth service")"
+    context="$(extract_context "${output}")"
+    assert_contains "incident-analysis skill appears" "incident-analysis" "${context}"
+
+    teardown_test_env
+}
+
+test_incident_analysis_phase_gating() {
+    echo "-- test: incident-analysis only fires in DEBUG and SHIP phases --"
+    setup_test_env
+    install_registry_with_incident_analysis
+
+    local output context
+
+    output="$(run_hook "debug the incident in checkout service logs")"
+    context="$(extract_context "${output}")"
+    assert_contains "hint fires in DEBUG phase" "INCIDENT ANALYSIS" "${context}"
+
+    output="$(run_hook "design an incident tracking dashboard")"
+    context="$(extract_context "${output}")"
+    assert_not_contains "hint suppressed in DESIGN phase" "INCIDENT ANALYSIS" "${context}"
+
+    teardown_test_env
+}
+
+test_incident_analysis_preserves_existing_triggers() {
+    echo "-- test: existing gcp-observability triggers still work --"
+    setup_test_env
+    install_registry_with_incident_analysis
+
+    local output context
+
+    output="$(run_hook "debug the runtime.log errors in production")"
+    context="$(extract_context "${output}")"
+    assert_contains "runtime.log still triggers hint" "INCIDENT ANALYSIS" "${context}"
+
+    teardown_test_env
+}
+
+test_incident_analysis_trigger_source() {
+    echo "-- test: default-triggers.json contains incident-analysis entry --"
+
+    local invoke_path
+    invoke_path="$(jq -r '.. | objects | select(.name == "incident-analysis") | .invoke // empty' config/default-triggers.json)"
+    assert_equals "invoke path correct" "Skill(auto-claude-skills:incident-analysis)" "${invoke_path}"
+
+    local hint_text
+    hint_text="$(jq -r '.. | objects | select(.name == "gcp-observability") | .hint // empty' config/default-triggers.json)"
+    assert_contains "hint text updated" "INCIDENT ANALYSIS" "${hint_text}"
+}
+
+test_incident_analysis_invoke_path() {
+    echo "-- test: invoke path uses bundled plugin prefix --"
+
+    local invoke_path
+    invoke_path="$(jq -r '.. | objects | select(.name == "incident-analysis") | .invoke // empty' config/default-triggers.json)"
+
+    assert_contains "uses bundled plugin prefix" "auto-claude-skills:" "${invoke_path}"
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_debug_prompt_matches
@@ -1499,6 +1615,12 @@ test_eval_phase_uses_process
 test_name_boost_boundary_aware
 test_trigger_boundary_excludes_dot
 test_domain_instruction_no_process
+test_incident_analysis_hint_fires
+test_incident_analysis_skill_scores
+test_incident_analysis_phase_gating
+test_incident_analysis_preserves_existing_triggers
+test_incident_analysis_trigger_source
+test_incident_analysis_invoke_path
 
 # ---------------------------------------------------------------------------
 # SDLC enforcement: MUST INVOKE for process skills
