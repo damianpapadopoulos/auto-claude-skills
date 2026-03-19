@@ -68,7 +68,7 @@ Routing Layer (existing infrastructure)
          |
          v
 Brain: skills/incident-analysis/SKILL.md
-  State Machine: MITIGATE -> INVESTIGATE -> POSTMORTEM
+  State Machine (stages, not SDLC phases): MITIGATE -> INVESTIGATE -> POSTMORTEM
   Behavioral Constraints (always active):
     - HITL gate on mutating commands
     - Flight Plan before code changes
@@ -102,21 +102,23 @@ During active investigation, all file reads, log queries, and code searches MUST
 
 ### 3. Temp-File Execution Pattern (Tier 2 Only)
 
-For any LQL query longer than 5 words or containing quotes/regex, Claude MUST write the query to `/tmp/agent-lql-query.txt` and execute via:
+For any LQL query longer than 5 words or containing quotes/regex, Claude MUST write the query to a session-scoped temp file (via `mktemp`) and execute via file read. This avoids both escaping failures and concurrent-session race conditions:
 
 ```bash
-cat > /tmp/agent-lql-query.txt << 'QUERY'
+LQL_FILE=$(mktemp /tmp/agent-lql-XXXXXX.txt)
+cat > "$LQL_FILE" << 'QUERY'
 resource.type="cloud_run_revision"
 AND resource.labels.service_name="checkout-service"
 AND severity>=ERROR
 AND timestamp>="2026-03-19T10:00:00Z"
 QUERY
 
-gcloud logging read "$(cat /tmp/agent-lql-query.txt)" \
+gcloud logging read "$(cat "$LQL_FILE")" \
   --project=my-project --format=json --limit=50
+rm -f "$LQL_FILE"
 ```
 
-This eliminates escaping-related syntax failures that occur when constructing complex LQL inline.
+Using `mktemp` with a random suffix prevents concurrent sessions from overwriting each other's queries (consistent with the project's session-token scoping for `~/.claude/` shared state).
 
 ### 4. Token Flush on Phase Transitions
 
@@ -130,7 +132,7 @@ This prevents the agent from "drowning in logs" and hallucinating during the wri
 
 ## Skill State Machine
 
-### Phase 1 — MITIGATE (Reactive Debugging)
+### Stage 1 — MITIGATE (Reactive Debugging)
 
 ```
 1. Detect available tools (Tier 1/2/3)
@@ -142,7 +144,7 @@ This prevents the agent from "drowning in logs" and hallucinating during the wri
 6. If code fix needed -> transition to INVESTIGATE
 ```
 
-### Phase 2 — INVESTIGATE (Root Cause Analysis)
+### Stage 2 — INVESTIGATE (Root Cause Analysis)
 
 ```
 1. Query logs with narrowed LQL filter (service + severity + time window)
@@ -164,14 +166,13 @@ This prevents the agent from "drowning in logs" and hallucinating during the wri
 8. Transition to POSTMORTEM
 ```
 
-### Phase 3 — POSTMORTEM (Structured Document Generation)
+### Stage 3 — POSTMORTEM (Structured Document Generation)
 
 ```
 1. Template discovery (ordered):
    a. docs/templates/postmortem.md (project convention)
    b. .github/ISSUE_TEMPLATE/postmortem.md (GitHub-native)
-   c. Convention in CLAUDE.md (postmortem_template_path key)
-   d. Built-in default template (embedded in skill)
+   c. Built-in default template (embedded in skill)
 2. Directory discovery:
    a. docs/postmortems/ or docs/incidents/ (check both)
    b. Create docs/postmortems/ if neither exists
@@ -189,10 +190,13 @@ This prevents the agent from "drowning in logs" and hallucinating during the wri
 
 ## Tiered Tool Detection
 
+**Detection logic in SKILL.md (runtime, self-contained):**
+
 ```bash
 # Step 1: Check for MCP observability tools
-# If list_log_entries tool exists in Claude's tool context -> Tier 1 (MCP)
-# Detection: Check session-start additionalContext for observability MCP presence
+# The SKILL.md instructs Claude to check whether list_log_entries, search_traces,
+# etc. are available as MCP tools in the current session.
+# This is a prompt-level check: "If you have access to list_log_entries tool -> Tier 1"
 
 # Step 2: Check for gcloud CLI
 command -v gcloud && gcloud logging read --help >/dev/null 2>&1
@@ -201,6 +205,20 @@ command -v gcloud && gcloud logging read --help >/dev/null 2>&1
 # Step 3: Neither available -> Tier 3 (guidance-only)
 # Print manual instructions for Cloud Console Logs Explorer
 ```
+
+**Session-start awareness (optional, informational):**
+
+Add `observability_capabilities` detection to `session-start-hook.sh` after the existing `context_capabilities` block (Step 8d). Same pattern as `security_capabilities`:
+
+```bash
+# Check for gcloud CLI availability
+obs_gcloud=false
+command -v gcloud >/dev/null 2>&1 && obs_gcloud=true
+```
+
+Emitted in `additionalContext` as: `Observability tools: gcloud=$obs_gcloud`
+
+This field is **informational for the model only** — it helps Claude know what's available before the skill loads, but is not a routing gate. The skill's own detection (Step 1 above) is authoritative. MCP tool availability is not detectable at session-start (MCP tools are discovered by the runtime, not by hooks).
 
 ### LQL Reference Patterns (Embedded in Skill)
 
@@ -228,28 +246,53 @@ command -v gcloud && gcloud logging read --help >/dev/null 2>&1
 
 | Investigation Step | Bash Command |
 |-------------------|-------------|
-| Query logs | `gcloud logging read "$(cat /tmp/agent-lql-query.txt)" --project=X --format=json --limit=50` |
+| Query logs | `gcloud logging read "$(cat "$LQL_FILE")" --project=X --format=json --limit=50` (see temp-file pattern) |
 | List traces | `gcloud traces list --project=X --format=json` |
-| Error events | `gcloud error-events list --service=X --format=json` |
+| Error events | `gcloud beta error-reporting events list --service=X --format=json` (beta) |
 | Metrics | `gcloud monitoring metrics list --project=X --format=json` (limited) |
 
 ## Routing Changes
 
-### Update `gcp-observability` in `default-triggers.json`
+### 1. Update `gcp-observability` methodology hint in `default-triggers.json`
+
+Update the existing methodology hint entry with expanded triggers and updated hint text. Note: `5[0-9][0-9]` is used instead of `5[0-9]{2}` because Bash 3.2 ERE (macOS `/bin/bash`) does not reliably support `{n}` quantifiers in `[[ =~ ]]`.
 
 ```json
 {
   "name": "gcp-observability",
   "triggers": [
-    "(runtime.log|error.group|metric.regress|production.error|staging.error|verify.deploy|post.deploy|list.log|list.metric|trace.search|incident|postmortem|root.cause|outage|error.spike|log.analysis|5[0-9]{2}.error)"
+    "(runtime.log|error.group|metric.regress|production.error|staging.error|verify.deploy|post.deploy|list.log|list.metric|trace.search|incident|postmortem|root.cause|outage|error.spike|log.analysis|5[0-9][0-9].error)"
   ],
   "trigger_mode": "regex",
-  "hint": "INCIDENT ANALYSIS: Use the incident-analysis skill for structured investigation. State machine: MITIGATE -> INVESTIGATE -> POSTMORTEM. Detect tool tier (MCP > gcloud > guidance). Scope all queries to specific service + environment + narrow time window.",
+  "hint": "INCIDENT ANALYSIS: Use Skill(auto-claude-skills:incident-analysis) for structured investigation. Stages: MITIGATE -> INVESTIGATE -> POSTMORTEM. Detect tool tier (MCP > gcloud > guidance). Scope all queries to specific service + environment + narrow time window.",
   "phases": ["SHIP", "DEBUG"]
 }
 ```
 
-Sync to `config/fallback-registry.json`.
+### 2. Add `incident-analysis` skill entry in `default-triggers.json`
+
+The methodology hint above tells Claude *what to do*. This skill entry registers the skill in the routing engine so it can be scored, role-capped, and invoked via `Skill(auto-claude-skills:incident-analysis)`:
+
+```json
+{
+  "name": "incident-analysis",
+  "invoke": "Skill(auto-claude-skills:incident-analysis)",
+  "role": "domain",
+  "priority": 20,
+  "triggers": [
+    "(incident|postmortem|outage|root.cause|error.spike|log.analysis|production.error|staging.error)"
+  ],
+  "trigger_mode": "regex",
+  "keywords": ["incident", "postmortem", "outage", "logs", "error spike"],
+  "phases": ["DEBUG", "SHIP"]
+}
+```
+
+**Role: `domain`** (not `process`) — this skill provides observability domain expertise but does not replace the `systematic-debugging` process skill. Both can fire together: `systematic-debugging` (process) + `incident-analysis` (domain).
+
+### 3. Sync `config/fallback-registry.json`
+
+Must be regenerated or hand-edited to include both the updated `gcp-observability` hint and the new `incident-analysis` skill entry. **Fallback-parity test assertion required** (see Test Strategy) to verify the fallback registry contains the same trigger patterns and invoke paths as `default-triggers.json`. This is critical because jq is optional at runtime and the fallback is the path taken when jq is absent.
 
 ## Phase Integration
 
@@ -271,19 +314,23 @@ If the error may be production/staging related:
 
 | File | Action | Description |
 |------|--------|-------------|
-| `skills/incident-analysis/SKILL.md` | **Create** | Brain: methodology, behavioral constraints, LQL patterns, templates, tiered detection |
-| `config/default-triggers.json` | **Modify** | Update `gcp-observability` triggers and hint text |
-| `config/fallback-registry.json` | **Modify** | Sync with default-triggers changes |
+| `skills/incident-analysis/SKILL.md` | **Create** | Brain: methodology, behavioral constraints, LQL patterns, templates, tiered detection. Invoke path: `Skill(auto-claude-skills:incident-analysis)` |
+| `config/default-triggers.json` | **Modify** | (1) Update `gcp-observability` hint triggers and text, (2) add `incident-analysis` skill entry with invoke path, role=domain, priority=20 |
+| `config/fallback-registry.json` | **Modify** | Sync with default-triggers changes. Requires parity test assertion. |
+| `hooks/session-start-hook.sh` | **Modify** | Add `observability_capabilities` detection (gcloud availability) after Step 8d, same pattern as `security_capabilities` |
 | `skills/unified-context-stack/phases/testing-and-debug.md` | **Modify** | Add Observability Truth tier (Section 4) |
-| `tests/test-routing.sh` | **Modify** | Add routing tests for incident/postmortem/outage triggers |
+| `tests/test-routing.sh` | **Modify** | Add routing tests for incident/postmortem/outage triggers + fallback parity |
 
 ### Test Strategy
 
 Add to `tests/test-routing.sh`:
 
-1. **Trigger matching**: Feed `incident`, `postmortem`, `root.cause`, `outage`, `error.spike`, `log.analysis` prompts to `skill-activation-hook.sh`, verify `gcp-observability` hint fires
-2. **Phase gating**: Verify hint fires in DEBUG and SHIP phases, does NOT fire in IMPLEMENT or DESIGN
-3. **Existing trigger preservation**: Verify original triggers (`runtime.log`, `error.group`, etc.) still fire correctly after regex update
+1. **Hint trigger matching**: Feed `incident`, `postmortem`, `root.cause`, `outage`, `error.spike`, `log.analysis` prompts to `skill-activation-hook.sh`, verify `gcp-observability` hint fires
+2. **Skill trigger matching**: Verify `incident-analysis` skill entry scores and appears in output for the same prompts
+3. **Phase gating**: Verify hint and skill fire in DEBUG and SHIP phases, do NOT fire in DESIGN, PLAN, IMPLEMENT, or REVIEW
+4. **Existing trigger preservation**: Verify original triggers (`runtime.log`, `error.group`, etc.) still fire correctly after regex update
+5. **Fallback-registry parity**: Assert that `config/fallback-registry.json` contains both the updated `gcp-observability` hint triggers and the new `incident-analysis` skill entry with correct invoke path `Skill(auto-claude-skills:incident-analysis)`
+6. **Invoke path correctness**: Verify the skill invoke path matches `Skill(auto-claude-skills:incident-analysis)` (not an external/user-skill path)
 
 Existing `test-routing.sh` and `test-context.sh` tests must continue passing (no regression).
 
@@ -299,6 +346,7 @@ Existing `test-routing.sh` and `test-context.sh` tests must continue passing (no
 | Global codebase search during incident | Scope restriction: all queries constrained to identified service/trace ID |
 | MCP server not installed (most users) | Graceful degradation: Tier 2 (gcloud) and Tier 3 (guidance) always available |
 | gcloud not authenticated | Skill instructs: check `gcloud auth list` first, guide through `gcloud auth login` if needed |
+| Concurrent sessions overwriting temp files | Session-scoped `mktemp` with random suffix; consistent with project's session-token scoping |
 
 ## What's NOT in v1
 
