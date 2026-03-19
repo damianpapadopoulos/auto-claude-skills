@@ -21,3 +21,11 @@ If the error involves a third-party library:
 If the error involves internal code or unclear call chains:
 - **serena=true**: Use `find_symbol` to locate the failing function, `find_referencing_symbols` to trace callers and dependencies
 - **serena=false**: Use Grep to search for the function name and trace references manually
+
+### 4. Observability Truth (Production State)
+If the error may be production/staging related:
+- **Tier 1** (MCP observability tools available): Use `list_log_entries` with scoped LQL filter (service + severity + time window <= 60 min)
+- **Tier 2** (gcloud available): Use temp-file pattern for LQL queries via `gcloud logging read --format=json`
+- **Tier 3** (neither): Guide developer to Cloud Console Logs Explorer
+- ALWAYS scope: service + environment + narrow time window
+- NEVER dump unbounded log results into context
