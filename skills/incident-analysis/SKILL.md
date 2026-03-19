@@ -36,7 +36,9 @@ gcloud logging read "$(cat "$LQL_FILE")" \
 
 The `;` operator ensures cleanup runs regardless of whether `gcloud` succeeds or fails. `mktemp` with a random suffix prevents concurrent sessions from overwriting each other's queries.
 
-### 4. Context Discipline
+### 4. Context Discipline on Stage Transitions
+
+Claude cannot literally clear its context window mid-session. This constraint is enforced **behaviorally** through prompt instructions:
 
 When transitioning from INVESTIGATE to POSTMORTEM:
 1. Write a synthesized summary of the timeline and root cause as an explicit output block
