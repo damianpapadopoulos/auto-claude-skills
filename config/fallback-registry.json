@@ -412,6 +412,29 @@
       "enabled": true
     },
     {
+      "name": "incident-analysis",
+      "role": "domain",
+      "phase": "DEBUG",
+      "triggers": [
+        "(incident|postmortem|outage|root.cause|error.spike|log.analysis|production.error|staging.error)"
+      ],
+      "keywords": [
+        "incident",
+        "postmortem",
+        "outage",
+        "logs",
+        "error spike"
+      ],
+      "trigger_mode": "regex",
+      "priority": 20,
+      "precedes": [],
+      "requires": [],
+      "description": "Structured incident investigation: MITIGATE -> INVESTIGATE -> POSTMORTEM. Detects tool tier (MCP > gcloud > guidance) and scopes queries to service + environment + narrow time window.",
+      "invoke": "Skill(auto-claude-skills:incident-analysis)",
+      "available": true,
+      "enabled": true
+    },
+    {
       "name": "test-driven-development",
       "role": "domain",
       "triggers": [],
@@ -1104,10 +1127,10 @@
     {
       "name": "gcp-observability",
       "triggers": [
-        "(runtime.log|error.group|metric.regress|production.error|staging.error|verify.deploy|post.deploy|list.log|list.metric|trace.search)"
+        "(runtime.log|error.group|metric.regress|production.error|staging.error|verify.deploy|post.deploy|list.log|list.metric|trace.search|incident|postmortem|root.cause|outage|error.spike|log.analysis|5[0-9][0-9].error)"
       ],
       "trigger_mode": "regex",
-      "hint": "GCP OBSERVABILITY: If observability MCP tools are available, verify runtime state. Scope queries to service + environment + narrow time window (30-60 min).",
+      "hint": "INCIDENT ANALYSIS: Use Skill(auto-claude-skills:incident-analysis) for structured investigation. Stages: MITIGATE -> INVESTIGATE -> POSTMORTEM. Detect tool tier (MCP > gcloud > guidance). Scope all queries to specific service + environment + narrow time window.",
       "phases": [
         "SHIP",
         "DEBUG"
@@ -1224,5 +1247,7 @@
       ]
     }
   ],
-  "warnings": []
+  "warnings": [
+    "+ incident-analysis (newly discovered)"
+  ]
 }
