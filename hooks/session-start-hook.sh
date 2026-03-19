@@ -670,6 +670,10 @@ command -v trivy    >/dev/null 2>&1 && _TRIVY=true
 command -v gitleaks >/dev/null 2>&1 && _GITLEAKS=true
 SECURITY_CAPS="semgrep=${_SEMGREP}, trivy=${_TRIVY}, gitleaks=${_GITLEAKS}"
 
+# ── Step 8g: Detect observability capabilities ──────────────────────
+_OBS_GCLOUD=false
+command -v gcloud >/dev/null 2>&1 && _OBS_GCLOUD=true
+
 # -----------------------------------------------------------------
 # Step 9+10: Build final registry JSON, extract stats, and cache
 # -----------------------------------------------------------------
@@ -917,6 +921,8 @@ case "${SECURITY_CAPS}" in
 esac
 CONTEXT="${CONTEXT}
 Security tools: ${SECURITY_CAPS}${_SEC_HINT}"
+CONTEXT="${CONTEXT}
+Observability tools: gcloud=${_OBS_GCLOUD}"
 
 # Check for stale/missing memory consolidation marker
 _PROJ_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
