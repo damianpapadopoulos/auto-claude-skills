@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Bundled `incident-analysis` skill with tiered GCP log investigation (MCP > gcloud > guidance) and structured postmortem generation
+- 3-stage investigation state machine: MITIGATE → INVESTIGATE → POSTMORTEM with 4 behavioral guardrails (HITL gate, scope restriction, temp-file LQL pattern, context discipline)
+- Observability Truth tier in unified-context-stack testing-and-debug phase
+- Session-start `observability_capabilities` detection (gcloud availability)
+- Updated `gcp-observability` routing hint with incident/postmortem/outage triggers
 - README rewritten as end-user product page with decision-funnel structure, SDLC phase table, example prompts, and boundary-setting section
 - Bundled `security-scanner` skill with hybrid Semgrep/Trivy/Gitleaks scanning via Bash
 - Session-start `security_capabilities` detection (Step 8f: semgrep, trivy, bandit, gitleaks)
