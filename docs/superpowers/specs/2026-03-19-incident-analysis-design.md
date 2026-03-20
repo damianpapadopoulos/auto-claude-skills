@@ -388,6 +388,7 @@ Existing `test-routing.sh` and `test-context.sh` tests must continue passing (no
 ```
 v1.0  Single-service investigation + structured postmortem (Tier 1/2/3)
 v1.1  One-hop trace correlation: Service A → Service B (Tier 1 MCP only) [SHIPPED]
+v1.2  Postmortem permalinks: trace IDs + commit hashes as clickable Markdown links [SHIPPED]
 v2.0  incident-trend-analyzer (Palladius aggregator pattern: read N postmortems, compute MTTR/MTTD, identify recurring failure modes)
 v2.1  pr-friction-logger (Palladius frictionlog pattern: emulate new-dev experience on PR branches)
 v3.0  Backend-agnostic (skills/incident-analysis-datadog/, skills/incident-analysis-splunk/)
