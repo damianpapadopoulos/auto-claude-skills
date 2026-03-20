@@ -87,19 +87,21 @@ The LEARN → DISCOVER feedback loop is the core value proposition: shipping cre
 
 **Trigger patterns:**
 ```
-"(how.did.*(perform|do|go|work)|outcome|metric|adoption|result|funnel|cohort|experiment.result|feature.impact|post.launch|post.ship|learn|retro(?!spective)|measure)"
+"(how.did.*(perform|do|go|work)|outcome|adoption|funnel|cohort|experiment.result|feature.impact|post.launch|post.ship|measure|did.it.work)"
 ```
+
+Note: `learn`, `metric`, and `result` are intentionally excluded from triggers to avoid false positives (e.g. "learning", "test results", "metric config"). They are handled via keywords instead, which use exact substring matching and are less prone to noise.
 
 **Keywords:**
 ```
-["how did it perform", "check metrics", "feature impact", "post-launch review", "did it work", "adoption metrics"]
+["how did it perform", "check metrics", "feature impact", "post-launch review", "did it work", "adoption metrics", "what did we learn", "learn from this", "review the results", "metric results"]
 ```
 
 **Priority:** 30
 
 **Requires:** `[]` (no chain dependency — LEARN can be entered independently, days after shipping)
 
-**Precedes:** `["brainstorming"]` (follow-up work feeds back into DISCOVER/DESIGN)
+**Precedes:** `["product-discovery"]` (follow-up work feeds back into DISCOVER, completing the closed loop)
 
 **MCP tool usage (PostHog):**
 - `query-run` with HogQL — adoption metrics, event counts, error rates
@@ -116,8 +118,9 @@ The LEARN → DISCOVER feedback loop is the core value proposition: shipping cre
 - If Atlassian MCP unavailable: output follow-up recommendations as text; user creates tickets manually
 
 **LEARN timing behavior:**
-- **Auto-baseline after SHIP:** When SHIP phase completes, write a lightweight baseline artifact to `~/.claude/.skill-learn-baseline-{session}` containing: feature name, ship timestamp, key metric names. This enables later LEARN invocations to compare against baseline. The baseline write is a PostHog annotation + local file, NOT a full metrics analysis.
-- **Full analysis on demand:** When user revisits with "how did X perform?" or triggers LEARN explicitly, the skill runs the full outcome analysis against the baseline.
+- **Auto-baseline after SHIP:** When SHIP phase completes, write a lightweight baseline artifact to `~/.claude/.skill-learn-baselines/{branch-name}.json` containing: feature name, ship timestamp, branch name, key metric names. Keyed by branch name (not session token) so that LEARN invocations in later sessions can discover the baseline. This is a PostHog annotation + local file, NOT a full metrics analysis.
+- **Full analysis on demand:** When user revisits with "how did X perform?" or triggers LEARN explicitly, the skill searches `~/.claude/.skill-learn-baselines/` for matching baselines by feature/branch name and runs the full outcome analysis.
+- **Cleanup:** Baselines older than 90 days are pruned on SHIP (opportunistic cleanup, not a separate job).
 
 ## 2. Routing Engine Changes
 
@@ -218,6 +221,7 @@ The LEARN → DISCOVER feedback loop is the core value proposition: shipping cre
   ],
   "trigger_mode": "regex",
   "hint": "POSTHOG: If PostHog MCP tools are available, query analytics and experiment results directly. Use outcome-review skill for structured post-ship analysis.",
+  "plugin": "posthog",
   "phases": ["LEARN", "SHIP", "DEBUG"]
 }
 ```
@@ -242,22 +246,48 @@ product-discovery)            PLABEL="Discover" ;;
 outcome-review)               PLABEL="Learn / Measure" ;;
 ```
 
+Also update the no-registry fallback message (line 70 of skill-activation-hook.sh) to include DISCOVER and LEARN:
+
+```bash
+"Phase: assess current phase (DISCOVER/DESIGN/PLAN/IMPLEMENT/REVIEW/SHIP/LEARN/DEBUG)"
+```
+
+### 2.8 Red flags for new phases
+
+Add DISCOVER and LEARN cases to the red-flag enforcement block:
+
+**DISCOVER red flags:**
+- Skipping Jira/Confluence context pull when Atlassian MCP is available
+- Jumping to design without presenting a discovery brief
+- Writing code during the DISCOVER phase
+
+**LEARN red flags:**
+- Creating Jira follow-up tickets without user approval
+- Skipping metrics analysis and going straight to recommendations
+- Editing code during the LEARN phase
+
 ### 2.7 SHIP baseline artifact
 
 After `finishing-a-development-branch` completes in the SHIP composition, write:
 
 ```json
-// ~/.claude/.skill-learn-baseline-{session}
+// ~/.claude/.skill-learn-baselines/{branch-name}.json
 {
   "feature": "<feature name from plan>",
   "shipped_at": "<ISO timestamp>",
   "branch": "<branch name>",
   "spec_path": "<path to openspec doc if exists>",
-  "suggested_metrics": ["<list from plan/spec if available>"]
+  "suggested_metrics": ["<list from plan/spec if available>"],
+  "jira_ticket": "<Jira ticket ID if available from discovery>"
 }
 ```
 
-This is consumed by outcome-review when LEARN is invoked later. The file is session-scoped and lightweight.
+**Key design choices:**
+- Keyed by **branch name** (sanitized: slashes → dashes), not session token. This allows LEARN to find baselines across sessions, since session tokens change per conversation.
+- The `finishing-a-development-branch` skill writes the baseline as its final step before cleanup.
+- outcome-review discovers baselines by listing `~/.claude/.skill-learn-baselines/` and matching on feature name, branch name, or Jira ticket.
+- Baselines older than 90 days are pruned opportunistically during SHIP.
+- The `jira_ticket` field enables LEARN to annotate the original ticket with outcome data.
 
 ## 3. Registry Changes
 
@@ -293,7 +323,7 @@ Add two new skill entries to the `skills` array:
   "role": "process",
   "phase": "LEARN",
   "triggers": [
-    "(how.did.*(perform|do|go|work)|outcome|metric|adoption|result|funnel|cohort|experiment.result|feature.impact|post.launch|post.ship|learn(?!ing)|measure|did.it.work)"
+    "(how.did.*(perform|do|go|work)|outcome|adoption|funnel|cohort|experiment.result|feature.impact|post.launch|post.ship|measure|did.it.work)"
   ],
   "keywords": [
     "how did it perform",
@@ -301,11 +331,15 @@ Add two new skill entries to the `skills` array:
     "feature impact",
     "post-launch review",
     "did it work",
-    "adoption metrics"
+    "adoption metrics",
+    "what did we learn",
+    "learn from this",
+    "review the results",
+    "metric results"
   ],
   "trigger_mode": "regex",
   "priority": 30,
-  "precedes": ["brainstorming"],
+  "precedes": ["product-discovery"],
   "requires": [],
   "description": "Query PostHog metrics, synthesize outcome report, create follow-up Jira work (gated). Entered independently post-ship.",
   "invoke": "Skill(auto-claude-skills:outcome-review)"
@@ -316,12 +350,25 @@ Add two new skill entries to the `skills` array:
 
 Mirror the same entries with `"available": true, "enabled": true`.
 
-### 3.3 Atlassian plugin phase_fit update
+### 3.3 Atlassian plugin updates
 
-Extend the existing atlassian plugin entry:
+Extend the existing atlassian plugin entry's phase_fit:
 
 ```json
 "phase_fit": ["DISCOVER", "DESIGN", "PLAN", "REVIEW", "LEARN"]
+```
+
+Add write-side MCP tools needed for LEARN follow-up creation:
+
+```json
+"mcp_tools": [
+  "searchJiraIssuesUsingJql",
+  "getJiraIssue",
+  "getConfluencePage",
+  "searchConfluenceUsingCql",
+  "createJiraIssue",
+  "addCommentToJiraIssue"
+]
 ```
 
 ### 3.4 Existing Jira/Confluence methodology hints
@@ -369,8 +416,25 @@ Both skills follow the existing pattern: YAML frontmatter + markdown body with s
 - LEARN trigger scoring: "how did the auth feature perform" → outcome-review selected
 - LEARN trigger scoring: "check metrics for last release" → outcome-review selected
 - LEARN vs DEBUG disambiguation: "something is wrong with metrics" → systematic-debugging (DEBUG), NOT learn
+- LEARN false-positive guard: "show me test results" → NOT outcome-review (result excluded from triggers)
+- LEARN false-positive guard: "I'm learning about bash" → NOT outcome-review (learn handled via keywords only)
 - Composition chain: product-discovery → brainstorming → writing-plans (full forward walk)
+- Composition chain: outcome-review → product-discovery (LEARN → DISCOVER loop)
 - `/discover` slash command: early exit, no hook activation (existing behavior)
+
+### 6.1.1 Regex compilation validation
+
+All trigger patterns in the registry must compile under Bash 3.2 POSIX ERE. Test:
+```bash
+# For each trigger in default-triggers.json:
+trigger="$pattern"
+[[ "test" =~ $trigger ]]
+status=$?
+# status 0 = match, status 1 = no match (both OK)
+# status 2 = compilation failure = FAIL
+[[ $status -le 1 ]] || fail "Trigger pattern fails to compile: $pattern"
+```
+This prevents future regressions from non-POSIX regex features (lookahead, lookbehind, etc.).
 
 ### 6.2 Registry tests (test-registry.sh)
 
@@ -399,7 +463,7 @@ Both skills follow the existing pattern: YAML frontmatter + markdown body with s
 | Risk | Mitigation |
 |------|------------|
 | DISCOVER false positives from casual "backlog" mentions | High-threshold triggers + `/discover` hard override |
-| LEARN "learn" substring matches "learning" in normal text | Regex uses negative lookahead: `learn(?!ing)` |
+| LEARN "learn" substring matches "learning" in normal text | `learn` handled via keywords only (exact substring match), not regex triggers |
 | PostHog MCP not installed for most users | Graceful degradation to guided manual mode |
-| Baseline artifact from SHIP gets stale | Session-scoped file; LEARN skill checks age and warns if >30 days |
+| Baseline artifact from SHIP gets stale | Branch-keyed file in `~/.claude/.skill-learn-baselines/`; LEARN warns if >30 days; 90-day opportunistic cleanup |
 | DISCOVER → DESIGN transition unclear | Composition chain shows `[NEXT] brainstorming`; directive says "invoke brainstorming after discovery" |
