@@ -154,9 +154,14 @@ This prevents the agent from "drowning in logs" — referencing stale raw JSON t
    a. Error grouping (frequency, first/last occurrence)
    b. Recent deployment correlation (deploy before error spike?)
    c. Resource metrics (CPU, memory, latency) if available
-4. [v1.1, Tier 1 only] Multi-service trace correlation:
-   - Extract trace IDs -> search_traces -> follow spans
-   - Query upstream/downstream service logs
+4. Autonomous trace correlation (Tier 1 MCP only):
+   - Select exemplar trace from dominant error group
+   - Call get_trace to retrieve span timeline
+   - If exactly one cross-service span has failure evidence (error status,
+     HTTP >= 500, exception, or timeout cascade >= 80% root span duration):
+     query Service B logs (one hop max, scoped to trace_id + service labels)
+   - Synthesize causal path only, feed into Step 5
+   - See v1.1 spec for full workflow details
 5. Formulate root cause hypothesis
 6. FLIGHT PLAN: Before touching any code, output a bulleted list of:
    - Files to modify
@@ -369,7 +374,7 @@ Existing `test-routing.sh` and `test-context.sh` tests must continue passing (no
 
 ## What's NOT in v1
 
-- Multi-service trace correlation (v1.1, gated behind Tier 1 MCP availability)
+- Multi-service trace correlation beyond one hop (v1.2+, currently limited to Service A → Service B)
 - `incident-trend-analyzer` skill (v2 — reads `docs/postmortems/` for meta-analysis across historical incidents)
 - `pr-friction-logger` skill (v2 — DX friction testing, Palladius frictionlog pattern)
 - Jira/Linear auto-ticket creation for postmortem action items
@@ -382,7 +387,7 @@ Existing `test-routing.sh` and `test-context.sh` tests must continue passing (no
 
 ```
 v1.0  Single-service investigation + structured postmortem (Tier 1/2/3)
-v1.1  Multi-service trace correlation (Tier 1 MCP only)
+v1.1  One-hop trace correlation: Service A → Service B (Tier 1 MCP only) [SHIPPED]
 v2.0  incident-trend-analyzer (Palladius aggregator pattern: read N postmortems, compute MTTR/MTTD, identify recurring failure modes)
 v2.1  pr-friction-logger (Palladius frictionlog pattern: emulate new-dev experience on PR branches)
 v3.0  Backend-agnostic (skills/incident-analysis-datadog/, skills/incident-analysis-splunk/)
