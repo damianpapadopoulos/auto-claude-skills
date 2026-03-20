@@ -80,27 +80,38 @@ If the state file exists and has the relevant change entry, use those values. Sk
 ### Step 3: Create Retrospective Change Folder
 
 **OPSX path (CLI available):**
-1. Use `/opsx:propose <feature-name>` to create the change folder and generate all artifacts in one step.
-2. IMPORTANT: Populate artifacts with **retrospective** content from the shipped codebase and SP artifacts, not forward-looking proposals. The code is already written — describe what was actually built.
+1. Run `openspec new change <feature-name>` to scaffold the change folder.
+2. Populate each artifact with **retrospective** content from the shipped codebase and SP artifacts, not forward-looking proposals. The code is already written — describe what was actually built.
 
-**Optional expanded-profile enhancement:** If the project uses the expanded OPSX profile (via `openspec config profile` + `openspec update`), you may use `/opsx:new` + `/opsx:ff` instead. Do NOT depend on expanded-profile commands unless the project has opted in.
+**Important — verb-first CLI commands:** Always use the top-level verb form. The `openspec change ...` subcommands are deprecated. Use:
+- `openspec new change <name>` (not `openspec change new`)
+- `openspec validate <name>` (not `openspec change validate`)
+- `openspec list` (not `openspec change list`)
+- `openspec show <name>` (not `openspec change show`)
+- `openspec archive <name>` (not `openspec change archive`)
 
 **Fallback path (no CLI):**
 
 Create `openspec/changes/<feature-name>/` with:
 
-**proposal.md:**
+**proposal.md** (must match openspec's expected headers exactly):
 ```
-# Proposal: <Feature Name>
-
-## Problem Statement
+## Why
 Why we built this. (Synthesized from SP brainstorming spec if available.)
 
-## Proposed Solution
+## What Changes
 High-level summary of what was actually built.
 
-## Out of Scope
-What we explicitly avoided.
+## Capabilities
+
+### New Capabilities
+- `<capability-name>`: Brief description of what this capability covers
+
+### Modified Capabilities
+- `<existing-name>`: What requirement changed
+
+## Impact
+Affected code, APIs, dependencies, systems.
 ```
 
 **design.md:**
@@ -119,18 +130,18 @@ Why Path A over Path B. Rejected alternatives and rationale.
 ```
 
 **specs/<capability>/spec.md** (delta spec, one per capability):
-```
-# <Capability Name> — Delta
 
+Use RFC 2119 keywords in UPPERCASE: MUST, MUST NOT, SHALL, SHALL NOT, SHOULD, SHOULD NOT, MAY. Never write these as lowercase when they express requirements.
+
+```
 ## ADDED Requirements
 
 ### Requirement: <Name>
-<Description of the new requirement>
+<Description using RFC 2119 keywords in UPPERCASE, e.g. "The system MUST ...">
 
 #### Scenario: <Name>
-Given <precondition>
-When <action>
-Then <expected result>
+- **WHEN** <condition>
+- **THEN** <expected outcome>
 ```
 
 **tasks.md** (when `plan_path` is provided):
@@ -186,7 +197,7 @@ Note: The CLI command is `openspec validate <change>`, not `openspec verify`. Th
 **Archive the change folder:**
 
 **OPSX path (CLI available):**
-Use `/opsx:archive <feature-name>`. This:
+Run `openspec archive <feature-name>`. This:
 1. Checks artifact completion.
 2. If delta specs exist, prompts for sync to canonical specs.
 3. Moves the change folder to `openspec/changes/archive/YYYY-MM-DD-<feature-name>`.
@@ -218,5 +229,5 @@ After the archive path exists and SP artifacts (if any) have been moved:
 
 | OpenSpec CLI | Behavior |
 |-------------|----------|
-| Available | `/opsx:propose` → `openspec validate` → `/opsx:archive` |
+| Available | `openspec new change` → `openspec validate` → `openspec archive` |
 | Not available | Claude-native templates → skip validation → manual archive. Same artifact contract (paths, filenames, section headings). |
