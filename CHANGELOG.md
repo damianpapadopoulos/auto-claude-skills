@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 3-stage investigation state machine: MITIGATE → INVESTIGATE → POSTMORTEM with 4 behavioral guardrails (HITL gate, scope restriction, temp-file LQL pattern, context discipline)
 - Observability Truth tier in unified-context-stack testing-and-debug phase
 - Session-start `observability_capabilities` detection (gcloud availability)
+- Postmortem permalinks in `incident-analysis` skill (v1.2): trace IDs as clickable Cloud Console links, commit hashes as clickable GitHub links
 - One-hop trace correlation in `incident-analysis` skill (v1.1): autonomous Service A → Service B correlation, evidence-gated, Tier 1 MCP only
 - Updated `gcp-observability` routing hint with incident/postmortem/outage triggers
 - README rewritten as end-user product page with decision-funnel structure, SDLC phase table, example prompts, and boundary-setting section
