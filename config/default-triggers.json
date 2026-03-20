@@ -367,6 +367,18 @@
       "invoke": "Skill(auto-claude-skills:batch-scripting)"
     },
     {
+      "name": "security-scanner",
+      "role": "domain",
+      "phase": "REVIEW",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 10,
+      "precedes": [],
+      "requires": [],
+      "description": "Composition-activated: fired by REVIEW phase composition, not by trigger scoring. Hybrid Semgrep/Trivy/Gitleaks scanning.",
+      "invoke": "Skill(auto-claude-skills:security-scanner)"
+    },
+    {
       "name": "incident-analysis",
       "role": "domain",
       "phase": "DEBUG",

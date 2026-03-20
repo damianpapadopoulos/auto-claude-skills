@@ -412,6 +412,20 @@
       "enabled": true
     },
     {
+      "name": "security-scanner",
+      "role": "domain",
+      "phase": "REVIEW",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 10,
+      "precedes": [],
+      "requires": [],
+      "description": "Composition-activated: fired by REVIEW phase composition, not by trigger scoring. Hybrid Semgrep/Trivy/Gitleaks scanning.",
+      "invoke": "Skill(auto-claude-skills:security-scanner)",
+      "available": true,
+      "enabled": true
+    },
+    {
       "name": "incident-analysis",
       "role": "domain",
       "phase": "DEBUG",
@@ -459,20 +473,6 @@
       "requires": [],
       "description": "Discovered skill",
       "invoke": "Skill(superpowers:using-superpowers)",
-      "available": true,
-      "enabled": true
-    },
-    {
-      "name": "security-scanner",
-      "role": "domain",
-      "triggers": [],
-      "trigger_mode": "regex",
-      "priority": 200,
-      "phase": "",
-      "precedes": [],
-      "requires": [],
-      "description": "Discovered skill",
-      "invoke": "Skill(auto-claude-skills:security-scanner)",
       "available": true,
       "enabled": true
     }
