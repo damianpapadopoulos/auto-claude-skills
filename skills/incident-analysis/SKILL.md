@@ -107,12 +107,53 @@ Stack traces, error messages, request IDs, trace IDs.
 - Recent deployment correlation (deploy timestamp vs. error spike?)
 - Resource metrics (CPU, memory, latency) if available
 
-### Step 4: Multi-Service Trace Correlation (v1.1, Tier 1 Only)
+### Step 4: Autonomous Trace Correlation (Tier 1 Only)
 
-If Tier 1 MCP tools are available:
-- Extract trace IDs from log entries
-- Use `search_traces` / `get_trace` to follow spans
-- Query upstream/downstream service logs
+If Tier 1 MCP tools are NOT available, skip this step entirely. Proceed to Step 5.
+
+**Prerequisite — exemplar trace selection:** If Stage 2 logs contain many failing requests, select one exemplar trace from the dominant error group (most frequent pattern) or the most recent failure with a `trace` field. Analyze only this single exemplar in Step 4.
+
+**Extract trace_id and project_id** from the exemplar log entry's `trace` field (format: `projects/PROJECT_ID/traces/TRACE_ID`). Strip the prefix to get the raw TRACE_ID. Preserve PROJECT_ID for `get_trace`.
+
+If no `trace` field is present in the failing log entries, skip this step entirely.
+
+**Retrieve the trace:**
+Call `get_trace(trace_id, project_id)` to retrieve the span timeline. Do NOT use `search_traces` in this step.
+
+**Inspect spans for cross-service boundaries:**
+
+1. **All spans within Service A only:** Skip hop. Proceed to Step 5.
+2. **Exactly one other service (Service B) meets EITHER evidence path below:** Execute the hop (continue below).
+3. **Multiple services meet evidence criteria, or 3+ services with any failure signals:** Present trace timeline to user. Do NOT autonomously choose. Let user specify which service.
+4. **Other services appear but none meet either evidence path:** Skip hop. Note services in synthesis.
+
+**Failure evidence (MUST be present in Service B span data — any one sufficient):**
+- Span status code != OK (gRPC error)
+- HTTP status >= 500 in span attributes
+- Exception stack trace in span events
+
+**Timeout cascade (ALL conditions required):**
+- Service A failed with explicit timeout/deadline-exceeded error
+- Service B span duration >= 80% of root span duration (computed: `(B span end - B span start) / (root span end - root span start)`)
+- No other non-Service-A span >= 40% of root span duration
+
+Latency-only spans (slow but no error/timeout) do NOT justify the hop.
+
+If evidence is ambiguous or borderline, do NOT hop — present trace timeline and let user decide.
+
+**Query Service B logs** using `list_log_entries`:
+- **project_id:** Service B's project ID (from span resource labels). Same as Service A's if same project.
+- **filter:** Scoped to `trace="projects/<Service B project>/traces/<TRACE_ID>"` AND Service B's concrete resource labels from the span data (e.g., `resource.type` plus `resource.labels.service_name` or equivalent — not all services use `service_name`; use whatever label the span provides)
+- **time range:** Service B span start minus 1 minute to span end plus 1 minute
+- **page_size:** <= 50 entries
+- If Service B's identity (resource labels or project) is ambiguous, STOP and present trace to user.
+- **STRICT CONSTRAINT:** Do not execute a second hop. Do not follow the trace into a third service.
+
+**Synthesize the causal path only:**
+- Map the failure chain from Service B → Service A (causal path only, not the full trace tree)
+- Present both services' log evidence in chronological order
+- If Service B logs return no useful signal, note the gap and proceed to Step 5
+- Feed this synthesized causal timeline into Step 5 (root cause hypothesis)
 
 ### Step 5: Formulate Root Cause Hypothesis
 
