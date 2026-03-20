@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - setup.md: matteocervelli install replaced with built-in notice + CLI tool setup
 
 ### Fixed
+- Fallback registry parity: added `security-scanner` to `default-triggers.json` with `phase: REVIEW` (composition-only, resolves 2 pre-existing test-registry.sh failures)
 - Gitleaks output sanitized to prevent partial secret leakage into LLM context (uses Description instead of Match)
 - Fast scan uses null-delimited xargs for safe filename handling
 - Fast scan scope uses git merge-base for branch-level changes
