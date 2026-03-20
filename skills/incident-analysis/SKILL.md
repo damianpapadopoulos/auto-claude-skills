@@ -111,7 +111,7 @@ Stack traces, error messages, request IDs, trace IDs.
 
 If Tier 1 MCP tools are NOT available, skip this step entirely. Proceed to Step 5.
 
-**Prerequisite — exemplar trace selection:** If Stage 2 logs contain many failing requests, select one exemplar trace from the dominant error group (most frequent pattern) or the most recent failure with a `trace` field. Analyze only this single exemplar in Step 4.
+**Prerequisite — exemplar trace selection:** If Stage 2 logs contain multiple failing requests (>1), select one exemplar trace from the dominant error group (most frequent pattern) or the most recent failure with a `trace` field. Analyze only this single exemplar in Step 4.
 
 **Extract trace_id and project_id** from the exemplar log entry's `trace` field (format: `projects/PROJECT_ID/traces/TRACE_ID`). Strip the prefix to get the raw TRACE_ID. Preserve PROJECT_ID for `get_trace`.
 
@@ -150,7 +150,7 @@ If evidence is ambiguous or borderline, do NOT hop — present trace timeline an
 - **STRICT CONSTRAINT:** Do not execute a second hop. Do not follow the trace into a third service.
 
 **Synthesize the causal path only:**
-- Map the failure chain from Service B → Service A (causal path only, not the full trace tree)
+- Include only spans on the causal path linking Service B's failure to Service A's error. Do not dump the full trace tree.
 - Present both services' log evidence in chronological order
 - If Service B logs return no useful signal, note the gap and proceed to Step 5
 - Feed this synthesized causal timeline into Step 5 (root cause hypothesis)

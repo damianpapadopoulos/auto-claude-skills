@@ -53,7 +53,7 @@ Replace the entire block from `### Step 4:` through the blank line before `### S
 
 If Tier 1 MCP tools are NOT available, skip this step entirely. Proceed to Step 5.
 
-**Prerequisite:** If Stage 2 logs contain many failing requests, select one exemplar trace from the dominant error group (most frequent pattern) or the most recent failure with a `trace` field. Analyze only this single exemplar.
+**Prerequisite:** If Stage 2 logs contain multiple failing requests (>1), select one exemplar trace from the dominant error group (most frequent pattern) or the most recent failure with a `trace` field. Analyze only this single exemplar.
 
 **Extract trace_id and project_id** from the exemplar log entry's `trace` field (format: `projects/PROJECT_ID/traces/TRACE_ID`). Strip the prefix to get the raw TRACE_ID. Preserve PROJECT_ID for `get_trace`.
 

@@ -44,7 +44,7 @@ Extract from the log entry's `trace` field (format: `projects/PROJECT_ID/traces/
 
 ### Representative Trace Selection
 
-If Stage 2 logs contain many failing requests (e.g., repeated 500s), the agent MUST select one exemplar trace before entering Step 4:
+If Stage 2 logs contain multiple failing requests (>1, e.g., repeated 500s), the agent MUST select one exemplar trace before entering Step 4:
 - Prefer the most recent failure from the dominant error group (most frequent error pattern)
 - If error groups are unclear, select the most recent failure with a `trace` field present
 - Analyze only this single exemplar trace in Step 4 — do not attempt to correlate multiple traces
