@@ -236,7 +236,7 @@ Review the document and action items.
 | Investigation Step | MCP Tool | Parameters |
 |-------------------|----------|------------|
 | Query logs | `list_log_entries` | filter (LQL), project_id, page_size |
-| Search traces | `search_traces` | filter, project_id |
+| Search traces | `search_traces` | filter, project_id (not used in Step 4; retained for future versions) |
 | Get trace detail | `get_trace` | trace_id, project_id |
 | Check metrics | `list_time_series` | filter, interval |
 | Check alerts | `list_alert_policies` | project_id |
