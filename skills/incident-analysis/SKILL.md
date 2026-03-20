@@ -206,6 +206,10 @@ Generate from the synthesized summary (NOT raw logs):
 - Root cause (from investigation hypothesis)
 - Action items (concrete, assignable, with suggested owners)
 
+**Permalink formatting (apply to all references in the generated postmortem):**
+- **Trace IDs:** Format as `[Trace TRACE_ID](https://console.cloud.google.com/traces/list?project=PROJECT_ID&tid=TRACE_ID)` using the project_id and trace_id from Stage 2. If cross-project trace correlation was used (Step 4), use the relevant project for each reference — Service A traces use Service A's project_id, Service B traces use Service B's project_id.
+- **Git commits:** If a commit hash is referenced (e.g., a deployment trigger), derive the repo URL via `git remote get-url origin`. If GitHub-hosted, format as `[Commit SHORT_HASH](https://github.com/ORG/REPO/commit/FULL_HASH)`. If not GitHub-hosted or the command fails, use the raw commit hash without a link.
+
 ### Step 4: Write to Disk
 
 Write to `docs/postmortems/YYYY-MM-DD-<kebab-case-summary>.md`
