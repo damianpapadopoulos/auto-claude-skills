@@ -1247,7 +1247,5 @@
       ]
     }
   ],
-  "warnings": [
-    "+ incident-analysis (newly discovered)"
-  ]
+  "warnings": []
 }
