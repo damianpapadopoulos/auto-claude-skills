@@ -133,11 +133,11 @@ If the evidence is ambiguous or borderline, do NOT hop — present the trace tim
 | `skills/incident-analysis/SKILL.md` | **Modify** | Replace Step 4 placeholder (line 110-116, including trailing blank line) with full one-hop correlation workflow. Remove `search_traces` from Step 4 usage. Note in Tier 1 MCP Tool Reference table that `search_traces` is not used in Step 4 (retained for future v1.2+ use only). |
 | `docs/superpowers/specs/2026-03-19-incident-analysis-design.md` | **Modify** | Replace Stage 2 Step 4 stub with the full bounded one-hop workflow prose, remove "[v1.1]" marker |
 
-No routing, hook, or phase doc changes needed. Prompt-level verification scenarios are specified in the test plan below — these are behavioral tests verified through manual prompt testing, not automated routing tests.
+No routing, hook, or phase doc changes needed. Verification is phased: (1) structured document review at ship time (trace through SKILL.md decision paths against each scenario), then (2) live prompt testing when the skill is first exercised on a real incident with Tier 1 MCP tools and trace data available. Automated routing tests are not applicable — the behavior lives in prompt logic.
 
 ## Test Plan
 
-These are prompt-level verification scenarios. Since the behavior lives in a SKILL.md (not hook code), verification is through manual prompt testing with the skill active, not automated test-routing.sh assertions.
+These are behavioral verification scenarios. Since the behavior lives in a SKILL.md (not hook code), verification is phased: (1) structured document review at ship time — trace through SKILL.md decision paths for each scenario, (2) live prompt testing when the skill is first exercised on a real incident with Tier 1 MCP tools and trace data. Automated routing tests are not applicable.
 
 | Scenario | Expected Behavior |
 |----------|-------------------|
