@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Bundled `incident-trend-analyzer` skill (v2.0): on-demand postmortem trend analysis with recurrence grouping, trigger categorization, MTTR/MTTD metrics, tiered eligibility, confidence-aware extraction, and terminal-first output with optional persistence
 - Bundled `incident-analysis` skill with tiered GCP log investigation (MCP > gcloud > guidance) and structured postmortem generation
 - 3-stage investigation state machine: MITIGATE → INVESTIGATE → POSTMORTEM with 4 behavioral guardrails (HITL gate, scope restriction, temp-file LQL pattern, context discipline)
 - Observability Truth tier in unified-context-stack testing-and-debug phase
