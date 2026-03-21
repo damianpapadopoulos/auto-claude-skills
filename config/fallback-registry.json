@@ -52,6 +52,33 @@
       "enabled": true
     },
     {
+      "name": "product-discovery",
+      "role": "process",
+      "phase": "DISCOVER",
+      "triggers": [
+        "(discover|user.problem|pain.point|what.to.build|what.should.we|which.issue)",
+        "(backlog|sprint.plan|prioriti|triage|next.sprint|roadmap)"
+      ],
+      "keywords": [
+        "what should we build",
+        "backlog review",
+        "sprint planning",
+        "discovery session",
+        "problem statement",
+        "user needs"
+      ],
+      "trigger_mode": "regex",
+      "priority": 35,
+      "precedes": [
+        "brainstorming"
+      ],
+      "requires": [],
+      "description": "Pull Jira/Confluence context, synthesize discovery brief, validate problem framing before design.",
+      "invoke": "Skill(auto-claude-skills:product-discovery)",
+      "available": true,
+      "enabled": true
+    },
+    {
       "name": "writing-plans",
       "role": "process",
       "phase": "PLAN",
@@ -449,6 +476,36 @@
       "enabled": true
     },
     {
+      "name": "outcome-review",
+      "role": "process",
+      "phase": "LEARN",
+      "triggers": [
+        "(how.did.*(perform|do|go|work)|outcome|adoption|funnel|cohort|experiment.result|feature.impact|post.launch|post.ship|measure|did.it.work)"
+      ],
+      "keywords": [
+        "how did it perform",
+        "check metrics",
+        "feature impact",
+        "post-launch review",
+        "did it work",
+        "adoption metrics",
+        "what did we learn",
+        "learn from this",
+        "review the results",
+        "metric results"
+      ],
+      "trigger_mode": "regex",
+      "priority": 30,
+      "precedes": [
+        "product-discovery"
+      ],
+      "requires": [],
+      "description": "Query PostHog metrics, synthesize outcome report, create follow-up Jira work (gated). Entered independently post-ship.",
+      "invoke": "Skill(auto-claude-skills:outcome-review)",
+      "available": true,
+      "enabled": true
+    },
+    {
       "name": "test-driven-development",
       "role": "domain",
       "triggers": [],
@@ -641,13 +698,17 @@
           "searchJiraIssuesUsingJql",
           "getJiraIssue",
           "getConfluencePage",
-          "searchConfluenceUsingCql"
+          "searchConfluenceUsingCql",
+          "createJiraIssue",
+          "addCommentToJiraIssue"
         ]
       },
       "phase_fit": [
+        "DISCOVER",
         "DESIGN",
         "PLAN",
-        "REVIEW"
+        "REVIEW",
+        "LEARN"
       ],
       "description": "Jira and Confluence integration via claude.ai managed MCP. Connect via /mcp in Claude Code. Pull acceptance criteria, search issues, read design docs.",
       "available": false
@@ -697,6 +758,31 @@
       ],
       "description": "Tiered context retrieval — curated docs (Context Hub via Context7), blast-radius mapping (Serena), institutional memory (Forgetful) with graceful degradation.",
       "available": true
+    },
+    {
+      "name": "posthog",
+      "source": "mcp-server",
+      "provides": {
+        "commands": [],
+        "skills": [],
+        "agents": [],
+        "hooks": [],
+        "mcp_tools": [
+          "query-run",
+          "get-experiment",
+          "list-experiments",
+          "get-feature-flag",
+          "list-feature-flags",
+          "create-annotation"
+        ]
+      },
+      "phase_fit": [
+        "LEARN",
+        "SHIP",
+        "DEBUG"
+      ],
+      "description": "PostHog analytics, experiments, and feature flags via MCP. Query adoption metrics, experiment results, and error rates.",
+      "available": false
     },
     {
       "name": "claude-code-setup",
@@ -861,6 +947,30 @@
     "warnings": []
   },
   "phase_compositions": {
+    "DISCOVER": {
+      "driver": "product-discovery",
+      "parallel": [
+        {
+          "plugin": "atlassian",
+          "use": "mcp:searchJiraIssuesUsingJql + getConfluencePage",
+          "when": "installed",
+          "purpose": "Pull problem context, acceptance criteria, related design docs from Jira and Confluence"
+        },
+        {
+          "plugin": "unified-context-stack",
+          "use": "tiered context retrieval (Historical Truth, Intent Truth)",
+          "when": "installed AND any context_capability is true",
+          "purpose": "Check past decisions and existing specs before discovery synthesis"
+        }
+      ],
+      "hints": [
+        {
+          "plugin": "atlassian",
+          "text": "ATLASSIAN: Pull Jira issues and Confluence docs to ground discovery in real backlog context.",
+          "when": "installed"
+        }
+      ]
+    },
     "DESIGN": {
       "driver": "brainstorming",
       "parallel": [
@@ -1029,6 +1139,10 @@
           "plugin": "github",
           "text": "Use GitHub MCP tools (create_pull_request) for programmatic PR creation with labels and reviewers",
           "when": "installed"
+        },
+        {
+          "text": "LEARN BASELINE: A learn baseline has been saved. Use /learn or 'how did [feature] perform' later to review outcomes.",
+          "when": "always"
         }
       ]
     },
@@ -1048,14 +1162,34 @@
         }
       ],
       "hints": []
+    },
+    "LEARN": {
+      "driver": "outcome-review",
+      "parallel": [
+        {
+          "plugin": "posthog",
+          "use": "mcp:query-run + get-experiment + create-annotation",
+          "when": "installed",
+          "purpose": "Query adoption metrics, experiment results, and annotate ship events"
+        },
+        {
+          "plugin": "atlassian",
+          "use": "mcp:createJiraIssue + addCommentToJiraIssue",
+          "when": "installed AND user approves follow-up creation",
+          "purpose": "Create follow-up tickets and annotate original issues with outcome data"
+        }
+      ],
+      "hints": []
     }
   },
   "phase_guide": {
+    "DISCOVER": "product-discovery (pull Jira/Confluence context, synthesize discovery brief)",
     "DESIGN": "brainstorming (ask questions, get approval)",
     "PLAN": "writing-plans (break into tasks, confirm before execution)",
     "IMPLEMENT": "executing-plans or subagent-driven-development (offer agent-team-execution for 3+ independent tasks)",
     "REVIEW": "requesting-code-review",
     "SHIP": "verification-before-completion + openspec-ship + finishing-a-development-branch",
+    "LEARN": "outcome-review (query metrics, synthesize outcome report, create follow-up work)",
     "DEBUG": "systematic-debugging, then return to current phase"
   },
   "methodology_hints": [
@@ -1103,11 +1237,12 @@
     {
       "name": "atlassian-jira",
       "triggers": [
-        "(ticket|story|epic|acceptance.criter|definition.of.done|requirement|user.story|jira|sprint|backlog)"
+        "(ticket|story|epic|acceptance.criter|definition.of.done|requirement|user.story|jira|sprint|backlog|discover|triage|prioriti)"
       ],
       "trigger_mode": "regex",
       "hint": "ATLASSIAN: If Jira MCP tools are available, pull acceptance criteria and linked context for relevant tickets. Reference any Jira context already discussed in this session.",
       "phases": [
+        "DISCOVER",
         "DESIGN",
         "PLAN"
       ]
@@ -1132,6 +1267,20 @@
       "trigger_mode": "regex",
       "hint": "INCIDENT ANALYSIS: Use Skill(auto-claude-skills:incident-analysis) for structured investigation. Stages: MITIGATE -> INVESTIGATE -> POSTMORTEM. Detect tool tier (MCP > gcloud > guidance). Scope all queries to specific service + environment + narrow time window.",
       "phases": [
+        "SHIP",
+        "DEBUG"
+      ]
+    },
+    {
+      "name": "posthog-metrics",
+      "triggers": [
+        "(metric|adoption|funnel|cohort|experiment|feature.flag|a.?b.test|conversion|retention|churn|engagement|posthog)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "POSTHOG: If PostHog MCP tools are available, query analytics and experiment results directly. Use outcome-review skill for structured post-ship analysis.",
+      "plugin": "posthog",
+      "phases": [
+        "LEARN",
         "SHIP",
         "DEBUG"
       ]
