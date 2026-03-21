@@ -42,7 +42,7 @@ A new `skills/incident-trend-analyzer/SKILL.md` that reads canonical postmortems
 
 - **Source:** `docs/postmortems/*.md` only
 - **Filename required:** `YYYY-MM-DD-*.md` (date extracted from filename, not content)
-- **Minimum corpus:** 3 recurrence-eligible postmortems. Below that, report "not enough data for trend analysis" and list what was found.
+- **Minimum corpus:** 3 recurrence-eligible postmortems. Below that, the **entire report is skipped** — the skill reports "not enough data for trend analysis" and lists what was found. No partial metrics are reported below this threshold.
 - **Unparseable files:** Listed in coverage report, excluded from analysis. No fuzzy parsing.
 
 ### Tiered Eligibility
@@ -126,6 +126,7 @@ If multiple categories match, pick the one with the most signal words. If tied, 
 
 ### Timing Extraction Rules
 
+- **Parseable timestamp formats:** Timestamps must be absolute to be considered parseable: ISO 8601 (`2026-03-15T10:32:00Z`), `HH:MM` or `HH:MM:SS` with date inferrable from the filename, or `YYYY-MM-DD HH:MM`. Relative timestamps ("5 minutes later", "+10m") produce `low` timing confidence and are excluded from MTTR/MTTD computation.
 - **incident_start:** Timeline row containing "deployed", "pushed", "config changed", "traffic spike", or first row if it describes a causal event
 - **detected_at:** Timeline row containing "alert", "page", "noticed", "reported", "detected"
 - **recovered_at:** Timeline row containing "resolved", "recovered", "mitigated", "restored"
@@ -202,7 +203,7 @@ Period: 2026-01-12 to 2026-03-15 (63 days)
 {
   "name": "incident-trend-analyzer",
   "role": "domain",
-  "phase": "SHIP",
+  "phase": "DEBUG",
   "triggers": [
     "(incident.trend|postmortem.trend|what.keeps.breaking|recurring.incident|failure.pattern|incident.pattern|analyze.postmortems)"
   ],
@@ -216,9 +217,19 @@ Period: 2026-01-12 to 2026-03-15 (63 days)
 }
 ```
 
-- **`phase: "SHIP"`** (singular) — retrospective/historical analysis. Uses explicit trigger routing, not hard phase gating.
-- **No methodology hint changes** — the existing `gcp-observability` hint may co-fire on some prompts (it triggers on `incident|postmortem`). This is acceptable co-guidance.
+- **`phase: "DEBUG"`** (singular) — aligned with `incident-analysis` (both are incident-domain skills). This is for repo convention alignment, not because the skill only runs during active debugging. If the system ever gets a retrospective/learning phase, that would be the long-term home.
+- **No methodology hint changes** — the existing `gcp-observability` hint may co-fire on some prompts (it triggers on `incident|postmortem`). This is acceptable co-guidance. Consider updating hint text in a follow-up to mention the trend analyzer for retrospective queries.
 - **Keywords tightened** — no bare `pattern` or `trend` to avoid false positives.
+
+### Co-firing with `incident-analysis` (Expected Behavior)
+
+Co-firing is the **expected default** for trend-analyzer prompts, not an edge case. The trend-analyzer triggers all contain `incident` or `postmortem` as substrings, which match `incident-analysis`'s broad regex `(incident|postmortem|...)`. Both are domain-role skills (2 domain slots available), so both will be surfaced.
+
+The trend-analyzer should **outscore** `incident-analysis` on trend-specific prompts. For example, "analyze postmortems for recurring incidents":
+- `incident-trend-analyzer`: `analyze.postmortems` boundary match (30 pts) + `recurring.incident` boundary match (30 pts) + priority 20 + keyword "recurring incidents" (20 pts) = ~100
+- `incident-analysis`: `incident` substring match (10 pts) + `postmortem` substring match (10 pts) + priority 20 = ~40
+
+This scoring gap ensures the trend-analyzer occupies the higher domain slot on trend prompts. The routing tests must verify this.
 
 ### Phase Composition (v2.0 — no changes)
 
@@ -248,11 +259,12 @@ No changes to phase compositions. The trend analyzer is on-demand only. Composit
 1. **Trigger matching:** Feed `incident trend`, `what keeps breaking`, `recurring incidents`, `analyze postmortems` → verify `incident-trend-analyzer` scores and appears
 2. **Phase label:** Verify skill has `phase: "SHIP"`
 3. **Non-overlap with incident-analysis:** Feed `investigate this incident` → verify `incident-analysis` fires but `incident-trend-analyzer` does NOT
-4. **Co-firing:** Feed `incident trend analysis for this outage` → verify both skills can appear (both domain role, 2 domain slots)
+4. **Co-firing is expected:** Feed `analyze postmortems for recurring incidents` → verify both skills appear (both domain role, 2 domain slots) with `incident-trend-analyzer` scoring higher
+5. **Outscoring on trend prompts:** Feed `what keeps breaking`, `postmortem trends`, `recurring incidents` → verify `incident-trend-analyzer` outscores `incident-analysis` in each case
 
 ### Registry Tests (`tests/test-registry.sh`)
 
-5. **Fallback parity:** Verify `incident-trend-analyzer` appears in fallback registry with correct invoke path after session-start
+6. **Fallback parity:** Verify `incident-trend-analyzer` appears in fallback registry with correct invoke path after session-start
 
 ## Risks and Mitigations
 
