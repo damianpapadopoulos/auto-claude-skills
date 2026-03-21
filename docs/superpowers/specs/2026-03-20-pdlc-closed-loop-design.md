@@ -1,7 +1,7 @@
 # PDLC Closed-Loop Orchestration — Phase 1: DISCOVER + LEARN
 
 **Date:** 2026-03-20
-**Status:** Draft
+**Status:** Ready for implementation
 **Scope:** Phase 1 of Option C — two new phases (DISCOVER, LEARN), two new skills (product-discovery, outcome-review), routing engine updates, registry changes
 
 ## Problem
@@ -46,10 +46,19 @@ The LEARN → DISCOVER feedback loop is the core value proposition: shipping cre
 3. Synthesizes a **discovery brief**: problem statement, user pain points, prior art, success criteria, constraints
 4. Presents the brief for user validation before transitioning to DESIGN
 
-**Trigger patterns:**
+**Trigger patterns (two-tier for high threshold):**
 ```
-"(discover|backlog|user.problem|pain.point|what.to.build|sprint.plan|prioriti|what.should.we|which.issue|triage|next.sprint|roadmap)"
+"(discover|user.problem|pain.point|what.to.build|what.should.we|which.issue)"
+"(backlog|sprint.plan|prioriti|triage|next.sprint|roadmap)"
 ```
+
+The first pattern contains **strong discovery signals** — terms that unambiguously indicate discovery intent. The second contains **weaker signals** that could appear in non-discovery contexts ("update the backlog", "check the sprint").
+
+**How the high threshold works:** The scoring engine awards points per trigger pattern matched. A prompt matching only the weak pattern scores 30 (trigger) + 35 (priority) = 65. A prompt matching both patterns scores 30+30+35 = 95. Brainstorming scores 30+30 (two trigger patterns) = 60 on build-verb prompts. This means:
+- Strong discovery language ("discover what to build") → product-discovery wins clearly (65+ vs brainstorming 0)
+- Weak + strong ("prioritize the backlog for discovery") → product-discovery wins decisively (95 vs brainstorming 0)
+- Weak only + build verb overlap ("add items to the backlog") → product-discovery 65 vs brainstorming 60 — product-discovery wins by a narrow margin, which is correct
+- Build verb only ("build a new auth service") → brainstorming wins (60+ vs product-discovery 0)
 
 **Keywords:**
 ```
@@ -211,6 +220,35 @@ Note: `learn`, `metric`, and `result` are intentionally excluded from triggers t
 }
 ```
 
+**Availability detection:** PostHog is an MCP server (`source: "mcp-server"`), not a plugin directory. It must be detected via `~/.claude.json` mcpServers, the same way Serena and Forgetful are detected today (session-start-hook.sh lines 640-656).
+
+Add to the MCP fallback detection block in session-start-hook.sh:
+
+```bash
+# In the jq expression at line 643-655, add:
+if .posthog == false and ($all_mcp | has("posthog")) then .posthog = true else . end
+```
+
+And extend CONTEXT_CAPS at line 630-637 to include PostHog:
+
+```jq
+($avail | index("posthog") != null) as $ph |
+# ... existing fields ...
+{context7:$c7, ..., posthog:$ph}
+```
+
+Then set the posthog plugin `available` flag based on CONTEXT_CAPS, the same way unified-context-stack is handled (line 660-663):
+
+```bash
+if printf '%s' "${CONTEXT_CAPS}" | jq -e '.posthog == true' >/dev/null 2>&1; then
+    PLUGINS_JSON="$(printf '%s' "${PLUGINS_JSON}" | jq '
+        map(if .name == "posthog" then .available = true else . end)
+    ')"
+fi
+```
+
+This ensures plugin-gated hints and compositions only fire when PostHog MCP is actually configured.
+
 ### 2.4 New methodology hints
 
 ```json
@@ -228,14 +266,31 @@ Note: `learn`, `metric`, and `result` are intentionally excluded from triggers t
 
 ### 2.5 Composition chain integration
 
-The DISCOVER → DESIGN link works via `precedes`:
+**DISCOVER → DESIGN** works via `precedes`:
 - product-discovery.precedes = `["brainstorming"]`
-- When the user is in DISCOVER and completes the discovery brief, the composition chain naturally advances to brainstorming
+- The composition chain walker finds this link and renders: `[CURRENT] product-discovery → [NEXT] brainstorming → [LATER] writing-plans → ...`
+- The composition directive says: "After completing product-discovery, invoke brainstorming"
 
-The SHIP → LEARN link works via the baseline artifact:
-- SHIP's finishing-a-development-branch completes the chain
-- outcome-review has NO `requires` dependency on SHIP (it can be entered independently days later)
-- The SHIP composition's final step writes the baseline artifact that LEARN later reads
+**SHIP → LEARN** is a **data link, not a chain link.** Rationale: LEARN happens days/weeks after SHIP — it would be wrong to show `[NEXT] outcome-review` at SHIP time, since the user won't invoke it immediately. Instead:
+
+- SHIP's `finishing-a-development-branch` writes the baseline artifact (Section 2.7) and completes the SHIP chain
+- outcome-review has NO `requires` dependency and NO chain link from SHIP
+- The SHIP composition gets a new **hint** that fires after SHIP completes:
+
+```json
+// Added to phase_compositions.SHIP.hints:
+{
+  "text": "LEARN BASELINE: A learn baseline has been saved. Use /learn or 'how did [feature] perform' later to review outcomes.",
+  "when": "always"
+}
+```
+
+This hint is advisory. It informs the user that LEARN is available without forcing it into the SHIP chain. The actual LEARN invocation happens in a later session via trigger scoring or `/learn`.
+
+**LEARN → DISCOVER** works via `precedes`:
+- outcome-review.precedes = `["product-discovery"]`
+- When the user completes an outcome review and follow-up work is identified, the directive says: "invoke product-discovery to begin the next cycle"
+- This closes the loop: LEARN creates follow-up work → DISCOVER picks it up
 
 ### 2.6 Label updates in _determine_label_phase
 
@@ -301,7 +356,8 @@ Add two new skill entries to the `skills` array:
   "role": "process",
   "phase": "DISCOVER",
   "triggers": [
-    "(discover|backlog|user.problem|pain.point|what.to.build|sprint.plan|prioriti|what.should.we|which.issue|triage|next.sprint|roadmap)"
+    "(discover|user.problem|pain.point|what.to.build|what.should.we|which.issue)",
+    "(backlog|sprint.plan|prioriti|triage|next.sprint|roadmap)"
   ],
   "keywords": [
     "what should we build",
@@ -387,12 +443,23 @@ Add DISCOVER triggers to the existing Jira hint:
 
 ## 4. Slash Command Entry Points
 
-`/discover` and `/learn` should be explicit command-style entry points that force phase selection without depending on trigger scoring. These are implemented as skill invocations:
+`/discover` and `/learn` are explicit command-style entry points that force phase selection without trigger scoring.
 
 - `/discover` → `Skill(auto-claude-skills:product-discovery)`
 - `/learn` → `Skill(auto-claude-skills:outcome-review)`
 
-These bypass the activation hook entirely (slash commands are already excluded by the hook's early exit: `[[ "$PROMPT" =~ ^[[:space:]]*/ ]] && exit 0`).
+**How they work:** Slash commands bypass the activation hook entirely (`[[ "$PROMPT" =~ ^[[:space:]]*/ ]] && exit 0`). The Skill tool loads the SKILL.md directly. This means:
+
+1. No signal file (`~/.claude/.skill-last-invoked-{session}`) is written by the hook
+2. No composition state is written by the hook
+3. The next prompt won't have context-bonus for successor skills
+
+**Mitigation:** Each SKILL.md includes an explicit transition directive at the end of its workflow:
+
+- product-discovery's SKILL.md ends with: *"Discovery complete. Invoke Skill(superpowers:brainstorming) to begin design."*
+- outcome-review's SKILL.md ends with: *"If follow-up work is needed, invoke Skill(auto-claude-skills:product-discovery) or Skill(superpowers:brainstorming) to begin the next cycle."*
+
+This is the same pattern used by existing skills (brainstorming ends with "invoke writing-plans"). The composition chain is advisory context for trigger-scored prompts; slash-command invocations rely on the skill's own transition directives instead. No signal file is needed because Claude follows the skill's explicit instructions.
 
 ## 5. Skill File Structure
 
@@ -462,7 +529,7 @@ This prevents future regressions from non-POSIX regex features (lookahead, lookb
 
 | Risk | Mitigation |
 |------|------------|
-| DISCOVER false positives from casual "backlog" mentions | High-threshold triggers + `/discover` hard override |
+| DISCOVER false positives from casual "backlog" mentions | Two-tier triggers: strong signals (discover, user.problem) in pattern 1, weak signals (backlog, sprint) in pattern 2; weak-only match scores lower but still wins over brainstorming due to priority:35. `/discover` as hard override for ambiguous cases. |
 | LEARN "learn" substring matches "learning" in normal text | `learn` handled via keywords only (exact substring match), not regex triggers |
 | PostHog MCP not installed for most users | Graceful degradation to guided manual mode |
 | Baseline artifact from SHIP gets stale | Branch-keyed file in `~/.claude/.skill-learn-baselines/`; LEARN warns if >30 days; 90-day opportunistic cleanup |
