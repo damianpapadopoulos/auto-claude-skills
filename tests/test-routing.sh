@@ -4195,7 +4195,7 @@ test_discover_trigger_scoring() {
     ctx="$(extract_context "${output}")"
     assert_contains "discovery strong+weak" "product-discovery" "${ctx}"
 
-    output="$(run_hook "review the backlog for prioritization")"
+    output="$(run_hook "triage the backlog for prioritization")"
     ctx="$(extract_context "${output}")"
     assert_contains "discovery weak trigger" "product-discovery" "${ctx}"
 

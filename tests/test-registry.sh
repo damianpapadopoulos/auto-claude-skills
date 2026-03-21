@@ -317,17 +317,19 @@ test_default_triggers_has_phase_compositions() {
     local phases
     phases="$(jq '.phase_compositions | keys[]' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null | sort)"
 
+    assert_contains "has DISCOVER phase" "DISCOVER" "${phases}"
     assert_contains "has DESIGN phase" "DESIGN" "${phases}"
     assert_contains "has PLAN phase" "PLAN" "${phases}"
     assert_contains "has IMPLEMENT phase" "IMPLEMENT" "${phases}"
     assert_contains "has REVIEW phase" "REVIEW" "${phases}"
     assert_contains "has SHIP phase" "SHIP" "${phases}"
     assert_contains "has DEBUG phase" "DEBUG" "${phases}"
+    assert_contains "has LEARN phase" "LEARN" "${phases}"
 
     # Each phase must have a driver field
     local driver_count
     driver_count="$(jq '[.phase_compositions | to_entries[] | select(.value.driver)] | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "all 6 phases have drivers" "6" "${driver_count}"
+    assert_equals "all 8 phases have drivers" "8" "${driver_count}"
 
     # REVIEW should have parallel entries
     local review_parallel
@@ -388,7 +390,7 @@ test_registry_includes_phase_compositions() {
 
     local pc_keys
     pc_keys="$(jq '.phase_compositions | keys | length' "${cache_file}" 2>/dev/null)"
-    assert_equals "phase_compositions has 6 phases" "6" "${pc_keys}"
+    assert_equals "phase_compositions has 8 phases" "8" "${pc_keys}"
 
     teardown_test_env
 }
