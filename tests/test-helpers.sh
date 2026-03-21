@@ -130,6 +130,18 @@ assert_json_valid() {
     fi
 }
 
+# assert_not_empty description value
+assert_not_empty() {
+    local description="$1"
+    local value="$2"
+
+    if [ -n "${value}" ]; then
+        _record_pass "${description}"
+    else
+        _record_fail "${description}" "expected non-empty value"
+    fi
+}
+
 # assert_file_exists description file
 assert_file_exists() {
     local description="$1"
