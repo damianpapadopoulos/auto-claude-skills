@@ -634,7 +634,8 @@ CONTEXT_CAPS="$(printf '%s' "${PLUGINS_JSON}" | jq \
     ($avail | index("context7") != null) as $c7 |
     ($avail | index("serena") != null) as $ser |
     ($avail | index("forgetful") != null) as $fm |
-    {context7:$c7, context_hub_cli:$chub, context_hub_available:$c7, serena:$ser, forgetful_memory:$fm, openspec:$openspec}'
+    ($avail | index("posthog") != null) as $ph |
+    {context7:$c7, context_hub_cli:$chub, context_hub_available:$c7, serena:$ser, forgetful_memory:$fm, openspec:$openspec, posthog:$ph}'
 )"
 
 # MCP fallback: check ~/.claude.json for servers not detected via plugins
@@ -652,7 +653,8 @@ if [ -f "${_CLAUDE_JSON}" ] && command -v jq >/dev/null 2>&1; then
          # Augment: only upgrade false->true, never downgrade
          if .serena == false and ($all_mcp | has("serena")) then .serena = true else . end |
          if .forgetful_memory == false and ($all_mcp | has("forgetful")) then .forgetful_memory = true else . end |
-         if .context7 == false and ($all_mcp | has("context7")) then .context7 = true else . end'
+         if .context7 == false and ($all_mcp | has("context7")) then .context7 = true else . end |
+         if .posthog == false and ($all_mcp | has("posthog")) then .posthog = true else . end'
     )" || true
 fi
 
@@ -660,6 +662,13 @@ fi
 if printf '%s' "${CONTEXT_CAPS}" | jq -e 'to_entries | any(.value == true)' >/dev/null 2>&1; then
     PLUGINS_JSON="$(printf '%s' "${PLUGINS_JSON}" | jq '
         map(if .name == "unified-context-stack" then .available = true else . end)
+    ')"
+fi
+
+# Set PostHog plugin available flag when MCP server is detected
+if printf '%s' "${CONTEXT_CAPS}" | jq -e '.posthog == true' >/dev/null 2>&1; then
+    PLUGINS_JSON="$(printf '%s' "${PLUGINS_JSON}" | jq '
+        map(if .name == "posthog" then .available = true else . end)
     ')"
 fi
 
