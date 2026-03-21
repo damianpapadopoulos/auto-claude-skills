@@ -154,6 +154,37 @@ install_context_registry() {
       "invoke": "Skill(auto-claude-skills:openspec-ship)",
       "available": true,
       "enabled": true
+    },
+    {
+      "name": "product-discovery",
+      "role": "process",
+      "phase": "DISCOVER",
+      "triggers": [
+        "(discover|user.problem|pain.point|what.to.build|what.should.we|which.issue)",
+        "(backlog|sprint.plan|prioriti|triage|next.sprint|roadmap)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 35,
+      "precedes": ["brainstorming"],
+      "requires": [],
+      "invoke": "Skill(auto-claude-skills:product-discovery)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "outcome-review",
+      "role": "process",
+      "phase": "LEARN",
+      "triggers": [
+        "(how.did.*(perform|do|go|work)|outcome|adoption|funnel|cohort|experiment.result|feature.impact|post.launch|post.ship|measure|did.it.work)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 30,
+      "precedes": ["product-discovery"],
+      "requires": [],
+      "invoke": "Skill(auto-claude-skills:outcome-review)",
+      "available": true,
+      "enabled": true
     }
   ],
   "methodology_hints": [],
@@ -921,5 +952,43 @@ test_fallback_design_matches_default() {
     assert_equals "fallback DESIGN purpose field" "Check existing specs and past decisions before proposing approaches" "${purpose_field}"
 }
 test_fallback_design_matches_default
+
+# ---------------------------------------------------------------------------
+# DISCOVER phase label rendering
+# ---------------------------------------------------------------------------
+test_discover_label() {
+    echo "-- test: DISCOVER phase renders Discover label --"
+    setup_test_env
+    install_context_registry
+
+    local output context
+    output="$(run_hook "discover what user problems exist")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "DISCOVER label shows Discover" "Discover" "${context}"
+    assert_contains "DISCOVER invocation hint present" "Skill(auto-claude-skills:product-discovery)" "${context}"
+
+    teardown_test_env
+}
+test_discover_label
+
+# ---------------------------------------------------------------------------
+# LEARN phase label rendering
+# ---------------------------------------------------------------------------
+test_learn_label() {
+    echo "-- test: LEARN phase renders Learn / Measure label --"
+    setup_test_env
+    install_context_registry
+
+    local output context
+    output="$(run_hook "how did the auth feature perform after launch")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "LEARN label shows Learn / Measure" "Learn / Measure" "${context}"
+    assert_contains "LEARN invocation hint present" "Skill(auto-claude-skills:outcome-review)" "${context}"
+
+    teardown_test_env
+}
+test_learn_label
 
 print_summary

@@ -936,9 +936,10 @@
     "context7": true,
     "context_hub_cli": true,
     "context_hub_available": true,
-    "serena": true,
+    "serena": false,
     "forgetful_memory": true,
-    "openspec": true
+    "openspec": true,
+    "posthog": false
   },
   "openspec_capabilities": {
     "binary": true,
@@ -1396,5 +1397,7 @@
       ]
     }
   ],
-  "warnings": []
+  "warnings": [
+    "- incident-trend-analyzer (removed)"
+  ]
 }
