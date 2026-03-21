@@ -67,7 +67,7 @@ else
   # No registry available — emit minimal phase checkpoint and exit
   OUT="SKILL ACTIVATION (0 skills | phase checkpoint only)
 
-Phase: assess current phase (DESIGN/PLAN/IMPLEMENT/REVIEW/SHIP/DEBUG)
+Phase: assess current phase (DISCOVER/DESIGN/PLAN/IMPLEMENT/REVIEW/SHIP/LEARN/DEBUG)
 and consider whether any installed skill applies."
   printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":%s}}\n' \
     "$(printf '%s' "$OUT" | jq -Rs .)"
@@ -494,6 +494,8 @@ _determine_label_phase() {
           brainstorming)              PLABEL="Build New" ;;
           executing-plans|subagent-driven-development) PLABEL="Plan Execution" ;;
           requesting-code-review|receiving-code-review) PLABEL="Review" ;;
+          product-discovery)            PLABEL="Discover" ;;
+          outcome-review)               PLABEL="Learn / Measure" ;;
         esac
         ;;
       domain)
@@ -1236,6 +1238,13 @@ _walk_composition_chain
 # =================================================================
 RED_FLAGS=""
 case "${PRIMARY_PHASE}" in
+  DISCOVER)
+    RED_FLAGS="
+HALT if any Red Flag is true:
+- Skipping Jira/Confluence context pull when Atlassian MCP is available
+- Jumping to design without presenting a discovery brief
+- Writing code during the DISCOVER phase"
+    ;;
   DESIGN)
     RED_FLAGS="
 HALT if any Red Flag is true:
@@ -1268,6 +1277,13 @@ HALT if any Red Flag is true:
 - Not providing BASE_SHA and HEAD_SHA git diff range to the reviewer
 - Claiming review is complete without acting on critical/important findings
 - Skipping security-scanner during review (Invoke Skill(auto-claude-skills:security-scanner) for deterministic scanning)"
+    ;;
+  LEARN)
+    RED_FLAGS="
+HALT if any Red Flag is true:
+- Creating Jira follow-up tickets without user approval
+- Skipping metrics analysis and going straight to recommendations
+- Editing code during the LEARN phase"
     ;;
 esac
 
