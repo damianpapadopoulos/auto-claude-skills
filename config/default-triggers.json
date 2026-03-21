@@ -392,6 +392,21 @@
       "requires": [],
       "description": "Structured incident investigation: MITIGATE -> INVESTIGATE -> POSTMORTEM. Detects tool tier (MCP > gcloud > guidance) and scopes queries to service + environment + narrow time window.",
       "invoke": "Skill(auto-claude-skills:incident-analysis)"
+    },
+    {
+      "name": "incident-trend-analyzer",
+      "role": "domain",
+      "phase": "DEBUG",
+      "triggers": [
+        "(incident.trend|postmortem.trend|what.keeps.breaking|recurring.incident|failure.pattern|incident.pattern|analyze.postmortems)"
+      ],
+      "keywords": ["postmortem trends", "recurring incidents", "incident patterns", "what keeps breaking"],
+      "trigger_mode": "regex",
+      "priority": 20,
+      "precedes": [],
+      "requires": [],
+      "description": "On-demand postmortem trend analysis: recurrence grouping, trigger categorization, MTTR/MTTD from canonical docs/postmortems/ corpus.",
+      "invoke": "Skill(auto-claude-skills:incident-trend-analyzer)"
     }
   ],
   "phase_guide": {

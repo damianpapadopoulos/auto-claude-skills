@@ -265,8 +265,61 @@ install_registry() {
       "invoke": "Skill(superpowers:claude-md-improver)",
       "available": true,
       "enabled": true
+    },
+    {
+      "name": "product-discovery",
+      "role": "process",
+      "phase": "DISCOVER",
+      "triggers": [
+        "(discover|user.problem|pain.point|what.to.build|what.should.we|which.issue)",
+        "(backlog|sprint.plan|prioriti|triage|next.sprint|roadmap)"
+      ],
+      "keywords": ["what should we build", "backlog review", "sprint planning", "discovery session", "problem statement", "user needs"],
+      "trigger_mode": "regex",
+      "priority": 35,
+      "precedes": ["brainstorming"],
+      "requires": [],
+      "invoke": "Skill(auto-claude-skills:product-discovery)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "outcome-review",
+      "role": "process",
+      "phase": "LEARN",
+      "triggers": [
+        "(how.did.*(perform|do|go|work)|outcome|adoption|funnel|cohort|experiment.result|feature.impact|post.launch|post.ship|measure|did.it.work)"
+      ],
+      "keywords": ["how did it perform", "check metrics", "feature impact", "post-launch review", "did it work", "adoption metrics", "what did we learn", "learn from this", "review the results", "metric results"],
+      "trigger_mode": "regex",
+      "priority": 30,
+      "precedes": ["product-discovery"],
+      "requires": [],
+      "invoke": "Skill(auto-claude-skills:outcome-review)",
+      "available": true,
+      "enabled": true
     }
   ],
+  "phase_guide": {
+    "DISCOVER": "product-discovery (identify problems, prioritize backlog)",
+    "DESIGN": "brainstorming (ask questions, get approval)",
+    "PLAN": "writing-plans (break into tasks, confirm before execution)",
+    "IMPLEMENT": "executing-plans or subagent-driven-development",
+    "REVIEW": "requesting-code-review",
+    "SHIP": "verification-before-completion + openspec-ship + finishing-a-development-branch",
+    "DEBUG": "systematic-debugging, then return to current phase",
+    "LEARN": "outcome-review (measure impact, extract learnings)"
+  },
+  "phase_compositions": {
+    "DISCOVER": {"driver": "product-discovery", "parallel": [], "hints": []},
+    "DESIGN": {"driver": "brainstorming", "parallel": [], "hints": []},
+    "PLAN": {"driver": "writing-plans", "parallel": [], "hints": []},
+    "IMPLEMENT": {"driver": "executing-plans", "parallel": [], "hints": []},
+    "REVIEW": {"driver": "requesting-code-review", "parallel": [], "hints": []},
+    "SHIP": {"driver": "verification-before-completion", "parallel": [], "hints": []},
+    "DEBUG": {"driver": "systematic-debugging", "parallel": [], "hints": []},
+    "LEARN": {"driver": "outcome-review", "parallel": [], "hints": []}
+  },
   "methodology_hints": [
     {
       "name": "ralph-loop",
@@ -382,6 +435,28 @@ install_registry_with_incident_analysis() {
       "trigger_mode": "regex",
       "hint": "INCIDENT ANALYSIS: Use Skill(auto-claude-skills:incident-analysis) for structured investigation. Stages: MITIGATE -> INVESTIGATE -> POSTMORTEM. Detect tool tier (MCP > gcloud > guidance). Scope all queries to specific service + environment + narrow time window.",
       "phases": ["SHIP", "DEBUG"]
+    }]' "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
+}
+
+# Helper: install registry extended with incident-trend-analyzer skill
+install_registry_with_incident_trend() {
+    install_registry_with_incident_analysis
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    local tmp_file
+    tmp_file="$(mktemp)"
+    jq '.skills += [{
+      "name": "incident-trend-analyzer",
+      "role": "domain",
+      "phase": "DEBUG",
+      "triggers": ["(incident.trend|postmortem.trend|what.keeps.breaking|recurring.incident|failure.pattern|incident.pattern|analyze.postmortems)"],
+      "trigger_mode": "regex",
+      "priority": 20,
+      "precedes": [],
+      "requires": [],
+      "invoke": "Skill(auto-claude-skills:incident-trend-analyzer)",
+      "keywords": ["postmortem trends", "recurring incidents", "incident patterns", "what keeps breaking"],
+      "available": true,
+      "enabled": true
     }]' "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
 }
 
@@ -1621,6 +1696,141 @@ test_incident_analysis_phase_gating
 test_incident_analysis_preserves_existing_triggers
 test_incident_analysis_trigger_source
 test_incident_analysis_invoke_path
+
+# ---------------------------------------------------------------------------
+# 32. Incident-trend-analyzer routing tests
+# ---------------------------------------------------------------------------
+test_trend_analyzer_trigger_matching() {
+    echo "-- test: incident-trend-analyzer triggers on trend keywords --"
+    setup_test_env
+    install_registry_with_incident_trend
+
+    local output context
+
+    output="$(run_hook "show me the incident trends across our postmortems")"
+    context="$(extract_context "${output}")"
+    assert_contains "incident trends triggers trend-analyzer" "incident-trend-analyzer" "${context}"
+
+    output="$(run_hook "what keeps breaking in production")"
+    context="$(extract_context "${output}")"
+    assert_contains "what keeps breaking triggers trend-analyzer" "incident-trend-analyzer" "${context}"
+
+    output="$(run_hook "analyze postmortems for recurring incidents")"
+    context="$(extract_context "${output}")"
+    assert_contains "recurring incidents triggers trend-analyzer" "incident-trend-analyzer" "${context}"
+
+    output="$(run_hook "are there any failure patterns in our incidents")"
+    context="$(extract_context "${output}")"
+    assert_contains "failure patterns triggers trend-analyzer" "incident-trend-analyzer" "${context}"
+
+    teardown_test_env
+}
+
+test_trend_analyzer_no_false_positive() {
+    echo "-- test: incident-trend-analyzer does NOT trigger-match on plain incident prompts --"
+    setup_test_env
+    install_registry_with_incident_trend
+
+    local stderr_file="${TEST_TMPDIR}/stderr_false_positive.txt"
+
+    # Plain incident prompt should trigger incident-analysis but NOT trigger-match trend-analyzer
+    jq -n --arg p "investigate this production incident in the auth service" '{"prompt":$p}' | \
+        CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        SKILL_EXPLAIN=1 \
+        bash "${HOOK}" 2>"${stderr_file}" >/dev/null
+
+    local stderr_content
+    stderr_content="$(cat "${stderr_file}")"
+
+    # incident-analysis should have a trigger match (boundary= component in score)
+    local ia_line
+    ia_line="$(printf '%s' "${stderr_content}" | grep 'incident-analysis:' | grep -v 'incident-trend-analyzer')"
+    assert_contains "incident-analysis has trigger match" "boundary=" "${ia_line}"
+
+    # incident-trend-analyzer should NOT have a trigger match — only name-boost
+    local trend_line
+    trend_line="$(printf '%s' "${stderr_content}" | grep 'incident-trend-analyzer:')"
+    assert_not_contains "trend-analyzer has no trigger match" "boundary=" "${trend_line}"
+    assert_contains "trend-analyzer only has name-boost" "name-boost=" "${trend_line}"
+
+    teardown_test_env
+}
+
+test_trend_analyzer_outscores_incident_analysis() {
+    echo "-- test: trend-analyzer outscores incident-analysis on trend prompts --"
+    setup_test_env
+    install_registry_with_incident_trend
+
+    local stderr_file="${TEST_TMPDIR}/stderr_trend_scores.txt"
+    local prompts="what keeps breaking
+show me failure pattern data
+are there recurring failure patterns"
+
+    local IFS_SAVE="$IFS"
+    IFS='
+'
+    for prompt in $prompts; do
+        IFS="$IFS_SAVE"
+        jq -n --arg p "$prompt" '{"prompt":$p}' | \
+            CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+            SKILL_EXPLAIN=1 \
+            bash "${HOOK}" 2>"${stderr_file}" >/dev/null
+
+        local stderr_content
+        stderr_content="$(cat "${stderr_file}")"
+
+        local trend_score ia_score
+        trend_score="$(printf '%s' "${stderr_content}" | grep -oE 'incident-trend-analyzer=[0-9]+' | grep -oE '[0-9]+' | head -1)"
+        ia_score="$(printf '%s' "${stderr_content}" | grep -oE '(^| )incident-analysis=[0-9]+' | grep -oE '[0-9]+' | head -1)"
+
+        # If incident-analysis is absent from raw scores, it scored 0
+        [ -z "${ia_score}" ] && ia_score=0
+
+        if [ -z "${trend_score}" ]; then
+            _record_fail "trend score missing for prompt '${prompt}'"
+        elif [ "${trend_score}" -le "${ia_score}" ]; then
+            _record_fail "trend-analyzer (${trend_score}) should outscore incident-analysis (${ia_score}) on '${prompt}'"
+        else
+            _record_pass "trend-analyzer (${trend_score}) > incident-analysis (${ia_score}) on '${prompt}'"
+        fi
+    done
+    IFS="$IFS_SAVE"
+
+    teardown_test_env
+}
+
+test_trend_analyzer_cofires_with_incident_analysis() {
+    echo "-- test: trend-analyzer co-fires with incident-analysis on overlapping prompt --"
+    setup_test_env
+    install_registry_with_incident_trend
+
+    local output context
+
+    output="$(run_hook "analyze postmortems for recurring incidents")"
+    context="$(extract_context "${output}")"
+    assert_contains "trend-analyzer fires" "incident-trend-analyzer" "${context}"
+    assert_contains "incident-analysis also fires" "incident-analysis" "${context}"
+
+    teardown_test_env
+}
+
+test_trend_analyzer_trigger_source() {
+    echo "-- test: default-triggers.json contains incident-trend-analyzer entry --"
+
+    local invoke_path
+    invoke_path="$(jq -r '.. | objects | select(.name == "incident-trend-analyzer") | .invoke // empty' config/default-triggers.json)"
+    assert_equals "invoke path correct" "Skill(auto-claude-skills:incident-trend-analyzer)" "${invoke_path}"
+
+    local phase
+    phase="$(jq -r '.. | objects | select(.name == "incident-trend-analyzer") | .phase // empty' config/default-triggers.json)"
+    assert_equals "phase is DEBUG" "DEBUG" "${phase}"
+}
+
+test_trend_analyzer_trigger_matching
+test_trend_analyzer_no_false_positive
+test_trend_analyzer_outscores_incident_analysis
+test_trend_analyzer_cofires_with_incident_analysis
+test_trend_analyzer_trigger_source
 
 # ---------------------------------------------------------------------------
 # SDLC enforcement: MUST INVOKE for process skills
@@ -3971,5 +4181,136 @@ test_frontmatter_overrides_default_triggers() {
     teardown_test_env
 }
 test_frontmatter_overrides_default_triggers
+
+# ---------------------------------------------------------------------------
+# DISCOVER phase routing tests
+# ---------------------------------------------------------------------------
+test_discover_trigger_scoring() {
+    echo "-- test: DISCOVER trigger scoring --"
+    setup_test_env
+    install_registry
+
+    local output ctx
+    output="$(run_hook "what should we build next sprint")"
+    ctx="$(extract_context "${output}")"
+    assert_contains "discovery strong+weak" "product-discovery" "${ctx}"
+
+    output="$(run_hook "review the backlog for prioritization")"
+    ctx="$(extract_context "${output}")"
+    assert_contains "discovery weak trigger" "product-discovery" "${ctx}"
+
+    teardown_test_env
+}
+
+test_discover_vs_design_disambiguation() {
+    echo "-- test: DISCOVER vs DESIGN disambiguation --"
+    setup_test_env
+    install_registry
+
+    local output ctx
+    output="$(run_hook "build a new auth service")"
+    ctx="$(extract_context "${output}")"
+    assert_contains "build -> brainstorming" "brainstorming" "${ctx}"
+    assert_not_contains "build -> not discovery" "product-discovery" "${ctx}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# LEARN phase routing tests
+# ---------------------------------------------------------------------------
+test_learn_trigger_scoring() {
+    echo "-- test: LEARN trigger scoring --"
+    setup_test_env
+    install_registry
+
+    local output ctx
+    output="$(run_hook "how did the auth feature perform")"
+    ctx="$(extract_context "${output}")"
+    assert_contains "learn trigger" "outcome-review" "${ctx}"
+
+    output="$(run_hook "check the adoption metrics for the new dashboard")"
+    ctx="$(extract_context "${output}")"
+    assert_contains "learn keyword" "outcome-review" "${ctx}"
+
+    teardown_test_env
+}
+
+test_learn_false_positive_guards() {
+    echo "-- test: LEARN false-positive guards --"
+    setup_test_env
+    install_registry
+
+    local output ctx
+    output="$(run_hook "show me the test results")"
+    ctx="$(extract_context "${output}")"
+    assert_not_contains "test results -> not learn" "outcome-review" "${ctx}"
+
+    output="$(run_hook "I am learning about bash scripting")"
+    ctx="$(extract_context "${output}")"
+    assert_not_contains "learning -> not learn" "outcome-review" "${ctx}"
+
+    teardown_test_env
+}
+
+test_learn_vs_debug_disambiguation() {
+    echo "-- test: LEARN vs DEBUG disambiguation --"
+    setup_test_env
+    install_registry
+
+    local output ctx
+    output="$(run_hook "something is wrong with the metrics dashboard")"
+    ctx="$(extract_context "${output}")"
+    assert_contains "wrong metrics -> debug" "systematic-debugging" "${ctx}"
+
+    teardown_test_env
+}
+
+test_discover_composition_chain() {
+    echo "-- test: DISCOVER -> DESIGN composition chain --"
+    setup_test_env
+    install_registry
+
+    local output ctx
+    output="$(run_hook "what should we build for the next sprint")"
+    ctx="$(extract_context "${output}")"
+    assert_contains "chain has brainstorming" "brainstorming" "${ctx}"
+
+    teardown_test_env
+}
+
+test_learn_composition_chain() {
+    echo "-- test: LEARN -> DISCOVER composition chain --"
+    setup_test_env
+    install_registry
+
+    local output ctx
+    output="$(run_hook "how did the auth feature perform after launch")"
+    ctx="$(extract_context "${output}")"
+    assert_contains "chain has product-discovery" "product-discovery" "${ctx}"
+
+    teardown_test_env
+}
+
+test_slash_command_early_exit() {
+    echo "-- test: /discover slash command exits early --"
+    setup_test_env
+    install_registry
+
+    local output
+    output="$(run_hook "/discover")"
+    assert_equals "slash command no output" "" "${output}"
+
+    teardown_test_env
+}
+
+test_discover_trigger_scoring
+test_discover_vs_design_disambiguation
+test_learn_trigger_scoring
+test_learn_false_positive_guards
+test_learn_vs_debug_disambiguation
+test_discover_composition_chain
+test_learn_composition_chain
+test_slash_command_early_exit
 
 print_summary
