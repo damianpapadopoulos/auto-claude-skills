@@ -257,7 +257,7 @@ No changes to phase compositions. The trend analyzer is on-demand only. Composit
 ### Routing Tests (`tests/test-routing.sh`)
 
 1. **Trigger matching:** Feed `incident trend`, `what keeps breaking`, `recurring incidents`, `analyze postmortems` → verify `incident-trend-analyzer` scores and appears
-2. **Phase label:** Verify skill has `phase: "SHIP"`
+2. **Phase label:** Verify skill has `phase: "DEBUG"`
 3. **Non-overlap with incident-analysis:** Feed `investigate this incident` → verify `incident-analysis` fires but `incident-trend-analyzer` does NOT
 4. **Co-firing is expected:** Feed `analyze postmortems for recurring incidents` → verify both skills appear (both domain role, 2 domain slots) with `incident-trend-analyzer` scoring higher
 5. **Outscoring on trend prompts:** Feed `what keeps breaking`, `postmortem trends`, `recurring incidents` → verify `incident-trend-analyzer` outscores `incident-analysis` in each case
