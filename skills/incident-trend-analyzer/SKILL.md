@@ -9,6 +9,8 @@ On-demand analysis of historical postmortems from `docs/postmortems/`. Reads can
 
 ## Step 1: Scan Corpus
 
+If `docs/postmortems/` does not exist, report: "No postmortem corpus found. Expected directory: `docs/postmortems/`. Run incident-analysis to generate postmortems first." and stop.
+
 Read `docs/postmortems/*.md` — **NON-RECURSIVE**. Do NOT descend into subdirectories (e.g., `docs/postmortems/trends/`). Filter to filenames matching `YYYY-MM-DD-*.md`. Report total files found.
 
 **Minimum corpus:** 3 recurrence-eligible postmortems. If fewer than 3 qualify after Step 2, stop the entire analysis and report:
@@ -44,7 +46,7 @@ Relative timestamps ("5 minutes later", "+10m") are NOT parseable. They produce 
 
 ## Step 3: Build Normalized Incident Records
 
-For each recurrence-eligible postmortem, build one normalized record with these fields:
+For each recurrence-eligible postmortem, build one normalized record with these fields. Failure mode and trigger category are extracted independently from the same section text. They answer different questions: failure mode = "what broke" (the symptom), trigger category = "what caused it" (the change type). The same signal words may match in both vocabularies; this is expected and correct. Signal pattern matching is case-insensitive.
 
 ### Service Extraction (from Summary)
 
