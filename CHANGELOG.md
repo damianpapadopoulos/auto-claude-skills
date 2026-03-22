@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- DISCOVER phase: `product-discovery` skill with tiered Atlassian MCP detection (Jira/Confluence context → discovery brief → transition to DESIGN)
+- LEARN phase: `outcome-review` skill with tiered PostHog MCP detection (analytics queries → outcome report → gated Jira follow-up creation)
+- Two-tier DISCOVER trigger patterns (strong + weak signals) with high-threshold scoring for disambiguation against DESIGN
+- PostHog MCP server detection in session-start hook (follows Serena/Forgetful pattern)
+- PostHog plugin entry with 6 MCP tools (query-run, get-experiment, list-experiments, get-feature-flag, list-feature-flags, create-annotation)
+- DISCOVER and LEARN phase_guide, phase_compositions, red flags, and labels in routing engine
+- SHIP composition LEARN reminder hint
+- posthog-metrics methodology hint (plugin-gated, LEARN/SHIP/DEBUG phases)
+- 12 new routing/registry/context tests for DISCOVER and LEARN phases
+- Regex compilation validation test for all trigger patterns (Bash 3.2 POSIX ERE)
+
+### Changed
+- Atlassian plugin phase_fit extended to include DISCOVER and LEARN; mcp_tools extended with createJiraIssue and addCommentToJiraIssue
+- atlassian-jira methodology hint phases extended to include DISCOVER; triggers extended with discover/triage/prioriti
+- No-registry fallback message updated to include DISCOVER and LEARN phases
+
 - Bundled `incident-analysis` skill with tiered GCP log investigation (MCP > gcloud > guidance) and structured postmortem generation
 - 3-stage investigation state machine: MITIGATE → INVESTIGATE → POSTMORTEM with 4 behavioral guardrails (HITL gate, scope restriction, temp-file LQL pattern, context discipline)
 - Observability Truth tier in unified-context-stack testing-and-debug phase
