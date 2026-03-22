@@ -299,13 +299,13 @@ test_default_triggers_has_plugins_section() {
     local plugin_count
     plugin_count="$(jq '.plugins | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
 
-    # Should have 10 curated plugins (5 enhancers + context7 + github + atlassian + forgetful + unified-context-stack)
-    assert_equals "default-triggers has 10 plugins" "10" "${plugin_count}"
+    # Should have 11 curated plugins (5 enhancers + context7 + github + atlassian + forgetful + unified-context-stack + posthog)
+    assert_equals "default-triggers has 11 plugins" "11" "${plugin_count}"
 
     # Each plugin should have required fields
     local valid_count
     valid_count="$(jq '[.plugins[] | select(.name and .source and .provides and .phase_fit and .description)] | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "all plugins have required fields" "10" "${valid_count}"
+    assert_equals "all plugins have required fields" "11" "${valid_count}"
 
     teardown_test_env
 }
@@ -845,6 +845,81 @@ test_openspec_workspace_only_discovery() {
 }
 
 # ---------------------------------------------------------------------------
+# DISCOVER and LEARN phase tests
+# ---------------------------------------------------------------------------
+
+test_discover_learn_skills_in_registry() {
+    echo "-- test: DISCOVER and LEARN skills present in registry --"
+    setup_test_env
+
+    local output
+    output="$(run_hook)"
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    assert_file_exists "cache file created" "${cache_file}"
+
+    # product-discovery exists with correct phase and role
+    local pd_phase pd_role
+    pd_phase="$(jq -r '.skills[] | select(.name == "product-discovery") | .phase' "${cache_file}")"
+    pd_role="$(jq -r '.skills[] | select(.name == "product-discovery") | .role' "${cache_file}")"
+    assert_equals "product-discovery phase" "DISCOVER" "${pd_phase}"
+    assert_equals "product-discovery role" "process" "${pd_role}"
+
+    # outcome-review exists with correct phase and role
+    local or_phase or_role
+    or_phase="$(jq -r '.skills[] | select(.name == "outcome-review") | .phase' "${cache_file}")"
+    or_role="$(jq -r '.skills[] | select(.name == "outcome-review") | .role' "${cache_file}")"
+    assert_equals "outcome-review phase" "LEARN" "${or_phase}"
+    assert_equals "outcome-review role" "process" "${or_role}"
+
+    # Phase guide includes DISCOVER and LEARN
+    local pg_discover pg_learn
+    pg_discover="$(jq -r '.phase_guide.DISCOVER // empty' "${cache_file}")"
+    pg_learn="$(jq -r '.phase_guide.LEARN // empty' "${cache_file}")"
+    assert_not_empty "phase_guide has DISCOVER" "${pg_discover}"
+    assert_not_empty "phase_guide has LEARN" "${pg_learn}"
+
+    # Phase compositions include DISCOVER and LEARN
+    local pc_discover pc_learn
+    pc_discover="$(jq -r '.phase_compositions.DISCOVER.driver // empty' "${cache_file}")"
+    pc_learn="$(jq -r '.phase_compositions.LEARN.driver // empty' "${cache_file}")"
+    assert_equals "DISCOVER composition driver" "product-discovery" "${pc_discover}"
+    assert_equals "LEARN composition driver" "outcome-review" "${pc_learn}"
+
+    # PostHog plugin entry exists
+    local ph_name
+    ph_name="$(jq -r '.plugins[] | select(.name == "posthog") | .name // empty' "${cache_file}")"
+    assert_equals "PostHog plugin exists" "posthog" "${ph_name}"
+
+    teardown_test_env
+}
+
+test_all_triggers_compile() {
+    echo "-- test: all trigger patterns compile under Bash 3.2 ERE --"
+
+    local triggers
+    triggers="$(jq -r '.skills[].triggers[]' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+    triggers="${triggers}
+$(jq -r '.methodology_hints[].triggers[]' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+
+    local fail_count=0
+    while IFS= read -r pattern; do
+        [[ -z "$pattern" ]] && continue
+        local test_status
+        [[ "test_string_for_compilation" =~ $pattern ]]
+        test_status=$?
+        if [[ "$test_status" -eq 2 ]]; then
+            _record_fail "regex compilation" "Pattern fails to compile: ${pattern}"
+            fail_count=$((fail_count + 1))
+        fi
+    done <<< "${triggers}"
+
+    if [[ "$fail_count" -eq 0 ]]; then
+        _record_pass "all trigger patterns compile"
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 test_empty_env_produces_fallback
@@ -874,6 +949,8 @@ test_openspec_binary_only
 test_openspec_commands_without_binary
 test_openspec_capability_line_emission
 test_openspec_workspace_only_discovery
+test_discover_learn_skills_in_registry
+test_all_triggers_compile
 
 # ---------------------------------------------------------------------------
 # Frontmatter parsing tests
