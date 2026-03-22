@@ -1142,7 +1142,7 @@
           "when": "installed"
         },
         {
-          "text": "LEARN BASELINE: A learn baseline has been saved. Use /learn or 'how did [feature] perform' later to review outcomes.",
+          "text": "LEARN REMINDER: After shipping, use 'how did [feature] perform' to review outcomes with the outcome-review skill.",
           "when": "always"
         }
       ]
@@ -1397,7 +1397,5 @@
       ]
     }
   ],
-  "warnings": [
-    "- incident-trend-analyzer (removed)"
-  ]
+  "warnings": []
 }
