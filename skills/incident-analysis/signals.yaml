@@ -1,0 +1,190 @@
+# Central signal registry — canonical IDs, base weights, structured detection params.
+# Playbooks reference signals by ID only.
+
+signals:
+
+  # ---------------------------------------------------------------------------
+  # Deploy correlation signals
+  # ---------------------------------------------------------------------------
+
+  error_rate_spike_correlated_with_deploy:
+    title: "Error rate spike correlated with deploy"
+    base_weight: 35
+    detection:
+      method: temporal_correlation
+      params:
+        max_delta_seconds: 300
+        correlation_direction: deploy_then_errors
+
+  recent_deploy_detected:
+    title: "Recent deploy detected"
+    base_weight: 15
+    detection:
+      method: existence
+      params:
+        source: deploy_metadata
+        recency_window_seconds: 3600
+
+  no_prior_error_pattern:
+    title: "No prior error pattern"
+    base_weight: 15
+    detection:
+      method: absence
+      params:
+        target: dominant_error_signature
+        baseline_window_seconds: 3600
+
+  # ---------------------------------------------------------------------------
+  # Resource saturation signals
+  # ---------------------------------------------------------------------------
+
+  cpu_saturation_detected:
+    title: "CPU saturation detected"
+    base_weight: 25
+    detection:
+      method: threshold
+      params:
+        metric: cpu_utilization
+        operator: gte
+        threshold_percent: 85
+        sustained_for_seconds: 300
+
+  memory_pressure_detected:
+    title: "Memory pressure detected"
+    base_weight: 25
+    detection:
+      method: compound
+      params:
+        any_of:
+          - method: event_presence
+            params:
+              event_type: OOMKilled
+          - method: threshold
+            params:
+              metric: memory_utilization
+              operator: gte
+              threshold_percent: 90
+              sustained_for_seconds: 300
+
+  traffic_spike_detected:
+    title: "Traffic spike detected"
+    base_weight: 20
+    detection:
+      method: anomaly
+      params:
+        metric: request_rate
+        anomaly_factor: 2.0
+        baseline_window_seconds: 3600
+
+  # ---------------------------------------------------------------------------
+  # Infrastructure signals
+  # ---------------------------------------------------------------------------
+
+  errors_localized_to_node:
+    title: "Errors localized to node"
+    base_weight: 30
+    detection:
+      method: distribution
+      params:
+        group_by: node
+        distribution_threshold: 0.80
+        min_sample_size: 10
+
+  node_not_ready_detected:
+    title: "Node not ready detected"
+    base_weight: 30
+    detection:
+      method: event_presence
+      params:
+        event_type: NodeNotReady
+        include_taints: true
+
+  # ---------------------------------------------------------------------------
+  # Workload health signals
+  # ---------------------------------------------------------------------------
+
+  crash_loop_detected:
+    title: "CrashLoopBackOff detected"
+    base_weight: 30
+    detection:
+      method: event_presence
+      params:
+        event_type: CrashLoopBackOff
+        recency_window_seconds: 1800
+
+  liveness_probe_failures:
+    title: "Liveness probe failures"
+    base_weight: 20
+    detection:
+      method: event_presence
+      params:
+        event_type: Unhealthy
+        probe_type: liveness
+        recency_window_seconds: 900
+
+  # ---------------------------------------------------------------------------
+  # Config / dependency signals
+  # ---------------------------------------------------------------------------
+
+  config_change_correlated_with_errors:
+    title: "Config change correlated with errors"
+    base_weight: 30
+    detection:
+      method: temporal_correlation
+      params:
+        max_delta_seconds: 600
+        correlation_direction: config_then_errors
+
+  upstream_dependency_errors:
+    title: "Upstream dependency errors"
+    base_weight: 25
+    detection:
+      method: event_presence
+      params:
+        event_type: dependency_error
+        recency_window_seconds: 1800
+
+  # ---------------------------------------------------------------------------
+  # Contradiction / veto signals (base_weight: 0)
+  # ---------------------------------------------------------------------------
+
+  error_pattern_predates_deploy:
+    title: "Error pattern predates deploy"
+    base_weight: 0
+    detection:
+      method: temporal_correlation
+      params:
+        max_delta_seconds: 300
+        correlation_direction: errors_then_deploy
+
+  multiple_services_affected_simultaneously:
+    title: "Multiple services affected simultaneously"
+    base_weight: 0
+    detection:
+      method: distribution
+      params:
+        group_by: service
+        min_correlated_services: 2
+        correlation_window_seconds: 300
+
+  resource_saturation_detected:
+    title: "Resource saturation detected (veto)"
+    base_weight: 0
+    detection:
+      method: compound
+      params:
+        any_of:
+          - signal_ref: cpu_saturation_detected
+          - signal_ref: memory_pressure_detected
+
+  crash_loop_coexists_with_saturation:
+    title: "CrashLoop coexists with resource saturation"
+    base_weight: 0
+    detection:
+      method: compound
+      params:
+        all_of:
+          - signal_ref: crash_loop_detected
+          - any_of:
+              - signal_ref: cpu_saturation_detected
+              - signal_ref: memory_pressure_detected
