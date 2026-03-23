@@ -122,6 +122,7 @@ _parse_frontmatter() {
         val = $0; sub(/^  - ["'"'"']?/, "", val); sub(/["'"'"']?[ \t]*$/, "", val)
         if (cur_key != "") {
             if (arr_started) arr = arr ","; else arr_started = 1
+            gsub(/\\/, "\\\\", val)
             gsub(/"/, "\\\"", val)
             arr = arr "\"" val "\""
         }
@@ -141,6 +142,7 @@ _parse_frontmatter() {
                 cur_key = ""
             } else {
                 if (obj != "{") obj = obj ","
+                gsub(/\\/, "\\\\", val)
                 gsub(/"/, "\\\"", val)
                 obj = obj "\"" cur_key "\":\"" val "\""
                 cur_key = ""

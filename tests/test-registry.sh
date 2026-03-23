@@ -1360,4 +1360,34 @@ SKILLEOF
 }
 test_test_mode_does_not_mutate_fallback
 
+# ---------------------------------------------------------------------------
+# Frontmatter backslash escaping
+# ---------------------------------------------------------------------------
+test_frontmatter_backslash_escaping() {
+    echo "-- test: frontmatter backslash in value produces valid JSON --"
+    setup_test_env
+
+    local sp_dir="${HOME}/.claude/plugins/cache/claude-plugins-official/superpowers/1.0.0/skills"
+    mkdir -p "${sp_dir}/bs-test"
+    printf '%s\n' '---' 'name: bs-test' 'description: test' 'triggers:' '  - "foo\bar"' '---' > "${sp_dir}/bs-test/SKILL.md"
+
+    run_hook >/dev/null 2>&1
+
+    local cache="${HOME}/.claude/.skill-registry-cache.json"
+    assert_json_valid "cache with backslash trigger is valid JSON" "${cache}"
+
+    # The trigger must survive round-trip — not be silently dropped
+    local trigger_count
+    trigger_count="$(jq '[.skills[] | select(.name == "bs-test")] | .[0].triggers | length' "${cache}" 2>/dev/null)"
+    assert_equals "backslash trigger preserved in cache" "1" "${trigger_count}"
+
+    # The trigger value must contain a literal backslash, not a corrupted escape
+    local trigger_val
+    trigger_val="$(jq -r '[.skills[] | select(.name == "bs-test")] | .[0].triggers[0]' "${cache}" 2>/dev/null)"
+    assert_contains "trigger contains literal backslash" 'foo\bar' "${trigger_val}"
+
+    teardown_test_env
+}
+test_frontmatter_backslash_escaping
+
 print_summary
