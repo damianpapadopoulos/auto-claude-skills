@@ -991,4 +991,47 @@ test_learn_label() {
 }
 test_learn_label
 
+echo "-- test: plugin-independent phase composition hint not dropped --"
+# Create registry with a hint that has no .plugin field
+_hint_tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/acs-hint-test.XXXXXXXX")"
+_hint_home="${_hint_tmpdir}/home"
+mkdir -p "${_hint_home}/.claude"
+cat > "${_hint_home}/.claude/.skill-registry-cache.json" <<'HINTREG'
+{
+  "version": "4.0.0",
+  "skills": [
+    {
+      "name": "brainstorming",
+      "role": "process",
+      "phase": "DESIGN",
+      "triggers": ["(design|build)"],
+      "priority": 30,
+      "invoke": "Skill(superpowers:brainstorming)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "plugins": [],
+  "phase_compositions": {
+    "DESIGN": {
+      "driver": "brainstorming",
+      "parallel": [],
+      "sequence": [],
+      "hints": [
+        {"text": "PLUGINLESS-HINT-TEXT", "plugin": "some-plugin"},
+        {"text": "GLOBAL-HINT-TEXT"}
+      ]
+    }
+  },
+  "methodology_hints": []
+}
+HINTREG
+_hint_output="$(jq -n --arg p "design a new feature for the app" '{"prompt":$p}' | HOME="${_hint_home}" CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" bash "${HOOK}" 2>/dev/null)"
+_hint_ctx="$(printf '%s' "${_hint_output}" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+# The plugin-dependent hint should be dropped (plugin not available)
+assert_not_contains "plugin hint dropped when unavailable" "PLUGINLESS-HINT-TEXT" "${_hint_ctx}"
+# The global hint (no .plugin) should survive
+assert_contains "global hint not dropped" "GLOBAL-HINT-TEXT" "${_hint_ctx}"
+rm -rf "${_hint_tmpdir}"
+
 print_summary

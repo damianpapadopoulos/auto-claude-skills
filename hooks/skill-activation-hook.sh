@@ -643,7 +643,6 @@ _walk_composition_chain() {
   # sequential chain.  Also walk requires backward to show prerequisites
   # when the user enters mid-chain (e.g. "execute the plan").
   COMPOSITION_CHAIN=""
-  COMPOSITION_NEXT=""
   COMPOSITION_DIRECTIVE=""
 
   # Determine the anchor skill for chain walking: prefer process, fall back to workflow
@@ -960,7 +959,7 @@ ${HINTS}${COMPOSITION_HINTS}"
     _top_skill="$(printf '%s' "$SELECTED" | head -1 | cut -d'|' -f2)"
     _top_phase="$(printf '%s' "$SELECTED" | head -1 | cut -d'|' -f5)"
     if [[ -n "$_top_skill" ]]; then
-      printf '{"skill":"%s","phase":"%s"}' "$_top_skill" "$_top_phase" \
+      jq -n --arg s "$_top_skill" --arg p "$_top_phase" '{skill:$s,phase:$p}' \
         > "${HOME}/.claude/.skill-last-invoked-${_SESSION_TOKEN}" 2>/dev/null || true
     fi
   fi
@@ -1196,8 +1195,12 @@ if [[ -n "$CURRENT_PHASE" ]]; then
           "LINE:  SEQUENCE: \(.step) -> \(.purpose)"
         end),
       (.hints // [] | .[] |
-        select(.plugin as $p | $avail | any(. == $p)) |
-        "HINT:\(.text)")
+        if .plugin then
+          select(.plugin as $p | $avail | any(. == $p)) |
+          "HINT:\(.text)"
+        else
+          "HINT:\(.text)"
+        end)
     )
   ' 2>/dev/null)"
 
