@@ -45,7 +45,7 @@ install_registry() {
         "(debug|bug|broken|crash|regression|not.work|error|fail|hang|freeze|timeout|leak|corrupt|unexpected|wrong)"
       ],
       "trigger_mode": "regex",
-      "priority": 10,
+      "priority": 50,
       "invoke": "Skill(superpowers:systematic-debugging)",
       "available": true,
       "enabled": true
@@ -55,7 +55,8 @@ install_registry() {
       "role": "process",
       "phase": "DESIGN",
       "triggers": [
-        "(build|create|implement|develop|scaffold|init|bootstrap|brainstorm|design|architect|strateg|scope|outline|approach|generate|set.?up|wire.up|connect|integrate|extend|new|start|introduce|enable|support|how.(should|would|could))"
+        "(brainstorm|design|architect|strateg|scope|outline|approach|set.?up|wire.up|how.(should|would|could))",
+        "(^|[^a-z])(build|create|implement|develop|scaffold|init|bootstrap|introduce|enable|add|make|new|start)($|[^a-z])"
       ],
       "trigger_mode": "regex",
       "priority": 30,
@@ -83,10 +84,10 @@ install_registry() {
       "role": "process",
       "phase": "IMPLEMENT",
       "triggers": [
-        "(execute.*plan|run.the.plan|implement.the.plan|continue|follow.the.plan|resume|next.task|next.step)"
+        "(execute.*plan|run.the.plan|implement.the.plan|implement.*(rest|remaining)|continue|follow.the.plan|pick.up|resume|next.task|next.step|carry.on|keep.going|where.were.we|what.s.next)"
       ],
       "trigger_mode": "regex",
-      "priority": 15,
+      "priority": 35,
       "precedes": [],
       "requires": ["writing-plans"],
       "invoke": "Skill(superpowers:executing-plans)",
