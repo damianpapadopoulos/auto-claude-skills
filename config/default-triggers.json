@@ -422,7 +422,7 @@
       "priority": 20,
       "precedes": [],
       "requires": [],
-      "description": "Structured incident investigation: MITIGATE -> INVESTIGATE -> POSTMORTEM. Detects tool tier (MCP > gcloud > guidance) and scopes queries to service + environment + narrow time window.",
+      "description": "Structured incident investigation: MITIGATE -> CLASSIFY -> (confidence-gated HITL or INVESTIGATE loop) -> EXECUTE -> VALIDATE -> POSTMORTEM. Detects tool tier (MCP > gcloud > guidance). Classifies incident against bundled playbooks, captures sanitized evidence, rechecks state fingerprint before execution, validates post-mitigation conditions.",
       "invoke": "Skill(auto-claude-skills:incident-analysis)"
     },
     {
@@ -557,7 +557,7 @@
         "(runtime.log|error.group|metric.regress|production.error|staging.error|verify.deploy|post.deploy|list.log|list.metric|trace.search|incident|postmortem|root.cause|outage|error.spike|log.analysis|5[0-9][0-9].error)"
       ],
       "trigger_mode": "regex",
-      "hint": "INCIDENT ANALYSIS: Use Skill(auto-claude-skills:incident-analysis) for structured investigation. Stages: MITIGATE -> INVESTIGATE -> POSTMORTEM. Detect tool tier (MCP > gcloud > guidance). Scope all queries to specific service + environment + narrow time window.",
+      "hint": "INCIDENT ANALYSIS: Use Skill(auto-claude-skills:incident-analysis) for structured investigation. Stages: MITIGATE -> CLASSIFY -> (confidence-gated HITL or INVESTIGATE loop) -> EXECUTE -> VALIDATE -> POSTMORTEM. Detect tool tier (MCP > gcloud > guidance). Scope all queries to specific service + environment + narrow time window. Classify incident type against bundled playbooks, capture sanitized evidence, recheck state fingerprint before execution, validate post-mitigation conditions.",
       "phases": [
         "SHIP",
         "DEBUG"
@@ -828,6 +828,7 @@
       "phase_fit": [
         "DESIGN",
         "PLAN",
+        "DEBUG",
         "REVIEW",
         "SHIP"
       ],
