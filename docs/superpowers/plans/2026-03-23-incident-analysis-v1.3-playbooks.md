@@ -255,8 +255,8 @@ signals:
 
 - [ ] **Step 2: Verify YAML is valid**
 
-Run: `python3 -c "import yaml; yaml.safe_load(open('skills/incident-analysis/signals.yaml'))" && echo "VALID"`
-Expected: `VALID`
+Validate YAML without PyYAML (not available in this repo's baseline). Use `ruby -e "require 'yaml'; YAML.load_file('skills/incident-analysis/signals.yaml')" && echo "VALID"` (Ruby ships with macOS and includes YAML). Alternatively, rely on the test suite (test-signal-registry.sh) for structural validation.
+Expected: No errors
 
 - [ ] **Step 3: Commit**
 
@@ -295,8 +295,8 @@ compatible_pairs:
 
 - [ ] **Step 2: Verify YAML is valid**
 
-Run: `python3 -c "import yaml; yaml.safe_load(open('skills/incident-analysis/compatibility.yaml'))" && echo "VALID"`
-Expected: `VALID`
+Validate YAML: `ruby -e "require 'yaml'; YAML.load_file('skills/incident-analysis/compatibility.yaml')" && echo "VALID"` or rely on test-signal-registry.sh.
+Expected: No errors
 
 - [ ] **Step 3: Commit**
 
@@ -386,6 +386,8 @@ INCIDENT ANALYSIS: Use Skill(auto-claude-skills:incident-analysis) for structure
 ```
 
 Also update the skill entry description to match.
+
+Additionally, ensure the GitHub deployment/workflow methodology hints in `default-triggers.json` can co-surface with incident-analysis in DEBUG phase. Find the `github-deployment` or `github-actions` hint entry and verify its `phases` array includes `"DEBUG"`. If it doesn't, add it. The design spec requires that deploy/regression prompts can co-surface incident-analysis, GKE, and GitHub hints simultaneously.
 
 - [ ] **Step 2: Verify JSON is valid**
 
@@ -492,7 +494,7 @@ Investigation-only playbook (same mandatory field pattern):
 
 - [ ] **Step 7: Verify all YAML files are valid**
 
-Run: `for f in skills/incident-analysis/playbooks/*.yaml; do python3 -c "import yaml; yaml.safe_load(open('$f'))" && echo "OK: $f" || echo "FAIL: $f"; done`
+Validate all playbook YAML files: `for f in skills/incident-analysis/playbooks/*.yaml; do ruby -e "require 'yaml'; YAML.load_file('$f')" && echo "OK: $f" || echo "FAIL: $f"; done`
 Expected: All 6 files show `OK`
 
 - [ ] **Step 8: Commit**
@@ -551,9 +553,9 @@ After Stage 1 Step 6 (transition), insert a new section for the CLASSIFY stage. 
 
 - [ ] **Step 4: Modify Stage 1 MITIGATE — update HITL gate**
 
-The current HITL gate (Stage 1 Step 5) says "If a mutating fix is obvious, present the exact command and HALT." Update this to reference the CLASSIFY stage: "If mitigation is needed, transition to CLASSIFY for structured playbook selection."
+The current HITL gate (Stage 1 Step 5) says "If a mutating fix is obvious, present the exact command and HALT." Replace this entirely: "If mitigation is needed, transition to CLASSIFY for structured playbook selection."
 
-Keep the original HITL gate language as a fallback for cases where no playbook matches (direct command proposals outside the playbook framework still require HITL confirmation).
+**Remove the old direct-command HITL path.** All mutating actions must now go through the playbook framework (classification, evidence capture, fingerprint recheck, VALIDATE). If no playbook matches the incident, the agent must transition to INVESTIGATE or provide manual guidance — it cannot propose a bare command outside the safety contract. This prevents an escape hatch that would bypass v1.3's core safety properties.
 
 - [ ] **Step 5: Modify Stage 2 INVESTIGATE — add re-entry semantics**
 
@@ -685,12 +687,22 @@ Expected: All tests PASS (including new test files, which auto-discover)
 
 - [ ] **Step 7: Create `tests/test-openspec.sh`**
 
-Validate the OpenSpec v1.3 change set:
+Validate the OpenSpec v1.3 change set. The primary acceptance check should be running the actual openspec validator if available:
+
+```bash
+# If openspec CLI is available:
+openspec validate 2026-03-23-incident-analysis-v1.3
+
+# If not, fall back to structural checks:
+```
+
+Structural fallback checks:
 - `openspec/changes/2026-03-23-incident-analysis-v1.3/` directory exists
-- Contains `proposal.md`, `design.md`, `tasks.md`
+- Contains `proposal.md` (with Problem Statement and Proposed Solution sections), `design.md`, `tasks.md`
 - Contains `specs/incident-analysis/spec.md` (delta spec)
-- Delta spec contains v1.3 requirement headings
+- Delta spec contains v1.3 requirement headings (Playbook Discovery, Confidence-Gated Classification, Three-Tier Eligibility, etc.)
 - Canonical `openspec/specs/incident-analysis/spec.md` contains v1.3 requirements
+- The test should first try `openspec validate` and only fall back to structural checks if the CLI is not installed
 
 - [ ] **Step 8: Commit**
 
