@@ -1,0 +1,24 @@
+id: infra-failure
+title: Infrastructure Failure
+category: infra-failure
+commandable: false
+
+signals:
+  supporting:
+    - errors_localized_to_node
+    - node_not_ready_detected
+  contradicting: []
+  veto_signals: []
+  contradiction_penalty: 0
+
+pre_conditions: []
+post_conditions: []
+hard_stop_conditions: []
+stop_conditions: []
+
+freshness_window_seconds: 300
+stabilization_delay_seconds: 120
+validation_window_seconds: 300
+sample_interval_seconds: 30
+
+state_fingerprint_fields: []

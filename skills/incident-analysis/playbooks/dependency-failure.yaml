@@ -1,0 +1,23 @@
+id: dependency-failure
+title: Dependency Failure
+category: dependency-failure
+commandable: false
+
+signals:
+  supporting:
+    - upstream_dependency_errors
+  contradicting: []
+  veto_signals: []
+  contradiction_penalty: 0
+
+pre_conditions: []
+post_conditions: []
+hard_stop_conditions: []
+stop_conditions: []
+
+freshness_window_seconds: 300
+stabilization_delay_seconds: 120
+validation_window_seconds: 300
+sample_interval_seconds: 30
+
+state_fingerprint_fields: []

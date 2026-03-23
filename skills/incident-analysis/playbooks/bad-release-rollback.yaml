@@ -1,0 +1,152 @@
+id: bad-release-rollback
+title: Bad Release Rollback
+category: bad-release
+commandable: true
+destructive_action: false
+requires_pre_execution_evidence: true
+
+required_tools:
+  - kubectl
+required_capabilities:
+  - deployment_metadata
+  - rollout_history
+
+signals:
+  supporting:
+    - error_rate_spike_correlated_with_deploy
+    - recent_deploy_detected
+    - no_prior_error_pattern
+  contradicting:
+    - multiple_services_affected_simultaneously
+    - resource_saturation_detected
+  veto_signals:
+    - error_pattern_predates_deploy
+  contradiction_penalty: 20
+
+queries:
+  kubectl_get_deployment:
+    kind: kubectl
+    command_argv: ["kubectl", "get", "deployment/{{deployment_name}}", "-n", "{{namespace}}", "-o", "json"]
+    extract: ".metadata.name"
+  kubectl_rollout_history:
+    kind: rollout_history
+    resource_kind: deployment
+    resource_name: "{{deployment_name}}"
+    namespace: "{{namespace}}"
+  kubectl_rollout_status:
+    kind: rollout_status
+    resource_kind: deployment
+    resource_name: "{{deployment_name}}"
+    namespace: "{{namespace}}"
+    watch: false
+  kubectl_ready_replicas:
+    kind: kubectl
+    command_argv: ["kubectl", "get", "deployment/{{deployment_name}}", "-n", "{{namespace}}", "-o", "jsonpath={.status.readyReplicas}"]
+    extract: "."
+  error_rate_query:
+    kind: log_metric
+    description: "Error rate for the affected service in the observation window"
+    metric: error_rate
+    scope: affected_service
+  error_pattern_query:
+    kind: log_metric
+    description: "Dominant error signature for the affected service"
+    metric: error_signature
+    scope: affected_service
+
+pre_conditions:
+  - id: deployment_exists
+    query_ref: kubectl_get_deployment
+    operator: exists
+    threshold: 1
+    window_seconds: 0
+  - id: previous_revision_healthy
+    query_ref: kubectl_rollout_history
+    operator: not_equals
+    threshold_ref: current_failing_revision
+    window_seconds: 0
+
+post_conditions:
+  - id: error_rate_baseline
+    query_ref: error_rate_query
+    operator: lte
+    threshold_ref: pre_incident_baseline_p95
+    window_seconds: 300
+  - id: rollback_revision_serving
+    query_ref: kubectl_rollout_status
+    operator: equals
+    threshold: true
+    window_seconds: 0
+
+hard_stop_conditions:
+  - id: zero_ready_replicas
+    query_ref: kubectl_ready_replicas
+    operator: equals
+    threshold: 0
+    window_seconds: 0
+  - id: error_rate_worse
+    query_ref: error_rate_query
+    operator: gt
+    threshold_ref: pre_mitigation_error_rate
+    window_seconds: 0
+
+stop_conditions:
+  - id: error_rate_unchanged
+    query_ref: error_rate_query
+    operator: gte
+    threshold_ref: pre_mitigation_error_rate
+    window_seconds: 0
+  - id: new_error_pattern
+    query_ref: error_pattern_query
+    operator: not_equals
+    threshold_ref: pre_mitigation_error_signature
+    window_seconds: 0
+
+freshness_window_seconds: 300
+stabilization_delay_seconds: 120
+validation_window_seconds: 300
+sample_interval_seconds: 30
+
+state_fingerprint_fields:
+  - "deployment.metadata.resourceVersion"
+  - "deployment.metadata.generation"
+  - "deployment.status.observedGeneration"
+  - "deployment.spec.template.metadata.labels.pod-template-hash"
+
+parameters:
+  - name: namespace
+    resolver:
+      kind: prompt
+    required: true
+    validation:
+      regex: "^[a-z0-9][a-z0-9-]{0,62}$"
+  - name: deployment_name
+    resolver:
+      kind: kubectl
+      resource_kind: deployment
+      scope: namespace
+      bind_to: affected_workload
+      cardinality: exactly_one
+    required: true
+    validation:
+      resource_kind: deployment
+  - name: previous_revision
+    resolver:
+      kind: query
+      query_ref: kubectl_rollout_history
+      transform: previous
+      cardinality: exactly_one
+    required: true
+    validation:
+      regex: "^[0-9]+$"
+
+command:
+  argv: ["kubectl", "rollout", "undo", "deployment/{{deployment_name}}", "-n", "{{namespace}}", "--to-revision={{previous_revision}}"]
+  cas_mode: revalidate_only
+  dry_run:
+    argv: ["kubectl", "rollout", "undo", "deployment/{{deployment_name}}", "-n", "{{namespace}}", "--to-revision={{previous_revision}}", "--dry-run=server"]
+
+explanation: >
+  Error rates spiked within minutes of a deployment. Rolling back to the
+  previous known-good revision restores the last stable state while the
+  team investigates the faulty code offline.
