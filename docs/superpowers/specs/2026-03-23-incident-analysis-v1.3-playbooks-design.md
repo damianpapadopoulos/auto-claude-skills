@@ -120,10 +120,7 @@ Each playbook is a YAML file with fully structured, machine-parseable fields.
 - `required_tools`, `parameters`, `command` (argv-based), `explanation`
 - `queries` (local query definitions for all referenced `query_ref` values)
 - `destructive_action`, `requires_pre_execution_evidence`
-- `cas_mode: native | revalidate_only` (fingerprint revalidation is universal; no `none` mode for commandable playbooks)
-  - `revalidate_only` — fingerprint recheck before execution; if drift detected, abort and return to CLASSIFY. The command itself has no CAS semantics. This is the default for most kubectl commands.
-  - `native` — the command includes a CAS token (e.g., resourceVersion in a JSON patch, etag in an API call) that causes the server to reject the operation if the resource changed. Fingerprint recheck still runs as a belt-and-suspenders check.
-  - Fingerprint revalidation is universal for all commandable playbooks. There is no `none` mode — every real mitigation command runs through at minimum `revalidate_only`. The `dry_run` sub-command within a playbook inherits the parent's `cas_mode` but skips the actual execution gate (it is read-only by definition).
+- `cas_mode` is specified inside `command` (not at the playbook top level). See Command structure below for values and semantics.
 
 When `commandable: false`, execution fields may be omitted and are ignored if present.
 
@@ -175,7 +172,7 @@ parameters:
 
 ### Command structure
 
-Argv token arrays with parameter substitution, no shell strings:
+Argv token arrays with parameter substitution, no shell strings. `cas_mode` lives here (not at playbook top level):
 
 ```yaml
 command:
@@ -183,7 +180,7 @@ command:
          "deployment/{{deployment_name}}",
          "-n", "{{namespace}}",
          "--to-revision={{previous_revision}}"]
-  cas_mode: revalidate_only
+  cas_mode: revalidate_only    # native | revalidate_only
   dry_run:
     argv: ["kubectl", "rollout", "undo",
            "deployment/{{deployment_name}}",
@@ -191,6 +188,12 @@ command:
            "--to-revision={{previous_revision}}",
            "--dry-run=server"]
 ```
+
+`cas_mode` values:
+- `revalidate_only` — fingerprint recheck before execution; if drift detected, abort and return to CLASSIFY. The command itself has no CAS semantics. Default for most kubectl commands.
+- `native` — the command includes a CAS token (e.g., resourceVersion in a JSON patch) that causes the server to reject on drift. Fingerprint recheck still runs as belt-and-suspenders.
+
+Fingerprint revalidation is universal for all commandable playbooks. There is no `none` mode — every real mitigation command runs through at minimum `revalidate_only`. The `dry_run` sub-command inherits the parent's `cas_mode` but skips the execution gate.
 
 ### V1.3 bundled playbooks
 
@@ -227,7 +230,7 @@ Compound signal propagation (`any_of`):
 - `not_detected` if all children are not_detected
 - `unknown_unavailable` if no child is detected AND >= 1 child is unavailable
 
-Only `detected` and `not_detected` contribute to scoring. `unknown_unavailable` signals are excluded from base_score computation, but their weight IS included in `max_possible` for coverage ratio — this is what makes coverage drop when data sources are missing.
+Only `detected` and `not_detected` signals contribute to scoring. `unknown_unavailable` signals are excluded from both `base_score` and `evaluable_weight` (the confidence denominator). Their weight IS included in `max_possible`, which is used only for the `coverage_ratio` calculation — this is what makes coverage drop when data sources are missing. Confidence and coverage are independent checks: confidence measures strength of available evidence, coverage gates whether enough evidence was available to trust the score.
 
 ### Scoring formula
 
@@ -253,7 +256,13 @@ For each candidate playbook:
      -- Each detected contradicting signal subtracts this same amount.
      -- Example: penalty=20, 2 contradictions detected -> -40 total.
      raw_score           = base_score - contradiction_score
-     confidence          = clamp(0, 100, round(raw_score / max_possible x 100))
+     confidence          = clamp(0, 100, round(raw_score / evaluable_weight x 100))
+     -- Confidence normalizes by evaluable_weight (signals that were actually
+     -- evaluated), NOT max_possible. This means missing data affects only
+     -- the coverage gate (step 2), not the confidence score itself.
+     -- A candidate with strong evidence over available signals can still
+     -- reach >= 85 even if some signals were unavailable, as long as
+     -- coverage_ratio >= 0.70.
 
   4. Eligibility
      candidate_eligible =
