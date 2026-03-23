@@ -4313,4 +4313,66 @@ test_discover_composition_chain
 test_learn_composition_chain
 test_slash_command_early_exit
 
+# ---------------------------------------------------------------------------
+# Bug-fix regression tests
+# ---------------------------------------------------------------------------
+
+test_required_when_does_not_contaminate_keywords() {
+    echo "-- test: required_when does not contaminate keyword scoring --"
+    setup_test_env
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    # Skill with BOTH keywords and required_when, but NO trigger match
+    # on the test prompt. The keyword is the ONLY way to select it.
+    # Bug: jq outputs 9 fields but read consumes 8, so required_when
+    # leaks into keywords_joined, corrupting the last keyword.
+    cat > "${cache_file}" <<'REG'
+{
+  "version": "4.0.0",
+  "skills": [
+    {
+      "name": "test-kw-rw",
+      "role": "domain",
+      "phase": "REVIEW",
+      "triggers": ["(zzz-no-match-pattern)"],
+      "trigger_mode": "regex",
+      "priority": 20,
+      "keywords": ["special-keyword-alpha"],
+      "required_when": "always use this skill",
+      "invoke": "Skill(test-kw-rw)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "systematic-debugging",
+      "role": "process",
+      "phase": "DEBUG",
+      "triggers": ["(debug|bug|error)"],
+      "trigger_mode": "regex",
+      "priority": 10,
+      "invoke": "Skill(superpowers:systematic-debugging)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "plugins": [],
+  "phase_compositions": {},
+  "methodology_hints": []
+}
+REG
+    # Prompt contains the keyword but triggers don't match.
+    # With the bug: keywords_joined = "special-keyword-alpha\x1falways use this skill"
+    #   → treated as one keyword, doesn't match substring in prompt → no selection
+    # Without the bug: keywords_joined = "special-keyword-alpha", matches → selected
+    local output
+    output="$(run_hook "debug this special-keyword-alpha issue")"
+    local ctx
+    ctx="$(extract_context "${output}")"
+    assert_contains "keyword match works with required_when present" "test-kw-rw" "${ctx}"
+
+    teardown_test_env
+}
+
+test_required_when_does_not_contaminate_keywords
+
 print_summary

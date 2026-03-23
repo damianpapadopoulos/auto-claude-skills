@@ -775,7 +775,7 @@ printf '%s' "${RESULT}" | jq '.registry' > "${CACHE_FILE}"
 # Step 10c: Auto-regenerate fallback registry
 # -----------------------------------------------------------------
 _FALLBACK="${PLUGIN_ROOT}/config/fallback-registry.json"
-if [ -d "${PLUGIN_ROOT}/config" ]; then
+if [ -d "${PLUGIN_ROOT}/config" ] && [ -z "${_SKILL_TEST_MODE:-}" ]; then
     _new_fallback="$(printf '%s' "${RESULT}" | jq '.registry')"
     if [ -f "${_FALLBACK}" ]; then
         _existing="$(cat "${_FALLBACK}" 2>/dev/null)"

@@ -19,7 +19,10 @@ echo "=== test-registry.sh ==="
 run_hook() {
     # CLAUDE_PLUGIN_ROOT must point to the project root so the hook
     # can find config/default-triggers.json etc.
+    # _SKILL_TEST_MODE prevents the hook from writing to the source-tree
+    # fallback-registry.json (which would mutate a git-tracked file).
     CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        _SKILL_TEST_MODE=1 \
         bash "${HOOK}" 2>/dev/null
 }
 
@@ -1319,5 +1322,42 @@ SKILLEOF
     teardown_test_env
 }
 test_fallback_auto_regenerated
+
+test_test_mode_does_not_mutate_fallback() {
+    echo "-- test: _SKILL_TEST_MODE prevents fallback mutation --"
+    setup_test_env
+
+    # Write a canary file to the fallback location. If the hook respects
+    # _SKILL_TEST_MODE, this canary survives. If not, it gets overwritten.
+    local fallback="${PROJECT_ROOT}/config/fallback-registry.json"
+    local canary="CANARY-$(date +%s)-$$"
+    local original_content=""
+    [ -f "${fallback}" ] && original_content="$(cat "${fallback}")"
+
+    # Inject canary as a JSON comment-like field
+    printf '%s' "${original_content}" | jq --arg c "${canary}" '. + {_test_canary: $c}' > "${fallback}"
+
+    local sp_dir="${HOME}/.claude/plugins/cache/claude-plugins-official/superpowers/1.0.0/skills"
+    mkdir -p "${sp_dir}/test-skill"
+    cat > "${sp_dir}/test-skill/SKILL.md" << 'SKILLEOF'
+---
+name: test-skill
+description: test
+---
+SKILLEOF
+
+    run_hook >/dev/null 2>&1
+
+    # Check if canary survived
+    local canary_after=""
+    canary_after="$(jq -r '._test_canary // ""' "${fallback}" 2>/dev/null)"
+    assert_equals "fallback not mutated by test run" "${canary}" "${canary_after}"
+
+    # Restore original content
+    printf '%s' "${original_content}" > "${fallback}"
+
+    teardown_test_env
+}
+test_test_mode_does_not_mutate_fallback
 
 print_summary

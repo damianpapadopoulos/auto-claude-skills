@@ -101,7 +101,7 @@ _score_skills() {
   # Score each skill (name-boost check merged into the same loop — no separate pre-pass)
   RESULTS=""
   _EXPLAIN_SCORING=""
-  while IFS="$FS" read -r skill_name skill_name_lower skill_role skill_priority skill_invoke skill_phase triggers_joined keywords_joined; do
+  while IFS="$FS" read -r skill_name skill_name_lower skill_role skill_priority skill_invoke skill_phase triggers_joined keywords_joined _required_when; do
     [[ -z "$skill_name" ]] && continue
 
     # Name boost: full name match (100) or hyphen-segment match (20).

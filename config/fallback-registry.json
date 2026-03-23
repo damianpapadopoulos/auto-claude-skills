@@ -526,34 +526,6 @@
       "invoke": "Skill(auto-claude-skills:incident-trend-analyzer)",
       "available": true,
       "enabled": true
-    },
-    {
-      "name": "test-driven-development",
-      "role": "domain",
-      "triggers": [],
-      "trigger_mode": "regex",
-      "priority": 200,
-      "phase": "",
-      "precedes": [],
-      "requires": [],
-      "description": "Discovered skill",
-      "invoke": "Skill(superpowers:test-driven-development)",
-      "available": true,
-      "enabled": true
-    },
-    {
-      "name": "using-superpowers",
-      "role": "domain",
-      "triggers": [],
-      "trigger_mode": "regex",
-      "priority": 200,
-      "phase": "",
-      "precedes": [],
-      "requires": [],
-      "description": "Discovered skill",
-      "invoke": "Skill(superpowers:using-superpowers)",
-      "available": true,
-      "enabled": true
     }
   ],
   "plugins": [
