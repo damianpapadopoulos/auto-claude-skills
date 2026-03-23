@@ -387,7 +387,10 @@ INCIDENT ANALYSIS: Use Skill(auto-claude-skills:incident-analysis) for structure
 
 Also update the skill entry description to match.
 
-Additionally, ensure the GitHub methodology hints in `default-triggers.json` can co-surface with incident-analysis in DEBUG phase. The actual entry is named `github-mcp` (line ~515) and the methodology hint is named `github` (line ~812). Verify the `github` methodology hint's `phases` array includes `"DEBUG"`. If it doesn't, add it. The design spec requires that deploy/regression prompts can co-surface incident-analysis, GKE, and GitHub hints simultaneously. The routing test (Task 7 Step 5) should assert this co-surfacing behavior.
+Additionally, ensure GitHub tools can co-surface with incident-analysis in DEBUG phase. There are two relevant entries in `default-triggers.json`:
+- `github-mcp` (line ~515): methodology hint entry with a `phases` array — this controls when the hint text appears. Verify `phases` includes `"DEBUG"`.
+- `github` (line ~812): plugin metadata entry with a `phase_fit` array — this controls when GitHub MCP tools are surfaced. Verify `phase_fit` includes `"DEBUG"`.
+Both must include DEBUG for full co-surfacing. The routing test (Task 7 Step 5) must explicitly assert that a DEBUG prompt containing "deploy rollback" surfaces both the incident-analysis hint AND the GitHub hint in the same output.
 
 - [ ] **Step 2: Verify JSON is valid**
 
@@ -466,7 +469,8 @@ Commandable playbook:
 - Contradicting: `crash_loop_coexists_with_saturation` (heavy penalty — scaling crash-looping pods makes things worse)
 - `contradiction_penalty: 30` (heavy)
 - Command: `kubectl scale deployment/{{deployment_name}} -n {{namespace}} --replicas={{target_replicas}}`
-- Parameters include `current_replicas` (kubectl resolver) and `target_replicas` (computed: current + 3)
+- Parameters: `namespace` (prompt), `deployment_name` (kubectl, bind_to, exactly_one), `current_replicas` (kubectl resolver from deployment spec.replicas), `target_replicas` (kind: prompt — the agent presents current_replicas and suggests a target, but the user decides the actual value; do NOT hardcode an arbitrary heuristic like current + 3)
+- pre_conditions must include: deployment is NOT managed by an HPA (check for `autoscaling.alpha.kubernetes.io` annotation or HPA targeting this deployment). If HPA-managed, the playbook cannot proceed — scaling a deployment under HPA control will be immediately reverted by the autoscaler
 
 - [ ] **Step 4: Create `config-regression.yaml`**
 
@@ -678,6 +682,7 @@ This ensures incident-trend-analyzer's parser still works.
 
 In `tests/test-routing.sh`, add test cases that verify:
 - Prompt containing "deploy rollback" in DEBUG phase surfaces incident-analysis
+- Prompt containing "deploy rollback" in DEBUG phase also surfaces the GitHub hint (co-surfacing)
 - Prompt containing "incident" still surfaces incident-analysis (existing behavior preserved)
 
 - [ ] **Step 6: Run all tests**
