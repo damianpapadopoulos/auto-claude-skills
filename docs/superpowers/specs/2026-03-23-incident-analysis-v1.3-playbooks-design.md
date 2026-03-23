@@ -101,7 +101,7 @@ MITIGATE --> CLASSIFY
 
 3. The 60-84 path never reaches HITL GATE directly. It always loops through targeted investigation back to CLASSIFY until confidence either rises above 85 or drops below 60.
 
-4. **Loop termination:** The CLASSIFY <-> INVESTIGATE loop terminates when any of: (a) confidence reaches >= 85 and eligibility passes, (b) confidence reaches < 60 and the full INVESTIGATE stage produces a root cause hypothesis (exits to POSTMORTEM via the existing v1.0 path), (c) 3 iterations without confidence improvement (defined as: top candidate score did not increase by >= 5 points), in which case the agent presents all gathered evidence and asks the user to choose a path (manual mitigation, continue investigation, or proceed to postmortem with current findings), (d) the user explicitly chooses a path at any iteration.
+4. **Loop termination:** The CLASSIFY <-> INVESTIGATE loop terminates when any of: (a) confidence reaches >= 85 and eligibility passes, (b) confidence remains < 60 after the abbreviated investigation (Steps 1-5) has produced a root cause hypothesis — the agent transitions to POSTMORTEM with accumulated findings from all iterations, (c) 3 iterations without confidence improvement (defined as: top candidate score did not increase by >= 5 points), in which case the agent presents all gathered evidence and asks the user to choose a path (manual mitigation, continue investigation, or proceed to postmortem with current findings), (d) the user explicitly chooses a path at any iteration.
 
 ## Playbook Schema
 
