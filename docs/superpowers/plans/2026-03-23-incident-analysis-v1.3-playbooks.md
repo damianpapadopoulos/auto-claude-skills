@@ -8,7 +8,7 @@
 
 **Tech Stack:** Bash 3.2 (macOS-compatible), YAML (playbook/signal definitions), jq (test assertions), sed (redaction patterns)
 
-**Design spec:** `docs/superpowers/specs/2026-03-23-incident-analysis-v1.3-playbooks-design.md`
+**Design spec:** `docs/superpowers/specs/2026-03-23-incident-analysis-v1.3-playbooks-design.md` (pre-existing, already committed)
 
 ---
 
@@ -315,7 +315,7 @@ git commit -m "feat: add playbook category compatibility matrix (closed-by-defau
 
 - [ ] **Step 1: Write the redaction test file**
 
-Create `tests/test-redact-evidence.sh` with tests for all 8 redaction patterns. The test file should source `tests/test-helpers.sh`, define test cases as input/expected pairs, pipe input through the redaction script, and assert the output matches. Each pattern gets its own test function.
+Create `tests/test-redact-evidence.sh` following project conventions: `set -u`, `SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"`, `PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"`, source `. "${SCRIPT_DIR}/test-helpers.sh"`, end with `print_summary`. Define test cases as input/expected pairs, pipe input through the redaction script, and assert the output matches. Each pattern gets its own test function.
 
 Test cases to cover:
 - Email: `user@example.com` -> `[REDACTED]`
@@ -399,8 +399,11 @@ Expected: All existing tests PASS
 
 - [ ] **Step 4: Regenerate fallback registry**
 
-Run: `bash hooks/session-start-hook.sh < /dev/null 2>/dev/null; echo "done"`
-Expected: `~/.claude/.skill-registry-cache.json` is regenerated
+The fallback registry (`config/fallback-registry.json`) is a checked-in file derived from `default-triggers.json`. Regenerate it by running the session-start hook in a way that writes the fallback:
+
+Run: `CLAUDE_PLUGIN_ROOT="$(pwd)" bash hooks/session-start-hook.sh < /dev/null 2>/dev/null; echo "done"`
+
+Then verify `config/fallback-registry.json` was updated (check `git diff config/fallback-registry.json`). If the hook does not update the fallback directly, copy from the generated cache or manually regenerate using the same jq pipeline the hook uses.
 
 - [ ] **Step 5: Commit**
 
@@ -465,24 +468,27 @@ Commandable playbook:
 
 - [ ] **Step 4: Create `config-regression.yaml`**
 
-Investigation-only playbook:
+Investigation-only playbook (all mandatory fields required even though `commandable: false`):
 - `id: config-regression`, `category: bad-config`, `commandable: false`
-- Supporting: `config_change_correlated_with_errors`
-- No command, no queries, no parameters, no explanation
-- Timing fields still required (for future repo-local override)
-- Empty structured conditions (pre/post/hard_stop/stop all empty arrays)
+- `signals:` with `supporting: [config_change_correlated_with_errors]`, `contradicting: []`, `veto_signals: []`, `contradiction_penalty: 0`
+- All timing fields: `freshness_window_seconds: 300`, `stabilization_delay_seconds: 120`, `validation_window_seconds: 300`, `sample_interval_seconds: 30`
+- Empty structured conditions: `pre_conditions: []`, `post_conditions: []`, `hard_stop_conditions: []`, `stop_conditions: []`
+- `state_fingerprint_fields: []` (empty but present — mandatory for all playbooks)
+- Omit: `command`, `queries`, `parameters`, `required_tools`, `explanation`, `destructive_action`, `requires_pre_execution_evidence`
 
 - [ ] **Step 5: Create `dependency-failure.yaml`**
 
-Investigation-only playbook:
+Investigation-only playbook (same mandatory field pattern as config-regression):
 - `id: dependency-failure`, `category: dependency-failure`, `commandable: false`
-- Supporting: `upstream_dependency_errors`
+- `signals:` with `supporting: [upstream_dependency_errors]`, `contradicting: []`, `veto_signals: []`, `contradiction_penalty: 0`
+- All timing fields, empty conditions, empty `state_fingerprint_fields: []`
 
 - [ ] **Step 6: Create `infra-failure.yaml`**
 
-Investigation-only playbook:
+Investigation-only playbook (same mandatory field pattern):
 - `id: infra-failure`, `category: infra-failure`, `commandable: false`
-- Supporting: `errors_localized_to_node`, `node_not_ready_detected`
+- `signals:` with `supporting: [errors_localized_to_node, node_not_ready_detected]`, `contradicting: []`, `veto_signals: []`, `contradiction_penalty: 0`
+- All timing fields, empty conditions, empty `state_fingerprint_fields: []`
 
 - [ ] **Step 7: Verify all YAML files are valid**
 
@@ -529,7 +535,7 @@ After Constraint 4 (Context Discipline), add:
 If the user has not approved a mitigation proposal within the playbook's `freshness_window_seconds` of evidence collection, the proposal is retracted. Return to CLASSIFY with fresh queries. Stale evidence cannot be acted upon.
 ```
 
-- [ ] **Step 3: Add new Stage 1.5 — CLASSIFY**
+- [ ] **Step 3: Add new new stage — CLASSIFY**
 
 After Stage 1 Step 6 (transition), insert a new section for the CLASSIFY stage. Include:
 - Playbook discovery (bundled at `skills/incident-analysis/playbooks/`, repo-local at `playbooks/incident-analysis/`, resolution by id)
@@ -553,7 +559,7 @@ Keep the original HITL gate language as a fallback for cases where no playbook m
 
 Add a note at the top of Stage 2 that when entered from the CLASSIFY < 60 path, only Steps 1-5 run (log queries, signal extraction, deep dive, trace correlation, root cause hypothesis). Steps 6-8 (Flight Plan, context synthesis, POSTMORTEM transition) are SKIPPED. Findings feed back to CLASSIFY.
 
-- [ ] **Step 6: Add new Stage 2.5 — EXECUTE**
+- [ ] **Step 6: Add new new stage — EXECUTE**
 
 After the HITL gate approval, insert the execution boundary:
 1. Fingerprint recheck (compare current state against captured fingerprint)
@@ -561,7 +567,7 @@ After the HITL gate approval, insert the execution boundary:
 3. Execute command (or confirm user ran it externally)
 4. Transition to VALIDATE
 
-- [ ] **Step 7: Add new Stage 2.75 — VALIDATE**
+- [ ] **Step 7: Add new new stage — VALIDATE**
 
 Insert the two-phase validation:
 - Phase 1: Stabilization grace period (wait `stabilization_delay_seconds`). Only `hard_stop_conditions` active.
@@ -611,6 +617,17 @@ git commit -m "feat: add CLASSIFY, EXECUTE, VALIDATE stages and playbook framewo
 - Add routing tests to: `tests/test-routing.sh`
 
 **Depends on:** Tasks 1-6 (validates all created/modified files)
+
+**Convention for ALL test files:** Every test file must follow the project pattern:
+```bash
+#!/usr/bin/env bash
+set -u
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+. "${SCRIPT_DIR}/test-helpers.sh"
+# ... test functions ...
+print_summary  # REQUIRED at end — without this, failures are silently swallowed
+```
 
 - [ ] **Step 1: Create `tests/test-skill-content.sh`**
 
