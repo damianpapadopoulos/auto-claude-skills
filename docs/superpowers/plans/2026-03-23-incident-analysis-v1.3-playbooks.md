@@ -387,7 +387,7 @@ INCIDENT ANALYSIS: Use Skill(auto-claude-skills:incident-analysis) for structure
 
 Also update the skill entry description to match.
 
-Additionally, ensure the GitHub deployment/workflow methodology hints in `default-triggers.json` can co-surface with incident-analysis in DEBUG phase. Find the `github-deployment` or `github-actions` hint entry and verify its `phases` array includes `"DEBUG"`. If it doesn't, add it. The design spec requires that deploy/regression prompts can co-surface incident-analysis, GKE, and GitHub hints simultaneously.
+Additionally, ensure the GitHub methodology hints in `default-triggers.json` can co-surface with incident-analysis in DEBUG phase. The actual entry is named `github-mcp` (line ~515) and the methodology hint is named `github` (line ~812). Verify the `github` methodology hint's `phases` array includes `"DEBUG"`. If it doesn't, add it. The design spec requires that deploy/regression prompts can co-surface incident-analysis, GKE, and GitHub hints simultaneously. The routing test (Task 7 Step 5) should assert this co-surfacing behavior.
 
 - [ ] **Step 2: Verify JSON is valid**
 
@@ -646,7 +646,7 @@ Source `tests/test-helpers.sh`. Test SKILL.md content assertions using grep:
 
 - [ ] **Step 2: Create `tests/test-playbook-schema.sh`**
 
-Test all 6 bundled playbook YAML files using python3 + yaml (or jq if converted). For each playbook:
+Test all 6 bundled playbook YAML files. Use `ruby -ryaml -rjson -e "puts YAML.load_file(ARGV[0]).to_json" FILE` to convert each YAML to JSON, then pipe through `jq` for field assertions. This avoids the PyYAML dependency while leveraging the existing jq-based test patterns. For each playbook:
 - Mandatory fields present: `id`, `title`, `category`, `commandable`, `signals`, timing fields, condition arrays, `state_fingerprint_fields`
 - Commandable playbooks also have: `required_tools`, `parameters`, `command` (with `argv` and `cas_mode`), `explanation`, `queries`, `destructive_action`, `requires_pre_execution_evidence`
 - Investigation-only playbooks do NOT have: `command`, `parameters`, `required_tools`
@@ -698,7 +698,7 @@ openspec validate 2026-03-23-incident-analysis-v1.3
 
 Structural fallback checks:
 - `openspec/changes/2026-03-23-incident-analysis-v1.3/` directory exists
-- Contains `proposal.md` (with Problem Statement and Proposed Solution sections), `design.md`, `tasks.md`
+- Contains `proposal.md` (with `## Why` and `## What Changes` sections — this is the repo's required proposal shape; do NOT use "Problem Statement" / "Proposed Solution" headers), `design.md`, `tasks.md`
 - Contains `specs/incident-analysis/spec.md` (delta spec)
 - Delta spec contains v1.3 requirement headings (Playbook Discovery, Confidence-Gated Classification, Three-Tier Eligibility, etc.)
 - Canonical `openspec/specs/incident-analysis/spec.md` contains v1.3 requirements
@@ -726,9 +726,10 @@ git commit -m "test: add v1.3 playbook, signal, skill content, postmortem, and o
 
 - [ ] **Step 1: Create proposal.md**
 
-Problem statement: current skill has no structured mitigation framework.
-Proposed solution: confidence-gated playbooks with evidence capture and validation.
-Out of scope: historical calibration, non-kubectl playbooks, evidence-bundle ingestion by trend analyzer.
+Use the repo's required proposal shape (headers `## Why` and `## What Changes`, NOT "Problem Statement" / "Proposed Solution"):
+- `## Why`: Current skill has no structured mitigation framework. Investigation stops at root cause hypothesis; no playbook selection, evidence capture, or post-execution validation.
+- `## What Changes`: Confidence-gated playbooks with evidence capture and validation. Adds CLASSIFY, EXECUTE, VALIDATE stages; bundled playbooks; signal registry; redaction script; evidence bundles.
+- Out of scope: historical calibration, non-kubectl playbooks, evidence-bundle ingestion by trend analyzer.
 
 - [ ] **Step 2: Create design.md**
 
