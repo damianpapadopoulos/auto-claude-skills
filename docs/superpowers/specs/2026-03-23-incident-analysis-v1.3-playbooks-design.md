@@ -298,6 +298,8 @@ For each candidate playbook:
        AND top_candidate.confidence - incompatible_runner_up.confidence >= 15
        AND exactly one proposal_eligible candidate at top
      -- Margin is computed against incompatible proposal_eligible runner-ups only.
+     -- If no incompatible proposal_eligible runner-up exists, the margin
+     -- gate passes by default (margin is treated as infinite).
 
   6. Contradiction collapse (uses classification_credible)
      IF two or more classification_credible candidates score >= 60
