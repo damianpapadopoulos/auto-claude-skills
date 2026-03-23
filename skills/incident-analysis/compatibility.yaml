@@ -1,0 +1,16 @@
+# skills/incident-analysis/compatibility.yaml
+# Playbook category compatibility matrix.
+# Default: CLOSED. Any category pair NOT listed in either list is treated
+# as UNKNOWN and defaults to INCOMPATIBLE behavior (triggers margin gate
+# and contradiction collapse). New playbook categories must be explicitly
+# placed in one list or the other.
+
+incompatible_pairs:
+  - [bad-release, resource-overload]
+  - [bad-release, workload-failure]
+  - [resource-overload, infra-failure]
+  - [workload-failure, infra-failure]
+
+compatible_pairs:
+  - [bad-release, bad-config]
+  - [resource-overload, dependency-failure]
