@@ -256,7 +256,11 @@ For each candidate playbook:
      -- Each detected contradicting signal subtracts this same amount.
      -- Example: penalty=20, 2 contradictions detected -> -40 total.
      raw_score           = base_score - contradiction_score
-     confidence          = clamp(0, 100, round(raw_score / evaluable_weight x 100))
+     IF evaluable_weight == 0:
+       confidence = 0
+       candidate is UNSCORED (excluded from margin and collapse checks)
+     ELSE:
+       confidence = clamp(0, 100, round(raw_score / evaluable_weight x 100))
      -- Confidence normalizes by evaluable_weight (signals that were actually
      -- evaluated), NOT max_possible. This means missing data affects only
      -- the coverage gate (step 2), not the confidence score itself.
@@ -264,23 +268,44 @@ For each candidate playbook:
      -- reach >= 85 even if some signals were unavailable, as long as
      -- coverage_ratio >= 0.70.
 
-  4. Eligibility
-     candidate_eligible =
+  4. Three-tier eligibility
+
+     -- Tier A: proposal_eligible (can reach HITL GATE)
+     proposal_eligible =
        commandable
        AND no veto_signals detected
        AND coverage_ratio >= 0.70
        AND all required parameters resolved
        AND pre_conditions passed
 
-  5. Winner selection
+     -- Tier B: classification_credible (participates in collapse checks)
+     classification_credible =
+       no veto_signals detected
+       AND evaluable_weight > 0
+       AND coverage_ratio >= 0.70
+       AND confidence >= 60
+     -- Includes non-commandable playbooks, unresolved params, failed
+     -- pre_conditions. These candidates represent genuine signal that
+     -- the incident matches a category, even if no command can be proposed.
+
+     -- Tier C: unscored (excluded from all scoring decisions)
+     -- evaluable_weight == 0 OR vetoed. Cannot participate in margin
+     -- or collapse.
+
+  5. Winner selection (uses proposal_eligible only)
      proposal_allowed =
        top_candidate.confidence >= 85
        AND top_candidate.confidence - incompatible_runner_up.confidence >= 15
-       AND exactly one eligible candidate at top
+       AND exactly one proposal_eligible candidate at top
+     -- Margin is computed against incompatible proposal_eligible runner-ups only.
 
-  6. Contradiction collapse
-     IF two or more candidates score >= 60 AND their categories appear
-     in the incompatible_pairs list -> all collapse to investigate path
+  6. Contradiction collapse (uses classification_credible)
+     IF two or more classification_credible candidates score >= 60
+     AND their categories are not in compatible_pairs
+     -> all collapse to investigate path
+     -- Ineligible-for-proposal candidates still trigger collapse if they
+     -- are classification_credible, because ambiguous evidence does not
+     -- become unambiguous just because one candidate lacks a command.
 ```
 
 ### Compatibility matrix
