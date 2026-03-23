@@ -7,7 +7,7 @@
 
 ## Summary
 
-Extend the existing incident-analysis skill into a confidence-gated mitigation system: MITIGATE -> CLASSIFY -> (HITL or INVESTIGATE loop) -> EXECUTE/CONFIRM -> VALIDATE -> POSTMORTEM. Keep the GCP-first investigation core, add GKE and GitHub deployment/workflow context as evidence and parameter sources, and preserve the existing 7-section postmortem shape.
+Extend the existing incident-analysis skill into a confidence-gated mitigation system: MITIGATE -> CLASSIFY -> (HITL or INVESTIGATE loop) -> EXECUTE -> VALIDATE -> POSTMORTEM. Keep the GCP-first investigation core, add GKE and GitHub deployment/workflow context as evidence and parameter sources, and preserve the existing 7-section postmortem shape.
 
 The design is inspired by Google's ProductionAgent approach (executable playbooks with safety checks) and the O'Reilly generic mitigations taxonomy (Rollback, Data Rollback, Degrade, Upsize, Block List, Drain, Quarantine), adapted for the open-tool ecosystem (kubectl, gcloud, gh CLI).
 
@@ -20,6 +20,8 @@ The design is inspired by Google's ProductionAgent approach (executable playbook
 3. **Always-on counterevidence** — both >= 85 and 60-84 paths show supporting AND contradictory signals. The agent never looks overconfident.
 
 4. **Execution boundary** — approval -> fingerprint recheck -> execute -> validate. Approval does not guarantee execution; drift invalidates the command.
+
+5. **Evidence freshness** — if the user has not approved the proposal within `freshness_window_seconds` of evidence collection, the proposal is retracted and the flow returns to CLASSIFY with fresh queries. Stale evidence cannot be acted upon.
 
 ## State Machine
 
@@ -40,17 +42,33 @@ MITIGATE --> CLASSIFY
                 |              |
                 |          fingerprint recheck
                 |              |
-                |          drift? --YES--> back to MITIGATE
+                |          drift? --YES--> back to CLASSIFY (state changed;
+                |                          re-score with updated fingerprint)
                 |              |
                 |             NO
                 |              |
                 |          EXECUTE (run command / confirm user ran it)
                 |              |
-                |          VALIDATE (stabilization_delay_seconds)
+                |          VALIDATE
                 |              |
-                |          hard_stop during delay? --YES--> ESCALATE -> INVESTIGATE
+                |          Phase 1: Stabilization grace period
+                |          (wait stabilization_delay_seconds)
+                |          Only hard_stop_conditions are active.
                 |              |
-                |             NO (delay expires)
+                |          hard_stop during grace? --YES--> ESCALATE -> INVESTIGATE
+                |              |
+                |             NO (grace period expires)
+                |              |
+                |          Phase 2: Observation window
+                |          (sample every sample_interval_seconds
+                |           for validation_window_seconds)
+                |          Both hard_stop_conditions AND stop_conditions active.
+                |          post_conditions evaluated at each sample.
+                |              |
+                |          hard_stop during observation? --YES--> ESCALATE -> INVESTIGATE
+                |          stop_condition during observation? --YES--> ESCALATE -> INVESTIGATE
+                |              |
+                |             NO (observation window expires)
                 |              |
                 |          post_conditions met?
                 |              |-- YES --> POSTMORTEM
@@ -66,17 +84,24 @@ MITIGATE --> CLASSIFY
                 |     --> back to CLASSIFY (recalculate with new evidence)
                 |
                 |-- confidence < 60
-                      --> INVESTIGATE (existing deep dive)
+                      --> INVESTIGATE (existing deep dive, Steps 1-5 only:
+                          log queries, signal extraction, deep dive,
+                          trace correlation, root cause hypothesis.
+                          Steps 6-8 are SKIPPED -- no Flight Plan,
+                          no context synthesis, no POSTMORTEM transition.
+                          Findings feed back to CLASSIFY.)
                       --> back to CLASSIFY (recalculate with new evidence)
 ```
 
 ### State Machine Invariants
 
-1. The >= 85 path to HITL GATE requires ALL of: confidence >= 85 AND exactly one playbook selected AND no veto signals detected AND coverage_ratio >= 0.70 AND all required parameters resolved AND pre_conditions passed AND margin over incompatible runner-up >= 15. If any condition fails, the flow falls to the 60-84 path.
+1. The >= 85 path to HITL GATE requires ALL of: confidence >= 85 AND exactly one playbook selected AND no veto signals detected AND coverage_ratio >= 0.70 AND all required parameters resolved AND pre_conditions passed AND margin over incompatible runner-up >= 15. If any condition fails, the candidate is presented using the 60-84 investigation summary format (no command block) with the specific failing eligibility condition called out in the SUGGESTED FOLLOW-UP section. The confidence score itself does not change — only the presentation changes.
 
 2. INCONCLUSIVE -> user choice -> "accept as mitigated but unverified" exits to POSTMORTEM with an explicit `verification_status: unverified` flag, distinct from validated success.
 
 3. The 60-84 path never reaches HITL GATE directly. It always loops through targeted investigation back to CLASSIFY until confidence either rises above 85 or drops below 60.
+
+4. **Loop termination:** The CLASSIFY <-> INVESTIGATE loop terminates when any of: (a) confidence reaches >= 85 and eligibility passes, (b) confidence reaches < 60 and the full INVESTIGATE stage produces a root cause hypothesis (exits to POSTMORTEM via the existing v1.0 path), (c) 3 iterations without confidence improvement (defined as: top candidate score did not increase by >= 5 points), in which case the agent presents all gathered evidence and asks the user to choose a path (manual mitigation, continue investigation, or proceed to postmortem with current findings), (d) the user explicitly chooses a path at any iteration.
 
 ## Playbook Schema
 
@@ -96,6 +121,9 @@ Each playbook is a YAML file with fully structured, machine-parseable fields.
 - `queries` (local query definitions for all referenced `query_ref` values)
 - `destructive_action`, `requires_pre_execution_evidence`
 - `cas_mode: none | native | revalidate_only`
+  - `revalidate_only` — fingerprint recheck before execution; if drift detected, abort and return to CLASSIFY. The command itself has no CAS semantics. This is the default for most kubectl commands.
+  - `native` — the command includes a CAS token (e.g., resourceVersion in a JSON patch, etag in an API call) that causes the server to reject the operation if the resource changed. Fingerprint recheck still runs as a belt-and-suspenders check.
+  - `none` — neither fingerprint recheck nor native CAS. Reserved for idempotent, side-effect-free commands only (e.g., dry-run). Should not appear on actual mitigation commands.
 
 When `commandable: false`, execution fields may be omitted and are ignored if present.
 
@@ -221,6 +249,9 @@ For each candidate playbook:
      base_score          = sum(base_weight for each supporting signal detected)
      contradiction_score = playbook.contradiction_penalty
                            x count(contradicting signals detected)
+     -- contradiction_penalty is a single flat value defined per-playbook.
+     -- Each detected contradicting signal subtracts this same amount.
+     -- Example: penalty=20, 2 contradictions detected -> -40 total.
      raw_score           = base_score - contradiction_score
      confidence          = clamp(0, 100, round(raw_score / max_possible x 100))
 
@@ -254,12 +285,12 @@ incompatible_pairs:
   - [resource-overload, infra-failure]
   - [workload-failure, infra-failure]
 
-compatible_pairs:
-  - [bad-release, bad-config]
-  - [resource-overload, dependency-failure]
+compatible_pairs:           # documentary only; any pair not in incompatible_pairs
+  - [bad-release, bad-config]          # is compatible by default. This section exists
+  - [resource-overload, dependency-failure]  # to make deliberate compatibility decisions explicit.
 ```
 
-Runner-up is the highest-scoring eligible candidate whose category differs from the top candidate. Margin is computed only against incompatible runner-ups. Compatible runner-ups do not trigger the margin gate.
+Runner-up is the highest-scoring eligible candidate whose category differs from the top candidate. Margin is computed only against incompatible runner-ups (looked up in `incompatible_pairs`). Compatible runner-ups do not trigger the margin gate.
 
 ### Compact decision records
 
@@ -432,8 +463,12 @@ Update `config/default-triggers.json` incident-analysis hint text to explicitly 
 | Playbook schema validation | `tests/test-playbook-schema.sh` | All bundled YAML files include mandatory safety keys |
 | Playbook commandable gates | `tests/test-playbook-schema.sh` | Commandable playbooks have required_tools, parameters, command, explanation |
 | Playbook investigation-only gates | `tests/test-playbook-schema.sh` | Non-commandable playbooks omit execution fields |
+| Playbook condition cross-refs | `tests/test-playbook-schema.sh` | Every query_ref in conditions resolves to a local queries: entry |
+| Playbook threshold exclusivity | `tests/test-playbook-schema.sh` | No condition has both threshold and threshold_ref |
+| Playbook resolver cardinality | `tests/test-playbook-schema.sh` | Resolvers with bind_to have cardinality: exactly_one |
 | Playbook signal references | `tests/test-signal-registry.sh` | All signal IDs in bundled playbooks exist in signals.yaml |
 | Compatibility matrix | `tests/test-signal-registry.sh` | All category IDs in compatibility.yaml match bundled playbook categories |
+| Contradiction collapse | `tests/test-signal-registry.sh` | All incompatible_pairs entries reference valid playbook categories; skill content mentions collapse rule |
 | Redaction: emails | `tests/test-redact-evidence.sh` | user@example.com -> [REDACTED] |
 | Redaction: IPv4/IPv6 | `tests/test-redact-evidence.sh` | 10.0.0.1, fe80::1 -> [REDACTED] |
 | Redaction: Bearer tokens | `tests/test-redact-evidence.sh` | Bearer eyJ... -> [REDACTED] |
