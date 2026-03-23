@@ -51,7 +51,7 @@
       "role": "process",
       "phase": "DISCOVER",
       "triggers": [
-        "(discover|user.problem|pain.point|what.to.build|what.should.we|which.issue)",
+        "(discovery|discover(y|.session|.brief)|user.problem|pain.point|what.to.build|what.should.we|which.issue)",
         "(backlog|sprint.plan|prioriti|triage|next.sprint|roadmap)"
       ],
       "keywords": [
@@ -429,7 +429,7 @@
       "role": "process",
       "phase": "LEARN",
       "triggers": [
-        "(how.did.*(perform|do|go|work)|outcome|adoption|funnel|cohort|experiment.result|feature.impact|post.launch|post.ship|measure|did.it.work)"
+        "(how.did.*(perform|do|go|work)|outcome|adoption|funnel|cohort|experiment.result|feature.impact|post.launch|post.ship|measur(e|ing).*(impact|outcome|metric|adoption|success|result)|did.it.work)"
       ],
       "keywords": [
         "how did it perform",

@@ -272,7 +272,7 @@ install_registry() {
       "role": "process",
       "phase": "DISCOVER",
       "triggers": [
-        "(discover|user.problem|pain.point|what.to.build|what.should.we|which.issue)",
+        "(discovery|discover(y|.session|.brief)|user.problem|pain.point|what.to.build|what.should.we|which.issue)",
         "(backlog|sprint.plan|prioriti|triage|next.sprint|roadmap)"
       ],
       "keywords": ["what should we build", "backlog review", "sprint planning", "discovery session", "problem statement", "user needs"],
@@ -289,7 +289,7 @@ install_registry() {
       "role": "process",
       "phase": "LEARN",
       "triggers": [
-        "(how.did.*(perform|do|go|work)|outcome|adoption|funnel|cohort|experiment.result|feature.impact|post.launch|post.ship|measure|did.it.work)"
+        "(how.did.*(perform|do|go|work)|outcome|adoption|funnel|cohort|experiment.result|feature.impact|post.launch|post.ship|measur(e|ing).*(impact|outcome|metric|adoption|success|result)|did.it.work)"
       ],
       "keywords": ["how did it perform", "check metrics", "feature impact", "post-launch review", "did it work", "adoption metrics", "what did we learn", "learn from this", "review the results", "metric results"],
       "trigger_mode": "regex",
@@ -4375,5 +4375,30 @@ REG
 }
 
 test_required_when_does_not_contaminate_keywords
+
+test_measure_false_positive_guard() {
+    echo "-- test: measure does not false-fire outcome-review --"
+    setup_test_env
+    install_registry
+    local output ctx
+    output="$(run_hook "measure the width of the sidebar component")"
+    ctx="$(extract_context "${output}")"
+    assert_not_contains "measure impl prompt -> not outcome-review" "outcome-review" "${ctx}"
+    teardown_test_env
+}
+
+test_discover_false_positive_guard() {
+    echo "-- test: discover does not false-fire product-discovery --"
+    setup_test_env
+    install_registry
+    local output ctx
+    output="$(run_hook "I discovered a bug in the parser module")"
+    ctx="$(extract_context "${output}")"
+    assert_not_contains "discovered bug -> not product-discovery" "product-discovery" "${ctx}"
+    teardown_test_env
+}
+
+test_measure_false_positive_guard
+test_discover_false_positive_guard
 
 print_summary
