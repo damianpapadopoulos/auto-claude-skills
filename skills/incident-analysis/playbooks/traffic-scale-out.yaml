@@ -44,6 +44,13 @@ pre_conditions:
     operator: gt
     threshold: 0
     window_seconds: 0
+  - id: not_hpa_managed
+    query_ref: kubectl_get_deployment
+    operator: not_exists
+    threshold: "metadata.annotations.autoscaling.alpha.kubernetes.io/current-metrics"
+    window_seconds: 0
+    # Also check: no HPA object targets this deployment. Scaling a
+    # deployment under HPA control will be immediately reverted.
 
 post_conditions:
   - id: error_rate_drops
@@ -115,8 +122,8 @@ parameters:
       regex: "^[0-9]+$"
   - name: target_replicas
     resolver:
-      kind: computed
-      expression: "current_replicas + 3"
+      kind: prompt
+      context: "Current replicas: {{current_replicas}}. Suggest a target based on the saturation level observed."
     required: true
     validation:
       regex: "^[0-9]+$"

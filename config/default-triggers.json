@@ -522,6 +522,7 @@
       "phases": [
         "DESIGN",
         "PLAN",
+        "DEBUG",
         "REVIEW",
         "SHIP"
       ]
