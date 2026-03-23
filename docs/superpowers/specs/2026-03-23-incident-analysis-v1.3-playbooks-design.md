@@ -101,7 +101,7 @@ MITIGATE --> CLASSIFY
 
 3. The 60-84 path never reaches HITL GATE directly. It always loops through targeted investigation back to CLASSIFY until confidence either rises above 85 or drops below 60.
 
-4. **Loop termination:** The CLASSIFY <-> INVESTIGATE loop terminates when any of: (a) confidence reaches >= 85 and eligibility passes, (b) confidence remains < 60 after the abbreviated investigation (Steps 1-5) has produced a root cause hypothesis — the agent transitions to POSTMORTEM with accumulated findings from all iterations, (c) 3 iterations without confidence improvement (defined as: top candidate score did not increase by >= 5 points), in which case the agent presents all gathered evidence and asks the user to choose a path (manual mitigation, continue investigation, or proceed to postmortem with current findings), (d) the user explicitly chooses a path at any iteration.
+4. **Loop termination:** The CLASSIFY <-> INVESTIGATE loop terminates when any of: (a) confidence reaches >= 85 and eligibility passes, (b) confidence remains < 60 after the abbreviated investigation (Steps 1-5) has produced a root cause hypothesis — the agent presents the hypothesis and asks the user to choose: proceed to POSTMORTEM with current findings, attempt manual mitigation, or continue investigating a different angle, (c) 3 iterations without confidence improvement (defined as: top candidate score did not increase by >= 5 points), in which case the agent presents all gathered evidence and asks the user to choose a path (manual mitigation, continue investigation, or proceed to postmortem with current findings), (d) the user explicitly chooses a path at any iteration.
 
 ## Playbook Schema
 
@@ -120,10 +120,10 @@ Each playbook is a YAML file with fully structured, machine-parseable fields.
 - `required_tools`, `parameters`, `command` (argv-based), `explanation`
 - `queries` (local query definitions for all referenced `query_ref` values)
 - `destructive_action`, `requires_pre_execution_evidence`
-- `cas_mode: none | native | revalidate_only`
+- `cas_mode: native | revalidate_only` (fingerprint revalidation is universal; no `none` mode for commandable playbooks)
   - `revalidate_only` — fingerprint recheck before execution; if drift detected, abort and return to CLASSIFY. The command itself has no CAS semantics. This is the default for most kubectl commands.
   - `native` — the command includes a CAS token (e.g., resourceVersion in a JSON patch, etag in an API call) that causes the server to reject the operation if the resource changed. Fingerprint recheck still runs as a belt-and-suspenders check.
-  - `none` — neither fingerprint recheck nor native CAS. Reserved for idempotent, side-effect-free commands only (e.g., dry-run). Should not appear on actual mitigation commands.
+  - Fingerprint revalidation is universal for all commandable playbooks. There is no `none` mode — every real mitigation command runs through at minimum `revalidate_only`. The `dry_run` sub-command within a playbook inherits the parent's `cas_mode` but skips the actual execution gate (it is read-only by definition).
 
 When `commandable: false`, execution fields may be omitted and are ignored if present.
 
@@ -285,12 +285,20 @@ incompatible_pairs:
   - [resource-overload, infra-failure]
   - [workload-failure, infra-failure]
 
-compatible_pairs:           # documentary only; any pair not in incompatible_pairs
-  - [bad-release, bad-config]          # is compatible by default. This section exists
-  - [resource-overload, dependency-failure]  # to make deliberate compatibility decisions explicit.
+compatible_pairs:
+  - [bad-release, bad-config]
+  - [resource-overload, dependency-failure]
+
+# Default: CLOSED. Any category pair NOT listed in either
+# incompatible_pairs or compatible_pairs is treated as
+# UNKNOWN and defaults to INCOMPATIBLE behavior (triggers
+# margin gate and contradiction collapse). New playbook
+# categories must be explicitly placed in one list or the
+# other. This prevents a newly added category from silently
+# bypassing safety checks.
 ```
 
-Runner-up is the highest-scoring eligible candidate whose category differs from the top candidate. Margin is computed only against incompatible runner-ups (looked up in `incompatible_pairs`). Compatible runner-ups do not trigger the margin gate.
+Runner-up is the highest-scoring eligible candidate whose category differs from the top candidate. Margin is computed against all runner-ups EXCEPT those in `compatible_pairs`. Any pair not explicitly listed as compatible is treated as incompatible for margin gate and contradiction collapse purposes. This is a closed-by-default safety posture: new playbook categories must be explicitly classified.
 
 ### Compact decision records
 
@@ -446,6 +454,7 @@ Update `config/default-triggers.json` incident-analysis hint text to explicitly 
 | `openspec/changes/<slug>/proposal.md` | Create | Active OpenSpec change set |
 | `openspec/changes/<slug>/design.md` | Create | Active OpenSpec change set |
 | `openspec/changes/<slug>/tasks.md` | Create | Active OpenSpec change set |
+| `openspec/changes/<slug>/specs/incident-analysis/spec.md` | Create | Delta spec for openspec validate |
 | `docs/superpowers/specs/2026-03-23-incident-analysis-v1.3-playbooks-design.md` | Create | This design doc |
 
 ## Test Plan
@@ -486,7 +495,7 @@ Update `config/default-triggers.json` incident-analysis hint text to explicitly 
 2. Evidence bundles are local by default, sanitized before persistence, and not auto-committed.
 3. Existing incident-trend-analyzer remains postmortem-only in v1.3; evidence-bundle ingestion is future work.
 4. Bundle files are immutable after write; the bundle directory is append-only until validation completes.
-5. State-fingerprint revalidation is universal; native CAS is opportunistic and only required where the command family supports it.
+5. State-fingerprint revalidation is universal for all commandable playbooks (`revalidate_only` or `native`). Native CAS is opportunistic and only used where the command family supports it.
 
 ## What's NOT in v1.3
 
