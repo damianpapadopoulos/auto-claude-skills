@@ -395,7 +395,7 @@ EOF
   while IFS='|' read -r score name role invoke phase; do
     [[ -z "$name" ]] && continue
     # Skip skills already selected in pass 0
-    printf '%s' "$REQUIRED_SELECTED" | grep -q "|${name}|" && continue
+    printf '%s' "$REQUIRED_SELECTED" | grep -qF "|${name}|" && continue
     if [[ "$role" == "process" ]]; then
       RESERVED_PROCESS_NAME="$name"
       SELECTED="${score}|${name}|${role}|${invoke}|${phase}
@@ -414,7 +414,7 @@ EOF
   while IFS='|' read -r score name role invoke phase; do
     [[ -z "$name" ]] && continue
     # Skip skills already selected in pass 0
-    printf '%s' "$REQUIRED_SELECTED" | grep -q "|${name}|" && continue
+    printf '%s' "$REQUIRED_SELECTED" | grep -qF "|${name}|" && continue
 
     case "$role" in
       required)
@@ -429,7 +429,6 @@ EOF
 "
           continue
         fi
-        [[ "$TOTAL_COUNT" -ge "$MAX_SUGGESTIONS" ]] && continue
         PROCESS_COUNT=$((PROCESS_COUNT + 1))
         [[ -n "${SKILL_EXPLAIN:-}" ]] && _EXPLAIN_CAPS="${_EXPLAIN_CAPS}[skill-hook]   [process] ${name} (${score}) <- slot ${PROCESS_COUNT}/1
 "
@@ -457,6 +456,10 @@ EOF
         WORKFLOW_COUNT=$((WORKFLOW_COUNT + 1))
         [[ -n "${SKILL_EXPLAIN:-}" ]] && _EXPLAIN_CAPS="${_EXPLAIN_CAPS}[skill-hook]   [workflow] ${name} (${score}) <- slot ${WORKFLOW_COUNT}/1
 "
+        ;;
+      *)
+        # Unknown role — skip to prevent bypassing caps
+        continue
         ;;
     esac
 
@@ -1117,7 +1120,7 @@ while IFS="$FS" read -r hint_skill hint_text hint_triggers_joined hint_phases_jo
   [[ -z "$hint_text" ]] && continue
 
   # Suppress hint if its associated skill is already selected
-  if [[ -n "$hint_skill" ]] && printf '%s' "$SELECTED" | grep -q "|${hint_skill}|"; then
+  if [[ -n "$hint_skill" ]] && printf '%s' "$SELECTED" | grep -qF "|${hint_skill}|"; then
     continue
   fi
 

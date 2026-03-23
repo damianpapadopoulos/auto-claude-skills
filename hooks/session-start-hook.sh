@@ -229,12 +229,6 @@ fi
 # -----------------------------------------------------------------
 ALL_DISCOVERED="${EXTERNAL_DISCOVERED}${PLUGIN_DISCOVERED}${USER_DISCOVERED}"
 
-# Count sources
-SOURCE_COUNT=0
-if [ -n "${EXTERNAL_DISCOVERED}" ]; then SOURCE_COUNT=$((SOURCE_COUNT + 1)); fi
-if [ -n "${PLUGIN_DISCOVERED}" ]; then SOURCE_COUNT=$((SOURCE_COUNT + 1)); fi
-if [ -n "${USER_DISCOVERED}" ]; then SOURCE_COUNT=$((SOURCE_COUNT + 1)); fi
-
 # -----------------------------------------------------------------
 # Step 5b: Extract frontmatter from all discovered SKILL.md files
 # -----------------------------------------------------------------
@@ -769,7 +763,7 @@ if [ "${RECONCILIATION_WARNINGS}" != "[]" ]; then
 fi
 
 # Write registry to cache (strip the stats wrapper)
-printf '%s' "${RESULT}" | jq '.registry' > "${CACHE_FILE}"
+printf '%s' "${RESULT}" | jq '.registry' > "${CACHE_FILE}.tmp.$$" && mv "${CACHE_FILE}.tmp.$$" "${CACHE_FILE}"
 
 # -----------------------------------------------------------------
 # Step 10c: Auto-regenerate fallback registry
@@ -780,12 +774,12 @@ if [ -d "${PLUGIN_ROOT}/config" ] && [ -z "${_SKILL_TEST_MODE:-}" ]; then
     if [ -f "${_FALLBACK}" ]; then
         _existing="$(cat "${_FALLBACK}" 2>/dev/null)"
         if [ "${_new_fallback}" != "${_existing}" ]; then
-            printf '%s\n' "${_new_fallback}" > "${_FALLBACK}" 2>/dev/null || {
+            printf '%s\n' "${_new_fallback}" > "${_FALLBACK}.tmp.$$" 2>/dev/null && mv "${_FALLBACK}.tmp.$$" "${_FALLBACK}" 2>/dev/null || {
                 [ -n "${SKILL_EXPLAIN:-}" ] && printf '[session-start] fallback-registry write skipped: read-only PLUGIN_ROOT\n' >&2
             }
         fi
     else
-        printf '%s\n' "${_new_fallback}" > "${_FALLBACK}" 2>/dev/null || {
+        printf '%s\n' "${_new_fallback}" > "${_FALLBACK}.tmp.$$" 2>/dev/null && mv "${_FALLBACK}.tmp.$$" "${_FALLBACK}" 2>/dev/null || {
             [ -n "${SKILL_EXPLAIN:-}" ] && printf '[session-start] fallback-registry write skipped: read-only PLUGIN_ROOT\n' >&2
         }
     fi
