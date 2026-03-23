@@ -255,7 +255,7 @@ signals:
 
 - [ ] **Step 2: Verify YAML is valid**
 
-Validate YAML without PyYAML (not available in this repo's baseline). Use `ruby -e "require 'yaml'; YAML.load_file('skills/incident-analysis/signals.yaml')" && echo "VALID"` (Ruby ships with macOS and includes YAML). Alternatively, use `python3 -c "import json, re; open('skills/incident-analysis/signals.yaml')" && echo "readable"` as a smoke test and rely on the test suite (test-signal-registry.sh) for structural validation.
+Validate YAML without PyYAML (not available in this repo's baseline). Use `ruby -e "require 'yaml'; YAML.load_file('skills/incident-analysis/signals.yaml')" && echo "VALID"` (Ruby ships with macOS and includes YAML). Alternatively, rely on the test suite (test-signal-registry.sh) for structural validation.
 Expected: No errors
 
 - [ ] **Step 3: Commit**
