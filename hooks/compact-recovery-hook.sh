@@ -3,6 +3,8 @@
 # Runs as SessionStart hook with matcher "compact".
 # stdout is injected into Claude's fresh context.
 
+trap 'exit 0' ERR
+
 # --- PATH discovery ---
 if ! command -v cozempic >/dev/null 2>&1; then
     for _p in "$HOME/.local/bin" "$HOME/Library/Python"/*/bin; do

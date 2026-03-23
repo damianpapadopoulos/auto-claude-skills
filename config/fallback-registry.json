@@ -443,6 +443,7 @@
       "role": "domain",
       "phase": "REVIEW",
       "triggers": [],
+      "keywords": [],
       "trigger_mode": "regex",
       "priority": 10,
       "precedes": [],
@@ -1009,7 +1010,11 @@
           "purpose": "Reproduce bug with failing test before fixing. INVOKE before writing fix code"
         }
       ],
-      "hints": []
+      "hints": [
+        {
+          "text": "DEBUG ESCALATION: If the fix touches multiple files, changes behavior, or affects a public API, enter REVIEW → SHIP after debugging. Use Skill(superpowers:requesting-code-review) to transition."
+        }
+      ]
     },
     "LEARN": {
       "driver": "outcome-review",
