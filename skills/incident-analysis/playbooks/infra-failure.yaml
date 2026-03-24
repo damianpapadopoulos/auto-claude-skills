@@ -7,9 +7,22 @@ signals:
   supporting:
     - errors_localized_to_node
     - node_not_ready_detected
-  contradicting: []
+    - multi_pod_probe_timeout
+    - node_memory_overcommit
+    - kubelet_housekeeping_degraded
+  contradicting:
+    - error_rate_spike_correlated_with_deploy
   veto_signals: []
-  contradiction_penalty: 0
+  contradiction_penalty: 15
+
+investigation_guidance: |
+  When this playbook matches, shift investigation from application logs to infrastructure:
+  1. Identify the affected node(s) from pod distribution
+  2. Query node memory/CPU metrics — check for chronic overcommit (hours, not minutes)
+  3. Check kubelet logs for housekeeping delays and probe failures
+  4. Check GCE serial console for kernel-level indicators
+  5. Assess blast radius: what other pods/services are on the same node?
+  6. Check scheduling: are resource requests realistic vs actual usage?
 
 pre_conditions: []
 post_conditions: []
