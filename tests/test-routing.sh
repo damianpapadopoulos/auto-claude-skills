@@ -4401,4 +4401,53 @@ test_discover_false_positive_guard() {
 test_measure_false_positive_guard
 test_discover_false_positive_guard
 
+# ---------------------------------------------------------------------------
+# v1.3 incident-analysis routing: deploy-rollback co-surfacing
+# ---------------------------------------------------------------------------
+
+test_incident_analysis_surfaces_on_deploy_rollback() {
+    echo "-- test: incident-analysis surfaces on deploy rollback incident prompt --"
+    setup_test_env
+    install_registry_with_incident_analysis
+
+    local output context
+    output="$(run_hook "deploy rollback incident")"
+    context="$(extract_context "${output}")"
+    assert_contains "incident-analysis surfaces on deploy rollback incident" "incident-analysis" "${context}"
+
+    teardown_test_env
+}
+
+test_github_co_surfaces_on_deploy_rollback() {
+    echo "-- test: gcp-observability hint co-surfaces on deploy rollback prompt --"
+    setup_test_env
+    install_registry_with_incident_analysis
+
+    local output context
+    # The prompt includes "incident" which triggers both the skill and the
+    # gcp-observability methodology hint (co-surfacing).
+    output="$(run_hook "deploy rollback incident")"
+    context="$(extract_context "${output}")"
+    assert_contains "gcp-observability hint co-surfaces" "INCIDENT ANALYSIS" "${context}"
+
+    teardown_test_env
+}
+
+test_incident_analysis_still_surfaces_on_incident() {
+    echo "-- test: incident-analysis still surfaces on plain incident prompt (regression) --"
+    setup_test_env
+    install_registry_with_incident_analysis
+
+    local output context
+    output="$(run_hook "investigate this incident in the payments service")"
+    context="$(extract_context "${output}")"
+    assert_contains "incident-analysis surfaces on incident prompt" "incident-analysis" "${context}"
+
+    teardown_test_env
+}
+
+test_incident_analysis_surfaces_on_deploy_rollback
+test_github_co_surfaces_on_deploy_rollback
+test_incident_analysis_still_surfaces_on_incident
+
 print_summary
