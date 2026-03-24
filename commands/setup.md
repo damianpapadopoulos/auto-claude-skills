@@ -185,6 +185,42 @@ The Serena command captures the current working directory at install time, makin
 
 After installation, verify MCP servers with `claude mcp list` (look for "Connected" status) and CLIs with `command -v`.
 
+### 7. Incident analysis tools (optional)
+
+These tools enhance the incident-analysis skill. Investigation works without them (Tier 2 gcloud CLI or Tier 3 guidance-only), but installing them unlocks faster queries, autonomous trace correlation, and playbook-driven mitigation.
+
+**Detection:** Before presenting the table, check which tools are already installed:
+- `gcloud`: `command -v gcloud`
+- `kubectl`: `command -v kubectl`
+- GCP Observability MCP: check `~/.claude.json` for a `gcp-observability` entry in `mcpServers`, or run `claude mcp list` and look for it
+
+Present only the missing tools. If all are present, skip this step.
+
+**Ask the user:** "Would you like to configure incident analysis tools? These enable faster log/trace queries and playbook-driven mitigation for production incidents."
+
+| Tool | Purpose | Install | Prerequisite |
+|------|---------|---------|-------------|
+| `gcloud` CLI | Tier 2 investigation (log queries, traces, error reporting) | `brew install google-cloud-sdk` (macOS) or see [install docs](https://cloud.google.com/sdk/docs/install) | GCP project access |
+| GCP Observability MCP | Tier 1 investigation (faster queries, autonomous trace correlation) | Add to `~/.claude.json` mcpServers (see below) | npm, gcloud auth |
+| `kubectl` | Playbook execution (rollback, restart, scale) | `brew install kubectl` (macOS) or `gcloud components install kubectl` | Cluster access |
+
+**GCP Observability MCP install:**
+
+Check if `~/.claude.json` already has a `gcp-observability` entry. If not, add it:
+
+```bash
+# Read current config, add the MCP server entry, write back
+jq '.mcpServers["gcp-observability"] = {"type": "stdio", "command": "npx", "args": ["-y", "@google-cloud/observability-mcp"], "env": {}}' ~/.claude.json > ~/.claude.json.tmp && mv ~/.claude.json.tmp ~/.claude.json
+```
+
+The MCP server uses Application Default Credentials. If gcloud is installed but not authenticated, guide through:
+```bash
+gcloud auth login
+gcloud auth application-default login
+```
+
+**kubectl** is only needed for v1.3 mitigation playbooks (rollback, restart, scale). Investigation works fully without it. If the user declines, note that playbook execution will be unavailable but investigation and postmortem generation will work normally.
+
 ## Execution
 
 Run each step in order. For steps 0 and 1, use AskUserQuestion to get the user's preference before taking action. For steps 2-4, if a skill directory already exists at the target path, skip it. For steps 5 and 6, use AskUserQuestion to get the user's preference before installing, and skip tools that are already installed.
@@ -201,3 +237,6 @@ After setup, confirm what was configured:
 - `openspec`: available or skipped
 - Serena MCP: connected or skipped
 - Forgetful Memory MCP: connected or skipped
+- GCP Observability MCP: configured or skipped
+- `gcloud`: available or skipped
+- `kubectl`: available or skipped

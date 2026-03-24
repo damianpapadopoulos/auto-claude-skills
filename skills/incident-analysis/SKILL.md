@@ -68,6 +68,12 @@ If gcloud is available but not authenticated, guide through `gcloud auth login` 
 **Tier 3 — Guidance-only:**
 If neither MCP tools nor gcloud are available, provide manual Cloud Console instructions (Logs Explorer URL patterns, filter syntax).
 
+**Tier upgrade nudge:** If using Tier 2 (gcloud CLI) and Tier 1 MCP tools are not available, include a one-line note after reporting the tier:
+
+> "Using gcloud CLI (Tier 2). For faster queries with autonomous trace correlation, run `/setup` to configure GCP Observability MCP (Tier 1)."
+
+Do not repeat this nudge after the first mention.
+
 ### Step 2: Establish Scope
 
 Identify:
@@ -315,6 +321,12 @@ Write a synthesized summary of the timeline and root cause. From this point forw
 ## EXECUTE
 
 Entered after the user approves a high-confidence CLASSIFY decision at the HITL gate. This stage applies the mitigation command with a fingerprint safety check.
+
+**Tool availability check:** Before proceeding, verify that the playbook's required tools are available. If a playbook requires `kubectl` and it is not installed:
+
+> "This playbook requires `kubectl` for execution, but it is not available. You can install it with `brew install kubectl` or `gcloud components install kubectl`. Alternatively, you can run the command manually in a terminal with cluster access, or skip to INVESTIGATE."
+
+Do not attempt to execute kubectl commands without kubectl installed. Present the command for the user to run externally if needed.
 
 ### Step 1: Fingerprint Recheck
 

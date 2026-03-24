@@ -676,8 +676,13 @@ command -v gitleaks >/dev/null 2>&1 && _GITLEAKS=true
 SECURITY_CAPS="semgrep=${_SEMGREP}, trivy=${_TRIVY}, gitleaks=${_GITLEAKS}"
 
 # ── Step 8g: Detect observability capabilities ──────────────────────
-_OBS_GCLOUD=false
+_OBS_GCLOUD=false; _OBS_MCP=false; _OBS_KUBECTL=false
 command -v gcloud >/dev/null 2>&1 && _OBS_GCLOUD=true
+command -v kubectl >/dev/null 2>&1 && _OBS_KUBECTL=true
+# Check if GCP Observability MCP is configured in ~/.claude.json
+if [ -f "${HOME}/.claude.json" ]; then
+    jq -e '.mcpServers["gcp-observability"] // .mcpServers["observability"]' "${HOME}/.claude.json" >/dev/null 2>&1 && _OBS_MCP=true
+fi
 
 # -----------------------------------------------------------------
 # Step 9+10: Build final registry JSON, extract stats, and cache
@@ -926,8 +931,12 @@ case "${SECURITY_CAPS}" in
 esac
 CONTEXT="${CONTEXT}
 Security tools: ${SECURITY_CAPS}${_SEC_HINT}"
+_OBS_HINT=""
+if [ "${_OBS_GCLOUD}" = "true" ] && [ "${_OBS_MCP}" = "false" ]; then
+    _OBS_HINT=" — run /setup to add GCP Observability MCP for Tier 1 trace correlation"
+fi
 CONTEXT="${CONTEXT}
-Observability tools: gcloud=${_OBS_GCLOUD}"
+Observability tools: gcloud=${_OBS_GCLOUD}, observability_mcp=${_OBS_MCP}, kubectl=${_OBS_KUBECTL}${_OBS_HINT}"
 
 # Check for stale/missing memory consolidation marker
 _PROJ_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
