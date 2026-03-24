@@ -409,7 +409,9 @@
       "role": "domain",
       "phase": "DEBUG",
       "triggers": [
-        "(incident|postmortem|outage|root.cause|error.spike|log.analysis|production.error|staging.error)"
+        "(incident|postmortem|outage|root.cause|error.spike|log.analysis|production.error|staging.error)",
+        "(connection.*(fail|refus|timeout|pool|exhaust|acquir)|oom.?kill|memory.pressure|cpu.*(throttl|saturat)|crash.?loop|liveness.probe|node.not.ready|upstream.*(fail|error|timeout))",
+        "(sigterm|sigkill|shutdown.*(error|fail|grace)|active.connection|cloud.?sql|proxy.*(restart|error|fail|crash)|pod.*(restart|crash|evict)|latency.*(spike|p99)|request.timeout|circuit.break|deploy.*(fail|rollback))"
       ],
       "keywords": [
         "incident",
