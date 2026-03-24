@@ -1,6 +1,6 @@
 ---
 name: incident-analysis
-description: Tiered GCP log investigation with playbook-driven mitigation, structured validation, and postmortem generation
+description: Investigate production symptoms: connection failures, pod crashes/restarts, SIGTERM/OOM errors, latency spikes, Cloud SQL/proxy issues, deployment-correlated errors
 ---
 
 # Incident Analysis

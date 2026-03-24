@@ -432,7 +432,7 @@
       "priority": 20,
       "precedes": [],
       "requires": [],
-      "description": "Structured incident investigation: MITIGATE -> CLASSIFY -> (confidence-gated HITL or INVESTIGATE loop) -> EXECUTE -> VALIDATE -> POSTMORTEM. Detects tool tier (MCP > gcloud > guidance). Classifies incident against bundled playbooks, captures sanitized evidence, rechecks state fingerprint before execution, validates post-mitigation conditions.",
+      "description": "Investigate production symptoms: connection failures, pod crashes/restarts, SIGTERM/OOM errors, latency spikes, Cloud SQL/proxy issues, deployment-correlated errors. Playbook-driven: MITIGATE -> CLASSIFY -> INVESTIGATE -> EXECUTE -> VALIDATE -> POSTMORTEM.",
       "invoke": "Skill(auto-claude-skills:incident-analysis)"
     },
     {
