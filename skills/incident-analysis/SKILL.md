@@ -303,6 +303,12 @@ If evidence is ambiguous or borderline, do NOT hop — present trace timeline an
 
 ### Step 5: Formulate Root Cause Hypothesis
 
+State the hypothesis in one sentence. Then:
+
+1. **Contradiction test:** Identify the strongest piece of evidence that would DISPROVE this hypothesis. Query for it. If found, revise the hypothesis before proceeding.
+2. **Symptom coverage:** List every observed symptom. Mark each as "explained" or "unexplained" by the hypothesis. If any symptom is unexplained, either expand the hypothesis or note it as an open question.
+3. **Alternative hypotheses:** Name at least one alternative explanation. State why the primary hypothesis is preferred over it, citing specific evidence.
+
 ### Step 6: Flight Plan
 
 Before touching any code, output a bulleted list of:
