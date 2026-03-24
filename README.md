@@ -14,14 +14,16 @@ The plugin bundles a small set of skills and routes to many more from companion 
 
   | Phase | What the plugin does |
   |-------|---------------------|
+  | DISCOVER | Pulls Jira/Confluence context, synthesizes a discovery brief before design |
   | DESIGN | Activates brainstorming, explores requirements before coding |
   | PLAN | Structures implementation into discrete tasks with dependency ordering |
   | IMPLEMENT | Enforces TDD, routes to parallel agents for independent work |
   | REVIEW | Triggers multi-perspective code review with security scanning, processes feedback with rigor |
   | SHIP | Requires verification evidence, generates as-built docs, guides branch completion |
-  | DEBUG | Scores highest priority, overrides the current phase with structured root-cause analysis |
+  | LEARN | Queries adoption metrics, synthesizes outcome report, creates follow-up work |
+  | DEBUG | Scores highest priority, overrides the current phase with structured root-cause analysis or incident investigation |
 
-- **Guardrails through hooks, not memory.** Phase composition enforces requirements like "write the failing test before implementation" and "show test runner output before claiming done" — computed fresh on every prompt.
+- **Guardrails through hooks, not memory.** Phase composition enforces requirements like "write the failing test before implementation" and "show test runner output before claiming done" — computed fresh on every prompt. Phase-specific red flags halt progress when steps are skipped (e.g., editing code before brainstorming, claiming tests pass without runner output).
 
 - **Optional enrichment from companion tools.** When integrations like Jira, GitHub, Context7, Serena, or GCP Observability are installed, the routing engine injects phase-appropriate context to use them.
 
@@ -30,6 +32,8 @@ The plugin bundles a small set of skills and routes to many more from companion 
 **"design a secure frontend component"** → DESIGN phase. Activates brainstorming (explore requirements before coding) and design-debate (multi-agent design exploration). With companion plugins, also activates frontend-design (UI patterns). Companion tools query library docs for relevant API constraints.
 
 **"debug this login bug"** → DEBUG phase. Activates systematic-debugging (structured root-cause analysis). TDD is injected as a mandatory parallel — reproduce with a failing test before fixing. If GCP Observability is installed, context hints toward runtime logs.
+
+**"investigate this 502 spike"** → DEBUG phase. Activates incident-analysis (tiered investigation with bundled playbooks for common failure modes like bad releases, dependency failures, and infra issues). Evidence is captured and redacted. If GCP Observability is installed, queries scope to the affected service and time window.
 
 **"ship this feature"** → SHIP phase. Activates a sequence starting with verification-before-completion (evidence before assertions), then openspec-ship (as-built documentation), through to finishing-a-development-branch (merge/PR/cleanup options).
 
@@ -75,7 +79,7 @@ Installed via `/setup` unless noted. The routing engine discovers these automati
 
 **MCP and context sources** — Context7 (library documentation), GitHub (PR and issue management), Serena (LSP-based symbol navigation), Forgetful Memory (cross-session architectural knowledge), Context Hub CLI (curated doc annotations).
 
-**Phase enhancers** — commit-commands (structured commit/PR workflows), security-guidance (passive write-time guard), feature-dev (parallel exploration agents), hookify (custom behavior rules), skill-creator (skill benchmarking).
+**Phase enhancers** — commit-commands (structured commit/PR workflows), security-guidance (passive write-time guard), feature-dev (parallel exploration agents), hookify (custom behavior rules), skill-creator (skill benchmarking), cozempic (context protection — checkpoints team state before compaction, prunes sessions to stay within context limits).
 
 **Atlassian managed integration** — Jira and Confluence connect via `/mcp` as a claude.ai managed MCP, not through `/setup`.
 
