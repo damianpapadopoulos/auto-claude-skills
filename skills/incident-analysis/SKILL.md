@@ -253,6 +253,14 @@ Stack traces, error messages, request IDs, trace IDs.
 - Recent deployment correlation (deploy timestamp vs. error spike?)
 - Resource metrics (CPU, memory, latency) if available
 
+**Infrastructure escalation (conditional):** If Step 3 reveals that multiple pods or services are failing simultaneously — especially with `context deadline exceeded`, widespread probe timeouts, or errors localized to a single node — the root cause is likely at the node or infrastructure level, not the application level. Shift investigation to:
+- Node resource metrics (memory/CPU allocatable utilization)
+- kubelet logs (housekeeping delays, probe failures, eviction events)
+- GCE serial console (kernel OOM, balloon driver, memory pressure)
+- Audit logs (maintenance-controller, drain events)
+
+If a `node-resource-exhaustion` playbook is available, transition to CLASSIFY for structured scoring.
+
 ### Step 4: Autonomous Trace Correlation (Tier 1 Only)
 
 If Tier 1 MCP tools are NOT available, skip this step entirely. Proceed to Step 5.
