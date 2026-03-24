@@ -471,6 +471,11 @@ Generate from the synthesized summary (NOT raw logs):
 - Root cause (from investigation hypothesis)
 - Action items (concrete, assignable, with suggested owners)
 
+**Recovery verification (mandatory):**
+- Timeline MUST include a verified recovery timestamp with evidence source (e.g., "first successful DB connection at 13:54:09 per proxy logs")
+- If recovery was not verified from evidence, state: "Recovery time not verified — estimated at X based on Y"
+- Impact duration = verified recovery time minus incident start time. Do not estimate.
+
 **Mitigation Applied (subsection under "Resolution and Recovery"):**
 
 If a playbook-driven mitigation was executed during this incident, include the following under the "Resolution and Recovery" section of the postmortem:
