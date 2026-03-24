@@ -417,8 +417,16 @@
         "incident",
         "postmortem",
         "outage",
-        "logs",
-        "error spike"
+        "error spike",
+        "connection failure",
+        "connection pool",
+        "cloud sql proxy",
+        "graceful shutdown",
+        "active connections",
+        "health check",
+        "pod restart",
+        "latency spike",
+        "request timeout"
       ],
       "trigger_mode": "regex",
       "priority": 20,

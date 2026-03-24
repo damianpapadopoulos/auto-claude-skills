@@ -427,7 +427,7 @@ install_registry_with_incident_analysis() {
       "precedes": [],
       "requires": [],
       "invoke": "Skill(auto-claude-skills:incident-analysis)",
-      "keywords": ["incident", "postmortem", "outage", "logs", "error spike"],
+      "keywords": ["incident", "postmortem", "outage", "error spike", "connection failure", "connection pool", "cloud sql proxy", "graceful shutdown", "active connections", "health check", "pod restart", "latency spike", "request timeout"],
       "available": true,
       "enabled": true
     }] | .methodology_hints += [{
