@@ -81,6 +81,15 @@ Identify:
 - Which environment (production, staging)?
 - What time window? (default: last 30-60 minutes)
 
+### Step 2b: Establish Inventory
+
+Before querying logs, determine what you are investigating:
+- How many replicas/instances exist? (query metrics or deployment spec — do not infer from logs)
+- Where are they distributed? (nodes, zones, regions)
+- What are the resource requests, limits, and probe configurations?
+
+This prevents scoping errors (investigating 4 pods when 7 exist) and reveals distribution risks (3 of 7 pods on one node) before they become surprises in the postmortem. For k8s, use `container/memory/request_bytes` grouped by pod name. For other platforms, use the equivalent inventory query.
+
 ### Step 3: Query Error Rate / Recent Errors
 
 Scoped to the identified service + narrow time window.
