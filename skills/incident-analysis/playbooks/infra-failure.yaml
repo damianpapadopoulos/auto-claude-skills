@@ -15,7 +15,7 @@ signals:
   veto_signals: []
   contradiction_penalty: 15
 
-investigation_guidance: |
+investigation_steps: |
   When this playbook matches, shift investigation from application logs to infrastructure:
   1. Identify the affected node(s) from pod distribution
   2. Query node memory/CPU metrics — check for chronic overcommit (hours, not minutes)

@@ -343,7 +343,7 @@ Before transitioning to POSTMORTEM, answer each question explicitly in the synth
 | 5 | Were other services or components affected? | Checked — list affected or state "checked, none found" |
 | 6 | Is this condition systemic (other nodes/instances at similar risk)? | Checked or state "not assessed" |
 
-**Gate rule:** If questions 1-3 have confident answers, proceed to POSTMORTEM. Questions 4-6 may be "not assessed" if investigation time is constrained, but must be flagged as open items. If question 1 or 2 is "No" or "Unknown," return to INVESTIGATE Step 1 with a revised hypothesis.
+**Gate rule:** If questions 1-3 have confident answers, proceed to POSTMORTEM. Questions 4-6 may be "not assessed" if investigation time is constrained, but must be flagged as open items. If question 1, 2, or 3 is "No" or "Unknown," return to INVESTIGATE Step 1 — for questions 1-2 with a revised hypothesis, for question 3 with targeted recovery-evidence queries.
 
 ### Step 9: Transition to POSTMORTEM
 
