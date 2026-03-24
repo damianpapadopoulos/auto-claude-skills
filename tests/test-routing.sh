@@ -432,7 +432,7 @@ install_registry_with_incident_analysis() {
       "enabled": true
     }] | .methodology_hints += [{
       "name": "gcp-observability",
-      "triggers": ["(runtime.log|error.group|metric.regress|production.error|staging.error|verify.deploy|post.deploy|list.log|list.metric|trace.search|incident|postmortem|root.cause|outage|error.spike|log.analysis|5[0-9][0-9].error)"],
+      "triggers": ["(runtime.log|error.group|metric.regress|production.error|staging.error|verify.deploy|post.deploy|list.log|list.metric|trace.search|incident|postmortem|root.cause|outage|error.spike|log.analysis|5[0-9][0-9].error)", "(connection.*(fail|refus|timeout|pool|exhaust)|oom.?kill|crash.?loop|cloud.?sql|proxy.*(restart|error|fail)|pod.*(restart|crash|evict)|sigterm|sigkill|latency.*(spike|p99)|deploy.*(fail|rollback))"],
       "trigger_mode": "regex",
       "hint": "INCIDENT ANALYSIS: Use Skill(auto-claude-skills:incident-analysis) for structured investigation. Stages: MITIGATE -> INVESTIGATE -> POSTMORTEM. Detect tool tier (MCP > gcloud > guidance). Scope all queries to specific service + environment + narrow time window.",
       "phases": ["SHIP", "DEBUG"]
@@ -1639,6 +1639,20 @@ test_incident_analysis_preserves_existing_triggers() {
     teardown_test_env
 }
 
+test_gcp_hint_fires_on_symptom_language() {
+    echo "-- test: gcp-observability hint fires on symptom language --"
+    setup_test_env
+    install_registry_with_incident_analysis
+
+    local output context
+
+    output="$(run_hook "cloud sql proxy crashed and connections are failing")"
+    context="$(extract_context "${output}")"
+    assert_contains "gcp-observability hint fires on symptoms" "INCIDENT ANALYSIS" "${context}"
+
+    teardown_test_env
+}
+
 test_incident_analysis_trigger_source() {
     echo "-- test: default-triggers.json contains incident-analysis entry --"
 
@@ -1701,6 +1715,7 @@ test_incident_analysis_hint_fires
 test_incident_analysis_skill_scores
 test_incident_analysis_phase_gating
 test_incident_analysis_preserves_existing_triggers
+test_gcp_hint_fires_on_symptom_language
 test_incident_analysis_trigger_source
 test_incident_analysis_invoke_path
 

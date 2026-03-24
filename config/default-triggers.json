@@ -565,7 +565,8 @@
     {
       "name": "gcp-observability",
       "triggers": [
-        "(runtime.log|error.group|metric.regress|production.error|staging.error|verify.deploy|post.deploy|list.log|list.metric|trace.search|incident|postmortem|root.cause|outage|error.spike|log.analysis|5[0-9][0-9].error)"
+        "(runtime.log|error.group|metric.regress|production.error|staging.error|verify.deploy|post.deploy|list.log|list.metric|trace.search|incident|postmortem|root.cause|outage|error.spike|log.analysis|5[0-9][0-9].error)",
+        "(connection.*(fail|refus|timeout|pool|exhaust)|oom.?kill|crash.?loop|cloud.?sql|proxy.*(restart|error|fail)|pod.*(restart|crash|evict)|sigterm|sigkill|latency.*(spike|p99)|deploy.*(fail|rollback))"
       ],
       "trigger_mode": "regex",
       "hint": "INCIDENT ANALYSIS: Use Skill(auto-claude-skills:incident-analysis) for structured investigation. Stages: MITIGATE -> CLASSIFY -> (confidence-gated HITL or INVESTIGATE loop) -> EXECUTE -> VALIDATE -> POSTMORTEM. Detect tool tier (MCP > gcloud > guidance). Scope all queries to specific service + environment + narrow time window. Classify incident type against bundled playbooks, capture sanitized evidence, recheck state fingerprint before execution, validate post-mitigation conditions.",
