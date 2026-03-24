@@ -99,6 +99,97 @@ signals:
         event_type: NodeNotReady
         include_taints: true
 
+  multi_pod_probe_timeout:
+    title: "Multiple pods failing probes with timeout"
+    base_weight: 30
+    detection:
+      method: compound
+      params:
+        all_of:
+          - method: event_presence
+            params:
+              event_type: Unhealthy
+              min_distinct_pods: 3
+              correlation_window_seconds: 60
+          - method: log_pattern
+            params:
+              pattern: "context deadline exceeded"
+              source: kubelet
+
+  node_memory_overcommit:
+    title: "Node non-evictable memory utilization > 85%"
+    base_weight: 25
+    detection:
+      method: threshold
+      params:
+        metric: "kubernetes.io/node/memory/allocatable_utilization"
+        metric_label_filter:
+          memory_type: "non-evictable"
+        operator: gte
+        threshold_percent: 85
+        sustained_for_seconds: 300
+
+  kubelet_housekeeping_degraded:
+    title: "kubelet housekeeping taking longer than expected"
+    base_weight: 20
+    detection:
+      method: log_pattern
+      params:
+        pattern: "Housekeeping took longer than expected"
+        source: kubelet
+        min_occurrences: 3
+        recency_window_seconds: 600
+
+  kernel_memory_pressure:
+    title: "Kernel memory pressure or balloon failure"
+    base_weight: 15
+    detection:
+      method: compound
+      params:
+        any_of:
+          - method: log_pattern
+            params:
+              pattern: "Under memory pressure"
+              source: serial_console
+          - method: log_pattern
+            params:
+              pattern: "Out of puff"
+              source: serial_console
+
+  request_exceeds_actual_usage:
+    title: "Memory request significantly below actual usage"
+    base_weight: 20
+    detection:
+      method: ratio
+      params:
+        numerator_metric: "kubernetes.io/container/memory/used_bytes"
+        denominator_metric: "kubernetes.io/container/memory/request_bytes"
+        operator: gte
+        threshold_ratio: 1.5
+        sustained_for_seconds: 3600
+
+  node_metrics_normal:
+    title: "Node memory and CPU utilization below 70%"
+    base_weight: 0
+    detection:
+      method: compound
+      params:
+        all_of:
+          - method: threshold
+            params:
+              metric: "kubernetes.io/node/memory/allocatable_utilization"
+              metric_label_filter:
+                memory_type: "non-evictable"
+              operator: lt
+              threshold_percent: 70
+              sustained_for_seconds: 300
+          - method: threshold
+            params:
+              metric: "kubernetes.io/node/cpu/allocatable_utilization"
+              operator: lt
+              threshold_percent: 70
+              sustained_for_seconds: 300
+
   # ---------------------------------------------------------------------------
   # Workload health signals
   # ---------------------------------------------------------------------------
