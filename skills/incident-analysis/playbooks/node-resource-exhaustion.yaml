@@ -1,0 +1,81 @@
+id: node-resource-exhaustion
+title: Node Resource Exhaustion (Memory)
+category: infra-failure
+commandable: false
+
+description: |
+  Multiple services on a single k8s node experience simultaneous failures due to
+  node-level memory exhaustion. Typically presents as widespread probe timeouts
+  (context deadline exceeded), container restarts, and slow kubelet housekeeping.
+  Often caused by memory requests significantly below actual usage, allowing the
+  scheduler to overcommit the node.
+
+signals:
+  supporting:
+    - multi_pod_probe_timeout
+    - node_memory_overcommit
+    - kubelet_housekeeping_degraded
+    - kernel_memory_pressure
+    - request_exceeds_actual_usage
+    - errors_localized_to_node
+    - liveness_probe_failures
+  contradicting:
+    - error_rate_spike_correlated_with_deploy
+  veto_signals:
+    - node_metrics_normal
+  contradiction_penalty: 20
+
+investigation_steps: |
+  Structured investigation for node memory exhaustion. Follow in order:
+
+  ## 1. Inventory
+  - How many replicas does the deployment have? (metrics, not logs)
+  - Which nodes host them? (pod distribution)
+  - What are the resource requests, limits, and actual usage per pod?
+  - What are the probe configurations (failureThreshold, timeoutSeconds)?
+
+  ## 2. Node Health Timeline
+  - Query node non-evictable memory utilization for 6-12 hours before incident
+  - Is this chronic (hours of >85%) or acute (sudden spike)?
+  - Query kubelet logs for housekeeping delays (expected vs actual)
+
+  ## 3. Trigger Identification
+  - Query kubelet logs for probe failures around incident time
+  - How many pods failed probes? Were they all on the same node?
+  - Check GCE serial console for virtio_balloon failures and kernel memory pressure
+  - Check audit logs for maintenance-controller, drain events, deployment events
+  - Rule out: rolling deployment, HPA events, manual actions
+
+  ## 4. Blast Radius
+  - What other pods/services run on the affected node?
+  - Did they also experience failures? (check kubelet probe logs)
+  - Do other nodes hosting the same workload have similar overcommit ratios?
+
+  ## 5. Recovery Verification
+  - When did affected proxies/containers restart?
+  - When were first successful connections re-established?
+  - Were pods restarted in-place (same node) or rescheduled?
+  - If restarted on same node: how long did restart take? (indicates ongoing pressure)
+
+  ## 6. Scheduling Math
+  - Sum all container request_bytes on the affected node
+  - Compare to node allocatable_bytes
+  - Identify the largest contributors to the (actual - request) gap
+  - Check if other nodes have similar overcommit patterns
+
+compatible_with:
+  - infra-failure
+
+pre_conditions: []
+post_conditions: []
+hard_stop_conditions: []
+stop_conditions: []
+
+freshness_window_seconds: 600
+stabilization_delay_seconds: 120
+validation_window_seconds: 300
+sample_interval_seconds: 30
+
+state_fingerprint_fields:
+  - node_memory_overcommit
+  - multi_pod_probe_timeout
