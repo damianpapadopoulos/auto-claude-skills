@@ -4456,4 +4456,100 @@ test_incident_analysis_surfaces_on_deploy_rollback
 test_github_co_surfaces_on_deploy_rollback
 test_incident_analysis_still_surfaces_on_incident
 
+# ---------------------------------------------------------------------------
+# Symptom-based incident-analysis routing tests
+# ---------------------------------------------------------------------------
+
+test_incident_analysis_triggers_on_connection_failure() {
+    echo "-- test: incident-analysis triggers on connection failure symptoms --"
+    setup_test_env
+    install_registry_with_incident_analysis
+
+    local output context
+
+    output="$(run_hook "Core failed to acquire connections while being healthy. Looking into the cloud sql proxy. Error during SIGTERM shutdown: 61 active connections still exist after waiting for 0s")"
+    context="$(extract_context "${output}")"
+    assert_contains "incident-analysis fires on connection+SIGTERM symptoms" "incident-analysis" "${context}"
+
+    teardown_test_env
+}
+
+test_incident_analysis_triggers_on_oom_kill() {
+    echo "-- test: incident-analysis triggers on OOM kill symptoms --"
+    setup_test_env
+    install_registry_with_incident_analysis
+
+    local output context
+
+    output="$(run_hook "pod keeps getting OOMKilled, memory pressure is high and the container restarts every few minutes")"
+    context="$(extract_context "${output}")"
+    assert_contains "incident-analysis fires on OOM symptoms" "incident-analysis" "${context}"
+
+    teardown_test_env
+}
+
+test_incident_analysis_triggers_on_crash_loop() {
+    echo "-- test: incident-analysis triggers on CrashLoopBackOff --"
+    setup_test_env
+    install_registry_with_incident_analysis
+
+    local output context
+
+    output="$(run_hook "backend-api is in CrashLoopBackOff after the latest deploy, liveness probe keeps failing")"
+    context="$(extract_context "${output}")"
+    assert_contains "incident-analysis fires on crash loop symptoms" "incident-analysis" "${context}"
+
+    teardown_test_env
+}
+
+test_incident_analysis_triggers_on_latency_spike() {
+    echo "-- test: incident-analysis triggers on latency spike --"
+    setup_test_env
+    install_registry_with_incident_analysis
+
+    local output context
+
+    output="$(run_hook "seeing a latency spike on the payments service, p99 went from 200ms to 5s after the last deploy")"
+    context="$(extract_context "${output}")"
+    assert_contains "incident-analysis fires on latency spike symptoms" "incident-analysis" "${context}"
+
+    teardown_test_env
+}
+
+test_incident_analysis_triggers_on_cloud_sql_proxy() {
+    echo "-- test: incident-analysis triggers on cloud sql proxy issues --"
+    setup_test_env
+    install_registry_with_incident_analysis
+
+    local output context
+
+    output="$(run_hook "cloud sql proxy restarted and dropped all active connections, the app cannot reach the database")"
+    context="$(extract_context "${output}")"
+    assert_contains "incident-analysis fires on cloud sql proxy symptoms" "incident-analysis" "${context}"
+
+    teardown_test_env
+}
+
+test_incident_analysis_cofires_with_debugging() {
+    echo "-- test: incident-analysis co-fires as domain alongside systematic-debugging as process --"
+    setup_test_env
+    install_registry_with_incident_analysis
+
+    local output context
+
+    output="$(run_hook "connection error after SIGTERM, pod crashing and restarting")"
+    context="$(extract_context "${output}")"
+    assert_contains "incident-analysis fires as domain" "incident-analysis" "${context}"
+    assert_contains "systematic-debugging fires as process" "systematic-debugging" "${context}"
+
+    teardown_test_env
+}
+
+test_incident_analysis_triggers_on_connection_failure
+test_incident_analysis_triggers_on_oom_kill
+test_incident_analysis_triggers_on_crash_loop
+test_incident_analysis_triggers_on_latency_spike
+test_incident_analysis_triggers_on_cloud_sql_proxy
+test_incident_analysis_cofires_with_debugging
+
 print_summary
