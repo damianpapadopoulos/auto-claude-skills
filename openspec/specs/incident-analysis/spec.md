@@ -201,7 +201,7 @@ Then both hard_stop_conditions and stop_conditions are evaluated, and post_condi
 
 #### Scenario: Validation success
 Given all post_conditions are met after the observation window
-Then the agent transitions to POSTMORTEM with verification_status: validated_success
+Then the agent transitions to POSTMORTEM with verification_status: verified
 
 #### Scenario: Validation failure
 Given post_conditions are not met or a stop_condition triggers

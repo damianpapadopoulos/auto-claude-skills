@@ -16,7 +16,8 @@ sed -E \
     -e 's/(api_key=)[^[:space:]&]+/\1[REDACTED]/g' \
     -e 's/Cookie:[[:space:]]+.+/Cookie: [REDACTED]/g' \
     -e 's/(session=)[^[:space:];,&]+/\1[REDACTED]/g' \
-    -e 's/([A-Z_]*(SECRET|PASSWORD|TOKEN|KEY)=).+/\1[REDACTED]/g' \
+    -e 's/([A-Z_]*(SECRET|PASSWORD|TOKEN|KEY)=)[^[:space:]]+/\1[REDACTED]/g' \
     -e 's/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/[REDACTED]/g' \
-    -e 's/([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}/[REDACTED]/g' \
+    -e 's/[0-9a-fA-F]{1,4}(:[0-9a-fA-F]{1,4}){7}/[REDACTED]/g' \
+    -e 's/([0-9a-fA-F]{0,4}::([0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{0,4})/[REDACTED]/g' \
     -e 's/([^0-9.]|^)([0-9]{1,3}\.){3}[0-9]{1,3}([^0-9.]|$)/\1[REDACTED]\3/g'

@@ -436,6 +436,12 @@ install_registry_with_incident_analysis() {
       "trigger_mode": "regex",
       "hint": "INCIDENT ANALYSIS: Use Skill(auto-claude-skills:incident-analysis) for structured investigation. Stages: MITIGATE -> INVESTIGATE -> POSTMORTEM. Detect tool tier (MCP > gcloud > guidance). Scope all queries to specific service + environment + narrow time window.",
       "phases": ["SHIP", "DEBUG"]
+    }] | .methodology_hints += [{
+      "name": "github-mcp",
+      "triggers": ["(pull.?request|issue|github|merge|branch|repo|deploy|rollback)"],
+      "trigger_mode": "regex",
+      "hint": "GITHUB: If GitHub MCP tools are available, check for related PRs, issues, and workflow runs.",
+      "phases": ["DESIGN", "PLAN", "DEBUG", "REVIEW", "SHIP"]
     }]' "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
 }
 
@@ -4419,16 +4425,16 @@ test_incident_analysis_surfaces_on_deploy_rollback() {
 }
 
 test_github_co_surfaces_on_deploy_rollback() {
-    echo "-- test: gcp-observability hint co-surfaces on deploy rollback prompt --"
+    echo "-- test: GitHub hint co-surfaces with incident-analysis on deploy rollback --"
     setup_test_env
     install_registry_with_incident_analysis
 
     local output context
-    # The prompt includes "incident" which triggers both the skill and the
-    # gcp-observability methodology hint (co-surfacing).
+    # "deploy rollback" triggers both gcp-observability and github-mcp hints
     output="$(run_hook "deploy rollback incident")"
     context="$(extract_context "${output}")"
-    assert_contains "gcp-observability hint co-surfaces" "INCIDENT ANALYSIS" "${context}"
+    assert_contains "incident-analysis hint co-surfaces" "INCIDENT ANALYSIS" "${context}"
+    assert_contains "github hint co-surfaces in DEBUG" "GITHUB" "${context}"
 
     teardown_test_env
 }

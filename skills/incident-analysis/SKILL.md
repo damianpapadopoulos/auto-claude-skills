@@ -135,10 +135,10 @@ If any `veto_signals` entry has state `detected`, the playbook is disqualified. 
 Compute `evaluable_weight = sum of weights for signals with state detected or not_detected`. Compute `max_possible = sum of all signal weights`. If `evaluable_weight / max_possible < 0.70`, the playbook is ineligible for proposal but still appears in the investigation summary.
 
 **Step 3 — Score calculation:**
-- `base_score = sum of (weight) for each signal with state detected`
-- `contradiction_score = sum of (weight * contradiction_weight) for each signal with state not_detected` (where `contradiction_weight` is defined per signal in the playbook, default 0)
+- `base_score = sum of (base_weight) for each supporting signal with state detected`
+- `contradiction_score = contradiction_penalty x count(contradicting signals with state detected)` — `contradiction_penalty` is a single flat value defined per-playbook in its YAML; each detected contradicting signal subtracts this same amount (e.g., penalty=20 with 2 contradictions = -40)
 - `raw_score = base_score - contradiction_score`
-- `confidence = raw_score / evaluable_weight` (NOT `max_possible`)
+- `confidence = clamp(0, 100, round(raw_score / evaluable_weight x 100))` (NOT `max_possible`) — this yields a 0-100 integer
 - If `evaluable_weight == 0` then `confidence = 0` and the playbook is unscored
 
 **Step 4 — Three-tier eligibility:**
