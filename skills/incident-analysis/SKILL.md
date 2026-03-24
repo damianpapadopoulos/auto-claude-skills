@@ -237,7 +237,7 @@ No command proposed at this confidence level. Gathering more evidence for reclas
 
 ## Stage 2 — INVESTIGATE
 
-**Re-entry from CLASSIFY (< 60 path):** When entered from the CLASSIFY low-confidence path, only Steps 1-5 run. Steps 6-8 (Flight Plan, context synthesis, POSTMORTEM transition) are SKIPPED. Findings feed back to CLASSIFY for reclassification.
+**Re-entry from CLASSIFY (< 60 path):** When entered from the CLASSIFY low-confidence path, only Steps 1-5 run. Steps 6-9 (Flight Plan, context synthesis, completeness gate, POSTMORTEM transition) are SKIPPED. Findings feed back to CLASSIFY for reclassification.
 
 ### Step 1: Query Logs with Narrowed Filter
 
@@ -330,7 +330,22 @@ Ask for explicit developer approval before proceeding.
 
 Write a synthesized summary of the timeline and root cause. From this point forward, reference ONLY this summary (not raw log JSON). See Constraint 4.
 
-### Step 8: Transition to POSTMORTEM
+### Step 8: Investigation Completeness Gate
+
+Before transitioning to POSTMORTEM, answer each question explicitly in the synthesis output. Any question answered "No" or "Unknown" becomes an **Open Question** in the postmortem — it MUST NOT be papered over with assumptions.
+
+| # | Question | Required evidence |
+|---|----------|-------------------|
+| 1 | Does the root cause explain ALL observed symptoms? | List each symptom and whether the hypothesis accounts for it |
+| 2 | What evidence would disprove this root cause? Did you look for it? | Name the disconfirming evidence sought and what was found |
+| 3 | When did the incident start AND end? | Both timestamps from log/metric evidence, not estimation |
+| 4 | How many instances/replicas/pods exist? How many were affected? | Verified from metrics or deployment spec, not inferred from log observation |
+| 5 | Were other services or components affected? | Checked — list affected or state "checked, none found" |
+| 6 | Is this condition systemic (other nodes/instances at similar risk)? | Checked or state "not assessed" |
+
+**Gate rule:** If questions 1-3 have confident answers, proceed to POSTMORTEM. Questions 4-6 may be "not assessed" if investigation time is constrained, but must be flagged as open items. If question 1 or 2 is "No" or "Unknown," return to INVESTIGATE Step 1 with a revised hypothesis.
+
+### Step 9: Transition to POSTMORTEM
 
 ## EXECUTE
 
