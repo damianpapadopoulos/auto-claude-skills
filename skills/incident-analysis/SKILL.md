@@ -90,6 +90,15 @@ Before querying logs, determine what you are investigating:
 
 This prevents scoping errors (investigating 4 pods when 7 exist) and reveals distribution risks (3 of 7 pods on one node) before they become surprises in the postmortem. For k8s, use `container/memory/request_bytes` grouped by pod name. For other platforms, use the equivalent inventory query.
 
+### Step 2c: Quantify User-Facing Impact
+
+Before diving into root cause, establish the impact magnitude from available sources:
+- **From metrics (query):** HTTP 5xx error count/rate at the load balancer or ingress, SLI degradation (latency, availability), affected endpoint paths.
+- **From user-provided context (do not query):** support tickets, user reports, business impact descriptions. Incorporate if provided but do not attempt to query external support/ticket systems.
+- **If neither is available:** state "user-facing impact not quantified" and proceed. Do not estimate.
+
+This frames severity before the deep dive — a 1,100-error incident gets different treatment than a 5-error incident.
+
 ### Step 3: Query Error Rate / Recent Errors
 
 Scoped to the identified service + narrow time window.
@@ -351,8 +360,10 @@ Before transitioning to POSTMORTEM, answer each question explicitly in the synth
 | 4 | How many instances/replicas/pods exist? How many were affected? | Verified from metrics or deployment spec, not inferred from log observation |
 | 5 | Were other services or components affected? | Checked — list affected or state "checked, none found" |
 | 6 | Is this condition systemic (other nodes/instances at similar risk)? | Checked or state "not assessed" |
+| 7 | Did the alerting system detect this? How quickly? | Which alerts fired, time from incident start to first alert, which alerts should have fired but didn't |
+| 8 | When did humans learn about it and what did they do? | First human awareness (alert, report, support ticket), first action taken, resolution action. Use user-provided context if available; state "not captured" if not. |
 
-**Gate rule:** If questions 1-3 have confident answers, proceed to POSTMORTEM. Questions 4-6 may be "not assessed" if investigation time is constrained, but must be flagged as open items. If question 1, 2, or 3 is "No" or "Unknown," return to INVESTIGATE Step 1 — for questions 1-2 with a revised hypothesis, for question 3 with targeted recovery-evidence queries.
+**Gate rule:** If questions 1-3 have confident answers, proceed to POSTMORTEM. Questions 4-8 may be "not assessed" if investigation time is constrained, but must be flagged as open items. If question 1, 2, or 3 is "No" or "Unknown," return to INVESTIGATE Step 1 — for questions 1-2 with a revised hypothesis, for question 3 with targeted recovery-evidence queries.
 
 ### Step 9: Transition to POSTMORTEM
 
