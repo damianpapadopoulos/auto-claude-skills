@@ -102,7 +102,7 @@ fi
 # Test 7: Contract consistency — both skills agree on canonical headings
 # ---------------------------------------------------------------------------
 
-for heading in "Summary" "Impact" "Action Items" "Root Cause" "Timeline" "Lessons Learned"; do
+for heading in "Summary" "Impact" "Action Items" "Root Cause" "Timeline" "Contributing Factors" "Lessons Learned" "Investigation Notes"; do
     if printf '%s' "${ANALYSIS_CONTENT}" | grep -q "${heading}" && \
        printf '%s' "${TREND_CONTENT}" | grep -q "${heading}"; then
         _record_pass "contract: ${heading} in both skills"

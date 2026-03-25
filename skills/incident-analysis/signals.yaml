@@ -156,7 +156,7 @@ signals:
               pattern: "Out of puff"
               source: serial_console
 
-  request_exceeds_actual_usage:
+  memory_underrequested:
     title: "Memory request significantly below actual usage"
     base_weight: 20
     detection:

@@ -16,7 +16,7 @@ signals:
     - node_memory_overcommit
     - kubelet_housekeeping_degraded
     - kernel_memory_pressure
-    - request_exceeds_actual_usage
+    - memory_underrequested
     - errors_localized_to_node
     - liveness_probe_failures
   contradicting:
