@@ -34,7 +34,7 @@ The skill SHALL generate a postmortem document in a consistent format.
 #### Scenario: No template file exists
 Given the project has no postmortem template
 When the skill reaches Stage 3
-Then it uses the built-in schema (7 section headers) and writes to `docs/postmortems/YYYY-MM-DD-<kebab-case-summary>.md`
+Then it uses the built-in schema (8 section headers) and writes to `docs/postmortems/YYYY-MM-DD-<kebab-case-summary>.md`
 
 #### Scenario: Project template exists
 Given `docs/templates/postmortem.md` exists

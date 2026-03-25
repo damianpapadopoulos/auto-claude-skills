@@ -111,4 +111,19 @@ for heading in "Summary" "Impact" "Action Items" "Root Cause" "Timeline" "Contri
     fi
 done
 
+# ---------------------------------------------------------------------------
+# Test 8: No stale "7 section" language in the spec
+# ---------------------------------------------------------------------------
+SPEC_FILE="${PROJECT_ROOT}/openspec/specs/incident-analysis/spec.md"
+if [ -f "${SPEC_FILE}" ]; then
+    SPEC_CONTENT="$(cat "${SPEC_FILE}")"
+    if printf '%s' "${SPEC_CONTENT}" | grep -qi "7 section headers\|seven section"; then
+        _record_fail "spec: no 7-section language" "found '7 section headers' or 'seven section' in spec.md"
+    else
+        _record_pass "spec: no 7-section language"
+    fi
+else
+    _record_pass "spec: no 7-section language (spec file not present, skip)"
+fi
+
 print_summary
