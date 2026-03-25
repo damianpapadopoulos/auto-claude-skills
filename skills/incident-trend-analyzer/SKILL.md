@@ -26,12 +26,16 @@ No partial metrics are reported below this threshold.
 
 ## Step 2: Parse and Classify Eligibility
 
-For each file matching `YYYY-MM-DD-*.md`, extract the date from the filename and extract raw section text by heading boundaries (`## N. Heading`). Classify into eligibility tiers:
+For each file matching `YYYY-MM-DD-*.md`, extract the date from the filename and extract raw section text by heading boundaries. Match sections by **heading text**, not ordinal position — e.g., any `## N. Summary` or `## Summary` heading matches "Summary" regardless of its number.
+
+This supports both the canonical 8-section schema (Summary, Impact, Action Items, Root Cause & Trigger, Timeline, Contributing Factors, Lessons Learned, Investigation Notes) and legacy 7-section postmortems (where Timeline was section 3 and Action Items was section 7).
+
+Classify into eligibility tiers:
 
 | Tier | Required | Enables |
 |------|----------|---------|
-| **Recurrence-eligible** | Valid filename + `## 1. Summary` + `## 4. Root Cause & Trigger` | Recurrence grouping, trigger categorization |
-| **Timeline-eligible** | Recurrence-eligible + `## 3. Timeline` with parseable timestamps | Timing metric candidates |
+| **Recurrence-eligible** | Valid filename + a Summary heading + a Root Cause heading (matches "Root Cause & Trigger" or "Root Cause") | Recurrence grouping, trigger categorization |
+| **Timeline-eligible** | Recurrence-eligible + a Timeline heading with parseable timestamps (at any position) | Timing metric candidates |
 | **MTTR-eligible** | Timeline-eligible + identifiable detection and recovery events | MTTR computation |
 | **MTTD-eligible** | Timeline-eligible + identifiable trigger and detection events | MTTD computation |
 
@@ -58,7 +62,7 @@ For each recurrence-eligible postmortem, build one normalized record with these 
 
 ### Failure Mode (from Root Cause & Trigger)
 
-Match signal patterns in the `## 4. Root Cause & Trigger` section text against this vocabulary:
+Match signal patterns in the Root Cause & Trigger section text against this vocabulary:
 
 | Key | Signal patterns |
 |-----|----------------|
@@ -77,7 +81,7 @@ Group on vocabulary key only. Show raw Root Cause text as evidence, never as gro
 
 ### Trigger Category (from Root Cause & Trigger)
 
-Match signal patterns in the `## 4. Root Cause & Trigger` section text against this vocabulary:
+Match signal patterns in the Root Cause & Trigger section text against this vocabulary:
 
 | Category | Signal patterns |
 |----------|----------------|
@@ -92,7 +96,7 @@ Pick the category with the most signal words. If tied, use `unknown`.
 
 ### Timing Extraction (from Timeline)
 
-For timeline-eligible postmortems only. Extract these timestamps from `## 3. Timeline` rows:
+For timeline-eligible postmortems only. Extract these timestamps from the Timeline section rows (matched by heading text, not position):
 
 | Field | Signal patterns in timeline row |
 |-------|---------------------------------|
