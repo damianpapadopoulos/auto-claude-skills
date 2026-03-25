@@ -79,7 +79,7 @@ Do not repeat this nudge after the first mention.
 Identify:
 - Which service?
 - Which environment (production, staging)?
-- What time window? (default: last 30-60 minutes)
+- What time window? (default: last 30-60 minutes). If the user provides a local time (e.g., "it broke at 2pm"), confirm their timezone and convert to UTC before querying. All subsequent timestamps in the investigation and postmortem MUST be in UTC.
 
 ### Step 2b: Establish Inventory
 
@@ -347,7 +347,7 @@ Before transitioning to POSTMORTEM, answer each question explicitly in the synth
 |---|----------|-------------------|
 | 1 | Does the root cause explain ALL observed symptoms? | List each symptom and whether the hypothesis accounts for it |
 | 2 | What evidence would disprove this root cause? Did you look for it? | Name the disconfirming evidence sought and what was found |
-| 3 | When did the incident start AND end? | Both timestamps from log/metric evidence, not estimation |
+| 3 | When did the incident start AND end? | Both timestamps in UTC from log/metric evidence, not estimation. If kernel timestamps (seconds since boot) were used, note the conversion. |
 | 4 | How many instances/replicas/pods exist? How many were affected? | Verified from metrics or deployment spec, not inferred from log observation |
 | 5 | Were other services or components affected? | Checked — list affected or state "checked, none found" |
 | 6 | Is this condition systemic (other nodes/instances at similar risk)? | Checked or state "not assessed" |
@@ -458,7 +458,7 @@ Check in order:
 ```
 ## 1. Summary
 ## 2. Impact (quantify user impact and duration)
-## 3. Timeline (markdown table: timestamp | event)
+## 3. Timeline (all timestamps UTC; markdown table: timestamp | event)
 ## 4. Root Cause & Trigger
 ## 5. Resolution and Recovery
 ## 6. Lessons Learned (what went well, what went wrong, where we got lucky)

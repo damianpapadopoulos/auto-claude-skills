@@ -22,7 +22,7 @@
       "requires": [],
       "description": "Structured debugging: reproduce, hypothesise, isolate, fix, verify. Returns to the current phase after resolution.",
       "invoke": "Skill(superpowers:systematic-debugging)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -48,34 +48,7 @@
       "requires": [],
       "description": "Ask clarifying questions, explore options, and get user approval before planning. Activated for Build intents.",
       "invoke": "Skill(superpowers:brainstorming)",
-      "available": true,
-      "enabled": true
-    },
-    {
-      "name": "product-discovery",
-      "role": "process",
-      "phase": "DISCOVER",
-      "triggers": [
-        "(discovery|discover(y|.session|.brief)|user.problem|pain.point|what.to.build|what.should.we|which.issue)",
-        "(backlog|sprint.plan|prioriti|triage|next.sprint|roadmap)"
-      ],
-      "keywords": [
-        "what should we build",
-        "backlog review",
-        "sprint planning",
-        "discovery session",
-        "problem statement",
-        "user needs"
-      ],
-      "trigger_mode": "regex",
-      "priority": 35,
-      "precedes": [
-        "brainstorming"
-      ],
-      "requires": [],
-      "description": "Pull Jira/Confluence context, synthesize discovery brief, validate problem framing before design.",
-      "invoke": "Skill(auto-claude-skills:product-discovery)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -94,7 +67,7 @@
       ],
       "description": "Break work into discrete tasks and confirm the plan with the user before execution begins.",
       "invoke": "Skill(superpowers:writing-plans)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -115,7 +88,7 @@
       ],
       "description": "Step-by-step execution of an approved plan. REQUIRED: set up git worktree first. If subagents available, use subagent-driven-development instead. Invoke finishing-a-development-branch after all tasks complete.",
       "invoke": "Skill(superpowers:executing-plans)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -130,7 +103,7 @@
       "requires": [],
       "description": "Fresh subagent per task with two-stage review (spec compliance then code quality). Preferred over executing-plans when subagents are available.",
       "invoke": "Skill(superpowers:subagent-driven-development)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -151,7 +124,7 @@
       ],
       "description": "Dispatch superpowers:code-reviewer subagent with git diff range and plan reference. Fix critical/important issues before proceeding.",
       "invoke": "Skill(superpowers:requesting-code-review)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -168,7 +141,7 @@
       "requires": [],
       "description": "Process review feedback with technical rigor: verify claims against codebase, push back if wrong, implement fixes one at a time.",
       "invoke": "Skill(superpowers:receiving-code-review)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -189,7 +162,7 @@
       ],
       "description": "Final verification checklist before shipping: tests pass, lint clean, no TODOs, docs updated.",
       "invoke": "Skill(superpowers:verification-before-completion)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -206,7 +179,7 @@
       ],
       "description": "Verify tests pass, present 4 options (merge local, create PR, keep branch, discard), execute chosen workflow, clean up worktree.",
       "invoke": "Skill(superpowers:finishing-a-development-branch)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -244,7 +217,7 @@
       "requires": [],
       "description": "Fan out independent tasks to parallel sub-agents and collect results.",
       "invoke": "Skill(superpowers:dispatching-parallel-agents)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -261,7 +234,7 @@
       "requires": [],
       "description": "Use git worktrees for parallel branch work. Trigger-gated required: activates when parallel/isolation keywords match.",
       "invoke": "Skill(superpowers:using-git-worktrees)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -278,7 +251,7 @@
       "requires": [],
       "description": "Author and maintain Claude Code skill files (SKILL.md). Meta-overlay for Claude tooling prompts.",
       "invoke": "Skill(superpowers:writing-skills)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -312,7 +285,7 @@
       "requires": [],
       "description": "Web application testing: browser automation, accessibility checks, visual regression, and E2E flows.",
       "invoke": "Skill(webapp-testing)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -329,7 +302,7 @@
       "requires": [],
       "description": "Co-author technical documents: proposals, specs, RFCs, and architecture docs.",
       "invoke": "Skill(doc-coauthoring)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -346,7 +319,7 @@
       "requires": [],
       "description": "Recommend Claude Code automation setups: hooks, MCP servers, plugins, and workflow optimisations.",
       "invoke": "Skill(claude-code-setup:claude-automation-recommender)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -363,7 +336,7 @@
       "requires": [],
       "description": "Improve CLAUDE.md project files: structure, clarity, and completeness of project instructions.",
       "invoke": "Skill(claude-md-management:claude-md-improver)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -439,130 +412,30 @@
       "enabled": true
     },
     {
+      "name": "test-skill",
+      "role": "domain",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 200,
+      "phase": "",
+      "precedes": [],
+      "requires": [],
+      "description": "Discovered skill",
+      "invoke": "Skill(superpowers:test-skill)",
+      "available": true,
+      "enabled": true
+    },
+    {
       "name": "security-scanner",
       "role": "domain",
-      "phase": "REVIEW",
       "triggers": [],
-      "keywords": [],
       "trigger_mode": "regex",
-      "priority": 10,
+      "priority": 200,
+      "phase": "",
       "precedes": [],
       "requires": [],
-      "description": "Composition-activated: fired by REVIEW phase composition, not by trigger scoring. Hybrid Semgrep/Trivy/Gitleaks scanning.",
+      "description": "Discovered skill",
       "invoke": "Skill(auto-claude-skills:security-scanner)",
-      "available": true,
-      "enabled": true
-    },
-    {
-      "name": "incident-analysis",
-      "role": "domain",
-      "phase": "DEBUG",
-      "triggers": [
-        "(incident|postmortem|outage|root.cause|error.spike|log.analysis|production.error|staging.error)",
-        "(connection.*(fail|refus|timeout|pool|exhaust|acquir)|oom.?kill|memory.pressure|cpu.*(throttl|saturat)|crash.?loop|liveness.probe|node.not.ready|upstream.*(fail|error|timeout))",
-        "(sigterm|sigkill|shutdown.*(error|fail|grace)|active.connection|cloud.?sql|proxy.*(restart|error|fail|crash)|pod.*(restart|crash|evict)|latency.*(spike|p99)|p99.*(latency|spike|degrad)|request.timeout|circuit.break|deploy.*(fail|rollback))"
-      ],
-      "keywords": [
-        "incident",
-        "postmortem",
-        "outage",
-        "error spike",
-        "connection failure",
-        "connection pool",
-        "cloud sql proxy",
-        "graceful shutdown",
-        "active connections",
-        "health check",
-        "pod restart",
-        "latency spike",
-        "request timeout"
-      ],
-      "trigger_mode": "regex",
-      "priority": 20,
-      "precedes": [],
-      "requires": [],
-      "description": "Investigate production symptoms: connection failures, pod crashes/restarts, SIGTERM/OOM errors, latency spikes, Cloud SQL/proxy issues, deployment-correlated errors. Playbook-driven: MITIGATE -> CLASSIFY -> INVESTIGATE -> EXECUTE -> VALIDATE -> POSTMORTEM.",
-      "invoke": "Skill(auto-claude-skills:incident-analysis)",
-      "available": true,
-      "enabled": true
-    },
-    {
-      "name": "outcome-review",
-      "role": "process",
-      "phase": "LEARN",
-      "triggers": [
-        "(how.did.*(perform|do|go|work)|outcome|adoption|funnel|cohort|experiment.result|feature.impact|post.launch|post.ship|measur(e|ing).*(impact|outcome|metric|adoption|success|result)|did.it.work)"
-      ],
-      "keywords": [
-        "how did it perform",
-        "check metrics",
-        "feature impact",
-        "post-launch review",
-        "did it work",
-        "adoption metrics",
-        "what did we learn",
-        "learn from this",
-        "review the results",
-        "metric results"
-      ],
-      "trigger_mode": "regex",
-      "priority": 30,
-      "precedes": [
-        "product-discovery"
-      ],
-      "requires": [],
-      "description": "Query PostHog metrics, synthesize outcome report, create follow-up Jira work (gated). Entered independently post-ship.",
-      "invoke": "Skill(auto-claude-skills:outcome-review)",
-      "available": true,
-      "enabled": true
-    },
-    {
-      "name": "incident-trend-analyzer",
-      "role": "domain",
-      "phase": "DEBUG",
-      "triggers": [
-        "(incident.trend|postmortem.trend|what.keeps.breaking|recurring.incident|failure.pattern|incident.pattern|analyze.postmortems)"
-      ],
-      "keywords": [
-        "postmortem trends",
-        "recurring incidents",
-        "incident patterns",
-        "what keeps breaking"
-      ],
-      "trigger_mode": "regex",
-      "priority": 20,
-      "precedes": [],
-      "requires": [],
-      "description": "On-demand postmortem trend analysis: recurrence grouping, trigger categorization, MTTR/MTTD from canonical docs/postmortems/ corpus.",
-      "invoke": "Skill(auto-claude-skills:incident-trend-analyzer)",
-      "available": true,
-      "enabled": true
-    },
-    {
-      "name": "test-driven-development",
-      "role": "domain",
-      "triggers": [],
-      "trigger_mode": "regex",
-      "priority": 200,
-      "phase": "",
-      "precedes": [],
-      "requires": [],
-      "description": "Discovered skill",
-      "invoke": "Skill(superpowers:test-driven-development)",
-      "available": true,
-      "enabled": true
-    },
-    {
-      "name": "using-superpowers",
-      "role": "domain",
-      "triggers": [],
-      "trigger_mode": "regex",
-      "priority": 200,
-      "phase": "",
-      "precedes": [],
-      "requires": [],
-      "description": "Discovered skill",
-      "invoke": "Skill(superpowers:using-superpowers)",
       "available": true,
       "enabled": true
     }
@@ -585,7 +458,7 @@
         "SHIP"
       ],
       "description": "Structured commit workflows and branch-to-PR automation",
-      "available": true
+      "available": false
     },
     {
       "name": "security-guidance",
@@ -602,7 +475,7 @@
         "*"
       ],
       "description": "Write-time security blocker for XSS, injection, unsafe deserialization",
-      "available": true
+      "available": false
     },
     {
       "name": "hookify",
@@ -625,7 +498,7 @@
         "DESIGN"
       ],
       "description": "Custom rule authoring for Claude behavior guards",
-      "available": true
+      "available": false
     },
     {
       "name": "feature-dev",
@@ -648,7 +521,7 @@
         "REVIEW"
       ],
       "description": "Full feature pipeline with parallel exploration and architecture agents",
-      "available": true
+      "available": false
     },
     {
       "name": "skill-creator",
@@ -670,7 +543,7 @@
         "DESIGN"
       ],
       "description": "Skill eval/improvement loop with benchmarking",
-      "available": true
+      "available": false
     },
     {
       "name": "context7",
@@ -691,7 +564,7 @@
         "DEBUG"
       ],
       "description": "Up-to-date library documentation via Context7 MCP. Resolves library IDs and fetches current docs, API references, and examples.",
-      "available": true
+      "available": false
     },
     {
       "name": "github",
@@ -713,12 +586,11 @@
       "phase_fit": [
         "DESIGN",
         "PLAN",
-        "DEBUG",
         "REVIEW",
         "SHIP"
       ],
       "description": "GitHub MCP for repository management. Create/review PRs, manage issues, search repos, and interact with GitHub APIs programmatically.",
-      "available": true
+      "available": false
     },
     {
       "name": "atlassian",
@@ -732,17 +604,13 @@
           "searchJiraIssuesUsingJql",
           "getJiraIssue",
           "getConfluencePage",
-          "searchConfluenceUsingCql",
-          "createJiraIssue",
-          "addCommentToJiraIssue"
+          "searchConfluenceUsingCql"
         ]
       },
       "phase_fit": [
-        "DISCOVER",
         "DESIGN",
         "PLAN",
-        "REVIEW",
-        "LEARN"
+        "REVIEW"
       ],
       "description": "Jira and Confluence integration via claude.ai managed MCP. Connect via /mcp in Claude Code. Pull acceptance criteria, search issues, read design docs.",
       "available": false
@@ -792,188 +660,15 @@
       ],
       "description": "Tiered context retrieval — curated docs (Context Hub via Context7), blast-radius mapping (Serena), institutional memory (Forgetful) with graceful degradation.",
       "available": true
-    },
-    {
-      "name": "posthog",
-      "source": "mcp-server",
-      "provides": {
-        "commands": [],
-        "skills": [],
-        "agents": [],
-        "hooks": [],
-        "mcp_tools": [
-          "query-run",
-          "get-experiment",
-          "list-experiments",
-          "get-feature-flag",
-          "list-feature-flags",
-          "create-annotation"
-        ]
-      },
-      "phase_fit": [
-        "LEARN",
-        "SHIP",
-        "DEBUG"
-      ],
-      "description": "PostHog analytics, experiments, and feature flags via MCP. Query adoption metrics, experiment results, and error rates.",
-      "available": false
-    },
-    {
-      "name": "claude-code-setup",
-      "source": "auto-discovered",
-      "provides": {
-        "commands": [],
-        "skills": [
-          "claude-automation-recommender"
-        ],
-        "agents": [],
-        "hooks": []
-      },
-      "phase_fit": [
-        "*"
-      ],
-      "description": "Auto-discovered plugin",
-      "available": true
-    },
-    {
-      "name": "claude-md-management",
-      "source": "auto-discovered",
-      "provides": {
-        "commands": [
-          "/revise-claude-md"
-        ],
-        "skills": [
-          "claude-md-improver"
-        ],
-        "agents": [],
-        "hooks": []
-      },
-      "phase_fit": [
-        "*"
-      ],
-      "description": "Auto-discovered plugin",
-      "available": true
-    },
-    {
-      "name": "frontend-design",
-      "source": "auto-discovered",
-      "provides": {
-        "commands": [],
-        "skills": [
-          "frontend-design"
-        ],
-        "agents": [],
-        "hooks": []
-      },
-      "phase_fit": [
-        "*"
-      ],
-      "description": "Auto-discovered plugin",
-      "available": true
-    },
-    {
-      "name": "pr-review-toolkit",
-      "source": "auto-discovered",
-      "provides": {
-        "commands": [
-          "/review-pr"
-        ],
-        "skills": [],
-        "agents": [
-          "code-reviewer",
-          "code-simplifier",
-          "comment-analyzer",
-          "pr-test-analyzer",
-          "silent-failure-hunter",
-          "type-design-analyzer"
-        ],
-        "hooks": []
-      },
-      "phase_fit": [
-        "*"
-      ],
-      "description": "Auto-discovered plugin",
-      "available": true
-    },
-    {
-      "name": "ralph-loop",
-      "source": "auto-discovered",
-      "provides": {
-        "commands": [
-          "/cancel-ralph",
-          "/help",
-          "/ralph-loop"
-        ],
-        "skills": [],
-        "agents": [],
-        "hooks": []
-      },
-      "phase_fit": [
-        "*"
-      ],
-      "description": "Auto-discovered plugin",
-      "available": true
-    },
-    {
-      "name": "superpowers",
-      "source": "auto-discovered",
-      "provides": {
-        "commands": [
-          "/brainstorm",
-          "/execute-plan",
-          "/write-plan"
-        ],
-        "skills": [
-          "brainstorming",
-          "dispatching-parallel-agents",
-          "executing-plans",
-          "finishing-a-development-branch",
-          "receiving-code-review",
-          "requesting-code-review",
-          "subagent-driven-development",
-          "systematic-debugging",
-          "test-driven-development",
-          "using-git-worktrees",
-          "using-superpowers",
-          "verification-before-completion",
-          "writing-plans",
-          "writing-skills"
-        ],
-        "agents": [
-          "code-reviewer"
-        ],
-        "hooks": []
-      },
-      "phase_fit": [
-        "*"
-      ],
-      "description": "Auto-discovered plugin",
-      "available": true
-    },
-    {
-      "name": "typescript-lsp",
-      "source": "auto-discovered",
-      "provides": {
-        "commands": [],
-        "skills": [],
-        "agents": [],
-        "hooks": []
-      },
-      "phase_fit": [
-        "*"
-      ],
-      "description": "Auto-discovered plugin",
-      "available": true
     }
   ],
   "context_capabilities": {
-    "context7": true,
+    "context7": false,
     "context_hub_cli": true,
-    "context_hub_available": true,
-    "serena": true,
-    "forgetful_memory": true,
-    "openspec": true,
-    "posthog": false
+    "context_hub_available": false,
+    "serena": false,
+    "forgetful_memory": false,
+    "openspec": true
   },
   "openspec_capabilities": {
     "binary": true,
@@ -982,30 +677,6 @@
     "warnings": []
   },
   "phase_compositions": {
-    "DISCOVER": {
-      "driver": "product-discovery",
-      "parallel": [
-        {
-          "plugin": "atlassian",
-          "use": "mcp:searchJiraIssuesUsingJql + getConfluencePage",
-          "when": "installed",
-          "purpose": "Pull problem context, acceptance criteria, related design docs from Jira and Confluence"
-        },
-        {
-          "plugin": "unified-context-stack",
-          "use": "tiered context retrieval (Historical Truth, Intent Truth)",
-          "when": "installed AND any context_capability is true",
-          "purpose": "Check past decisions and existing specs before discovery synthesis"
-        }
-      ],
-      "hints": [
-        {
-          "plugin": "atlassian",
-          "text": "ATLASSIAN: Pull Jira issues and Confluence docs to ground discovery in real backlog context.",
-          "when": "installed"
-        }
-      ]
-    },
     "DESIGN": {
       "driver": "brainstorming",
       "parallel": [
@@ -1174,10 +845,6 @@
           "plugin": "github",
           "text": "Use GitHub MCP tools (create_pull_request) for programmatic PR creation with labels and reviewers",
           "when": "installed"
-        },
-        {
-          "text": "LEARN REMINDER: After shipping, use 'how did [feature] perform' to review outcomes with the outcome-review skill.",
-          "when": "always"
         }
       ]
     },
@@ -1196,39 +863,15 @@
           "purpose": "Reproduce bug with failing test before fixing. INVOKE before writing fix code"
         }
       ],
-      "hints": [
-        {
-          "text": "DEBUG ESCALATION: If the fix touches multiple files, changes behavior, or affects a public API, enter REVIEW → SHIP after debugging. Use Skill(superpowers:requesting-code-review) to transition."
-        }
-      ]
-    },
-    "LEARN": {
-      "driver": "outcome-review",
-      "parallel": [
-        {
-          "plugin": "posthog",
-          "use": "mcp:query-run + get-experiment + create-annotation",
-          "when": "installed",
-          "purpose": "Query adoption metrics, experiment results, and annotate ship events"
-        },
-        {
-          "plugin": "atlassian",
-          "use": "mcp:createJiraIssue + addCommentToJiraIssue",
-          "when": "installed AND user approves follow-up creation",
-          "purpose": "Create follow-up tickets and annotate original issues with outcome data"
-        }
-      ],
       "hints": []
     }
   },
   "phase_guide": {
-    "DISCOVER": "product-discovery (pull Jira/Confluence context, synthesize discovery brief)",
     "DESIGN": "brainstorming (ask questions, get approval)",
     "PLAN": "writing-plans (break into tasks, confirm before execution)",
     "IMPLEMENT": "executing-plans or subagent-driven-development (offer agent-team-execution for 3+ independent tasks)",
     "REVIEW": "requesting-code-review",
     "SHIP": "verification-before-completion + openspec-ship + finishing-a-development-branch",
-    "LEARN": "outcome-review (query metrics, synthesize outcome report, create follow-up work)",
     "DEBUG": "systematic-debugging, then return to current phase"
   },
   "methodology_hints": [
@@ -1269,7 +912,6 @@
       "phases": [
         "DESIGN",
         "PLAN",
-        "DEBUG",
         "REVIEW",
         "SHIP"
       ]
@@ -1277,12 +919,11 @@
     {
       "name": "atlassian-jira",
       "triggers": [
-        "(ticket|story|epic|acceptance.criter|definition.of.done|requirement|user.story|jira|sprint|backlog|discover|triage|prioriti)"
+        "(ticket|story|epic|acceptance.criter|definition.of.done|requirement|user.story|jira|sprint|backlog)"
       ],
       "trigger_mode": "regex",
       "hint": "ATLASSIAN: If Jira MCP tools are available, pull acceptance criteria and linked context for relevant tickets. Reference any Jira context already discussed in this session.",
       "phases": [
-        "DISCOVER",
         "DESIGN",
         "PLAN"
       ]
@@ -1302,26 +943,11 @@
     {
       "name": "gcp-observability",
       "triggers": [
-        "(runtime.log|error.group|metric.regress|production.error|staging.error|verify.deploy|post.deploy|list.log|list.metric|trace.search|incident|postmortem|root.cause|outage|error.spike|log.analysis|5[0-9][0-9].error)",
-        "(connection.*(fail|refus|timeout|pool|exhaust)|oom.?kill|crash.?loop|cloud.?sql|proxy.*(restart|error|fail)|pod.*(restart|crash|evict)|sigterm|sigkill|latency.*(spike|p99)|p99.*(latency|spike|degrad)|deploy.*(fail|rollback))"
+        "(runtime.log|error.group|metric.regress|production.error|staging.error|verify.deploy|post.deploy|list.log|list.metric|trace.search)"
       ],
       "trigger_mode": "regex",
-      "hint": "INCIDENT ANALYSIS: Use Skill(auto-claude-skills:incident-analysis) for structured investigation. Stages: MITIGATE -> CLASSIFY -> (confidence-gated HITL or INVESTIGATE loop) -> EXECUTE -> VALIDATE -> POSTMORTEM. Detect tool tier (MCP > gcloud > guidance). Scope all queries to specific service + environment + narrow time window. Classify incident type against bundled playbooks, capture sanitized evidence, recheck state fingerprint before execution, validate post-mitigation conditions.",
+      "hint": "GCP OBSERVABILITY: If observability MCP tools are available, verify runtime state. Scope queries to service + environment + narrow time window (30-60 min).",
       "phases": [
-        "SHIP",
-        "DEBUG"
-      ]
-    },
-    {
-      "name": "posthog-metrics",
-      "triggers": [
-        "(metric|adoption|funnel|cohort|experiment|feature.flag|a.?b.test|conversion|retention|churn|engagement|posthog)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "POSTHOG: If PostHog MCP tools are available, query analytics and experiment results directly. Use outcome-review skill for structured post-ship analysis.",
-      "plugin": "posthog",
-      "phases": [
-        "LEARN",
         "SHIP",
         "DEBUG"
       ]
@@ -1433,7 +1059,7 @@
       "trigger_mode": "regex",
       "hint": "SECURITY SCAN: If semgrep/trivy are installed, run deterministic scans before LLM review. Invoke Skill(auto-claude-skills:security-scanner).",
       "phases": [
-        "*"
+        "REVIEW"
       ]
     }
   ],
