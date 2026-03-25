@@ -15,7 +15,9 @@ If a mutating action is identified (restart service, rollback deployment, scale 
 
 ### 2. Scope Restriction — No Global Searches During Incidents
 
-During active investigation, all file reads, log queries, and code searches MUST be constrained to the specific service or trace ID identified in Stage 1 (MITIGATE). Global codebase searches (unbounded grep, recursive find) are forbidden. This prevents context window exhaustion and irrelevant noise during time-sensitive debugging.
+During active investigation, all application-level file reads, log queries, and code searches MUST be constrained to the specific service or trace ID identified in Stage 1 (MITIGATE). Global codebase searches (unbounded grep, recursive find) are forbidden. This prevents context window exhaustion and irrelevant noise during time-sensitive debugging.
+
+**Infrastructure escalation exception:** When Step 3 (Single-Service Deep Dive) identifies multi-pod or multi-service failures that indicate a node-level or infrastructure-level root cause, the scope expands to the affected node(s) and their infrastructure signals (kubelet logs, serial console, audit logs, node-level metrics). This escalation is bounded — queries target the specific node(s) implicated by the application-level evidence, not the entire cluster. The completeness gate (Step 8, Q6) may require checking peer nodes for systemic risk; this is also permitted under this exception.
 
 ### 3. Temp-File Execution Pattern (Tier 2 Only)
 
@@ -510,19 +512,34 @@ Open questions remaining.
 
 ### Investigation Path (optional appendix)
 If the investigation involved hypothesis revisions or completeness gate loop-backs,
-offer to include an investigation path.
+offer to include an investigation path. The path has two parts: a hypothesis thread
+(the reasoning arc) and evidence steps (the verification chain).
 
 **Format rules:**
-- Each step: **question → decisive evidence → conclusion**
-- Dead ends: **Ruled out:** lines with evidence source and reason
-- Hypothesis changes: **→ Hypothesis revised:** markers stating from-what to-what
-- Disconfirming checks: **"prediction" → confirmed/contradicted** with evidence
-- All timestamps explicitly **UTC**
-- End with a single-sentence **Reviewer takeaway** linked to the top action item
+- **Hypothesis thread first:** 3-5 lines showing how the agent's thinking evolved.
+  Each hypothesis: what it was → what prompted it → verdict.
+  This is the "story" — a reviewer can read just this and understand the reasoning.
+- **Evidence steps second:** question → decisive evidence → conclusion per step.
+  Dead ends: **Ruled out:** lines with evidence source and reason.
+  Disconfirming checks: **"prediction" → confirmed/contradicted** with evidence.
+  All timestamps explicitly **UTC**.
 - Steps may be combined, reordered, or omitted based on what the investigation
   actually required. Number sequentially based on what was done. Do not pad.
+- End with a single-sentence **Reviewer takeaway** linked to the top action item.
 
 **Template:**
+
+  **Hypothesis thread:**
+  H1: [hypothesis] — [what prompted it].
+      → [Ruled out / Revised / Confirmed]: [decisive evidence].
+  H2: [hypothesis] — [what prompted the shift from H1].
+      → [Ruled out / Revised / Confirmed]: [decisive evidence].
+  HN: [hypothesis] — [what prompted the shift from H(N-1)].
+      → Confirmed: [evidence that confirmed it].
+  Key revision trigger: [the single data point or observation that changed
+  the direction of the investigation].
+
+  **Steps:**
 
   1. **Inventory** — What exists and how is it configured?
      Evidence: [deployment/infrastructure query] → [instance count, distribution, resource config].
@@ -541,7 +558,6 @@ offer to include an investigation path.
      Evidence: [infrastructure metrics, system logs] → [what was unhealthy and for how long].
      Deeper: [scheduling/capacity/config data] → [why the unhealthy state existed].
      Conclusion: [the systemic cause].
-     → Hypothesis revised: [from what to what, and why — only if hypothesis changed].
 
   5. **Disconfirming checks** — What would disprove this root cause?
      "[testable prediction]" → [confirmed/contradicted] ([evidence]).

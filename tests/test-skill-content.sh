@@ -73,4 +73,10 @@ assert_contains "CLASSIFY stage section" "## CLASSIFY" "${SKILL_CONTENT}"
 assert_contains "loop termination: 3 iterations" "3 reclassification iterations" "${SKILL_CONTENT}"
 assert_contains "loop termination: improvement threshold" "improvement" "${SKILL_CONTENT}"
 
+# ---------------------------------------------------------------------------
+# Scope restriction has infrastructure escalation carve-out
+# ---------------------------------------------------------------------------
+CONSTRAINT_2_BLOCK=$(sed -n '/### 2\. Scope Restriction/,/### 3\./p' "${SKILL_FILE}")
+assert_contains "scope restriction: infra escalation carve-out" "Infrastructure escalation" "${CONSTRAINT_2_BLOCK}"
+
 print_summary
