@@ -369,9 +369,9 @@ Before transitioning to POSTMORTEM, answer each question explicitly in the synth
 
 **Investigation path offer:** If the investigation involved hypothesis revisions (Step 5 ran more than once) or completeness gate loop-backs (any question triggered a return to Step 1), offer to generate an investigation path appendix:
 
-> "Investigation involved N hypothesis revisions. Include investigation path appendix in the postmortem? (Helps future investigators, adds ~1 page.)"
+> "Investigation involved N hypothesis revisions. Include investigation path appendix? (Adds ~1 page under Investigation Notes — shows the question → evidence → conclusion chain and ruled-out hypotheses.)"
 
-If accepted, include it as a subsection under Investigation Notes (section 8). If declined or the investigation was straightforward (no revisions, no loop-backs), omit it.
+If accepted, generate using the format in the Investigation Notes template (question → decisive evidence → conclusion per step, explicit Ruled out: lines for dead ends, Hypothesis revised: markers where thinking changed, Reviewer takeaway at the end). Include as a subsection under Investigation Notes (section 8). If declined or the investigation was straightforward (no revisions, no loop-backs), omit it.
 
 ## EXECUTE
 
@@ -510,9 +510,45 @@ Open questions remaining.
 
 ### Investigation Path (optional appendix)
 If the investigation involved hypothesis revisions or completeness gate loop-backs,
-offer to include a step-by-step investigation path showing what was checked, in what
-order, what was ruled out, and where the hypothesis changed. This helps future
-investigators facing similar incidents avoid repeating dead ends.
+offer to include an investigation path. Format each step as:
+**question → decisive evidence → conclusion**.
+
+Use reviewer-friendly headings (not investigator jargon). Example format:
+
+  1. **Inventory** — How many replicas, where distributed?
+     Evidence: deployment metrics → 7 replicas, 3/3/1 across 3 nodes, 8 GB request / 16 GB limit.
+     Conclusion: 3 of 7 pods co-located on one node; request is half typical usage.
+
+  2. **Proximate cause** — What killed the DB connections?
+     Evidence: proxy logs 13:32-13:34 UTC → SIGTERM on 3 pods, 229 connections killed (0s drain).
+     Conclusion: proxy term_timeout=0s caused instant connection loss on any restart.
+
+  3. **Ruled-out triggers** — What did NOT cause the pod kills?
+     Ruled out: maintenance drain (audit logs: only lease renewals, constant pattern).
+     Ruled out: deployment (Flux: artifact up-to-date, no ScalingReplicaSet events).
+     Ruled out: HPA (no Scaled events).
+     Actual trigger: kubelet logs show 16+ pods failing probes with context deadline exceeded.
+
+  4. **Node health** — Why were probes timing out?
+     Evidence: node memory 87-93% for 5 hours; virtio_balloon failure at 13:15 UTC.
+     Conclusion: chronic overcommit, not a transient blip.
+     → Hypothesis revised: not "memory eviction" but "overcommit caused system-wide thrashing."
+
+  5. **Disconfirming checks** — What would disprove chronic overcommit?
+     "Utilization should be high for hours" → confirmed (87%+ since 08:35 UTC).
+     "Transient blip should show healthy node before 13:32" → contradicted.
+     "Explains all symptoms?" → yes (3 pods killed, 16+ services failing, kernel pressure).
+
+  6. **Recovery** — When was service actually restored?
+     Evidence: proxy restart 13:44, first DB connection 13:54 UTC (+21 min).
+     Conclusion: pods restarted in-place on same thrashed node; recovery was slow, not instant.
+
+  7. **Blast radius** — What else was affected or at risk?
+     Evidence: 16+ services on v0hl; node bj24 at 86.2% utilization.
+     Conclusion: node-wide impact; bj24 has same overcommit pattern and is at risk.
+
+  **Reviewer takeaway:** The node was overcommitted for 5 hours before failure.
+  An alert on sustained node memory >85% would have caught this before user impact.
 ```
 
 ### Step 2: Directory Discovery
