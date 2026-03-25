@@ -96,4 +96,13 @@ STEP7_BLOCK=$(sed -n '/### Step 7: Context Discipline/,/### Step 8/p' "${SKILL_F
 assert_contains "step 7: preserves ruled-out hypotheses" "ruled-out" "${STEP7_BLOCK}"
 assert_contains "step 7: preserves hypothesis revisions" "hypothesis revision" "${STEP7_BLOCK}"
 
+# ---------------------------------------------------------------------------
+# Evidence persistence is operationalized in EXECUTE and VALIDATE
+# ---------------------------------------------------------------------------
+EXECUTE_BLOCK=$(sed -n '/## EXECUTE/,/## VALIDATE/p' "${SKILL_FILE}")
+assert_contains "EXECUTE: write pre.json step" "pre.json" "${EXECUTE_BLOCK}"
+
+VALIDATE_BLOCK=$(sed -n '/## VALIDATE/,/## Evidence Bundle/p' "${SKILL_FILE}")
+assert_contains "VALIDATE: write validate.json step" "validate.json" "${VALIDATE_BLOCK}"
+
 print_summary

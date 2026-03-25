@@ -410,6 +410,12 @@ If the fingerprint has drifted (signals changed materially since classification)
 - **Do NOT execute.** The situation has changed since the user approved.
 - Present the drift summary and return to CLASSIFY with fresh evidence.
 
+### Step 1b: Persist Pre-Execution Evidence
+
+Write the evidence bundle's `pre.json` to `docs/postmortems/evidence/<bundle-id>/pre.json`. Contents: signal states from CLASSIFY, fingerprint snapshot from Step 1, and the final log window (last N entries matching the playbook's signals). All payloads MUST pass through `redact-evidence.sh` before writing. See Evidence Bundle for format and redaction details.
+
+If the playbook specifies `requires_pre_execution_evidence: true`, this step is mandatory — do not proceed to Step 2 without writing `pre.json`.
+
 ### Step 2: Execute Command
 
 If the fingerprint matches, execute the approved command from the playbook (or confirm that the user has run it externally).
@@ -444,17 +450,20 @@ At each sample:
 **Validated — Success:**
 All `post_conditions` passed consistently across the observation window. No stop conditions triggered.
 - Record `verification_status: verified`
+- Write `validate.json` to the evidence bundle with validation sample results, post_condition evaluations, and timing data. All payloads MUST pass through `redact-evidence.sh`.
 - Transition to POSTMORTEM
 
 **Validated — Failed (ESCALATE):**
 A `hard_stop_condition` or `stop_condition` triggered during validation. The mitigation made things worse or did not help.
 - Record `verification_status: failed`
+- Write `validate.json` to the evidence bundle with the failure evidence, stop_condition trigger details, and timing data. All payloads MUST pass through `redact-evidence.sh`.
 - Transition to INVESTIGATE (full Stage 2, not the limited CLASSIFY < 60 path)
 - Present the validation failure evidence to the user
 
 **Inconclusive:**
 The observation window completed but `post_conditions` results are mixed or unclear.
 - Present the validation data to the user with three options:
+- Regardless of which option the user chooses, write `validate.json` to the evidence bundle with the partial results and timing data. All payloads MUST pass through `redact-evidence.sh`.
   1. **Extend:** Run another observation window
   2. **Escalate:** Transition to INVESTIGATE
   3. **Accept as mitigated (unverified):** Record `verification_status: unverified` and transition to POSTMORTEM
