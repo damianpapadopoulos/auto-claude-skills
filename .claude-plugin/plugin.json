@@ -1,7 +1,7 @@
 {
   "name": "auto-claude-skills",
   "description": "Intelligent skill activation hook with phase-aware routing and agent team support for the design-plan-implement-review-ship pipeline",
-  "version": "3.14.6",
+  "version": "3.14.7",
   "author": {
     "name": "auto-claude-skills contributors"
   },
