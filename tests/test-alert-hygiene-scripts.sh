@@ -39,8 +39,8 @@ cat > "${FIXTURES_DIR}/policies.json" << 'FIXTURE'
     "displayName": "Test flapping alert",
     "enabled": true,
     "userLabels": {"squad": "staging_alerts"},
-    "conditions": [{"conditionPrometheusQueryLanguage": {"query": "metric > 100", "duration": "300s", "evaluationInterval": "60s"}}],
-    "alertStrategy": {"autoClose": "1800s"},
+    "conditions": [{"displayName": "metric > 100", "evaluationInterval": "60s", "duration": "300s"}],
+    "autoClose": "1800s",
     "notificationChannels": ["projects/test/notificationChannels/1"],
     "combiner": "OR"
   },
@@ -49,8 +49,8 @@ cat > "${FIXTURES_DIR}/policies.json" << 'FIXTURE'
     "displayName": "Test chronic alert",
     "enabled": true,
     "userLabels": {"squad": "prod_alerts"},
-    "conditions": [{"conditionPrometheusQueryLanguage": {"query": "restarts > 5", "duration": "600s", "evaluationInterval": "60s"}}],
-    "alertStrategy": {},
+    "conditions": [{"displayName": "restarts > 5", "evaluationInterval": "60s", "duration": "600s"}],
+    "autoClose": "",
     "notificationChannels": ["projects/test/notificationChannels/1"],
     "combiner": "OR"
   }
@@ -151,6 +151,31 @@ flap = [c for c in clusters if 'flapping' in c['policy_name'].lower()][0]
 print(flap['raw_incidents'])
 " 2>/dev/null)
 assert_equals "flapping cluster has 50 raw incidents" "50" "${RAW_COUNT}"
+
+# Validate autoClose and evaluationInterval extraction
+AUTO_CLOSE=$(python3 -c "
+import json
+clusters = json.load(open('${FIXTURES_DIR}/clusters.json'))
+flap = [c for c in clusters if 'flapping' in c['policy_name'].lower()][0]
+print(flap['auto_close_sec'])
+" 2>/dev/null)
+assert_equals "flapping cluster auto_close extracted" "1800" "${AUTO_CLOSE}"
+
+EVAL_WINDOW=$(python3 -c "
+import json
+clusters = json.load(open('${FIXTURES_DIR}/clusters.json'))
+flap = [c for c in clusters if 'flapping' in c['policy_name'].lower()][0]
+print(flap['eval_window_sec'])
+" 2>/dev/null)
+assert_equals "flapping cluster eval_window extracted" "60" "${EVAL_WINDOW}"
+
+CHRONIC_AUTO_CLOSE=$(python3 -c "
+import json
+clusters = json.load(open('${FIXTURES_DIR}/clusters.json'))
+chronic = [c for c in clusters if 'chronic' in c['policy_name'].lower()][0]
+print(chronic['auto_close_sec'])
+" 2>/dev/null)
+assert_equals "chronic cluster auto_close is 0 (empty)" "0" "${CHRONIC_AUTO_CLOSE}"
 
 # --- Scenario: cross-project alerts stay separated ---
 python3 -c "
