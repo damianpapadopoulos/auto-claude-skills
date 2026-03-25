@@ -1003,7 +1003,7 @@
     "context7": true,
     "context_hub_cli": true,
     "context_hub_available": true,
-    "serena": false,
+    "serena": true,
     "forgetful_memory": true,
     "openspec": true,
     "posthog": false
