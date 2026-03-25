@@ -367,6 +367,12 @@ Before transitioning to POSTMORTEM, answer each question explicitly in the synth
 
 ### Step 9: Transition to POSTMORTEM
 
+**Investigation path offer:** If the investigation involved hypothesis revisions (Step 5 ran more than once) or completeness gate loop-backs (any question triggered a return to Step 1), offer to generate an investigation path appendix:
+
+> "Investigation involved N hypothesis revisions. Include investigation path appendix in the postmortem? (Helps future investigators, adds ~1 page.)"
+
+If accepted, include it as a subsection under Investigation Notes (section 8). If declined or the investigation was straightforward (no revisions, no loop-backs), omit it.
+
 ## EXECUTE
 
 Entered after the user approves a high-confidence CLASSIFY decision at the HITL gate. This stage applies the mitigation command with a fingerprint safety check.
@@ -501,6 +507,12 @@ What went well, what went wrong, where we got lucky.
 Hypotheses investigated and ruled out.
 Confidence notes (what is confirmed vs inferred).
 Open questions remaining.
+
+### Investigation Path (optional appendix)
+If the investigation involved hypothesis revisions or completeness gate loop-backs,
+offer to include a step-by-step investigation path showing what was checked, in what
+order, what was ruled out, and where the hypothesis changed. This helps future
+investigators facing similar incidents avoid repeating dead ends.
 ```
 
 ### Step 2: Directory Discovery
