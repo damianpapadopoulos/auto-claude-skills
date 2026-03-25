@@ -512,13 +512,14 @@ Open questions remaining.
 
 ### Investigation Path (optional appendix)
 If the investigation involved hypothesis revisions or completeness gate loop-backs,
-offer to include an investigation path. The path has two parts: a hypothesis thread
-(the reasoning arc) and evidence steps (the verification chain).
+offer to include an investigation path. The path has two parts: a decision tree
+(the reasoning arc at a glance) and evidence steps (the verification chain).
 
 **Format rules:**
-- **Hypothesis thread first:** 3-5 lines showing how the agent's thinking evolved.
-  Each hypothesis: what it was → what prompted it → verdict.
-  This is the "story" — a reviewer can read just this and understand the reasoning.
+- **Decision tree first:** an indented text tree showing the branching logic.
+  ✗ for ruled-out paths (with reason), ✓ for confirmed paths.
+  Include recovery, blast radius, and any disproved claims from other investigations.
+  A reviewer can read just this tree and understand the full reasoning in 30 seconds.
 - **Evidence steps second:** question → decisive evidence → conclusion per step.
   Dead ends: **Ruled out:** lines with evidence source and reason.
   Disconfirming checks: **"prediction" → confirmed/contradicted** with evidence.
@@ -529,17 +530,24 @@ offer to include an investigation path. The path has two parts: a hypothesis thr
 
 **Template:**
 
-  **Hypothesis thread:**
-  H1: [hypothesis] — [what prompted it].
-      → [Ruled out / Revised / Confirmed]: [decisive evidence].
-  H2: [hypothesis] — [what prompted the shift from H1].
-      → [Ruled out / Revised / Confirmed]: [decisive evidence].
-  HN: [hypothesis] — [what prompted the shift from H(N-1)].
-      → Confirmed: [evidence that confirmed it].
-  Key revision trigger: [the single data point or observation that changed
-  the direction of the investigation].
+  **Decision tree:**
+  ```
+  ├─ [proximate cause found] ([evidence source])
+  │  └─ [question: why did this happen?]
+  │     ├─ ✗ [ruled-out hypothesis] ([reason])
+  │     ├─ ✗ [ruled-out hypothesis] ([reason])
+  │     └─ ✓ [confirmed trigger]
+  │        └─ [deeper question: why did the trigger occur?]
+  │           ├─ ✗ [ruled-out hypothesis] ([reason])
+  │           └─ ✓ [confirmed root cause]
+  │              [key evidence]
+  │              └─ Disconfirming checks: [N/N pass] → ROOT CAUSE CONFIRMED
+  ├─ Recovery: [verified duration and mechanism]
+  ├─ Blast radius: [scope and ongoing risk]
+  └─ Disproved: [claims from other investigations that were contradicted]
+  ```
 
-  **Steps:**
+  **Evidence steps:**
 
   1. **Inventory** — What exists and how is it configured?
      Evidence: [deployment/infrastructure query] → [instance count, distribution, resource config].
