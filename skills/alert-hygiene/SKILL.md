@@ -7,6 +7,11 @@ description: Use when facing flapping alerts, alert fatigue, recurring noisy inc
 
 Use when facing alert noise, flapping alerts, alert fatigue, threshold audits, or SLO-alert redesign questions. Analyzes alert policies and incident history for a single GCP monitoring project. Produces a confidence-grouped prescriptive report: high-confidence next actions (structural flaws, arithmetic mismatches), medium-confidence actions (pattern-only inferences), and needs-analyst items (ambiguous intent, SLO candidates). Runs straight through from data pull to final report.
 
+**When NOT to use:**
+- Active incident investigation — use incident-analysis instead (tiered log investigation with mitigation playbooks)
+- SLO design from scratch — this skill identifies SLO-redesign *candidates*, it does not design SLOs or generate burn-rate PromQL
+- Multi-project analysis — v1 is scoped to one monitoring project per invocation
+
 ## Behavioral Constraints
 
 ### 1. Scope Restriction
@@ -107,7 +112,7 @@ Scan the policy inventory against the coverage gap checklist. For each gap candi
 
 ### Stage 5: Produce Report
 
-Write the final report as markdown. Structure: Executive Summary, High-Confidence Actions, Medium-Confidence Actions, Needs Analyst Input, Coverage Gaps, Label Inconsistencies, Priority Order, Frequency Table appendix. Group by confidence band, not by action type.
+Write the final report as markdown using the Report Skeleton template below. Group by confidence band, not by action type.
 
 ## Prescriptive Reasoning by Pattern
 
@@ -221,7 +226,7 @@ Include a Definitions section in every report (after Executive Summary, before P
 
 ## Report Structure
 
-The report is grouped by confidence band, not by verdict type. This lets the user act immediately on high-confidence items while knowing which items need their judgment. The Priority Order appears after the action sections, summarizing the top changes and investigations in a scannable table.
+The report is grouped by confidence band, not by verdict type. This lets the user act immediately on high-confidence items while knowing which items need their judgment. The Priority Order appears early (BLUF — Bottom Line Up Front) so an engineering manager can approve the top actions within 30 seconds.
 
 ### Per-Item Template
 
@@ -283,6 +288,20 @@ For **Needs Analyst Input** items, replace Action/Impact/Risk with:
 - **Add/extend coverage** — a high-value blind spot exists.
 - **No action** — well-calibrated, low-frequency. Keep as-is.
 
+## Recommended Priority Order
+
+### Track A: Config Changes
+Sequential, executable in one change window. Ordered by impact * confidence / effort.
+
+| # | Action | Policy ID | Effort | Incidents Reduced | Channels | Owner | Confidence | Risk |
+|---|--------|-----------|--------|-------------------|----------|-------|------------|------|
+
+### Track B: Investigations
+Assign to teams now, run in parallel with Track A config changes.
+
+| # | Investigation | Scope | Owner | First Diagnostic Step | User-Facing? |
+|---|--------------|-------|-------|----------------------|-------------|
+
 ## High-Confidence Actions
 Items where frequency pattern AND metric/structural evidence agree. Safe to act on directly.
 
@@ -307,20 +326,6 @@ Items where the skill cannot determine intent — SLO redesign candidates (requi
 
 ## Label/Scope Inconsistencies
 | Policy | Policy ID | Current Label | Fires On | Incidents Affected | Required Fix | Related |
-
-## Recommended Priority Order
-
-### Track A: Config Changes
-Sequential, executable in one change window. Ordered by impact * confidence / effort.
-
-| # | Action | Policy ID | Effort | Incidents Reduced | Channels | Owner | Confidence | Risk |
-|---|--------|-----------|--------|-------------------|---------------|-------|------------|------|
-
-### Track B: Investigations
-Assign to teams now, run in parallel with Track A config changes.
-
-| # | Investigation | Scope | Owner | First Diagnostic Step | User-Facing? |
-|---|--------------|-------|-------|----------------------|-------------|
 
 ## Keep — No Action Required
 Brief section with 5-10 representative well-calibrated clusters and one-liner rationale for each (e.g., "fires <2x/14d, threshold well above baseline, correct routing"). Demonstrates the analysis evaluated the full inventory.
