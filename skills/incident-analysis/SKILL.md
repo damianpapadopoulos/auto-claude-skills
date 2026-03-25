@@ -510,45 +510,54 @@ Open questions remaining.
 
 ### Investigation Path (optional appendix)
 If the investigation involved hypothesis revisions or completeness gate loop-backs,
-offer to include an investigation path. Format each step as:
-**question → decisive evidence → conclusion**.
+offer to include an investigation path.
 
-Use reviewer-friendly headings (not investigator jargon). Example format:
+**Format rules:**
+- Each step: **question → decisive evidence → conclusion**
+- Dead ends: **Ruled out:** lines with evidence source and reason
+- Hypothesis changes: **→ Hypothesis revised:** markers stating from-what to-what
+- Disconfirming checks: **"prediction" → confirmed/contradicted** with evidence
+- All timestamps explicitly **UTC**
+- End with a single-sentence **Reviewer takeaway** linked to the top action item
+- Steps may be combined, reordered, or omitted based on what the investigation
+  actually required. Number sequentially based on what was done. Do not pad.
 
-  1. **Inventory** — How many replicas, where distributed?
-     Evidence: deployment metrics → 7 replicas, 3/3/1 across 3 nodes, 8 GB request / 16 GB limit.
-     Conclusion: 3 of 7 pods co-located on one node; request is half typical usage.
+**Template:**
 
-  2. **Proximate cause** — What killed the DB connections?
-     Evidence: proxy logs 13:32-13:34 UTC → SIGTERM on 3 pods, 229 connections killed (0s drain).
-     Conclusion: proxy term_timeout=0s caused instant connection loss on any restart.
+  1. **Inventory** — What exists and how is it configured?
+     Evidence: [deployment/infrastructure query] → [instance count, distribution, resource config].
+     Conclusion: [what the inventory reveals about risk or scope].
 
-  3. **Ruled-out triggers** — What did NOT cause the pod kills?
-     Ruled out: maintenance drain (audit logs: only lease renewals, constant pattern).
-     Ruled out: deployment (Flux: artifact up-to-date, no ScalingReplicaSet events).
-     Ruled out: HPA (no Scaled events).
-     Actual trigger: kubelet logs show 16+ pods failing probes with context deadline exceeded.
+  2. **Proximate cause** — What directly caused the user-facing impact?
+     Evidence: [error logs, connection logs, HTTP status] → [what broke, when, how many affected].
+     Conclusion: [the immediate mechanism].
 
-  4. **Node health** — Why were probes timing out?
-     Evidence: node memory 87-93% for 5 hours; virtio_balloon failure at 13:15 UTC.
-     Conclusion: chronic overcommit, not a transient blip.
-     → Hypothesis revised: not "memory eviction" but "overcommit caused system-wide thrashing."
+  3. **Ruled-out triggers** — What did NOT cause this?
+     Ruled out: [hypothesis] ([evidence source]: [why excluded]).
+     Ruled out: [hypothesis] ([evidence source]: [why excluded]).
+     Actual trigger: [what the evidence points to instead].
 
-  5. **Disconfirming checks** — What would disprove chronic overcommit?
-     "Utilization should be high for hours" → confirmed (87%+ since 08:35 UTC).
-     "Transient blip should show healthy node before 13:32" → contradicted.
-     "Explains all symptoms?" → yes (3 pods killed, 16+ services failing, kernel pressure).
+  4. **Root cause** — Why did the trigger occur?
+     Evidence: [infrastructure metrics, system logs] → [what was unhealthy and for how long].
+     Deeper: [scheduling/capacity/config data] → [why the unhealthy state existed].
+     Conclusion: [the systemic cause].
+     → Hypothesis revised: [from what to what, and why — only if hypothesis changed].
+
+  5. **Disconfirming checks** — What would disprove this root cause?
+     "[testable prediction]" → [confirmed/contradicted] ([evidence]).
+     "[testable prediction]" → [confirmed/contradicted] ([evidence]).
+     "Explains all symptoms?" → [yes/no, with list if no].
 
   6. **Recovery** — When was service actually restored?
-     Evidence: proxy restart 13:44, first DB connection 13:54 UTC (+21 min).
-     Conclusion: pods restarted in-place on same thrashed node; recovery was slow, not instant.
+     Evidence: [recovery indicators] → [verified timestamps UTC].
+     Conclusion: [actual duration, recovery mechanism, any surprises].
 
-  7. **Blast radius** — What else was affected or at risk?
-     Evidence: 16+ services on v0hl; node bj24 at 86.2% utilization.
-     Conclusion: node-wide impact; bj24 has same overcommit pattern and is at risk.
+  7. **Blast radius** — What else was affected or is at risk?
+     Evidence: [cross-service/cross-node checks] → [scope of impact].
+     Conclusion: [single-service or systemic, ongoing risk if any].
 
-  **Reviewer takeaway:** The node was overcommitted for 5 hours before failure.
-  An alert on sustained node memory >85% would have caught this before user impact.
+  **Reviewer takeaway:** [One sentence: the most important thing this investigation
+  revealed, linked to the top action item.]
 ```
 
 ### Step 2: Directory Discovery
