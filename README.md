@@ -6,7 +6,7 @@ Instead of remembering which skill to invoke for each task, the plugin classifie
 
 ## What It Does
 
-The plugin bundles a small set of skills and routes to many more from companion plugins — covering brainstorming, TDD, debugging, code review, planning, frontend design, security scanning, and more.
+The plugin bundles and applies skills that are useful along the SDLC.
 
 - **Prompt routing by intent.** Each prompt is scored against trigger patterns and matched to relevant skills. Prompts that match nothing produce no output — no noise on non-development work.
 
@@ -19,7 +19,7 @@ The plugin bundles a small set of skills and routes to many more from companion 
   | PLAN | Structures implementation into discrete tasks with dependency ordering |
   | IMPLEMENT | Enforces TDD, routes to parallel agents for independent work |
   | REVIEW | Triggers multi-perspective code review with security scanning, processes feedback with rigor |
-  | SHIP | Requires verification evidence, generates as-built docs, guides branch completion |
+  | SHIP | Requires verification evidence, generates as-built OpenSpec docs, guides branch completion |
   | LEARN | Queries adoption metrics, synthesizes outcome report, creates follow-up work |
   | DEBUG | Scores highest priority, overrides the current phase with structured root-cause analysis or incident investigation |
 
@@ -33,7 +33,9 @@ The plugin bundles a small set of skills and routes to many more from companion 
 
 **"debug this login bug"** → DEBUG phase. Activates systematic-debugging (structured root-cause analysis). TDD is injected as a mandatory parallel — reproduce with a failing test before fixing. If GCP Observability is installed, context hints toward runtime logs.
 
-**"investigate this 502 spike"** → DEBUG phase. Activates incident-analysis (tiered investigation with bundled playbooks for common failure modes like bad releases, dependency failures, and infra issues). Evidence is captured and redacted. If GCP Observability is installed, queries scope to the affected service and time window.
+**"investigate this 502 spike"** → DEBUG phase. Activates incident-analysis, which inventories available infrastructure, classifies the failure against 7 bundled playbooks (bad-release, dependency failure, infra failure, node exhaustion, and others), runs a structured investigation with completeness gates, and generates a canonical postmortem with impact quantification.
+
+**"our alerts keep flapping"** → DEBUG phase. Activates alert-hygiene to pull GCP alert policies and incident history, cluster flapping patterns, and produce a confidence-grouped report with prescriptive next actions.
 
 **"ship this feature"** → SHIP phase. Activates a sequence starting with verification-before-completion (evidence before assertions), then openspec-ship (as-built documentation), through to finishing-a-development-branch (merge/PR/cleanup options).
 
@@ -42,7 +44,7 @@ The plugin bundles a small set of skills and routes to many more from companion 
 1. **SessionStart** builds a cached skill registry by merging default triggers, skills discovered from installed plugins, and any user overrides from `~/.claude/skill-config.json`. Also recovers state from interrupted sessions after compaction.
 2. **UserPromptSubmit** scores the prompt against trigger patterns — word-boundary matches score higher than substrings, and skill priority, name similarity, and keyword hits all contribute. The engine selects at most 1 process skill, 2 domain skills, and 1 workflow skill.
 3. **Phase composition** layers in requirements appropriate to the detected phase: mandatory TDD during implementation, red-flag halts for unverified completion claims, multi-step sequencing during ship.
-4. **Guard hooks** run on other lifecycle events — including OpenSpec compliance checks before commands, Serena nudges when Grep could use symbol navigation, context preservation before compaction, agent checkpoint tracking, teammate idle detection, and learning consolidation at session end.
+4. **Guard hooks** run on other lifecycle events — including OpenSpec compliance checks before commits, Serena nudges when Grep could use symbol navigation, context preservation before compaction, session state recovery after compaction, agent checkpoint tracking, and learning consolidation at session end.
 
 ## Install
 
@@ -66,7 +68,7 @@ The plugin bundles a small set of skills and routes to many more from companion 
 `/setup` walks you through installing companion plugins, skills, and MCP integrations. After setup, each session start shows what's active:
 
 ```
-SessionStart: 24 skills active (12 of 12 plugins). Setup complete
+SessionStart: 28 skills active (12 of 12 plugins). Setup complete
 ```
 
 The plugin works without every companion integration — it discovers what's installed and routes accordingly. More tools installed means richer context at each phase.
@@ -80,6 +82,8 @@ Installed via `/setup` unless noted. The routing engine discovers these automati
 **MCP and context sources** — Context7 (library documentation), GitHub (PR and issue management), Serena (LSP-based symbol navigation), Forgetful Memory (cross-session architectural knowledge), Context Hub CLI (curated doc annotations).
 
 **Phase enhancers** — commit-commands (structured commit/PR workflows), security-guidance (passive write-time guard), feature-dev (parallel exploration agents), hookify (custom behavior rules), skill-creator (skill benchmarking), cozempic (context protection — checkpoints team state before compaction, prunes sessions to stay within context limits).
+
+**GCP Observability** — When the observability MCP is installed, incident-analysis and alert-hygiene gain direct log/trace/metric queries instead of falling back to gcloud CLI guidance.
 
 **Atlassian managed integration** — Jira and Confluence connect via `/mcp` as a claude.ai managed MCP, not through `/setup`.
 
@@ -124,7 +128,7 @@ Shows trigger matches, scoring, role-cap filtering, and the context that would b
 
 - **Not IDE autocomplete.** It doesn't suggest code inline — it routes to skills and workflows that guide how you work.
 - **Not a ticketing or backlog system.** It can pull context from Jira via MCP, but doesn't manage tickets.
-- **Not a deployment or observability platform.** It can hint at GCP tools during debugging, but doesn't deploy or monitor.
+- **Not a monitoring platform.** It investigates incidents and analyzes alert hygiene using your existing GCP infrastructure, but doesn't deploy alerting policies or run monitoring.
 
 It orchestrates Claude Code's in-session workflow and points to external tools where relevant.
 
