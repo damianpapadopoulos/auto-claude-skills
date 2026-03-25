@@ -464,16 +464,43 @@ If the playbook specifies `requires_pre_execution_evidence: true`, the `pre.json
 Check in order:
 1. `docs/templates/postmortem.md` (project convention)
 2. `.github/ISSUE_TEMPLATE/postmortem.md` (GitHub-native)
-3. Built-in default schema:
+3. Built-in default schema (ordered for reviewer flow — decisions first, evidence after):
 
 ```
 ## 1. Summary
-## 2. Impact (quantify user impact and duration)
-## 3. Timeline (all timestamps UTC; markdown table: timestamp | event)
+One sentence in plain language (who was affected, what happened).
+Then one paragraph of technical detail.
+
+## 2. Impact
+User impact first (who was affected, error count, support tickets, business impact).
+Then infrastructure scope (pods, services, nodes, capacity loss).
+Include duration: verified start and end timestamps in UTC.
+
+## 3. Action Items
+Ordered by priority (P0 first). Each item MUST have a suggested owner and due date.
+Items without owners should be flagged: "⚠ Owner needed".
+Include: priority, action, owner, due date, status.
+
 ## 4. Root Cause & Trigger
-## 5. Resolution and Recovery
-## 6. Lessons Learned (what went well, what went wrong, where we got lucky)
-## 7. Action Items (actionable, assignable, with suggested owners)
+Concise explanation of why the incident happened.
+Include causal chain diagram if the mechanism has multiple steps.
+
+## 5. Timeline (all timestamps UTC)
+Markdown table: timestamp | event | evidence source.
+Interleave infrastructure events AND human actions (alerts, notifications, manual interventions).
+Must include verified recovery timestamp.
+
+## 6. Contributing Factors
+Ordered by impact (most impactful first, not discovery order).
+Each factor: what it is, why it made things worse.
+
+## 7. Lessons Learned
+What went well, what went wrong, where we got lucky.
+
+## 8. Investigation Notes
+Hypotheses investigated and ruled out.
+Confidence notes (what is confirmed vs inferred).
+Open questions remaining.
 ```
 
 ### Step 2: Directory Discovery
@@ -484,21 +511,24 @@ Check for existing directory:
 
 ### Step 3: Generate Postmortem
 
-Generate from the synthesized summary (NOT raw logs):
-- Title and metadata (date, service, severity)
-- Timeline (from extracted timestamps, ordered)
-- Impact (from error rates/metrics, quantified)
-- Root cause (from investigation hypothesis)
-- Action items (concrete, assignable, with suggested owners)
+Generate from the synthesized summary (NOT raw logs). Follow the template section order:
+- Summary: one sentence plain language, then one paragraph technical
+- Impact: user-facing impact first (error count, affected users, business impact from user-provided context), then infrastructure scope
+- Action items: ordered by priority, each with suggested owner and due date. Flag unassigned items with "⚠ Owner needed"
+- Root cause: concise causal chain, include scheduling/resource math if relevant
+- Timeline: infrastructure events interleaved with human actions (alerts fired, human response, manual intervention), all UTC with evidence sources
+- Contributing factors: ordered by impact, most impactful first
+- Lessons learned: went well, went wrong, got lucky
+- Investigation notes: ruled-out hypotheses, confidence levels, open questions
 
 **Recovery verification (mandatory):**
 - Timeline MUST include a verified recovery timestamp with evidence source (e.g., "first successful DB connection at 13:54:09 per proxy logs")
 - If recovery was not verified from evidence, state: "Recovery time not verified — estimated at X based on Y"
 - Impact duration = verified recovery time minus incident start time. Do not estimate.
 
-**Mitigation Applied (subsection under "Resolution and Recovery"):**
+**Mitigation Applied (subsection under "Root Cause & Trigger"):**
 
-If a playbook-driven mitigation was executed during this incident, include the following under the "Resolution and Recovery" section of the postmortem:
+If a playbook-driven mitigation was executed during this incident, include the following under the "Root Cause & Trigger" section of the postmortem:
 
 | Field | Value |
 |-------|-------|
@@ -509,7 +539,7 @@ If a playbook-driven mitigation was executed during this incident, include the f
 | Verification Status | `verified`, `failed`, or `unverified` (from VALIDATE exit path) |
 | Evidence Bundle | Relative path to `docs/postmortems/evidence/<bundle-id>/` |
 
-Keep the existing 7 section headers (Summary, Impact, Timeline, Root Cause & Trigger, Resolution and Recovery, Lessons Learned, Action Items) intact. The mitigation details are a subsection within Resolution and Recovery, not a new top-level section.
+Keep the 8 section headers (Summary, Impact, Action Items, Root Cause & Trigger, Timeline, Contributing Factors, Lessons Learned, Investigation Notes) intact. The mitigation details are a subsection within Root Cause & Trigger, not a new top-level section. If a project template overrides this structure (Step 1), follow the project template instead.
 
 **Permalink formatting (apply to all references in the generated postmortem):**
 - **Trace IDs:** Format as `[Trace TRACE_ID](https://console.cloud.google.com/traces/list?project=PROJECT_ID&tid=TRACE_ID)` using the project_id and trace_id from Stage 2. If cross-project trace correlation was used (Step 4), use the relevant project for each reference — Service A traces use Service A's project_id, Service B traces use Service B's project_id.
