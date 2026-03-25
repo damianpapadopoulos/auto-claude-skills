@@ -458,12 +458,14 @@
       "role": "domain",
       "phase": "DEBUG",
       "triggers": [
-        "(incident|postmortem|outage|root.cause|error.spike|log.analysis|production.error|staging.error)",
+        "(incident.*(investig|analys|review|report|timeline|summary|response|triage|debug|diagnos|resolv)|postmortem|outage|root.cause|error.spike|log.analysis|production.error|staging.error)",
         "(connection.*(fail|refus|timeout|pool|exhaust|acquir)|oom.?kill|memory.pressure|cpu.*(throttl|saturat)|crash.?loop|liveness.probe|node.not.ready|upstream.*(fail|error|timeout))",
         "(sigterm|sigkill|shutdown.*(error|fail|grace)|active.connection|cloud.?sql|proxy.*(restart|error|fail|crash)|pod.*(restart|crash|evict)|latency.*(spike|p99)|p99.*(latency|spike|degrad)|request.timeout|circuit.break|deploy.*(fail|rollback))"
       ],
       "keywords": [
-        "incident",
+        "incident investigation",
+        "incident analysis",
+        "incident report",
         "postmortem",
         "outage",
         "error spike",
