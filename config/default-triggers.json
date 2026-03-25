@@ -482,6 +482,37 @@
       "requires": [],
       "description": "On-demand postmortem trend analysis: recurrence grouping, trigger categorization, MTTR/MTTD from canonical docs/postmortems/ corpus.",
       "invoke": "Skill(auto-claude-skills:incident-trend-analyzer)"
+    },
+    {
+      "name": "alert-hygiene",
+      "role": "domain",
+      "phase": "LEARN",
+      "triggers": [
+        "(alert.*(hygiene|noise|flap|tune|suppress|fatigue|toil))",
+        "(alert.*(review|audit|cleanup|health|analysis))",
+        "(incident.*(volume|frequency|noise|dedup))",
+        "(notification.*(noise|fatigue|channel|routing))",
+        "(threshold.*(tune|adjust|raise|lower|calibrat))",
+        "(slo.*(redesign|burn.rate|error.budget|alert))"
+      ],
+      "keywords": [
+        "alert hygiene",
+        "alert noise",
+        "alert fatigue",
+        "flapping alerts",
+        "tune alerts",
+        "suppress alerts",
+        "incident volume",
+        "notification noise",
+        "threshold tuning",
+        "SLO alerting"
+      ],
+      "trigger_mode": "regex",
+      "priority": 15,
+      "precedes": [],
+      "requires": [],
+      "description": "Use when facing flapping alerts, alert fatigue, recurring noisy incidents, threshold audits, or SLO-alert redesign questions for a GCP monitoring project.",
+      "invoke": "Skill(auto-claude-skills:alert-hygiene)"
     }
   ],
   "phase_guide": {

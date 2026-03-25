@@ -236,4 +236,15 @@ assert_equals "empty alerts produces zero clusters" "0" "${EMPTY_COUNT}"
 # Cleanup
 rm -rf "${FIXTURES_DIR}"
 
+# --- Trigger config ---
+TRIGGERS_FILE="${PROJECT_ROOT}/config/default-triggers.json"
+TRIGGER_ENTRY=$(python3 -c "
+import json
+with open('${TRIGGERS_FILE}') as f:
+    data = json.load(f)
+matches = [s for s in data['skills'] if s['name'] == 'alert-hygiene']
+print(len(matches))
+" 2>/dev/null)
+assert_equals "alert-hygiene trigger exists" "1" "${TRIGGER_ENTRY}"
+
 print_summary
