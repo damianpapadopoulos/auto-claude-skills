@@ -356,7 +356,16 @@ Ask for explicit developer approval before proceeding.
 
 ### Step 7: Context Discipline — Synthesize
 
-Write a synthesized summary of the timeline and root cause. From this point forward, reference ONLY this summary (not raw log JSON). See Constraint 4.
+Write a synthesized summary as an explicit output block. The summary MUST include all of the following (not just timeline and root cause):
+
+1. **Timeline:** Chronological sequence of events with UTC timestamps and evidence sources
+2. **Root cause:** The primary hypothesis with supporting evidence
+3. **ruled-out hypotheses:** Each alternative considered, the disconfirming evidence found, and why it was eliminated
+4. **hypothesis revisions:** Where the investigation changed direction, what triggered the revision, and what the previous hypothesis was
+5. **Completeness gate answers:** Responses to Step 8 questions (captured here so they survive the context boundary)
+6. **Inventory and impact:** Pod/replica counts, distribution, user-facing error counts from Steps 2b/2c
+
+From this point forward, reference ONLY this summary (not raw log JSON). See Constraint 4.
 
 ### Step 8: Investigation Completeness Gate
 

@@ -89,4 +89,11 @@ assert_contains "decision record: state fingerprint field" "State Fingerprint" "
 assert_contains "decision record: explanation field" "Explanation" "${HC_RECORD}"
 assert_contains "decision record: veto signals field" "VETO" "${HC_RECORD}"
 
+# ---------------------------------------------------------------------------
+# Step 7 synthesis preserves investigation path material
+# ---------------------------------------------------------------------------
+STEP7_BLOCK=$(sed -n '/### Step 7: Context Discipline/,/### Step 8/p' "${SKILL_FILE}")
+assert_contains "step 7: preserves ruled-out hypotheses" "ruled-out" "${STEP7_BLOCK}"
+assert_contains "step 7: preserves hypothesis revisions" "hypothesis revision" "${STEP7_BLOCK}"
+
 print_summary
