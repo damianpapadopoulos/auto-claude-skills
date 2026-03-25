@@ -1470,7 +1470,5 @@
       ]
     }
   ],
-  "warnings": [
-    "+ alert-hygiene (newly discovered)"
-  ]
+  "warnings": []
 }
