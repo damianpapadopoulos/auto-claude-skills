@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Incident-analysis Constraint 2 scope restriction now has infrastructure escalation exception for node-level investigation
+- High-confidence decision record restored missing safety fields: Evidence Age, VETO SIGNALS, State Fingerprint, Explanation
+- Step 7 synthesis expanded to preserve ruled-out hypotheses and revision history for Investigation Path appendix
+- OpenSpec spec.md corrected from "7 section headers" to "8 section headers"
+- EXECUTE and VALIDATE stages now have explicit evidence persistence steps (pre.json, validate.json)
+
 ### Added
 - DISCOVER phase: `product-discovery` skill with tiered Atlassian MCP detection (Jira/Confluence context → discovery brief → transition to DESIGN)
 - LEARN phase: `outcome-review` skill with tiered PostHog MCP detection (analytics queries → outcome report → gated Jira follow-up creation)
