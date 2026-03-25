@@ -79,4 +79,14 @@ assert_contains "loop termination: improvement threshold" "improvement" "${SKILL
 CONSTRAINT_2_BLOCK=$(sed -n '/### 2\. Scope Restriction/,/### 3\./p' "${SKILL_FILE}")
 assert_contains "scope restriction: infra escalation carve-out" "Infrastructure escalation" "${CONSTRAINT_2_BLOCK}"
 
+# ---------------------------------------------------------------------------
+# Decision record contains spec-required safety fields
+# ---------------------------------------------------------------------------
+# Extract the high-confidence decision record template block
+HC_RECORD=$(sed -n '/### Decision Record — High Confidence/,/### Decision Record — Medium Confidence/p' "${SKILL_FILE}")
+assert_contains "decision record: evidence age field" "Evidence Age" "${HC_RECORD}"
+assert_contains "decision record: state fingerprint field" "State Fingerprint" "${HC_RECORD}"
+assert_contains "decision record: explanation field" "Explanation" "${HC_RECORD}"
+assert_contains "decision record: veto signals field" "VETO" "${HC_RECORD}"
+
 print_summary

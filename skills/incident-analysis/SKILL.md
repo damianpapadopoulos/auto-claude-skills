@@ -210,6 +210,7 @@ CLASSIFY DECISION — HIGH CONFIDENCE
 Playbook:      <playbook_id> (<playbook_name>)
 Confidence:    <confidence>% (margin: <margin>pt over runner-up)
 Category:      <category>
+Evidence Age:  <seconds since oldest signal query>s (freshness window: <freshness_window_seconds>s)
 
 SIGNALS EVALUATED:
   [detected]            <signal_id> (weight: <w>)
@@ -217,7 +218,14 @@ SIGNALS EVALUATED:
   [not_detected]        <signal_id> (weight: <w>, contradiction: <cw>)
   [unknown_unavailable] <signal_id> (weight: <w>) — excluded from scoring
 
+VETO SIGNALS:
+  [not_detected]        <veto_signal_id> — no veto
+
 COVERAGE: <evaluable_weight>/<max_possible> (<coverage>%)
+
+State Fingerprint: <hash or summary of signal states used for EXECUTE recheck>
+
+Explanation:   <one-sentence summary of why this playbook was selected over alternatives>
 
 COMMAND:
   <interpolated command from playbook>
