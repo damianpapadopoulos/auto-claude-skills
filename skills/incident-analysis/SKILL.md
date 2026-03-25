@@ -79,7 +79,7 @@ Do not repeat this nudge after the first mention.
 Identify:
 - Which service?
 - Which environment (production, staging)?
-- What time window? (default: last 30-60 minutes). If the user provides a local time (e.g., "it broke at 2pm"), confirm their timezone and convert to UTC before querying. All subsequent timestamps in the investigation and postmortem MUST be in UTC.
+- What time window? (default: last 30-60 minutes). If the user provides a local time (e.g., "it broke at 2pm"), convert to UTC using the session's timezone (`date +%z`) before querying. If the session timezone cannot be determined, ask the user. All subsequent timestamps in the investigation and postmortem MUST be in UTC.
 
 ### Step 2b: Establish Inventory
 
