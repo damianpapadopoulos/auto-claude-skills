@@ -4560,11 +4560,25 @@ test_incident_analysis_cofires_with_debugging() {
     teardown_test_env
 }
 
+test_investigate_command_routing() {
+    echo "-- test: /investigate command exists and references incident-analysis --"
+
+    local cmd_file="${PROJECT_ROOT}/commands/investigate.md"
+    assert_file_exists "/investigate command file" "${cmd_file}"
+
+    local content
+    content="$(cat "${cmd_file}")"
+    assert_contains "references incident-analysis skill" "incident-analysis" "${content}"
+    assert_contains "references MITIGATE stage" "MITIGATE" "${content}"
+    assert_contains "must not bypass MITIGATE" "Must not bypass MITIGATE" "${content}"
+}
+
 test_incident_analysis_triggers_on_connection_failure
 test_incident_analysis_triggers_on_oom_kill
 test_incident_analysis_triggers_on_crash_loop
 test_incident_analysis_triggers_on_latency_spike
 test_incident_analysis_triggers_on_cloud_sql_proxy
 test_incident_analysis_cofires_with_debugging
+test_investigate_command_routing
 
 print_summary
