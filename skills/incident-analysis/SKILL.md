@@ -198,16 +198,41 @@ Based on the winning candidate's confidence:
 Transition to HITL GATE. Present the high-confidence decision record (see below). The user must approve before EXECUTE.
 
 **Medium confidence (60-84):**
-Present the investigation summary with the medium-confidence decision record (see below). No command block is shown. Suggest targeted read-only follow-up queries to gather more evidence, then reclassify.
+Present the investigation summary with the medium-confidence decision record (see below).
+No command block is shown. The SHORTLIST contains pre-canned disambiguation probes from
+runner-up playbooks. Execute one probe per runner-up (read-only, aggregate-first,
+max_results <= 10). After probes: existing signal evaluator recomputes affected signal
+states, scorer re-ranks unchanged, mark `disambiguation_round: completed`. Normal confidence
+routing continues — if still medium after probes, present findings without another probe
+round for the same classification fingerprint.
 
 **Low confidence (< 60):**
-Transition to INVESTIGATE Steps 1-5 only (limited investigation). Findings feed back to CLASSIFY for reclassification.
+Transition to INVESTIGATE Steps 1-5 only (limited investigation). Include the SHORTLIST
+handoff artifact (same format as medium-confidence) so that Step 2b can consume it.
+Findings feed back to CLASSIFY for reclassification.
 
 ### Loop Termination
 
 - **Stall detection:** If 3 reclassification iterations pass without >= 5 point confidence improvement, stop iterating. Present all collected evidence and let the user choose: select a playbook manually, continue investigating, or escalate.
 - **User override:** The user can override classification at any iteration and select a playbook directly.
 - **Low-confidence with hypothesis:** If confidence remains < 60 but a root cause hypothesis has formed, present the user with three options: transition to POSTMORTEM, provide manual mitigation guidance, or continue investigation.
+
+### Disambiguation Anti-Looping
+
+- The `classification_fingerprint` is derived from the **pre_probe** evidence snapshot
+  (service + time_window + signal_state_hash computed before any probes ran). This fingerprint
+  is stable across the probe → rerank cycle.
+- At most one probe round per `classification_fingerprint`. After one round, mark
+  `disambiguation_round: completed` on the handoff artifact. No second probe round for the
+  same fingerprint regardless of confidence level after reranking.
+- Probe outcomes are cached per fingerprint. The same probe cannot rerun in the same
+  classification cycle unless evidence materially changed (new log queries, new time window).
+- A timed-out or failed probe leaves its target signals as `unknown_unavailable`. A
+  **timed-out or failed** probe may never strengthen a candidate. A successful probe may flip
+  a signal to `detected` or `not_detected`, which feeds into the normal scorer rerank and may
+  change the outcome. The existing scorer math and coverage gate are unchanged.
+- Signals using `distribution` or `ratio` detection methods cannot be resolved from a single
+  probe query and remain `unknown_unavailable` even if named in `resolves_signals`.
 
 ### Decision Record — High Confidence
 
@@ -265,9 +290,16 @@ SIGNALS EVALUATED:
 
 COVERAGE: <evaluable_weight>/<max_possible> (<coverage>%)
 
-SUGGESTED FOLLOW-UP:
-  - <read-only query to resolve unknown signals>
-  - <read-only query to resolve unknown signals>
+SHORTLIST:
+  leader:      <playbook_id> (<confidence>%)
+  runner-up-1: <playbook_id> (<confidence>%), probe: <query_ref>
+  runner-up-2: <playbook_id> (<confidence>%), probe: <query_ref>
+  compatibility: [<leader_category>, <runner_category>] = <compatible|incompatible>
+  disambiguation_round: pending
+  classification_fingerprint: <service>/<time_window>/<pre_probe_signal_state_hash>
+
+Shortlist eligibility: non-vetoed, confidence > 40, evaluable_weight > 0,
+has declared disambiguation_probe, max 2 runner-ups.
 
 No command proposed at this confidence level. Gathering more evidence for reclassification.
 ```
@@ -283,6 +315,22 @@ Use LQL scoped to service + severity + time window identified in Stage 1.
 ### Step 2: Extract Key Signals
 
 Stack traces, error messages, request IDs, trace IDs.
+
+### Step 2b: Targeted Disambiguation Probes
+
+When entered from the CLASSIFY low-confidence path with a SHORTLIST handoff artifact,
+execute the disambiguation probes listed for each runner-up. Probes are read-only,
+aggregate-first queries (max_results <= 10) that target signals specific to the runner-up
+playbook. Each probe runs once per classification fingerprint.
+
+**Scope exception:** Disambiguation probes may query declared/known dependencies of the
+affected service, within the same time window as the primary investigation
+(e.g., upstream APIs, backing datastores) even though those are technically
+outside the single-service scope restriction. This is permitted because playbook
+`disambiguation_probe` definitions are pre-authored and bounded — they cannot expand into
+unbounded global searches.
+
+After all probes complete, feed results back to CLASSIFY for reclassification.
 
 ### Step 3: Single-Service Deep Dive
 

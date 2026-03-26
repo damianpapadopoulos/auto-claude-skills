@@ -110,4 +110,17 @@ assert_contains "VALIDATE: write validate.json step" "validate.json" "${VALIDATE
 # ---------------------------------------------------------------------------
 assert_contains "SKILL.md mentions SLO burn rate in MITIGATE" "SLO burn rate alert" "${SKILL_CONTENT}"
 
+# ---------------------------------------------------------------------------
+# Disambiguation probe behavioral contracts
+# (SKILL_CONTENT is already defined at the top of this test file)
+# ---------------------------------------------------------------------------
+assert_contains "SKILL.md has SHORTLIST artifact" "SHORTLIST:" "${SKILL_CONTENT}"
+assert_contains "SKILL.md has classification_fingerprint" "classification_fingerprint" "${SKILL_CONTENT}"
+assert_contains "SKILL.md has disambiguation_round" "disambiguation_round" "${SKILL_CONTENT}"
+assert_contains "SKILL.md has pre_probe fingerprint" "pre_probe" "${SKILL_CONTENT}"
+assert_contains "SKILL.md has Step 2b" "Step 2b" "${SKILL_CONTENT}"
+assert_contains "SKILL.md has Targeted Disambiguation Probes" "Targeted Disambiguation Probes" "${SKILL_CONTENT}"
+assert_contains "SKILL.md has scope exception for dependency probes" "declared/known dependencies" "${SKILL_CONTENT}"
+assert_contains "SKILL.md has one probe round limit" "one probe round" "${SKILL_CONTENT}"
+
 print_summary
