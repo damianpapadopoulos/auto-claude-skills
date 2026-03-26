@@ -148,7 +148,7 @@ assert_not_contains "SKILL.md has no separate SOURCE_ANALYSIS stage" "## SOURCE_
 
 # Step 4b must appear before Step 5 (ordering check)
 step4b_line="$(grep -n '### Step 4b' "${SKILL_FILE}" | head -1 | cut -d: -f1)"
-step5_line="$(grep -n '### Step 5' "${SKILL_FILE}" | head -1 | cut -d: -f1)"
+step5_line="$(grep -n '### Step 5: Formulate Root Cause' "${SKILL_FILE}" | head -1 | cut -d: -f1)"
 
 assert_not_empty "SKILL.md has Step 4b line number" "${step4b_line}"
 assert_not_empty "SKILL.md has Step 5 line number" "${step5_line}"

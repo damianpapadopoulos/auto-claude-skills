@@ -394,6 +394,27 @@ If evidence is ambiguous or borderline, do NOT hop — present trace timeline an
 - If Service B logs return no useful signal, note the gap and proceed to Step 5
 - Feed this synthesized causal timeline into Step 5 (root cause hypothesis)
 
+### Step 4b: Source Analysis (Conditional)
+
+**Gate:** Runs only when ALL conditions are met:
+1. Bad-release category: `recent_deploy_detected` signal detected, OR deploy timestamp within incident window or 4h before start
+2. Actionable stack frame available from Step 2 (not minified/compiled/generated)
+3. Deployed ref resolvable from deployment metadata
+
+If Step 4 shifted investigation to a different service, resolve that service's workload identity from trace/log resource labels first (one bounded deployment-metadata lookup). If ambiguous, skip with reason.
+
+**Procedure:** Follow `references/source-analysis.md`:
+1. Resolve deployed ref → commit SHA (not HEAD)
+2. Map 1-2 top actionable stack frames to source files at deployed ref
+3. Read code at error location (hunk + 20-line context, bounded evidence only)
+4. Check last 3 commits within 48h for regression indicators
+
+**Output:** Structured `source_analysis` object with `status` (skipped | reviewed_no_regression | candidate_found | unavailable), `deployed_ref`, `resolved_commit_sha`, `source_files[]`, and `regression_candidates[]`. Feeds directly into Step 5 hypothesis formation.
+
+**Failure:** Fail-open — "Step 4b: GitHub API unavailable, source analysis skipped." Never silent.
+
+**Tool tiers:** gh API (Tier 1) → git show (Tier 2) → guidance URLs (Tier 3).
+
 ### Step 5: Formulate Root Cause Hypothesis
 
 State the hypothesis in one sentence. Then:
