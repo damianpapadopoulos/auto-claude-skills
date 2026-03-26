@@ -99,6 +99,49 @@ def check_label_inconsistency(policy_labels, resource_project):
     return staging_label and prod_resource
 
 
+def extract_metric_types(policies):
+    """Extract all metric types referenced in policy conditions."""
+    types = set()
+    for p in policies:
+        for c in p.get('conditions', []):
+            filt = c.get('filter', '')
+            if filt:
+                m = re.search(r'metric\.type\s*=\s*"([^"]+)"', filt)
+                if m:
+                    types.add(m.group(1))
+            query = c.get('query', '')
+            if query:
+                m = re.match(r'([\w][\w.:/\-]+)', query.strip())
+                if m and '/' in m.group(1):
+                    types.add(m.group(1))
+    return sorted(types)
+
+
+def compute_unlabeled_ranking(policies, clusters):
+    """Rank unlabeled policies by incident volume for actionable reporting."""
+    policy_raw = defaultdict(int)
+    policy_eps = defaultdict(int)
+    for c in clusters:
+        pfn = c.get('policy_full_name', '')
+        policy_raw[pfn] += c.get('raw_incidents', 0)
+        policy_eps[pfn] += c.get('deduped_episodes', 0)
+
+    ranking = []
+    for p in policies:
+        labels = p.get('userLabels', {})
+        has_owner = any(k in labels for k in ('squad', 'team', 'owner'))
+        if not has_owner and p.get('enabled', True):
+            pfn = p['name']
+            ranking.append({
+                'policy_name': p.get('displayName', ''),
+                'policy_id': pfn,
+                'total_raw': policy_raw.get(pfn, 0),
+                'total_episodes': policy_eps.get(pfn, 0),
+            })
+    ranking.sort(key=lambda x: -x['total_raw'])
+    return ranking[:20]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--policies', required=True)
@@ -152,6 +195,17 @@ def main():
         mt = ca[0].get('metricType', 'unknown')
         rt = ca[0].get('resourceType', 'unknown')
         pi = plookup.get(pfn, {})
+        # Match condition to get threshold data
+        conditions = pi.get('conditions', [])
+        if len(conditions) == 1:
+            matched_cond = conditions[0]
+            cond_match = 'single'
+        elif len(conditions) > 1:
+            matched_cond = conditions[0]
+            cond_match = 'ambiguous'
+        else:
+            matched_cond = None
+            cond_match = 'none'
         dedupe_window = max(1800, 2 * pi.get('eval_window_sec', 0))
 
         episodes, distinct_res = dedupe_episodes(ca, dedupe_window)
@@ -216,11 +270,24 @@ def main():
             'auto_close_sec': pi.get('auto_close_sec', 0),
             'policy_full_name': pfn,
             'condition_name': ca[0].get('conditionName', ''),
+            'threshold_value': matched_cond.get('thresholdValue') if matched_cond else None,
+            'comparison': matched_cond.get('comparison', '') if matched_cond else '',
+            'condition_filter': matched_cond.get('filter', '') if matched_cond else '',
+            'condition_query': matched_cond.get('query', '') if matched_cond else '',
+            'condition_type': matched_cond.get('type', '') if matched_cond else '',
+            'condition_match': cond_match,
         })
 
     results.sort(key=lambda x: -x['raw_incidents'])
+    metric_types = extract_metric_types(policies)
+    unlabeled = compute_unlabeled_ranking(policies, results)
+    output = {
+        'clusters': results,
+        'metric_types_in_inventory': metric_types,
+        'unlabeled_ranking': unlabeled,
+    }
     with open(args.output, 'w') as f:
-        json.dump(results, f, indent=2)
+        json.dump(output, f, indent=2)
     print(f"Computed {len(results)} clusters from {len(alerts)} incidents across {len(policies)} policies")
 
 

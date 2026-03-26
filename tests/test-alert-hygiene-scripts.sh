@@ -39,7 +39,17 @@ cat > "${FIXTURES_DIR}/policies.json" << 'FIXTURE'
     "displayName": "Test flapping alert",
     "enabled": true,
     "userLabels": {"squad": "staging_alerts"},
-    "conditions": [{"displayName": "metric > 100", "evaluationInterval": "60s", "duration": "300s"}],
+    "conditions": [{
+      "displayName": "metric > 100",
+      "type": "conditionThreshold",
+      "filter": "metric.type=\"custom/metric\" AND resource.type=\"k8s_container\"",
+      "query": "",
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 100,
+      "evaluationInterval": "60s",
+      "duration": "300s",
+      "aggregations": []
+    }],
     "autoClose": "1800s",
     "notificationChannels": ["projects/test/notificationChannels/1"],
     "combiner": "OR"
@@ -48,8 +58,18 @@ cat > "${FIXTURES_DIR}/policies.json" << 'FIXTURE'
     "name": "projects/test/alertPolicies/2",
     "displayName": "Test chronic alert",
     "enabled": true,
-    "userLabels": {"squad": "prod_alerts"},
-    "conditions": [{"displayName": "restarts > 5", "evaluationInterval": "60s", "duration": "600s"}],
+    "userLabels": {},
+    "conditions": [{
+      "displayName": "restarts > 5",
+      "type": "conditionThreshold",
+      "filter": "metric.type=\"kubernetes.io/container/restart_count\" AND resource.type=\"k8s_container\"",
+      "query": "",
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 5,
+      "evaluationInterval": "60s",
+      "duration": "600s",
+      "aggregations": []
+    }],
     "autoClose": "",
     "notificationChannels": ["projects/test/notificationChannels/1"],
     "combiner": "OR"
@@ -113,14 +133,14 @@ assert_equals "compute-clusters.py runs on synthetic data" "0" "$?"
 assert_file_exists "cluster output written" "${FIXTURES_DIR}/clusters.json"
 
 # Validate cluster output structure
-CLUSTER_COUNT=$(python3 -c "import json; print(len(json.load(open('${FIXTURES_DIR}/clusters.json'))))" 2>/dev/null)
+CLUSTER_COUNT=$(python3 -c "import json; print(len(json.load(open('${FIXTURES_DIR}/clusters.json'))['clusters']))" 2>/dev/null)
 assert_equals "two clusters produced" "2" "${CLUSTER_COUNT}"
 
 # Validate flapping cluster has correct pattern
 FLAP_PATTERN=$(python3 -c "
 import json
-clusters = json.load(open('${FIXTURES_DIR}/clusters.json'))
-flap = [c for c in clusters if 'flapping' in c['policy_name'].lower()][0]
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+flap = [c for c in data['clusters'] if 'flapping' in c['policy_name'].lower()][0]
 print(flap['pattern'])
 " 2>/dev/null)
 assert_equals "flapping alert classified as flapping" "flapping" "${FLAP_PATTERN}"
@@ -128,8 +148,8 @@ assert_equals "flapping alert classified as flapping" "flapping" "${FLAP_PATTERN
 # Validate chronic cluster has correct pattern
 CHRONIC_PATTERN=$(python3 -c "
 import json
-clusters = json.load(open('${FIXTURES_DIR}/clusters.json'))
-chronic = [c for c in clusters if 'chronic' in c['policy_name'].lower()][0]
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+chronic = [c for c in data['clusters'] if 'chronic' in c['policy_name'].lower()][0]
 print(chronic['pattern'])
 " 2>/dev/null)
 assert_equals "chronic alert classified as chronic" "chronic" "${CHRONIC_PATTERN}"
@@ -137,8 +157,8 @@ assert_equals "chronic alert classified as chronic" "chronic" "${CHRONIC_PATTERN
 # Validate label inconsistency flagged (staging label on prod resource)
 LABEL_FLAG=$(python3 -c "
 import json
-clusters = json.load(open('${FIXTURES_DIR}/clusters.json'))
-flap = [c for c in clusters if 'flapping' in c['policy_name'].lower()][0]
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+flap = [c for c in data['clusters'] if 'flapping' in c['policy_name'].lower()][0]
 print('yes' if flap.get('label_inconsistency') else 'no')
 " 2>/dev/null)
 assert_equals "label inconsistency flagged" "yes" "${LABEL_FLAG}"
@@ -146,8 +166,8 @@ assert_equals "label inconsistency flagged" "yes" "${LABEL_FLAG}"
 # Validate raw vs deduped counts
 RAW_COUNT=$(python3 -c "
 import json
-clusters = json.load(open('${FIXTURES_DIR}/clusters.json'))
-flap = [c for c in clusters if 'flapping' in c['policy_name'].lower()][0]
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+flap = [c for c in data['clusters'] if 'flapping' in c['policy_name'].lower()][0]
 print(flap['raw_incidents'])
 " 2>/dev/null)
 assert_equals "flapping cluster has 50 raw incidents" "50" "${RAW_COUNT}"
@@ -155,27 +175,104 @@ assert_equals "flapping cluster has 50 raw incidents" "50" "${RAW_COUNT}"
 # Validate autoClose and evaluationInterval extraction
 AUTO_CLOSE=$(python3 -c "
 import json
-clusters = json.load(open('${FIXTURES_DIR}/clusters.json'))
-flap = [c for c in clusters if 'flapping' in c['policy_name'].lower()][0]
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+flap = [c for c in data['clusters'] if 'flapping' in c['policy_name'].lower()][0]
 print(flap['auto_close_sec'])
 " 2>/dev/null)
 assert_equals "flapping cluster auto_close extracted" "1800" "${AUTO_CLOSE}"
 
 EVAL_WINDOW=$(python3 -c "
 import json
-clusters = json.load(open('${FIXTURES_DIR}/clusters.json'))
-flap = [c for c in clusters if 'flapping' in c['policy_name'].lower()][0]
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+flap = [c for c in data['clusters'] if 'flapping' in c['policy_name'].lower()][0]
 print(flap['eval_window_sec'])
 " 2>/dev/null)
 assert_equals "flapping cluster eval_window extracted" "60" "${EVAL_WINDOW}"
 
 CHRONIC_AUTO_CLOSE=$(python3 -c "
 import json
-clusters = json.load(open('${FIXTURES_DIR}/clusters.json'))
-chronic = [c for c in clusters if 'chronic' in c['policy_name'].lower()][0]
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+chronic = [c for c in data['clusters'] if 'chronic' in c['policy_name'].lower()][0]
 print(chronic['auto_close_sec'])
 " 2>/dev/null)
 assert_equals "chronic cluster auto_close is 0 (empty)" "0" "${CHRONIC_AUTO_CLOSE}"
+
+# Validate threshold value extraction
+THRESHOLD_VAL=$(python3 -c "
+import json
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+flap = [c for c in data['clusters'] if 'flapping' in c['policy_name'].lower()][0]
+print(flap['threshold_value'])
+" 2>/dev/null)
+assert_equals "flapping cluster threshold_value extracted" "100" "${THRESHOLD_VAL}"
+
+THRESHOLD_COMP=$(python3 -c "
+import json
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+flap = [c for c in data['clusters'] if 'flapping' in c['policy_name'].lower()][0]
+print(flap['comparison'])
+" 2>/dev/null)
+assert_equals "flapping cluster comparison extracted" "COMPARISON_GT" "${THRESHOLD_COMP}"
+
+COND_MATCH=$(python3 -c "
+import json
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+flap = [c for c in data['clusters'] if 'flapping' in c['policy_name'].lower()][0]
+print(flap['condition_match'])
+" 2>/dev/null)
+assert_equals "flapping cluster condition_match is single" "single" "${COND_MATCH}"
+
+COND_FILTER=$(python3 -c "
+import json
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+flap = [c for c in data['clusters'] if 'flapping' in c['policy_name'].lower()][0]
+print('yes' if 'custom/metric' in flap.get('condition_filter', '') else 'no')
+" 2>/dev/null)
+assert_equals "flapping cluster condition_filter contains metric type" "yes" "${COND_FILTER}"
+
+# Validate metric_types_in_inventory
+METRIC_TYPES_COUNT=$(python3 -c "
+import json
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+print(len(data['metric_types_in_inventory']))
+" 2>/dev/null)
+assert_equals "two metric types extracted from inventory" "2" "${METRIC_TYPES_COUNT}"
+
+HAS_CUSTOM=$(python3 -c "
+import json
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+print('yes' if 'custom/metric' in data['metric_types_in_inventory'] else 'no')
+" 2>/dev/null)
+assert_equals "metric_types includes custom/metric" "yes" "${HAS_CUSTOM}"
+
+HAS_RESTART=$(python3 -c "
+import json
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+print('yes' if 'kubernetes.io/container/restart_count' in data['metric_types_in_inventory'] else 'no')
+" 2>/dev/null)
+assert_equals "metric_types includes restart_count" "yes" "${HAS_RESTART}"
+
+# Validate unlabeled_ranking
+UNLABELED_COUNT=$(python3 -c "
+import json
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+print(len(data['unlabeled_ranking']))
+" 2>/dev/null)
+assert_equals "one unlabeled policy in ranking" "1" "${UNLABELED_COUNT}"
+
+UNLABELED_NAME=$(python3 -c "
+import json
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+print(data['unlabeled_ranking'][0]['policy_name'])
+" 2>/dev/null)
+assert_equals "unlabeled policy is chronic alert" "Test chronic alert" "${UNLABELED_NAME}"
+
+UNLABELED_RAW=$(python3 -c "
+import json
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+print(data['unlabeled_ranking'][0]['total_raw'])
+" 2>/dev/null)
+assert_equals "unlabeled policy has 10 raw incidents" "10" "${UNLABELED_RAW}"
 
 # --- Scenario: cross-project alerts stay separated ---
 python3 -c "
@@ -210,7 +307,7 @@ python3 "${SCRIPTS_DIR}/compute-clusters.py" \
     --alerts "${FIXTURES_DIR}/xproj-alerts.json" \
     --output "${FIXTURES_DIR}/xproj-clusters.json" 2>&1
 
-XPROJ_COUNT=$(python3 -c "import json; print(len(json.load(open('${FIXTURES_DIR}/xproj-clusters.json'))))" 2>/dev/null)
+XPROJ_COUNT=$(python3 -c "import json; print(len(json.load(open('${FIXTURES_DIR}/xproj-clusters.json'))['clusters']))" 2>/dev/null)
 assert_equals "cross-project alerts produce separate clusters" "2" "${XPROJ_COUNT}"
 
 # --- Scenario: same policy/resource/metric, different conditions stay split ---
@@ -246,7 +343,7 @@ python3 "${SCRIPTS_DIR}/compute-clusters.py" \
     --alerts "${FIXTURES_DIR}/multicond-alerts.json" \
     --output "${FIXTURES_DIR}/multicond-clusters.json" 2>&1
 
-MULTICOND_COUNT=$(python3 -c "import json; print(len(json.load(open('${FIXTURES_DIR}/multicond-clusters.json'))))" 2>/dev/null)
+MULTICOND_COUNT=$(python3 -c "import json; print(len(json.load(open('${FIXTURES_DIR}/multicond-clusters.json'))['clusters']))" 2>/dev/null)
 assert_equals "different conditions under same policy produce separate clusters" "2" "${MULTICOND_COUNT}"
 
 # --- Scenario: empty alerts input produces empty output ---
@@ -255,8 +352,12 @@ python3 "${SCRIPTS_DIR}/compute-clusters.py" \
     --policies "${FIXTURES_DIR}/policies.json" \
     --alerts "${FIXTURES_DIR}/empty-alerts.json" \
     --output "${FIXTURES_DIR}/empty-clusters.json" 2>&1
-EMPTY_COUNT=$(python3 -c "import json; print(len(json.load(open('${FIXTURES_DIR}/empty-clusters.json'))))" 2>/dev/null)
+EMPTY_COUNT=$(python3 -c "import json; print(len(json.load(open('${FIXTURES_DIR}/empty-clusters.json'))['clusters']))" 2>/dev/null)
 assert_equals "empty alerts produces zero clusters" "0" "${EMPTY_COUNT}"
+
+# metric types still populated from policies even with zero alerts
+EMPTY_METRICS=$(python3 -c "import json; print(len(json.load(open('${FIXTURES_DIR}/empty-clusters.json'))['metric_types_in_inventory']))" 2>/dev/null)
+assert_equals "empty alerts still extracts metric types from policies" "2" "${EMPTY_METRICS}"
 
 # Cleanup
 rm -rf "${FIXTURES_DIR}"
