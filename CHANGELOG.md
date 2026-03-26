@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Bounded disambiguation probes for incident-analysis CLASSIFY: SHORTLIST artifact, Step 2b targeted probes, one-round anti-looping with pre-probe fingerprint
+- Playbook `disambiguation_probe` schema on dependency-failure, config-regression, and infra-failure playbooks
+- Step 4b source analysis within INVESTIGATE: bad-release gated code analysis at deployed ref, post-hop workload resolution, structured output contract
+- `/investigate` command entry point pre-populating MITIGATE scope inputs
+- `slo_burn_rate_alert` context signal with MITIGATE Step 2c integration
+- SLO burn rate routing trigger in default-triggers.json and fallback-registry.json
+- Fixture schema validator (test-incident-analysis-output.sh) with real-incident-only authoring guidelines
+- 15 new test assertions for disambiguation probes and Step 4b behavioral contracts
+
+### Added
 - Remediation verification for incident-analysis: Step 2b inventory now captures scheduling constraints (affinity, topologySpreadConstraints, taints/tolerations) with tiered retrieval (kubectl > GitOps > unverified flag)
 - "Current State" field in postmortem action items — forces verification of existing config before recommending changes, with functional equivalence guidance (topologySpreadConstraints ≈ podAntiAffinity)
 
