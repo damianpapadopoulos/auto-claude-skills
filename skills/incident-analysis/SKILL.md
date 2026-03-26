@@ -449,29 +449,6 @@ Before transitioning to POSTMORTEM, answer each question explicitly in the synth
 
 If accepted, generate using the format in the Investigation Notes template (question → decisive evidence → conclusion per step, explicit Ruled out: lines for dead ends, Hypothesis revised: markers where thinking changed, Reviewer takeaway at the end). Include as a subsection under Investigation Notes (section 8). If declined or the investigation was straightforward (no revisions, no loop-backs), omit it.
 
-## SOURCE_ANALYSIS (Conditional)
-
-Conditional stage between INVESTIGATE and EXECUTE. Analyzes source code at the deployed
-version to identify regression candidates when stack traces are available.
-
-**Entry conditions (both required):**
-1. INVESTIGATE evidence contains stack traces (extracted in Step 2)
-2. Deployment info is available (image tag or SHA from k8s or metrics evidence)
-
-**If either condition is not met:** Skip this stage. Log the reason explicitly.
-
-**If conditions are met:** Follow the procedure in `references/source-analysis.md`:
-1. Resolve deployed SHA from image tag
-2. Map stack frames to source files via GitHub API
-3. Read code at error location (+/- 20 lines context)
-4. Check last 3 commits to affected files for regression candidates (within 48h)
-5. Annotate investigation evidence with `source_files[]`, `regression_candidates[]`, `deployed_sha`
-
-**Failure handling:** Fail-open with explicit warning — "GitHub API unavailable, source
-analysis skipped." The user must know a data source was unavailable.
-
-**Token budget:** Full procedure is in `references/source-analysis.md`, loaded on demand.
-
 ## EXECUTE
 
 Entered after the user approves a high-confidence CLASSIFY decision at the HITL gate. This stage applies the mitigation command with a fingerprint safety check.
