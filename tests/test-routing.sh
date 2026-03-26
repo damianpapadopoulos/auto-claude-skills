@@ -4560,11 +4560,52 @@ test_incident_analysis_cofires_with_debugging() {
     teardown_test_env
 }
 
+test_investigate_command_routing() {
+    echo "-- test: /investigate command exists and references incident-analysis --"
+
+    local cmd_file="${PROJECT_ROOT}/commands/investigate.md"
+    assert_file_exists "/investigate command file" "${cmd_file}"
+
+    local content
+    content="$(cat "${cmd_file}")"
+    assert_contains "references incident-analysis skill" "incident-analysis" "${content}"
+    assert_contains "references MITIGATE stage" "MITIGATE" "${content}"
+    assert_contains "must not bypass MITIGATE" "Must not bypass MITIGATE" "${content}"
+}
+
+test_slo_burn_rate_routes_to_incident_analysis() {
+    echo "-- test: SLO burn rate prompts route to incident-analysis --"
+    setup_test_env
+    install_registry_with_incident_analysis
+
+    # Extend the fixture registry with SLO/burn-rate trigger
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    local tmp_file
+    tmp_file="$(mktemp)"
+    jq '(.skills[] | select(.name == "incident-analysis") | .triggers) += ["(slo.*(burn|alert|breach|budget)|burn.?rate|error.budget)"]
+      | (.skills[] | select(.name == "incident-analysis") | .keywords) += ["SLO burn rate", "error budget"]' \
+      "${cache_file}" > "${tmp_file}" && mv "${tmp_file}" "${cache_file}"
+
+    local output context
+
+    output="$(run_hook "SLO burn rate alert fired on checkout-service, error budget depleting fast")"
+    context="$(extract_context "${output}")"
+    assert_contains "SLO burn rate routes to incident-analysis" "incident-analysis" "${context}"
+
+    output="$(run_hook "burn rate exceeded 2x threshold on payment-service for 10 minutes")"
+    context="$(extract_context "${output}")"
+    assert_contains "burn rate language routes to incident-analysis" "incident-analysis" "${context}"
+
+    teardown_test_env
+}
+
 test_incident_analysis_triggers_on_connection_failure
 test_incident_analysis_triggers_on_oom_kill
 test_incident_analysis_triggers_on_crash_loop
 test_incident_analysis_triggers_on_latency_spike
 test_incident_analysis_triggers_on_cloud_sql_proxy
 test_incident_analysis_cofires_with_debugging
+test_investigate_command_routing
+test_slo_burn_rate_routes_to_incident_analysis
 
 print_summary

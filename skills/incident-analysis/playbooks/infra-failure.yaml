@@ -24,6 +24,20 @@ investigation_steps: |
   5. Assess blast radius: what other pods/services are on the same node?
   6. Check scheduling: are resource requests realistic vs actual usage?
 
+queries:
+  node_status_scan:
+    kind: log_query
+    description: "Node condition events (NotReady, SchedulingDisabled) in same time window"
+    params:
+      scope: same_cluster
+      event_type: NodeNotReady
+      max_results: 10
+
+disambiguation_probe:
+  query_ref: node_status_scan
+  resolves_signals:
+    - node_not_ready_detected
+
 pre_conditions: []
 post_conditions: []
 hard_stop_conditions: []

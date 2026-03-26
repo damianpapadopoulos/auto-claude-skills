@@ -21,7 +21,7 @@
   - `measured` = metric time-series query with stated scope and numeric result
   - `structural` = config flaw unambiguous from policy definition alone (e.g., auto_close NOT SET, threshold=0, eval window absent)
   - `heuristic` = pattern-only inference, flagged for validation before applying
-- **Metric validation status:** Performed for 7 of 14 clusters via Cloud Monitoring REST API (`curl` + `gcloud auth print-access-token`). PromQL metrics mapped to Cloud Monitoring equivalents (e.g., `prometheus.googleapis.com/METRIC/gauge`). Validated: Diet Suggestions (baseline crowding confirmed), artemis message/consumer/expired counts (structural flaws confirmed), memory utilization (below threshold), transaction threshold (baseline measured), hcs-gb (low traffic confirmed). Not measurable from single time-series query: error rate ratios (Mobile API, medical-reporting — requires two filtered series + division), histogram quantiles (MySQL slow query, P99/P95/P90 — requires bucket computation), high-cardinality counters (pod restarts — daily delta loses signal).
+- **Metric validation status:** Performed for 3 of 5 targeted clusters via Cloud Monitoring REST API. PromQL metrics are queryable by mapping to their Cloud Monitoring equivalents (e.g., `jvm_threads_live_threads` → `prometheus.googleapis.com/jvm_threads_live_threads/gauge`). Validated: Diet Suggestions thread count (measured: p50=961, p95=1,256 vs threshold 1,000 — baseline crowding confirmed), artemis_message_count (measured: hourly MAX = 0 across all queues — structural flaw confirmed), artemis_messages_expired (measured: daily MAX = 0 — structural flaw confirmed). MySQL slow query (dbinsights.googleapis.com/perquery/latencies) returned distribution data requiring histogram analysis — deferred.
 - **To reproduce:** Run `pull-policies.py --project oviva-monitoring`, `pull-incidents.py --project oviva-monitoring --days 14`, `compute-clusters.py --policies policies.json --alerts alerts.json`, then apply Stage 3-5 reasoning from the alert-hygiene SKILL.md
 
 ## Definitions
@@ -99,7 +99,7 @@ Items where frequency pattern AND structural evidence agree. Safe to act on dire
 
 **Observed:** 246 raw incidents across 4 project scopes. Raw/episode ratio: 23:1 on hb-it. Median duration: 190,117s (~2.2 days) on hb-it, 414,187s (~4.8 days) on oviva-k8s. auto_close: NOT SET. Eval window: 0s. The alert detects queues without consumers but never closes — once a consumer disconnects briefly, the alert stays open for days.
 **Inferred:** Consumer disconnects during deploys or scaling events trigger the alert. Without auto_close and with eval=0s, each consumer blip becomes a multi-day open incident.
-**Evidence basis:** measured + structural — auto_close NOT SET + eval=0s + permanent fire. Metric validation: `prometheus.googleapis.com/artemis_consumer_count/gauge` hourly MIN = 0 across all queues in all namespaces over 14d. Consumer is always present at hourly resolution — the alert fires on sub-hour disconnects during deploys/scaling.
+**Evidence basis:** structural — auto_close NOT SET + eval=0s + permanent median duration + 23:1 ratio
 
 **Action:**
 1. Set `auto_close` to 86400s (24h)
@@ -251,7 +251,7 @@ Items based on frequency pattern only. Likely correct but validate the specific 
 
 **Observed:** 40 raw incidents, 14 episodes. Noise score: 6 (highest in the dataset). Median retrigger: 130s (2 minutes!). Median duration: 608s (~10m). Concentrated h09 (38%). auto_close: 1800s. Eval window: 60s.
 **Inferred:** 2-minute retrigger interval indicates the alert fires on every evaluation cycle during error spikes. The 1% threshold may be too low for this service, or the service has a consistent h09 error pattern (European morning traffic).
-**Evidence basis:** measured — `prometheus.googleapis.com/http_server_requests_seconds_count/summary` ALIGN_DELTA hourly: p50=3, p95=8 total requests/hour. This is very low traffic — a single error at 3 req/h = 33% error rate. Threshold of 1% fires on single-request errors. Raising threshold or adding volume floor is correct.
+**Evidence basis:** heuristic — retrigger pattern + time-of-day concentration. Metric validation deferred (not in top 5 cap).
 
 **Action:**
 1. Extend eval window from 60s to 300s
@@ -331,7 +331,6 @@ Items where the skill cannot determine intent — SLO redesign candidates, ambig
 
 **Observed:** 27 raw incidents across oviva-k8s-prod (15) and oviva-k8s-dg-prod (12). 93-100% concentrated at h02 UTC. auto_close: 604800s (7 days — very long). Median duration: 865-4,126s.
 **Inferred:** Almost certainly a nightly batch job at 02:00 UTC that holds long transactions. *Inferred nightly batch from 93-100% h02 concentration — verify before applying mute window.*
-**Measured:** `cloudsql.googleapis.com/database/mysql/innodb/active_trx_longest_time` ALIGN_MAX hourly over 14d: p50=156s, p95=228s. The longest active transaction routinely runs 2-4 minutes. If the alert threshold is >300s, p95 (228s) is at 76% — approaching threshold. If threshold is lower, baseline crowding. Combined with 93-100% h02 concentration, this confirms a nightly batch job holding long transactions.
 **Evidence basis:** heuristic — time-of-day concentration at 93-100% is strong but batch job not confirmed
 
 **Question:** Is there a known nightly batch/ETL job at 02:00 UTC on these Cloud SQL instances?
@@ -443,41 +442,20 @@ Re-run this analysis in 14 days (target: 2026-04-08). Expected results per top c
 
 ## Appendix: Evidence Coverage
 
-Grouped by validation method. Reviewer action: `metric query` and `config inspection` items are audit-complete; `pattern analysis` items need reviewer judgment before applying.
-
-### Config inspection — provable from policy definition
-
-| Cluster | What was checked | Finding | Scope |
-|---------|-----------------|---------|-------|
-| MySQL slow query (high) | eval_window=60s, auto_close NOT SET, flapping pattern (ratio 3.5-5.3:1) | Structural flap: 60s eval catches transient spikes that self-resolve in 10m, no auto_close accumulates incidents | 3 clusters |
-| MySQL slow query (moderate) | Identical config flaws to high-traffic variant | Same structural flap pattern | 3 clusters |
-| Delta pods restart | auto_close NOT SET, 1,187 distinct resources on hb-it | Alert accumulates open incidents indefinitely; distinct resource count proves systemic issue | 5 clusters |
-| gamification queue | 0 notification channels attached | Alert fires but notifies nobody — orphaned or intentional dashboard-only | 1 policy |
-
-### Metric query — validated against Cloud Monitoring time-series
-
-| Cluster | Query | Result | Finding |
-|---------|-------|--------|---------|
-| Diet Suggestions threads | `prometheus.googleapis.com/jvm_threads_live_threads/gauge` ALIGN_MAX 1h, 14d, cluster=oviva-dg-prod1 | p50=961, p95=1,256, max=1,256 | Baseline crowding: p50 at 96% of threshold (1,000). 33% of hours exceed threshold. Alert detects real saturation — fix underlying issue. |
-| Queue is never empty | `prometheus.googleapis.com/artemis_message_count/gauge` ALIGN_MAX 1h, namespace=it+prod | hourly MAX=0 across all queues | Messages flow through in <1h. `min_over_time(...[12h]) > 0` fires on sub-hour transients. Threshold of 0 is structurally wrong. |
-| Queue expired messages | `prometheus.googleapis.com/artemis_messages_expired/gauge` ALIGN_MAX daily, namespace=it | daily MAX=0 across all queues | Expiry events are brief transients. Threshold of 0 fires on single-message expiry. |
-| Queue without consumer | `prometheus.googleapis.com/artemis_consumer_count/gauge` ALIGN_MIN 1h, namespace=it | hourly MIN=0 everywhere | Consumer is always present at hourly resolution. Alert fires on sub-hour disconnects during deploys/scaling. |
-| hcs-gb error rate | `prometheus.googleapis.com/http_server_requests_seconds_count/summary` ALIGN_DELTA 1h | p50=3, p95=8 req/h | Very low traffic — single error at 3 req/h = 33% error rate. Confirms 1% threshold fires on single-request errors. |
-| Memory limit utilization | `kubernetes.io/container/memory/limit_utilization` ALIGN_MAX daily, 7d | p50=35%, p95=47%, max=47% | Well below typical 80-90% threshold. Alert fires on brief spikes that don't persist at daily granularity. |
-| Transaction threshold MySQL | `cloudsql.googleapis.com/database/mysql/innodb/active_trx_longest_time` ALIGN_MAX 1h, 14d | p50=156s, p95=228s | Longest transaction routinely 2-4min. 93-100% at h02 confirms nightly batch. |
-
-### Pattern analysis — inferred from incident frequency/timing, needs validation before applying
-
-| Cluster | Pattern observed | What would upgrade this | Scope |
-|---------|-----------------|------------------------|-------|
-| Mobile API 5xx | h23 concentration 39%, 5m median duration, 2 near-identical policies | Correlate h23 firings with deploy timestamps; if >80% match → high confidence for mute/eval extension | 2 policies |
-| medical-reporting error | h07 concentration 40%, 14m median duration | Check CI/CD or cron schedule for h07 activity; if >80% match → high confidence | 1 cluster |
-| P99/P95/P90 Latency overlap | Three percentile alerts on same services, lower percentile dominates noise | Analyst confirms: are services user-facing with SLI/SLO targets? If yes → SLO redesign. If no → consolidate to P99 only. | Multiple |
-
-### Not attempted — specific API limitation
-
-| Cluster | Limitation | Why it can't be a single query |
-|---------|-----------|-------------------------------|
-| MySQL slow query (both) | CUMULATIVE DISTRIBUTION metric | `histogram_quantile` computation requires bucket boundaries from distribution; `ALIGN_PERCENTILE_*` not supported on CUMULATIVE distributions via REST API |
-| Delta pods restart | CUMULATIVE counter, high cardinality | 1,187 distinct containers; short alignment (10m) × 14d × 1,187 series exceeds page limits; daily ALIGN_DELTA loses individual restart events |
-| Mobile API 5xx, medical-reporting | Error rate = ratio of two series | Requires 5xx-filtered count ÷ total count — two separate queries + division, not a single list_time_series call |
+| Cluster | Metric Validated? | Evidence Basis | Sample Scope | Dedupe Window | Confidence |
+|---------|------------------|---------------|--------------|---------------|------------|
+| Queue is never empty | Yes — hourly MAX=0 confirms sub-hour transients | measured + structural (threshold=0 + 12h lookback + auto_close NOT SET) | All 5 clusters | 30m | High |
+| Queue without consumer | No — deferred (not in top 5 cap) | structural (auto_close NOT SET + eval=0s + permanent fire) | 4 clusters | 30m | High |
+| Queue expired messages | Yes — daily MAX=0 confirms transient expiry | measured + structural (threshold=0 + no auto_close) | 3 clusters | 30m | High |
+| MySQL slow query (high) | No — histogram distribution (deferred) | structural (60s eval + no auto_close + flapping pattern) | 3 clusters | 30m | High |
+| MySQL slow query (moderate) | No — histogram distribution (deferred) | structural (identical to high-traffic variant) | 3 clusters | 30m | High |
+| Delta pods restart | No — deferred (not in top 5 cap) | structural (no auto_close + chronic accumulation + 1,187 distinct resources) | 5 clusters | 30m | High |
+| MySQL label mismatch | N/A | structural (label vs resource_project mismatch) | 2 policies | N/A | High |
+| Mobile API 5xx | No — deferred (not in top 5 cap) | heuristic (h23 concentration 39%) | 2 policies | 30m | Medium |
+| hcs-gb error rate | No — deferred (not in top 5 cap) | heuristic (2m retrigger + h09 concentration 38%) | 1 cluster | 30m | Medium |
+| medical-reporting error | No — deferred (not in top 5 cap) | heuristic (h07 concentration 40%) | 1 cluster | 30m | Medium |
+| Diet Suggestions threads | Yes — p50=961, p95=1,256 vs threshold 1,000 | measured (baseline crowding: 96% of threshold) | 1 cluster (dg-prod) | 30m | High |
+| Max memory limit utilization | No — deferred (not in top 5 cap) | heuristic (recurring, threshold unknown) | 2 policies | 30m | Medium |
+| P99/P95/P90 Latency overlap | No — deferred (not in top 5 cap) | heuristic (percentile overlap pattern) | Multiple | 30m | Needs Analyst |
+| Transaction threshold MySQL | No — deferred (not in top 5 cap) | heuristic (93-100% h02 concentration) | 2 clusters | 30m | Needs Analyst |
+| gamification queue | No — deferred (structural sufficient) | structural (0 notification channels) | 1 policy | 30m | Needs Analyst |

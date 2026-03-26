@@ -279,3 +279,17 @@ signals:
           - any_of:
               - signal_ref: cpu_saturation_detected
               - signal_ref: memory_pressure_detected
+
+  # ---------------------------------------------------------------------------
+  # SLO signals
+  # ---------------------------------------------------------------------------
+
+  slo_burn_rate_alert:
+    title: "SLO burn rate alert fired"
+    base_weight: 30
+    detection:
+      method: event_presence
+      params:
+        event_type: AlertFired
+        alert_name_pattern: ".*burn.?rate.*"
+        recency_window_seconds: 3600

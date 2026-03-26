@@ -66,6 +66,44 @@ for yaml_file in "${PLAYBOOK_DIR}"/*.yaml; do
 done
 
 # ---------------------------------------------------------------------------
+# For every signal in disambiguation_probe.resolves_signals, assert it exists
+# ---------------------------------------------------------------------------
+for yaml_file in "${PLAYBOOK_DIR}"/*.yaml; do
+    filename="$(basename "${yaml_file}")"
+    pb_json="$(yaml_to_json "${yaml_file}")"
+
+    has_probe="$(printf '%s' "${pb_json}" | jq 'has("disambiguation_probe")')"
+    if [ "${has_probe}" != "true" ]; then
+        continue
+    fi
+
+    resolve_refs="$(printf '%s' "${pb_json}" | jq -r '.disambiguation_probe.resolves_signals[]' 2>/dev/null)"
+    if [ -z "${resolve_refs}" ]; then
+        continue
+    fi
+
+    IFS_SAVE="$IFS"
+    IFS='
+'
+    for sig_id in ${resolve_refs}; do
+        IFS="${IFS_SAVE}"
+        found=""
+        for key in ${signal_keys}; do
+            if [ "${sig_id}" = "${key}" ]; then
+                found="yes"
+                break
+            fi
+        done
+        if [ -n "${found}" ]; then
+            _record_pass "${filename}: resolves_signal '${sig_id}' exists in signals.yaml"
+        else
+            _record_fail "${filename}: resolves_signal '${sig_id}' exists in signals.yaml" "not found in signals.yaml"
+        fi
+    done
+    IFS="${IFS_SAVE}"
+done
+
+# ---------------------------------------------------------------------------
 # Load compatibility.yaml and collect all referenced categories
 # ---------------------------------------------------------------------------
 compat_json="$(yaml_to_json "${COMPAT_FILE}")"
@@ -118,5 +156,22 @@ if printf '%s' "${skill_content}" | grep -qi "contradiction.*collapse\|collapse.
 else
     _record_fail "SKILL.md references contradiction collapse" "neither 'contradiction collapse' nor 'collapse' near 'incompatible' found"
 fi
+
+# ---------------------------------------------------------------------------
+# slo_burn_rate_alert signal exists
+# ---------------------------------------------------------------------------
+slo_check="$(printf '%s' "${signal_json}" | jq -r '.signals | has("slo_burn_rate_alert")')"
+if [ "${slo_check}" = "true" ]; then
+    _record_pass "slo_burn_rate_alert signal exists"
+else
+    _record_fail "slo_burn_rate_alert signal exists" "not found in signals.yaml"
+fi
+
+# slo_burn_rate_alert has required detection fields
+slo_method="$(printf '%s' "${signal_json}" | jq -r '.signals.slo_burn_rate_alert.detection.method // empty')"
+assert_not_empty "slo_burn_rate_alert has detection method" "${slo_method}"
+
+slo_weight="$(printf '%s' "${signal_json}" | jq -r '.signals.slo_burn_rate_alert.base_weight // empty')"
+assert_not_empty "slo_burn_rate_alert has base_weight" "${slo_weight}"
 
 print_summary

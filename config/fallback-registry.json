@@ -460,7 +460,8 @@
       "triggers": [
         "(incident.*(investig|analys|review|report|timeline|summary|response|triage|debug|diagnos|resolv)|postmortem|outage|root.cause|error.spike|log.analysis|production.error|staging.error)",
         "(connection.*(fail|refus|timeout|pool|exhaust|acquir)|oom.?kill|memory.pressure|cpu.*(throttl|saturat)|crash.?loop|liveness.probe|node.not.ready|upstream.*(fail|error|timeout))",
-        "(sigterm|sigkill|shutdown.*(error|fail|grace)|active.connection|cloud.?sql|proxy.*(restart|error|fail|crash)|pod.*(restart|crash|evict)|latency.*(spike|p99)|p99.*(latency|spike|degrad)|request.timeout|circuit.break|deploy.*(fail|rollback))"
+        "(sigterm|sigkill|shutdown.*(error|fail|grace)|active.connection|cloud.?sql|proxy.*(restart|error|fail|crash)|pod.*(restart|crash|evict)|latency.*(spike|p99)|p99.*(latency|spike|degrad)|request.timeout|circuit.break|deploy.*(fail|rollback))",
+        "(slo.*(burn|alert|breach|budget)|burn.?rate|error.budget)"
       ],
       "keywords": [
         "incident investigation",
@@ -477,7 +478,9 @@
         "health check",
         "pod restart",
         "latency spike",
-        "request timeout"
+        "request timeout",
+        "SLO burn rate",
+        "error budget"
       ],
       "trigger_mode": "regex",
       "priority": 20,
@@ -1005,7 +1008,7 @@
     "context7": true,
     "context_hub_cli": true,
     "context_hub_available": true,
-    "serena": true,
+    "serena": false,
     "forgetful_memory": true,
     "openspec": true,
     "posthog": false
