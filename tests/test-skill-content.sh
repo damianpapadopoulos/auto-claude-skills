@@ -123,4 +123,16 @@ assert_contains "SKILL.md has Targeted Disambiguation Probes" "Targeted Disambig
 assert_contains "SKILL.md has scope exception for dependency probes" "declared/known dependencies" "${SKILL_CONTENT}"
 assert_contains "SKILL.md has one probe round limit" "one probe round" "${SKILL_CONTENT}"
 
+# ---------------------------------------------------------------------------
+# SOURCE_ANALYSIS reference file
+# ---------------------------------------------------------------------------
+ref_file="${PROJECT_ROOT}/skills/incident-analysis/references/source-analysis.md"
+assert_file_exists "source-analysis.md reference file" "${ref_file}"
+
+ref_content="$(cat "${ref_file}")"
+assert_contains "reference has GitHub API" "GitHub" "${ref_content}"
+assert_contains "reference has regression heuristic" "regression" "${ref_content}"
+assert_contains "reference has fail-open" "GitHub API unavailable" "${ref_content}"
+assert_contains "reference has deployed SHA" "deployed_sha" "${ref_content}"
+
 print_summary
