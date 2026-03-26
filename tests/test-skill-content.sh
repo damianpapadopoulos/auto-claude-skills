@@ -105,4 +105,44 @@ assert_contains "EXECUTE: write pre.json step" "pre.json" "${EXECUTE_BLOCK}"
 VALIDATE_BLOCK=$(sed -n '/## VALIDATE/,/## Evidence Bundle/p' "${SKILL_FILE}")
 assert_contains "VALIDATE: write validate.json step" "validate.json" "${VALIDATE_BLOCK}"
 
+# ---------------------------------------------------------------------------
+# Step 4b: Source Analysis — reference file
+# ---------------------------------------------------------------------------
+ref_file="${PROJECT_ROOT}/skills/incident-analysis/references/source-analysis.md"
+assert_file_exists "source-analysis.md reference file" "${ref_file}"
+
+if [ -f "${ref_file}" ]; then
+    ref_content="$(cat "${ref_file}")"
+    assert_contains "reference has GitHub API" "GitHub" "${ref_content}"
+    assert_contains "reference has regression heuristic" "regression" "${ref_content}"
+    assert_contains "reference has fail-open" "GitHub API unavailable" "${ref_content}"
+    assert_contains "reference has deployed_ref" "deployed_ref" "${ref_content}"
+    assert_contains "reference has resolved_commit_sha" "resolved_commit_sha" "${ref_content}"
+    assert_not_contains "reference does not use deployed_sha" "deployed_sha" "${ref_content}"
+    assert_contains "reference has structured source_files" "source_files:" "${ref_content}"
+    assert_contains "reference has workload identity" "workload identity" "${ref_content}"
+fi
+
+# ---------------------------------------------------------------------------
+# Step 4b: Source Analysis — SKILL.md placement
+# ---------------------------------------------------------------------------
+assert_contains "SKILL.md has Step 4b" "### Step 4b" "${SKILL_CONTENT}"
+assert_contains "SKILL.md references source-analysis.md" "references/source-analysis.md" "${SKILL_CONTENT}"
+assert_not_contains "SKILL.md has no separate SOURCE_ANALYSIS stage" "## SOURCE_ANALYSIS" "${SKILL_CONTENT}"
+
+# Step 4b must appear before Step 5: Formulate Root Cause Hypothesis (ordering check)
+step4b_line="$(grep -n '### Step 4b' "${SKILL_FILE}" | head -1 | cut -d: -f1)"
+step5_line="$(grep -n '### Step 5: Formulate Root Cause' "${SKILL_FILE}" | head -1 | cut -d: -f1)"
+
+assert_not_empty "SKILL.md has Step 4b line number" "${step4b_line:-}"
+assert_not_empty "SKILL.md has Step 5 line number" "${step5_line:-}"
+
+if [ -n "${step4b_line:-}" ] && [ -n "${step5_line:-}" ]; then
+    if [ "${step4b_line}" -lt "${step5_line}" ]; then
+        _record_pass "Step 4b appears before Step 5"
+    else
+        _record_fail "Step 4b appears before Step 5" "Step 4b line=${step4b_line}, Step 5 line=${step5_line}"
+    fi
+fi
+
 print_summary

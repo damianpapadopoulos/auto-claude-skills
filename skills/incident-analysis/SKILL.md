@@ -340,7 +340,33 @@ If evidence is ambiguous or borderline, do NOT hop — present trace timeline an
 - Include only spans on the causal path linking Service B's failure to Service A's error. Do not dump the full trace tree.
 - Present both services' log evidence in chronological order
 - If Service B logs return no useful signal, note the gap and proceed to Step 5
-- Feed this synthesized causal timeline into Step 5 (root cause hypothesis)
+- Feed this synthesized causal timeline into Step 4b or Step 5
+
+### Step 4b: Source Analysis (Conditional)
+
+Analyzes source code at the deployed version to identify regression candidates. Runs after Step 4 if trace correlation ran; if Step 4 was skipped, runs here on the currently scoped service.
+
+**Gate — all required:**
+1. Actionable stack frame from Step 2 (skip minified/compiled/generated frames)
+2. Resolvable deployed ref (image tag or SHA from Step 2b deployment metadata)
+3. Bad-release category: `recent_deploy_detected` signal detected, OR deploy within incident window, OR deploy within 4 hours before incident start. Config-regression, dependency-failure, and infra-failure do **not** trigger this step.
+
+**If any condition is not met:** Set `source_analysis.status: skipped` with `skip_reason` and proceed to Step 5.
+
+**Post-hop rule:** If Step 4 shifted investigation to Service B, resolve Service B's workload identity from trace/log resource labels (not by assuming deployment name matches service name). Do one bounded deployment-metadata lookup for that workload. If workload identity is ambiguous, skip with reason.
+
+**Procedure:** Follow `references/source-analysis.md`:
+1. Resolve `deployed_ref` → `resolved_commit_sha` (read code at deployed ref, not HEAD)
+2. Map top 1-2 actionable stack frames to source files; verify at deployed ref
+3. Read error location +/- 15 lines context (bounded evidence — never full files or diffs)
+4. Check last 3 commits within 48h for regression candidates
+5. Emit structured output: `source_analysis.status` (`reviewed_no_regression` | `candidate_found` | `skipped` | `unavailable`), `source_files[]`, `regression_candidates[]`
+
+**Tool tiers:** GitHub API (Tier 1) → `git show` (Tier 2) → provide URL for manual inspection (Tier 3).
+
+**Fail-open:** If GitHub API is unavailable, set `source_analysis.status: unavailable` with error detail and proceed to Step 5. Never silently degrade.
+
+If `status: candidate_found`, the regression candidate becomes primary input to Step 5 hypothesis formation.
 
 ### Step 5: Formulate Root Cause Hypothesis
 
