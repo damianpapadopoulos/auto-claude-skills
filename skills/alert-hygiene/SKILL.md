@@ -119,16 +119,20 @@ Read the cluster stats JSON. For each cluster, apply the prescriptive reasoning 
 
 For the **top 5 clusters by raw incidents** where the evidence basis would be "heuristic" (not "structural" — structural flaws like auto_close NOT SET don't need metric validation):
 
-1. Use MCP `list_time_series` (Tier 1) or `gcloud monitoring read` (Tier 2) to query the metric over the analysis window for the affected resource(s). Scope the query to the cluster's `resource_type` and `resource_project`.
-2. Compute p50 and p95 of the observed metric values.
-3. Compare against the configured `threshold_value`:
+1. **Map PromQL metric names to Cloud Monitoring equivalents.** Most PromQL conditions use metrics that ARE queryable via Cloud Monitoring under a different name:
+   - GKE built-in: `kubernetes_io:METRIC_PATH` → `kubernetes.io/METRIC_PATH` (e.g., `kubernetes_io:container_restart_count` → `kubernetes.io/container/restart_count`)
+   - GCP service metrics: `SERVICE_COM:METRIC` → `SERVICE.com/METRIC` (e.g., `dbinsights_googleapis_com:perquery_latencies` → `dbinsights.googleapis.com/perquery/latencies`)
+   - Custom Prometheus: `METRIC_NAME` → `prometheus.googleapis.com/METRIC_NAME/gauge` (e.g., `jvm_threads_live_threads` → `prometheus.googleapis.com/jvm_threads_live_threads/gauge`)
+   - PromQL labels map to `metric.labels.X` (not `resource.labels.X`) for custom metrics. Resource labels like `cluster`, `namespace` use `resource.labels.X`.
+2. Query using MCP `list_time_series` or REST API `https://monitoring.googleapis.com/v3/projects/PROJECT/timeSeries` with the mapped metric type. Use `ALIGN_MAX` (hourly) for threshold comparison, `ALIGN_MEAN` for baseline assessment. Scope with resource labels from the cluster data.
+3. Compute p50 and p95 of the observed metric values.
+4. Compare against the configured threshold (extracted from the PromQL query text if not in `threshold_value`):
    - If p95 < threshold: the alert rarely fires legitimately. Recommend lowering threshold to p95 + 20% headroom. State: *"p95={X}, threshold={Y}, headroom={Z}%"*.
    - If p50 > 0.8 × threshold: the baseline is close to threshold. This confirms the flapping diagnosis. State: *"p50={X} is {Y}% of threshold={Z} — baseline crowding"*.
    - Record the query used and numeric result in the cluster's `Evidence basis` field. Mark as `measured`.
-4. If MCP/gcloud unavailable, or the metric type doesn't support direct query (PromQL custom metrics without a direct Cloud Monitoring equivalent): note *"metric validation skipped — {reason}"* and keep `heuristic` basis.
-5. If the query returns no data (metric not reporting): note *"metric validation failed — no data returned for {metric_type} on {resource_project}"*. This itself is a finding — the metric may be misconfigured.
+5. If the metric type cannot be mapped (no clear Cloud Monitoring equivalent) or the query returns no data: note the reason and keep `heuristic` basis. A no-data result is itself a finding — the metric may be misconfigured.
 
-**Cap:** Maximum 5 validation queries per run. Prioritize clusters where the recommendation involves a specific numeric threshold change (not just "set auto_close").
+**Cap:** Maximum 5 validation queries per run. Prioritize clusters where the recommendation involves a specific numeric threshold change (not just "set auto_close"). Also validate structural items where measurement adds insight (e.g., confirming queue baselines are non-zero confirms the > 0 threshold is wrong).
 
 ### Stage 4: Coverage Gap Check
 
