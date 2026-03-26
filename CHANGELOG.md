@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Remediation verification for incident-analysis: Step 2b inventory now captures scheduling constraints (affinity, topologySpreadConstraints, taints/tolerations) with tiered retrieval (kubectl > GitOps > unverified flag)
+- "Current State" field in postmortem action items — forces verification of existing config before recommending changes, with functional equivalence guidance (topologySpreadConstraints ≈ podAntiAffinity)
+
 ### Fixed
 - Incident-analysis Constraint 2 scope restriction now has infrastructure escalation exception for node-level investigation
 - High-confidence decision record restored missing safety fields: Evidence Age, VETO SIGNALS, State Fingerprint, Explanation
