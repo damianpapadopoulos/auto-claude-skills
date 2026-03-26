@@ -1,7 +1,11 @@
 id: config-regression
-title: Config Regression
+title: Configuration Regression
 category: bad-config
 commandable: false
+
+description: >
+  Errors correlated with a configuration change rather than a code deployment.
+  Investigate Helm value changes, ConfigMap updates, and Secret rotations.
 
 signals:
   supporting:
@@ -9,6 +13,26 @@ signals:
   contradicting: []
   veto_signals: []
   contradiction_penalty: 0
+
+investigation_steps: |
+  1. Check recent commits to config repo for the affected service
+  2. Compare Helm values between current and previous versions
+  3. Check ConfigMap and Secret changes in the namespace
+  4. Check if Cloud SQL Proxy configuration changed
+
+queries:
+  config_change_scan:
+    kind: log_query
+    description: "Audit log entries for ConfigMap/Secret/HelmRelease changes in same namespace and time window"
+    params:
+      scope: same_namespace
+      log_name: "cloudaudit.googleapis.com%2Factivity"
+      max_results: 10
+
+disambiguation_probe:
+  query_ref: config_change_scan
+  resolves_signals:
+    - config_change_correlated_with_errors
 
 pre_conditions: []
 post_conditions: []
