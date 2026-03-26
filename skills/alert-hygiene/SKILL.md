@@ -142,6 +142,7 @@ Use MCP `list_time_series` (Tier 1) or REST API via temp-file pattern (Tier 2). 
 **Tier 2 query pattern** (uses session temp file per Behavioral Constraint 2):
 
 ```bash
+WORK_DIR="${WORK_DIR:-$(mktemp -d /tmp/ah-XXXXXX)}"
 FILTER_FILE=$(mktemp "$WORK_DIR/ts-filter-XXXXXX.txt")
 cat > "$FILTER_FILE" << 'FILTER'
 metric.type = "prometheus.googleapis.com/jvm_threads_live_threads/gauge"
