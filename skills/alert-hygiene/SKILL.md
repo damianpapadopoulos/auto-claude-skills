@@ -119,20 +119,57 @@ Read the cluster stats JSON. For each cluster, apply the prescriptive reasoning 
 
 For the **top 5 clusters by raw incidents** where the evidence basis would be "heuristic" (not "structural" — structural flaws like auto_close NOT SET don't need metric validation):
 
-1. **Map PromQL metric names to Cloud Monitoring equivalents.** Most PromQL conditions use metrics that ARE queryable via Cloud Monitoring under a different name:
-   - GKE built-in: `kubernetes_io:METRIC_PATH` → `kubernetes.io/METRIC_PATH` (e.g., `kubernetes_io:container_restart_count` → `kubernetes.io/container/restart_count`)
-   - GCP service metrics: `SERVICE_COM:METRIC` → `SERVICE.com/METRIC` (e.g., `dbinsights_googleapis_com:perquery_latencies` → `dbinsights.googleapis.com/perquery/latencies`)
-   - Custom Prometheus: `METRIC_NAME` → `prometheus.googleapis.com/METRIC_NAME/gauge` (e.g., `jvm_threads_live_threads` → `prometheus.googleapis.com/jvm_threads_live_threads/gauge`)
-   - PromQL labels map to `metric.labels.X` (not `resource.labels.X`) for custom metrics. Resource labels like `cluster`, `namespace` use `resource.labels.X`.
-2. Query using MCP `list_time_series` or REST API `https://monitoring.googleapis.com/v3/projects/PROJECT/timeSeries` with the mapped metric type. Use `ALIGN_MAX` (hourly) for threshold comparison, `ALIGN_MEAN` for baseline assessment. Scope with resource labels from the cluster data.
-3. Compute p50 and p95 of the observed metric values.
-4. Compare against the configured threshold (extracted from the PromQL query text if not in `threshold_value`):
-   - If p95 < threshold: the alert rarely fires legitimately. Recommend lowering threshold to p95 + 20% headroom. State: *"p95={X}, threshold={Y}, headroom={Z}%"*.
-   - If p50 > 0.8 × threshold: the baseline is close to threshold. This confirms the flapping diagnosis. State: *"p50={X} is {Y}% of threshold={Z} — baseline crowding"*.
-   - Record the query used and numeric result in the cluster's `Evidence basis` field. Mark as `measured`.
-5. If the metric type cannot be mapped (no clear Cloud Monitoring equivalent) or the query returns no data: note the reason and keep `heuristic` basis. A no-data result is itself a finding — the metric may be misconfigured.
+**Step 1 — Map PromQL metric names to Cloud Monitoring equivalents.**
 
-**Cap:** Maximum 5 validation queries per run. Prioritize clusters where the recommendation involves a specific numeric threshold change (not just "set auto_close"). Also validate structural items where measurement adds insight (e.g., confirming queue baselines are non-zero confirms the > 0 threshold is wrong).
+Most PromQL conditions use metrics that ARE queryable via Cloud Monitoring under a mapped name:
+
+| PromQL pattern | Cloud Monitoring equivalent | Example |
+|---|---|---|
+| `kubernetes_io:METRIC_PATH` | `kubernetes.io/METRIC_PATH` | `kubernetes_io:container_restart_count` → `kubernetes.io/container/restart_count` |
+| `SERVICE_COM:METRIC` | `SERVICE.com/METRIC` | `dbinsights_googleapis_com:perquery_latencies` → `dbinsights.googleapis.com/perquery/latencies` |
+| `METRIC_NAME` (custom) | `prometheus.googleapis.com/METRIC_NAME/SUFFIX` | `jvm_threads_live_threads` → `prometheus.googleapis.com/jvm_threads_live_threads/gauge` |
+
+For custom Prometheus metrics, the suffix depends on the metric type: try `/gauge` first, then `/counter`, `/summary`, `/histogram` if no data returns. PromQL labels map to `metric.labels.X` for custom metrics; resource labels like `cluster`, `namespace` use `resource.labels.X`.
+
+**Step 2 — Extract threshold from PromQL query text.**
+
+When `threshold_value` is null (PromQL conditions), extract from the query string. PromQL thresholds appear as a comparison operator at the end or after a closing parenthesis: `... > 1000`, `... < 0.01`, `... == 0`. Match with: `[><=!]+\s*([\d.]+)\s*$` on the query text.
+
+**Step 3 — Query the metric.**
+
+Use MCP `list_time_series` (Tier 1) or REST API via temp-file pattern (Tier 2). Use `ALIGN_MAX` (hourly) for threshold comparison, `ALIGN_MEAN` for baseline assessment.
+
+**Tier 2 query pattern** (uses session temp file per Behavioral Constraint 2):
+
+```bash
+FILTER_FILE=$(mktemp "$WORK_DIR/ts-filter-XXXXXX.txt")
+cat > "$FILTER_FILE" << 'FILTER'
+metric.type = "prometheus.googleapis.com/jvm_threads_live_threads/gauge"
+AND metric.labels.container = "diet-suggestions"
+AND resource.labels.cluster = "oviva-dg-prod1"
+FILTER
+
+TOKEN=$(gcloud auth print-access-token)
+FILTER_ENC=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(open(sys.argv[1]).read().strip().replace('\n', ' ')))" "$FILTER_FILE")
+
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://monitoring.googleapis.com/v3/projects/$PROJECT/timeSeries?filter=$FILTER_ENC&interval.startTime=${START_TIME}&interval.endTime=${END_TIME}&aggregation.alignmentPeriod=3600s&aggregation.perSeriesAligner=ALIGN_MAX&pageSize=20" \
+  -o "$WORK_DIR/ts-result.json" ; rm -f "$FILTER_FILE"
+```
+
+Write results to `$WORK_DIR`, not to conversation context. Parse with `python3` one-liner to extract p50/p95.
+
+**Step 4 — Compare against threshold.**
+
+- If p95 < threshold: the alert rarely fires legitimately. Recommend lowering threshold to p95 + 20% headroom. State: *"p95={X}, threshold={Y}, headroom={Z}%"*.
+- If p50 > 0.8 × threshold: baseline crowding. State: *"p50={X} is {Y}% of threshold={Z} — baseline crowding"*.
+- Record the query used and numeric result in the cluster's `Evidence basis` field. Mark as `measured`.
+
+**Step 5 — Handle failures.**
+
+If the metric type cannot be mapped, the query returns no data, or the suffix is wrong: note the reason and keep `heuristic` basis. A no-data result is itself a finding — the metric may be misconfigured or the resource labels may not match.
+
+**Cap:** Maximum 5 validation queries per run. Prioritize clusters where the recommendation involves a specific numeric threshold change (not just "set auto_close"). Also validate structural items where measurement adds insight (e.g., confirming queue baselines show all zeros at hourly MAX proves the `> 0` threshold fires on sub-hour transients).
 
 ### Stage 4: Coverage Gap Check
 
