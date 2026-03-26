@@ -18,6 +18,9 @@ yaml_to_json() {
     ruby -ryaml -rjson -e "puts YAML.load_file(ARGV[0]).to_json" "$1"
 }
 
+SIGNAL_FILE="${PROJECT_ROOT}/skills/incident-analysis/signals.yaml"
+signal_json="$(yaml_to_json "${SIGNAL_FILE}")"
+
 # ---------------------------------------------------------------------------
 # Iterate all 6 playbook files
 # ---------------------------------------------------------------------------
@@ -190,6 +193,82 @@ for yaml_file in "${PLAYBOOK_DIR}"/*.yaml; do
             _record_pass "${filename}: bind_to params have cardinality exactly_one"
         else
             _record_fail "${filename}: bind_to params have cardinality exactly_one" "${bad_cardinality} params missing exactly_one"
+        fi
+    fi
+
+    # ------------------------------------------------------------------
+    # Disambiguation probe validation (optional field)
+    # ------------------------------------------------------------------
+    has_probe="$(printf '%s' "${json}" | jq 'has("disambiguation_probe")')"
+
+    if [ "${has_probe}" = "true" ]; then
+        # query_ref must reference a valid key in queries
+        probe_ref="$(printf '%s' "${json}" | jq -r '.disambiguation_probe.query_ref // empty')"
+        assert_not_empty "${filename}: disambiguation_probe has query_ref" "${probe_ref}"
+
+        if [ -n "${probe_ref}" ]; then
+            has_queries="$(printf '%s' "${json}" | jq 'has("queries")')"
+            if [ "${has_queries}" = "true" ]; then
+                ref_exists="$(printf '%s' "${json}" | jq --arg ref "${probe_ref}" '.queries | has($ref)')"
+                if [ "${ref_exists}" = "true" ]; then
+                    _record_pass "${filename}: probe query_ref '${probe_ref}' exists in queries"
+                else
+                    _record_fail "${filename}: probe query_ref '${probe_ref}' exists in queries" "not found in queries object"
+                fi
+            else
+                _record_fail "${filename}: probe query_ref '${probe_ref}' exists in queries" "playbook has no queries section"
+            fi
+        fi
+
+        # resolves_signals must be non-empty array
+        sig_count="$(printf '%s' "${json}" | jq '.disambiguation_probe.resolves_signals | length' 2>/dev/null)"
+        if [ -n "${sig_count}" ] && [ "${sig_count}" -gt 0 ] 2>/dev/null; then
+            _record_pass "${filename}: disambiguation_probe.resolves_signals is non-empty (${sig_count})"
+        else
+            _record_fail "${filename}: disambiguation_probe.resolves_signals is non-empty" "empty or missing"
+        fi
+
+        # Probe query must declare max_results (payload cap)
+        if [ -n "${probe_ref}" ] && [ "${has_queries}" = "true" ]; then
+            max_r="$(printf '%s' "${json}" | jq --arg ref "${probe_ref}" '.queries[$ref].params.max_results // empty')"
+            if [ -n "${max_r}" ]; then
+                _record_pass "${filename}: probe query '${probe_ref}' has max_results cap"
+            else
+                _record_fail "${filename}: probe query '${probe_ref}' has max_results cap" "payload cap missing"
+            fi
+        fi
+
+        # Probe query kind must be read-only (not kubectl apply/patch/delete/scale)
+        if [ -n "${probe_ref}" ] && [ "${has_queries}" = "true" ]; then
+            probe_kind="$(printf '%s' "${json}" | jq -r --arg ref "${probe_ref}" '.queries[$ref].kind // empty')"
+            probe_argv="$(printf '%s' "${json}" | jq -r --arg ref "${probe_ref}" '(.queries[$ref].command_argv // []) | join(" ")' 2>/dev/null)"
+            write_cmd=""
+            case "${probe_argv}" in
+                *"kubectl apply"*|*"kubectl patch"*|*"kubectl delete"*|*"kubectl scale"*) write_cmd="yes" ;;
+            esac
+            if [ -z "${write_cmd}" ]; then
+                _record_pass "${filename}: probe query '${probe_ref}' is read-only"
+            else
+                _record_fail "${filename}: probe query '${probe_ref}' is read-only" "contains write command: ${probe_argv}"
+            fi
+        fi
+
+        # Warn if resolves_signals references a signal with distribution or ratio method
+        resolve_sigs="$(printf '%s' "${json}" | jq -r '.disambiguation_probe.resolves_signals[]' 2>/dev/null)"
+        if [ -n "${resolve_sigs}" ]; then
+            IFS_SAVE="$IFS"
+            IFS='
+'
+            for rsig in ${resolve_sigs}; do
+                IFS="${IFS_SAVE}"
+                sig_method="$(printf '%s' "${signal_json}" | jq -r --arg s "${rsig}" '.signals[$s].detection.method // empty')"
+                case "${sig_method}" in
+                    distribution|ratio)
+                        printf "  WARN: %s: resolves_signals '%s' uses '%s' method (cannot be resolved from single probe)\n" "${filename}" "${rsig}" "${sig_method}"
+                        ;;
+                esac
+            done
+            IFS="${IFS_SAVE}"
         fi
     fi
 
