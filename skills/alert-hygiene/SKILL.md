@@ -169,7 +169,16 @@ Write results to `$WORK_DIR`, not to conversation context. Parse with `python3` 
 
 If the metric type cannot be mapped, the query returns no data, or the suffix is wrong: note the reason and keep `heuristic` basis. A no-data result is itself a finding — the metric may be misconfigured or the resource labels may not match.
 
-**Cap:** Maximum 5 validation queries per run. Prioritize clusters where the recommendation involves a specific numeric threshold change (not just "set auto_close"). Also validate structural items where measurement adds insight (e.g., confirming queue baselines show all zeros at hourly MAX proves the `> 0` threshold fires on sub-hour transients).
+**Scope:** Query all heuristic-basis clusters. Also validate structural items where measurement adds insight (e.g., confirming queue baselines show all zeros at hourly MAX proves the `> 0` threshold fires on sub-hour transients). If API errors or rate limits occur, prioritize by raw incident count.
+
+**Known measurement limitations** (state these accurately in the Evidence Coverage appendix — do not use generic "deferred" or "PromQL custom format"):
+
+| Metric kind | Limitation | What to report |
+|---|---|---|
+| CUMULATIVE DISTRIBUTION (e.g., `dbinsights.googleapis.com/perquery/latencies`) | `histogram_quantile` computation requires bucket boundaries; `ALIGN_PERCENTILE_*` not supported on CUMULATIVE distributions | "No — requires histogram quantile computation not available from single time-series query" |
+| Error rate ratios (e.g., 5xx / total requests) | Requires two status-filtered series + division; not a single query | "No — error rate requires ratio of status-filtered series" |
+| High-cardinality CUMULATIVE counters (e.g., pod restart count across 1,000+ containers) | Daily ALIGN_DELTA loses individual events; short alignment periods hit page limits | "No — high-cardinality counter, daily delta loses individual signal" |
+| Custom PromQL with no Cloud Monitoring equivalent | Rare — most Prometheus metrics map via `prometheus.googleapis.com/METRIC/SUFFIX` | "No — no Cloud Monitoring equivalent found after trying gauge/counter/summary/histogram suffixes" |
 
 ### Stage 4: Coverage Gap Check
 
