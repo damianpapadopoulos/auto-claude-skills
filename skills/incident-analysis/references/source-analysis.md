@@ -1,0 +1,150 @@
+# Step 4b: Source Analysis — Reference Procedure
+
+Conditional step within INVESTIGATE. Analyzes source code at the deployed version
+when actionable stack traces are available and a bad-release scenario is plausible.
+
+## Gate Conditions
+
+All must be true:
+1. **Bad-release gate:** `recent_deploy_detected` signal is detected, OR deploy timestamp
+   falls within the incident window or within 4 hours before incident start. Config-regression,
+   dependency-failure, and infra-failure categories do not trigger this step.
+2. **Actionable stack frame:** At least one stack frame from Step 2 resolves to a source file
+   (not minified, compiled, or generated code). Skip frames from third-party libraries.
+3. **Resolvable deployed ref:** Deployment metadata provides an image tag or SHA that can be
+   mapped to a git ref.
+
+If any condition is not met, skip with structured output:
+```yaml
+source_analysis:
+  status: skipped
+  skip_reason: "no actionable stack frame" | "deployed ref unresolvable" | "not bad-release category"
+```
+
+## Post-Hop Workload Resolution
+
+If Step 4 (trace correlation) shifted the investigation to a different service (Service B),
+resolve Service B's workload identity from trace/log resource labels before proceeding:
+
+1. Extract workload identity from span resource labels (e.g., `k8s_container` resource type
+   with `container_name`, `namespace_name`, `pod_name`)
+2. Resolve the owning workload (Deployment, StatefulSet, DaemonSet, etc.) via one bounded
+   deployment-metadata lookup for that workload identity
+3. Extract the image tag from the resolved workload spec
+
+If workload identity is ambiguous after one lookup attempt, skip with reason:
+```yaml
+source_analysis:
+  status: unavailable
+  skip_reason: "Service B workload identity ambiguous after trace hop"
+```
+
+## Procedure
+
+### Step 1: Resolve Deployed Ref
+
+Extract the git reference from deployment evidence:
+- Image tag (e.g., `v2.3.1`) → use as `deployed_ref`
+- Resolve to commit SHA via `gh api repos/{owner}/{repo}/git/ref/tags/{tag}` → `resolved_commit_sha`
+- If the tag is not a semver tag, attempt direct SHA resolution
+- If unresolvable, skip with `status: unavailable`
+
+### Step 2: Map Stack Frames to Source Files
+
+For each actionable stack frame (max 1-2 top frames):
+- Java: `com.oviva.user.UserController` → `src/main/java/com/oviva/user/UserController.java`
+- Python: `app/services/checkout.py` → direct path
+- Go: `github.com/org/repo/pkg/handler.go` → `pkg/handler.go`
+
+Verify file exists at deployed ref:
+```bash
+gh api repos/{owner}/{repo}/contents/{path}?ref={resolved_commit_sha}
+```
+
+If not found, try search as fallback:
+```bash
+gh api search/code -f q="class ClassName repo:org/repo"
+```
+
+### Step 3: Read Code at Error Location
+
+For each mapped file (max 1-2), read the relevant hunk at the deployed ref (not HEAD):
+- Error line +/- 20 lines of context
+- Never dump full files or full diffs — bounded evidence only
+
+Tool tiers:
+- **Tier 1:** `gh api` or GitHub MCP tools
+- **Tier 2:** `git show {ref}:{path}` if repo is checked out locally
+- **Tier 3:** Guidance — provide GitHub URL for manual inspection
+
+### Step 4: Check Recent Commits
+
+For each affected file, fetch the last 3 commits within 48 hours of incident start:
+```bash
+gh api repos/{owner}/{repo}/commits?path={path}&per_page=3&sha={resolved_commit_sha}
+```
+
+Look for regression indicators:
+- Removed safety checks or error handling
+- Changed code paths at or near the error location
+- Dependency version bumps
+- Skip lockfiles and generated metadata (manifest-only review)
+
+For monorepos: path-filter to service root if mapping is known.
+
+### Step 5: Emit Structured Output
+
+```yaml
+source_analysis:
+  status: reviewed_no_regression | candidate_found
+  deployed_ref: "v2.3.1"
+  resolved_commit_sha: "abc123def456..."
+  source_files:
+    - path: "src/main/java/com/oviva/user/UserController.java"
+      line: 142
+      code_context: |
+        User user = userRepository.findById(id);
+        return user.toDto();  // line 142 - NPE if null
+      status: analyzed | not_found | access_denied
+  regression_candidates:
+    - commit_sha: "def456..."
+      date: "2026-03-24T10:30:00Z"
+      summary: "removed null check in getUser()"
+      files: ["UserController.java"]
+```
+
+When no regression is found:
+```yaml
+source_analysis:
+  status: reviewed_no_regression
+  deployed_ref: "v2.3.1"
+  resolved_commit_sha: "abc123def456..."
+  source_files:
+    - path: "src/main/java/com/oviva/user/UserController.java"
+      line: 142
+      code_context: "user.toDto() — no obvious defect at deployed version"
+      status: analyzed
+  regression_candidates: []
+```
+
+## Failure Handling
+
+**Fail-open with explicit warning.** If any GitHub API call fails (timeout, 404, rate
+limit, authentication error):
+
+> "Step 4b: GitHub API unavailable ({error}), source analysis skipped. Investigation
+> continues without source code context."
+
+The user must know a data source was unavailable. Never silently degrade.
+
+## Scope Constraints
+
+- **Same service only.** No multi-repo traversal.
+- **Bounded:** Max 1-2 top actionable stack frames, 1-2 files, last 3 commits within 48h.
+- **Read-only.** No code modification suggestions (that's the Flight Plan in Step 6).
+- **No blame analysis** or authorship tracking.
+
+## Token Budget
+
+This reference file is loaded only when Step 4b is active (gate conditions met).
+SKILL.md holds ~15-20 lines inline pointing here.
