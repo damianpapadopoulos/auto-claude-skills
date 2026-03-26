@@ -135,4 +135,10 @@ assert_contains "reference has regression heuristic" "regression" "${ref_content
 assert_contains "reference has fail-open" "GitHub API unavailable" "${ref_content}"
 assert_contains "reference has deployed SHA" "deployed_sha" "${ref_content}"
 
+# ---------------------------------------------------------------------------
+# SOURCE_ANALYSIS stage in SKILL.md
+# ---------------------------------------------------------------------------
+assert_contains "SKILL.md has SOURCE_ANALYSIS stage" "SOURCE_ANALYSIS" "${SKILL_CONTENT}"
+assert_contains "SKILL.md references source-analysis.md" "references/source-analysis.md" "${SKILL_CONTENT}"
+
 print_summary
