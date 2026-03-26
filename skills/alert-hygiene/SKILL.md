@@ -96,19 +96,46 @@ Run pull-policies.py and pull-incidents.py with the validated project. Verify no
 
 ### Stage 2: Compute Cluster Stats
 
-Run compute-clusters.py. This produces per-cluster:
+Run compute-clusters.py. This produces a structured output with three sections:
+
+**Per-cluster fields (`clusters` array):**
 - `raw_incidents`, `deduped_episodes`, `dedupe_window_sec`
 - `distinct_resources`, `median_duration_sec`, `median_retrigger_sec`
 - `tod_pattern`, `pattern` (flapping/chronic/recurring/burst/isolated)
 - `noise_score`, `noise_reasons`, `label_inconsistency`
+- `threshold_value`, `comparison`, `condition_filter`, `condition_query`, `condition_type`, `condition_match`
+
+**Inventory-level fields:**
+- `metric_types_in_inventory` — deduplicated set of all metric types across all policy conditions
+- `unlabeled_ranking` — top 20 enabled policies without squad/team/owner label, ranked by total raw incidents
 
 ### Stage 3: Classify and Prescribe
 
 Read the cluster stats JSON. For each cluster, apply the prescriptive reasoning templates below to assign a verdict and specific recommended action.
 
+**Threshold-aware prescriptions:** When the cluster data includes `threshold_value` and `comparison`, state the current config explicitly in the per-item output: *"Current: {comparison} {threshold_value}, eval window {eval_window_sec}s, auto_close {auto_close_sec}s"*. Use the actual value in recommendations: *"Raise threshold from 0 to >1000"* not *"Raise threshold to >1000"*. When `condition_match` is `"ambiguous"`, note all threshold values and flag which one the recommendation applies to. When `condition_filter` or `condition_query` is available, include a truncated excerpt (≤60 chars) in the per-item output for reviewer auditability.
+
+### Stage 3b: Targeted Metric Validation
+
+For the **top 5 clusters by raw incidents** where the evidence basis would be "heuristic" (not "structural" — structural flaws like auto_close NOT SET don't need metric validation):
+
+1. Use MCP `list_time_series` (Tier 1) or `gcloud monitoring read` (Tier 2) to query the metric over the analysis window for the affected resource(s). Scope the query to the cluster's `resource_type` and `resource_project`.
+2. Compute p50 and p95 of the observed metric values.
+3. Compare against the configured `threshold_value`:
+   - If p95 < threshold: the alert rarely fires legitimately. Recommend lowering threshold to p95 + 20% headroom. State: *"p95={X}, threshold={Y}, headroom={Z}%"*.
+   - If p50 > 0.8 × threshold: the baseline is close to threshold. This confirms the flapping diagnosis. State: *"p50={X} is {Y}% of threshold={Z} — baseline crowding"*.
+   - Record the query used and numeric result in the cluster's `Evidence basis` field. Mark as `measured`.
+4. If MCP/gcloud unavailable, or the metric type doesn't support direct query (PromQL custom metrics without a direct Cloud Monitoring equivalent): note *"metric validation skipped — {reason}"* and keep `heuristic` basis.
+5. If the query returns no data (metric not reporting): note *"metric validation failed — no data returned for {metric_type} on {resource_project}"*. This itself is a finding — the metric may be misconfigured.
+
+**Cap:** Maximum 5 validation queries per run. Prioritize clusters where the recommendation involves a specific numeric threshold change (not just "set auto_close").
+
 ### Stage 4: Coverage Gap Check
 
-Scan the policy inventory against the coverage gap checklist. For each gap candidate, check whether an existing policy already covers the metric type. Recommend "extend scope" or "add new" accordingly.
+Read `metric_types_in_inventory` from the compute-clusters output. Compare against the Coverage Gap Checklist below. For each gap:
+- If the metric type exists in the inventory: check scope — is it applied to all relevant clusters/services, or only a subset? If partial, report "extend scope" with the specific uncovered projects.
+- If the metric type does not exist: report "add new".
+- Cross-reference each gap with existing noisy clusters that the gap metric would detect upstream (e.g., probe failure coverage → would provide early signal for pod restart clusters).
 
 ### Stage 5: Produce Report
 
@@ -236,6 +263,7 @@ Every cluster item — in any confidence band — uses this standardized block. 
 ### {N}. {Action}: {policy_name} — {raw} incidents [{confidence}]
 **Policy ID:** projects/{project}/alertPolicies/{id} | **Condition:** {condition_name}
 **Owner:** squad={label} | service={name} | project={resource_project}
+**Threshold:** {comparison} {threshold_value} | eval: {eval_window_sec}s | auto_close: {auto_close_sec}s | condition: `{condition_filter_excerpt_60chars}`
 **Notification reach:** {N} channels (count only — channel type resolution requires separate API calls not in v1)
 
 **Observed:** {only what the data shows — metrics, timestamps, counts, ratios}
@@ -277,6 +305,16 @@ For **Needs Analyst Input** items, replace Action/Impact/Risk with:
 - Top findings (3-5 bullets with incident counts)
 - {high_count} high-confidence actions, {medium_count} medium-confidence, {analyst_count} needs analyst input
 - Config-only changes (items 1-N) reduce raw volume by an estimated {X} incidents ({Y}%)
+
+## Methodology
+- **Data source:** GCP Monitoring API (REST, paginated)
+- **Scripts:** pull-policies.py (inventory), pull-incidents.py (incidents), compute-clusters.py (clustering + enrichment)
+- **Analysis window:** {days} days ending {date}
+- **Dedupe window:** max(1800s, 2× evaluation interval) per cluster
+- **Noise score formula:** 0-10 composite: raw/episode ratio >5 (+3) or >2 (+1), median duration <15m (+2), retrigger <1h (+2), deploy-hour concentration (+1)
+- **Pattern classification:** flapping (ratio>3 AND raw>10), chronic (episodes≥5 AND duration>1h), recurring (episodes≥5 AND duration≤1h), burst (raw>10 AND episodes≤3), isolated (other)
+- **Evidence basis levels:** `measured` = metric time-series query with stated scope and result; `structural` = config flaw unambiguous from policy definition alone; `heuristic` = pattern-only inference, flagged for validation
+- **To reproduce:** Run the three scripts with same `--project` and `--days`, then apply Stage 3-5 reasoning from this skill
 
 ## Definitions
 (Key Terms table from the skill — raw incidents, episodes, raw/episode ratio with severity bands, noise score, evidence basis)
@@ -326,6 +364,14 @@ Items where the skill cannot determine intent — SLO redesign candidates (requi
 
 ## Label/Scope Inconsistencies
 | Policy | Policy ID | Current Label | Fires On | Incidents Affected | Required Fix | Related |
+
+### Unlabeled Policies by Incident Volume
+Top 10 policies without squad/team/owner label, ranked by total raw incidents (source: `unlabeled_ranking` from compute-clusters output):
+
+| # | Policy | Policy ID | Raw ({days}d) | Episodes | Channels | Suggested Owner |
+|---|--------|-----------|--------------|----------|----------|----------------|
+
+"Suggested Owner" is left as "⚠ assign" unless resource project or metric type implies a specific team.
 
 ## Keep — No Action Required
 Brief section with 5-10 representative well-calibrated clusters and one-liner rationale for each (e.g., "fires <2x/14d, threshold well above baseline, correct routing"). Demonstrates the analysis evaluated the full inventory.
