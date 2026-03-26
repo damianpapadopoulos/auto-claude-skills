@@ -3,12 +3,37 @@ title: Dependency Failure
 category: dependency-failure
 commandable: false
 
+description: >
+  Errors caused by upstream dependency failures. The primary service is
+  healthy but cannot complete requests because a dependency is down or
+  degraded.
+
 signals:
   supporting:
     - upstream_dependency_errors
   contradicting: []
   veto_signals: []
   contradiction_penalty: 0
+
+investigation_steps: |
+  1. Identify failing dependency from error messages and traces
+  2. Check dependency service health (pods, logs, metrics)
+  3. Check Cloud SQL Proxy connections if database-related
+  4. Determine if dependency failure is primary or cascading
+
+queries:
+  dependency_error_scan:
+    kind: log_query
+    description: "ERROR logs from known dependencies in same time window"
+    params:
+      scope: declared_dependencies
+      severity: ERROR
+      max_results: 10
+
+disambiguation_probe:
+  query_ref: dependency_error_scan
+  resolves_signals:
+    - upstream_dependency_errors
 
 pre_conditions: []
 post_conditions: []
