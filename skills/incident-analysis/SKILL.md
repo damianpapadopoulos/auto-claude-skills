@@ -89,8 +89,13 @@ Before querying logs, determine what you are investigating:
 - How many replicas/instances exist? (query metrics or deployment spec — do not infer from logs)
 - Where are they distributed? (nodes, zones, regions)
 - What are the resource requests, limits, and probe configurations?
+- For k8s workloads: scheduling constraints — pod affinity/anti-affinity rules, topologySpreadConstraints, node affinity, taints and tolerations. Query from the same deployment spec used for resource requests. If kubectl is unavailable, check GitOps manifests via `gh api` or `git show` as fallback.
 
 This prevents scoping errors (investigating 4 pods when 7 exist) and reveals distribution risks (3 of 7 pods on one node) before they become surprises in the postmortem. For k8s, use `container/memory/request_bytes` grouped by pod name. For other platforms, use the equivalent inventory query.
+
+Note: topologySpreadConstraints and podAntiAffinity both control pod distribution — if either is present, the workload has scheduling constraints. Distinguish enforcement level: soft (ScheduleAnyway, preferredDuringScheduling) vs hard (DoNotSchedule, requiredDuringScheduling).
+
+When live cluster access is unavailable for inventory or action item verification, fall back to GitOps manifests (`gh api repos/ORG/REPO/contents/PATH` or `git show`) to check deployment configuration. If neither is available, flag affected inventory fields and action items as unverified.
 
 ### Step 2c: Quantify User-Facing Impact
 
@@ -513,7 +518,7 @@ Include duration: verified start and end timestamps in UTC.
 ## 3. Action Items
 Ordered by priority (P0 first). Each item MUST have a suggested owner and due date.
 Items without owners should be flagged: "⚠ Owner needed".
-Include: priority, action, owner, due date, status.
+Include: priority, action, current state, owner, due date, status.
 
 ## 4. Root Cause & Trigger
 Concise explanation of why the incident happened.
@@ -621,7 +626,7 @@ Check for existing directory:
 Generate from the synthesized summary (NOT raw logs). Follow the template section order:
 - Summary: one sentence plain language, then one paragraph technical
 - Impact: user-facing impact first (error count, affected users, business impact from user-provided context), then infrastructure scope
-- Action items: ordered by priority, each with suggested owner and due date. Flag unassigned items with "⚠ Owner needed"
+- Action items: ordered by priority, each with current state, suggested owner, and due date. "Current state" describes the relevant existing configuration or deployed state for the system the action item targets — what is there today, not what should be. Check for functionally equivalent configurations, not just exact field matches. If current state cannot be determined, state "⚠ Not verified against live config." Flag unassigned items with "⚠ Owner needed"
 - Root cause: concise causal chain, include scheduling/resource math if relevant
 - Timeline: infrastructure events interleaved with human actions (alerts fired, human response, manual intervention), all UTC with evidence sources
 - Contributing factors: ordered by impact, most impactful first
