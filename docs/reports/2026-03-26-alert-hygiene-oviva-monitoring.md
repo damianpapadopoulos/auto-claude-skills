@@ -443,19 +443,41 @@ Re-run this analysis in 14 days (target: 2026-04-08). Expected results per top c
 
 ## Appendix: Evidence Coverage
 
-| Cluster | Metric Validated? | Evidence Basis | Sample Scope | Dedupe Window | Confidence |
-|---------|------------------|---------------|---------------|------------|------------|
-| Queue is never empty | Yes — hourly MAX=0 confirms sub-hour transients | measured + structural (threshold=0 + 12h lookback + auto_close NOT SET) | All 5 clusters | 30m | High |
-| Queue without consumer | Yes — hourly MIN=0 everywhere, consumer always present | measured + structural (auto_close NOT SET + eval=0s + permanent fire) | 4 clusters | 30m | High |
-| Queue expired messages | Yes — daily MAX=0 confirms transient expiry | measured + structural (threshold=0 + no auto_close) | 3 clusters | 30m | High |
-| MySQL slow query (high) | No — CUMULATIVE DISTRIBUTION requires histogram_quantile computation | structural (60s eval + no auto_close + flapping pattern) | 3 clusters | 30m | High |
-| MySQL slow query (moderate) | No — same limitation as high-traffic variant | structural (identical to high-traffic variant) | 3 clusters | 30m | High |
-| Delta pods restart | No — CUMULATIVE counter, daily delta loses individual restart signal | structural (no auto_close + chronic accumulation + 1,187 distinct resources) | 5 clusters | 30m | High |
-| Diet Suggestions threads | Yes — p50=961, p95=1,256 vs threshold 1,000 (96% baseline crowding) | measured (Cloud Monitoring REST: prometheus.googleapis.com/jvm_threads_live_threads/gauge, ALIGN_MAX 1h, 14d) | 1 cluster (dg-prod) | 30m | High |
-| Mobile API 5xx | No — error rate requires ratio of status-filtered series (two queries + division) | heuristic (h23 concentration 39%) | 2 policies | 30m | Medium |
-| hcs-gb error rate | Yes — p50=3 req/h total traffic, confirms low-traffic noise | measured (Cloud Monitoring REST: http_server_requests_seconds_count/summary, ALIGN_DELTA 1h) | 1 cluster | 30m | Medium |
-| medical-reporting error | No — error rate requires ratio computation | heuristic (h07 concentration 40%) | 1 cluster | 30m | Medium |
-| Max memory limit utilization | Yes — p50=35%, p95=47%, well below typical 80-90% threshold | measured (Cloud Monitoring REST: kubernetes.io/container/memory/limit_utilization, ALIGN_MAX daily) | 2 policies | 30m | Medium |
-| P99/P95/P90 Latency overlap | No — latency distribution requires histogram_quantile | heuristic (percentile overlap pattern) | Multiple | 30m | Needs Analyst |
-| Transaction threshold MySQL | Yes — p50=156s, p95=228s longest active transaction | measured (Cloud Monitoring REST: cloudsql.googleapis.com/database/mysql/innodb/active_trx_longest_time, ALIGN_MAX 1h) | 2 clusters | 30m | Needs Analyst |
-| gamification queue | No — structural evidence sufficient (0 channels) | structural (0 notification channels) | 1 policy | 30m | Needs Analyst |
+Grouped by validation method. Reviewer action: `metric query` and `config inspection` items are audit-complete; `pattern analysis` items need reviewer judgment before applying.
+
+### Config inspection — provable from policy definition
+
+| Cluster | What was checked | Finding | Scope |
+|---------|-----------------|---------|-------|
+| MySQL slow query (high) | eval_window=60s, auto_close NOT SET, flapping pattern (ratio 3.5-5.3:1) | Structural flap: 60s eval catches transient spikes that self-resolve in 10m, no auto_close accumulates incidents | 3 clusters |
+| MySQL slow query (moderate) | Identical config flaws to high-traffic variant | Same structural flap pattern | 3 clusters |
+| Delta pods restart | auto_close NOT SET, 1,187 distinct resources on hb-it | Alert accumulates open incidents indefinitely; distinct resource count proves systemic issue | 5 clusters |
+| gamification queue | 0 notification channels attached | Alert fires but notifies nobody — orphaned or intentional dashboard-only | 1 policy |
+
+### Metric query — validated against Cloud Monitoring time-series
+
+| Cluster | Query | Result | Finding |
+|---------|-------|--------|---------|
+| Diet Suggestions threads | `prometheus.googleapis.com/jvm_threads_live_threads/gauge` ALIGN_MAX 1h, 14d, cluster=oviva-dg-prod1 | p50=961, p95=1,256, max=1,256 | Baseline crowding: p50 at 96% of threshold (1,000). 33% of hours exceed threshold. Alert detects real saturation — fix underlying issue. |
+| Queue is never empty | `prometheus.googleapis.com/artemis_message_count/gauge` ALIGN_MAX 1h, namespace=it+prod | hourly MAX=0 across all queues | Messages flow through in <1h. `min_over_time(...[12h]) > 0` fires on sub-hour transients. Threshold of 0 is structurally wrong. |
+| Queue expired messages | `prometheus.googleapis.com/artemis_messages_expired/gauge` ALIGN_MAX daily, namespace=it | daily MAX=0 across all queues | Expiry events are brief transients. Threshold of 0 fires on single-message expiry. |
+| Queue without consumer | `prometheus.googleapis.com/artemis_consumer_count/gauge` ALIGN_MIN 1h, namespace=it | hourly MIN=0 everywhere | Consumer is always present at hourly resolution. Alert fires on sub-hour disconnects during deploys/scaling. |
+| hcs-gb error rate | `prometheus.googleapis.com/http_server_requests_seconds_count/summary` ALIGN_DELTA 1h | p50=3, p95=8 req/h | Very low traffic — single error at 3 req/h = 33% error rate. Confirms 1% threshold fires on single-request errors. |
+| Memory limit utilization | `kubernetes.io/container/memory/limit_utilization` ALIGN_MAX daily, 7d | p50=35%, p95=47%, max=47% | Well below typical 80-90% threshold. Alert fires on brief spikes that don't persist at daily granularity. |
+| Transaction threshold MySQL | `cloudsql.googleapis.com/database/mysql/innodb/active_trx_longest_time` ALIGN_MAX 1h, 14d | p50=156s, p95=228s | Longest transaction routinely 2-4min. 93-100% at h02 confirms nightly batch. |
+
+### Pattern analysis — inferred from incident frequency/timing, needs validation before applying
+
+| Cluster | Pattern observed | What would upgrade this | Scope |
+|---------|-----------------|------------------------|-------|
+| Mobile API 5xx | h23 concentration 39%, 5m median duration, 2 near-identical policies | Correlate h23 firings with deploy timestamps; if >80% match → high confidence for mute/eval extension | 2 policies |
+| medical-reporting error | h07 concentration 40%, 14m median duration | Check CI/CD or cron schedule for h07 activity; if >80% match → high confidence | 1 cluster |
+| P99/P95/P90 Latency overlap | Three percentile alerts on same services, lower percentile dominates noise | Analyst confirms: are services user-facing with SLI/SLO targets? If yes → SLO redesign. If no → consolidate to P99 only. | Multiple |
+
+### Not attempted — specific API limitation
+
+| Cluster | Limitation | Why it can't be a single query |
+|---------|-----------|-------------------------------|
+| MySQL slow query (both) | CUMULATIVE DISTRIBUTION metric | `histogram_quantile` computation requires bucket boundaries from distribution; `ALIGN_PERCENTILE_*` not supported on CUMULATIVE distributions via REST API |
+| Delta pods restart | CUMULATIVE counter, high cardinality | 1,187 distinct containers; short alignment (10m) × 14d × 1,187 series exceeds page limits; daily ALIGN_DELTA loses individual restart events |
+| Mobile API 5xx, medical-reporting | Error rate = ratio of two series | Requires 5xx-filtered count ÷ total count — two separate queries + division, not a single list_time_series call |

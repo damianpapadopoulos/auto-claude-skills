@@ -437,8 +437,19 @@ Re-run this analysis in {days} days. Expected results per top cluster:
 Full cluster table sorted by raw incidents: cluster key, raw, episodes, distinct resources, median duration, median retrigger, noise score, pattern, verdict, confidence.
 
 ## Appendix: Evidence Coverage
-| Cluster | Metric Validated? | Evidence Basis | Sample Scope | Dedupe Window | Confidence |
-(lets reviewer see which recommendations rest on metric validation vs pattern-only inference)
+Grouped by validation method. Reviewer action: `metric query` and `config inspection` items are audit-complete; `pattern analysis` items need reviewer judgment before applying.
+
+### Config inspection — provable from policy definition
+| Cluster | What was checked | Finding | Scope |
+
+### Metric query — validated against Cloud Monitoring time-series
+| Cluster | Query | Result | Finding |
+
+### Pattern analysis — inferred from incident frequency/timing, needs validation before applying
+| Cluster | Pattern observed | What would upgrade this | Scope |
+
+### Not attempted — specific API limitation
+| Cluster | Limitation | Why it can't be a single query |
 ```
 
 ## Action Types
