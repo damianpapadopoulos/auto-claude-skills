@@ -444,7 +444,7 @@ Re-run this analysis in 14 days (target: 2026-04-08). Expected results per top c
 ## Appendix: Evidence Coverage
 
 | Cluster | Metric Validated? | Evidence Basis | Sample Scope | Dedupe Window | Confidence |
-|---------|------------------|---------------|---------------|------------|
+|---------|------------------|---------------|---------------|------------|------------|
 | Queue is never empty | Yes — hourly MAX=0 confirms sub-hour transients | measured + structural (threshold=0 + 12h lookback + auto_close NOT SET) | All 5 clusters | 30m | High |
 | Queue without consumer | Yes — hourly MIN=0 everywhere, consumer always present | measured + structural (auto_close NOT SET + eval=0s + permanent fire) | 4 clusters | 30m | High |
 | Queue expired messages | Yes — daily MAX=0 confirms transient expiry | measured + structural (threshold=0 + no auto_close) | 3 clusters | 30m | High |
