@@ -119,4 +119,21 @@ else
     _record_fail "SKILL.md references contradiction collapse" "neither 'contradiction collapse' nor 'collapse' near 'incompatible' found"
 fi
 
+# ---------------------------------------------------------------------------
+# slo_burn_rate_alert signal exists
+# ---------------------------------------------------------------------------
+slo_check="$(printf '%s' "${signal_json}" | jq -r '.signals | has("slo_burn_rate_alert")')"
+if [ "${slo_check}" = "true" ]; then
+    _record_pass "slo_burn_rate_alert signal exists"
+else
+    _record_fail "slo_burn_rate_alert signal exists" "not found in signals.yaml"
+fi
+
+# slo_burn_rate_alert has required detection fields
+slo_method="$(printf '%s' "${signal_json}" | jq -r '.signals.slo_burn_rate_alert.detection.method // empty')"
+assert_not_empty "slo_burn_rate_alert has detection method" "${slo_method}"
+
+slo_weight="$(printf '%s' "${signal_json}" | jq -r '.signals.slo_burn_rate_alert.base_weight // empty')"
+assert_not_empty "slo_burn_rate_alert has base_weight" "${slo_weight}"
+
 print_summary

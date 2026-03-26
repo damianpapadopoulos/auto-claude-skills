@@ -105,4 +105,9 @@ assert_contains "EXECUTE: write pre.json step" "pre.json" "${EXECUTE_BLOCK}"
 VALIDATE_BLOCK=$(sed -n '/## VALIDATE/,/## Evidence Bundle/p' "${SKILL_FILE}")
 assert_contains "VALIDATE: write validate.json step" "validate.json" "${VALIDATE_BLOCK}"
 
+# ---------------------------------------------------------------------------
+# SLO burn rate context signal in MITIGATE
+# ---------------------------------------------------------------------------
+assert_contains "SKILL.md mentions SLO burn rate in MITIGATE" "SLO burn rate alert" "${SKILL_CONTENT}"
+
 print_summary

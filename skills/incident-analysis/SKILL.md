@@ -101,6 +101,10 @@ When live cluster access is unavailable for inventory or action item verificatio
 
 Before diving into root cause, establish the impact magnitude from available sources:
 - **From metrics (query):** HTTP 5xx error count/rate at the load balancer or ingress, SLI degradation (latency, availability), affected endpoint paths.
+- **From alerts (check):** If an SLO burn rate alert fired for this service in the time
+  window, note the alert name, burn rate value, and error budget remaining. This provides
+  severity context before the deep dive. Check via `list_alert_policies` (Tier 1) or
+  `gcloud alpha monitoring policies list` (Tier 2).
 - **From user-provided context (do not query):** support tickets, user reports, business impact descriptions. Incorporate if provided but do not attempt to query external support/ticket systems.
 - **If neither is available:** state "user-facing impact not quantified" and proceed. Do not estimate.
 
