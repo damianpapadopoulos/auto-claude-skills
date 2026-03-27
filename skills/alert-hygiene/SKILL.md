@@ -84,6 +84,7 @@ Before any analysis, discover and validate the monitoring project:
 3. If the user does not provide a project, check if recent incident context or prior conversation names it. If not, ask once with the guidance above.
 4. Verify incidents return non-empty: run pull-incidents.py with `--days 1` as a quick check. If zero incidents but policies exist, the window may be too narrow or incidents are in a different project — warn with specifics.
 5. If both return data: `"Monitoring project: {project}, {N} policies found, incidents available. Proceeding with {days}-day analysis."`
+6. **GitHub org for IaC links:** Check if recent conversation or CLAUDE.md names a GitHub org. If not, ask once: *"Which GitHub org hosts your monitoring IaC? (e.g., `oviva-ag`). Used for Search IaC links in the report — skip if not applicable."* Store as `{github_org}` for Stage 5 link construction. If the user skips, omit Search IaC links.
 
 Fail early — do not proceed to Stage 1 with an empty or wrong project.
 
@@ -395,6 +396,24 @@ If any are missing, the item drops to Investigate regardless of confidence level
 
 Guardrail thresholds must be derived from evidence, not arbitrary. Guardrail = N/A only when the change cannot plausibly hide a real signal.
 
+### Contextual Action Links
+
+Every Do Now and Investigate finding gets one `**Links:**` line directly after `**Notification Reach:**`. No links in Decision Summary, Needs Decision, Verification Scorecard, or Evidence Ledger. Max 3 links per finding, separator ` · `.
+
+**Link construction** (see templates below for placement):
+
+| Label | URL pattern | When |
+|-------|-------------|------|
+| Open policy | `https://console.cloud.google.com/monitoring/alerting/policies/{id}?project={monitoring_project}` | Concrete policy ID available |
+| Open alert policies | `https://console.cloud.google.com/monitoring/alerting?project={monitoring_project}` | No concrete policy ID (fallback) |
+| Search IaC | `https://github.com/search?q=org%3A{github_org}+{id}&type=code` | `{github_org}` provided in Stage 0 |
+| Incident history | `https://console.cloud.google.com/monitoring/alerting/incidents?project={monitoring_project}` | Investigate only: next step is reviewing firing/timing patterns |
+| Validate metric | `https://console.cloud.google.com/monitoring/metrics-explorer?project={monitoring_project}` | Investigate only: next step is metric validation AND report has enough query detail |
+
+**Do Now:** Open policy + Search IaC (2 links).
+**Investigate:** Open policy + Search IaC + optional contextual third link (max 3). Omit third link if it would require inventing missing query details.
+**Do not** embed URLs in `Policy ID` or `IaC Location` fields — keep those plain text.
+
 ### Do Now Per-Item Template
 
 ```
@@ -404,6 +423,7 @@ Guardrail thresholds must be derived from evidence, not arbitrary. Guardrail = N
 **Target Owner:** {current_label} -> {target_team}
 **Scope:** {projects affected}
 **Notification Reach:** {N} channels
+**Links:** [Open policy](https://console.cloud.google.com/monitoring/alerting/policies/{id}?project={project}) · [Search IaC](https://github.com/search?q=org%3A{github_org}+{id}&type=code)
 
 #### Current Policy Snapshot
 (Include fields relevant to the finding type. Not all fields apply to every finding.)
@@ -446,6 +466,7 @@ Guardrail thresholds must be derived from evidence, not arbitrary. Guardrail = N
 **Target Owner:** {team}
 **Scope:** {projects affected}
 **Notification Reach:** {N} channels
+**Links:** [Open policy](https://console.cloud.google.com/monitoring/alerting/policies/{id}?project={project}) · [Search IaC](https://github.com/search?q=org%3A{github_org}+{id}&type=code)
 
 **Situation:** {what is happening — 1-2 sentences}
 **Impact:** {why it matters — incident counts, team effect}

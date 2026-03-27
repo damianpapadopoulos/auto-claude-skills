@@ -3,6 +3,7 @@
 .claude/settings.local.json
 docs/plans/
 docs/postmortems/
+docs/reports/
 docs/session-backups/
 docs/superpowers-analysis.md
 .worktrees/
