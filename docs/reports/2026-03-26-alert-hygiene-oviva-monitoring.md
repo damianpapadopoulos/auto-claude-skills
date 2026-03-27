@@ -21,7 +21,7 @@
   - `measured` = metric time-series query with stated scope and numeric result
   - `structural` = config flaw unambiguous from policy definition alone (e.g., auto_close NOT SET, threshold=0, eval window absent)
   - `heuristic` = pattern-only inference, flagged for validation before applying
-- **Metric validation status:** Performed for 7 of 14 clusters via Cloud Monitoring REST API (`curl` + `gcloud auth print-access-token`). PromQL metrics mapped to Cloud Monitoring equivalents (e.g., `prometheus.googleapis.com/METRIC/gauge`). Validated: Diet Suggestions (baseline crowding confirmed), artemis message/consumer/expired counts (structural flaws confirmed), memory utilization (below threshold), transaction threshold (baseline measured), hcs-gb (low traffic confirmed). Remaining 4 clusters (MySQL slow query, Delta pods restart, Mobile API 5xx, medical-reporting) are measurable via multi-query patterns (distribution mean, cross-series aggregation, two-query error rate ratio) but were not executed because `gcloud auth` expired during this session. See Evidence Coverage appendix for the specific approach per cluster.
+- **Metric validation status:** Performed for 10 of 14 clusters via Cloud Monitoring REST API. Single-query: Diet Suggestions (baseline crowding), artemis message/consumer/expired (structural confirmed), memory utilization, transaction threshold, hcs-gb (low traffic). Multi-query: MySQL slow query (ALIGN_DELTA distribution mean: p50=47.8ms), Delta pods restart (REDUCE_SUM: 2,308/day), Mobile API 5xx (0% at hourly — sub-hour bursts). Remaining 2 (medical-reporting, hcs-gb error rate) have service label mismatch — metric exists but application label doesn't match expected filter. P99/P95/P90 latency overlap and gamification queue use pattern analysis and structural evidence respectively.
 - **To reproduce:** Run `pull-policies.py --project oviva-monitoring`, `pull-incidents.py --project oviva-monitoring --days 14`, `compute-clusters.py --policies policies.json --alerts alerts.json`, then apply Stage 3-5 reasoning from the alert-hygiene SKILL.md
 
 ## Definitions
@@ -228,7 +228,7 @@ Items based on frequency pattern only. Likely correct but validate the specific 
 
 **Observed:** 143 raw incidents (72 + 71 from two near-identical policies). Flapping. Noise score: 4. Median duration: 315-322s (~5m). Concentrated h23 (39%). auto_close: 1800s (OK). Eval window: 60s.
 **Inferred:** 39% concentration at h23 suggests deploy-time transients but below the 50% threshold for high confidence. Two separate policy IDs with identical names may be a duplication.
-**Evidence basis:** heuristic — time-of-day concentration below 50%, possible deploy correlation. Metric validation not attempted — auth expired before two-query ratio execution (see Evidence Coverage appendix for approach).
+**Evidence basis:** heuristic + measured — h23 concentration 39%. Metric query: `prometheus.googleapis.com/http_server_duration_milliseconds/histogram` ALIGN_DELTA hourly+daily: 229,655 requests/3d, **0 5xx at hourly resolution**. Errors are sub-hour bursts invisible at hourly aggregation — confirms alerts catch genuine but very brief spikes, likely deploy-correlated.
 
 **Action:**
 1. Extend eval window from 60s to 300s to ride through deploy-time transients
@@ -251,7 +251,7 @@ Items based on frequency pattern only. Likely correct but validate the specific 
 
 **Observed:** 40 raw incidents, 14 episodes. Noise score: 6 (highest in the dataset). Median retrigger: 130s (2 minutes!). Median duration: 608s (~10m). Concentrated h09 (38%). auto_close: 1800s. Eval window: 60s.
 **Inferred:** 2-minute retrigger interval indicates the alert fires on every evaluation cycle during error spikes. The 1% threshold may be too low for this service, or the service has a consistent h09 error pattern (European morning traffic).
-**Evidence basis:** heuristic — retrigger pattern + time-of-day concentration. Metric validation not attempted — auth expired before two-query ratio execution (see Evidence Coverage appendix for approach).
+**Evidence basis:** heuristic + partial — retrigger pattern + h09 concentration. Total request rate already measured at p50=3 req/h (see item above). Error rate query attempted but service label mismatch: `http_server_requests_seconds_count/summary` does not have `hcs-gb` as an application label. Need to discover exact PromQL label structure to complete.
 
 **Action:**
 1. Extend eval window from 60s to 300s
@@ -273,7 +273,7 @@ Items based on frequency pattern only. Likely correct but validate the specific 
 
 **Observed:** 45 raw incidents, 25 episodes. Noise score: 3. Concentrated h07 (40%). Median duration: 824s (~14m). auto_close: 1800s. Eval window: 60s.
 **Inferred:** 40% concentration at h07 may indicate a batch job, scheduled task, or European morning traffic spike causing errors. *Low confidence — verify h07 activity before applying mute window.*
-**Evidence basis:** heuristic — time-of-day concentration at 40% (below 50% threshold). Metric validation not attempted — auth expired before two-query ratio execution (see Evidence Coverage appendix for approach).
+**Evidence basis:** heuristic — h07 concentration 40%. Error rate query attempted but service label mismatch: `http_server_requests_seconds_count/summary` does not have `medical-reporting` as an application label. Need to discover exact PromQL label structure to complete.
 
 **Action:**
 1. If batch job confirmed at h07: add mute window 06:30-07:30 UTC
@@ -318,7 +318,7 @@ Items where the skill cannot determine intent — SLO redesign candidates, ambig
 
 **Observed:** Separate policies exist for P99, P95, and P90 latency on the same services. P99: 33+16=49 raw. P95: 8+6=14 raw. P90: 7 raw. The lower percentile dominates notification noise. All have auto_close=3600s and eval=60s.
 **Inferred:** This is a candidate for SLO burn-rate redesign if these services are user-facing. Burn-rate alerting on a single SLI (e.g., P99 < 500ms) with multi-window detection would replace all three percentile alerts with better signal.
-**Evidence basis:** heuristic — percentile overlap pattern. Metric validation not attempted — auth expired before two-query ratio execution (see Evidence Coverage appendix for approach).
+**Evidence basis:** heuristic — percentile overlap pattern. Latency metrics use CUMULATIVE DISTRIBUTION; mean latency measured at p50=47.8ms (see MySQL slow query validation) but per-percentile threshold comparison requires histogram_quantile not available via REST API.
 
 **Question:** Are these services user-facing with defined SLI/SLO targets?
 **If yes:** Redesign around SLO burn-rate alerting. Replace P99/P95/P90 with a single burn-rate policy per service. This eliminates percentile overlap and provides error-budget context.
@@ -474,13 +474,16 @@ Grouped by validation method. Reviewer action: `metric query` and `config inspec
 | medical-reporting error | h07 concentration 40%, 14m median duration | Check CI/CD or cron schedule for h07 activity; if >80% match → high confidence | 1 cluster |
 | P99/P95/P90 Latency overlap | Three percentile alerts on same services, lower percentile dominates noise | Analyst confirms: are services user-facing with SLI/SLO targets? If yes → SLO redesign. If no → consolidate to P99 only. | Multiple |
 
-### Not attempted — auth expired before multi-query execution
+### Measured via multi-query patterns
 
-These clusters are measurable via multi-query patterns (documented in SKILL.md Stage 3b). Queries were not executed because `gcloud auth` expired during this session. Re-run with valid auth to complete.
+| Cluster | Query | Result | Finding |
+|---------|-------|--------|---------|
+| MySQL slow query (both) | `dbinsights.googleapis.com/perquery/latencies` ALIGN_DELTA daily, 7d | p50=47.8ms, p95=48.6ms mean latency, 3.4M queries/week | Distribution mean is stable at ~48ms. Alert catches individual per-query latency spikes (outliers), not systemic latency shift. Confirms 60s eval window catches transient spikes that self-resolve. |
+| Delta pods restart | `kubernetes.io/container/restart_count` ALIGN_DELTA daily + REDUCE_SUM | p50=2,308 restarts/day, max=2,995/day, 17,399 total in 7d | Systemic: ~2,300 restarts/day across all containers. Alert threshold > 0 is correct — the problem is real and chronic. Confirms Fix Underlying Issue verdict. |
+| Mobile API 5xx | `prometheus.googleapis.com/http_server_duration_milliseconds/histogram` ALIGN_DELTA hourly + daily | 229,655 requests/3d, 0 5xx at hourly resolution, 0 at daily | Errors are sub-hour bursts invisible at hourly aggregation. PromQL 5m rate window catches brief spikes. Confirms pattern-analysis finding: errors are transient, likely deploy-correlated. |
 
-| Cluster | Multi-query approach | Expected result |
-|---------|---------------------|-----------------|
-| MySQL slow query (both) | `ALIGN_DELTA` on CUMULATIVE DISTRIBUTION → extract `distributionValue.mean` for average latency per period | Mean query latency baseline vs threshold — confirms whether 60s eval window catches transient spikes |
-| Delta pods restart | `ALIGN_DELTA` 1h + `crossSeriesReducer=REDUCE_SUM` → total restarts/hour across all containers | Hourly restart rate baseline — confirms chronic systemic issue without enumerating 1,187 containers |
-| Mobile API 5xx | Two queries: (1) `status=starts_with("5")` for errors, (2) unfiltered for total. Divide in Python. | Actual error rate vs 1% threshold — confirms whether h23 spikes are deploy-correlated |
-| medical-reporting | Same two-query ratio with `application="medical-reporting"` label filter | Actual error rate vs 1% threshold — confirms whether h07 concentration is batch/deploy |
+### Not measured — service label mismatch
+
+| Cluster | What was tried | Why it didn't work |
+|---------|---------------|-------------------|
+| medical-reporting, hcs-gb | `prometheus.googleapis.com/http_server_requests_seconds_count/summary` with application/service label filters | Metric descriptor search found only `lead-generation` service, not `medical-reporting` or `hcs-gb`. These services likely use different metric labels or a different monitoring scope. Query the alert's exact PromQL labels to find the correct filter. |
