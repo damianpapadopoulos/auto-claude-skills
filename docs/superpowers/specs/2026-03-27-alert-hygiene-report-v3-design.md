@@ -26,7 +26,7 @@ Replace the current skeleton (confidence bands + Track A/B) with:
   (unchanged from current — data source, scripts, window, dedupe, noise score, pattern classification, evidence basis, reproduction)
 
 ## Definitions
-  (unchanged — raw incidents, episodes, ratio, noise score, evidence basis)
+  (add: open-incident hours = sum of all incident durations in the analysis window, measured in hours; existing terms unchanged)
 
 ## Action Type Legend
   (unchanged — Tune, Fix, Redesign, Add/extend, No action)
@@ -100,7 +100,7 @@ One compact table at the top of the report. Capped at 8-12 items. Each row links
 - `High / Decision Pending` — Needs Decision items
 
 **Primary Expected Outcome rules by category:**
-- **Do Now:** Measurable incident reduction (e.g., "Raw incidents ~208 -> ~10")
+- **Do Now:** Primary success outcome aligned to finding type — incident reduction for noise tuning (e.g., "Raw incidents ~208 -> ~10"), median duration for auto_close fixes (e.g., "Median open duration < 24h"), owner/channel coverage for routing fixes (e.g., "Correct squad label on 2 policies")
 - **Investigate:** Stage 1 closure result (e.g., "Hypothesis confirmed/refuted; follow-up created")
 - **Needs Decision:** Decision closure (e.g., "Alerting strategy chosen by deadline")
 
@@ -123,8 +123,16 @@ Replaces the current High-Confidence per-item template.
 **Notification Reach:** {N} channels
 
 #### Current Policy Snapshot
+(Include fields relevant to the finding type. Not all fields apply to every finding.)
+
+**For threshold/query changes:**
 **Threshold:** {comparison} {threshold_value} | eval: {eval_window_sec}s | auto_close: {auto_close_sec}s
 **Condition:** `{condition_filter_or_query_excerpt_60chars}`
+
+**For routing/ownership changes:**
+**Current Label:** squad={current} | **Current Channels:** {channel list or count}
+
+**For all Do Now items:**
 **IaC Location:** [{Confirmed|Likely|Search Required}] {path or search guidance}
 
 **Situation:** {what is happening — 1-2 sentences}
@@ -181,7 +189,7 @@ If any are missing, the item drops to Investigate regardless of confidence level
 Replaces the current Medium-Confidence per-item template. Uses a two-stage DoD to prevent parking-lot investigations.
 
 ```markdown
-### {N}. {investigation_title} [Medium / Stage 1]
+### {N}. {investigation_title} [{confidence} / Stage 1]
 
 **Policy ID:** projects/{project}/alertPolicies/{id}
 **Target Owner:** {team}
@@ -201,8 +209,8 @@ Replaces the current Medium-Confidence per-item template. Uses a two-stage DoD t
 - **If confirmed:** {specific action with its own numeric outcome DoD}
 - **If refuted:** {alternative action or close with rationale}
 
-**Evidence Basis:** {measured|heuristic} — {current evidence}
-**To Upgrade:** {specific step to raise to measured/structural, enabling promotion to Do Now}
+**Evidence Basis:** {measured|structural|heuristic} — {current evidence}
+**To Upgrade:** {specific step that would make this item Do Now-ready (e.g., locate IaC path, assign owner, validate metric baseline)}
 ```
 
 ### Two-Stage DoD Rules
@@ -210,6 +218,10 @@ Replaces the current Medium-Confidence per-item template. Uses a two-stage DoD t
 - Stage 1 closes on hypothesis confirmed/refuted + explicit next action documented
 - Stage 2 is a completely separate follow-up item with its own numeric, time-bounded outcome DoD
 - This prevents mixing discovery work with delivery work in a single ticket
+
+### Structurally Proven but Not-Yet-PR-Ready Items
+
+Items with structural or measured evidence that fail the Do Now gate (e.g., missing IaC location, missing owner) land in Investigate with their full evidence preserved. The `To Upgrade` field states exactly which gate requirement is missing. Stage 1 for these items is not hypothesis validation — it is resolving the missing gate requirement (e.g., "locate IaC path," "assign owner"). Once resolved, the item can be promoted to Do Now in the next report cycle or follow-up.
 
 ---
 
@@ -256,11 +268,14 @@ Each Do Now item includes:
 
 > For all Do Now items, the following standard applies:
 > 1. IaC PR is approved and merged
-> 2. Engineer confirms via GCP Monitoring Console that the PromQL condition, thresholds, and auto_close settings match the proposed config in production
-> 3. Confirm no accidental scope or channel changes were introduced
+> 2. Engineer confirms via GCP Monitoring Console that **every mutated field** matches the proposed config in production:
+>    - For threshold/query changes: verify PromQL condition, thresholds, eval window, auto_close
+>    - For routing/label changes: verify squad/team labels, notification channels
+>    - For scope changes: verify project/resource selectors
+> 3. Confirm no accidental changes to fields outside the change spec (scope, channels, labels, conditions)
 > 4. Record merge date for 14-day outcome review
 
-Per-finding Immediate Verification is added only for **non-standard changes** (scope moves, duplicate consolidation, routing/channel changes, multi-policy edits).
+Per-finding Immediate Verification is added only when the verification steps are **non-obvious or high-risk** (scope moves across projects, duplicate policy consolidation, multi-policy edits, channel rewiring).
 
 **Verification Scorecard** — rolled-up table at report level:
 
@@ -331,7 +346,7 @@ Consolidates current Label/Scope Inconsistencies and Coverage Gaps into one them
 | Action types | Tune/Fix/Redesign/Add/No action unchanged |
 | Prescriptive reasoning templates | By-pattern and by-alert-type templates unchanged |
 | Methodology section | Unchanged |
-| Definitions section | Unchanged |
+| Definitions section | Add open-incident hours definition; existing terms unchanged |
 | Keep section | Unchanged |
 | Appendices | Unchanged |
 
@@ -367,9 +382,34 @@ Consolidates current Label/Scope Inconsistencies and Coverage Gaps into one them
 | File | Change |
 |------|--------|
 | Modify: `skills/alert-hygiene/SKILL.md` | Report Skeleton, Per-Item Template, Confidence Levels, Stage 5 instructions, new sections (Decision Summary, Systemic Issues, Verification Scorecard, Global Implementation Standard) |
-| Modify: `tests/test-alert-hygiene-skill-content.sh` | Update string-presence assertions for renamed/restructured sections |
+| Modify: `tests/test-alert-hygiene-skill-content.sh` | Structural and behavioral contract assertions (see below) |
 
 No new files created. No script changes.
+
+### Test Coverage for Content Tests
+
+Beyond updating string-presence assertions for renamed sections, the content tests must verify:
+
+**Structural assertions (section presence):**
+- Decision Summary section exists with column spec
+- Do Now section references Global Implementation Standard
+- Investigate section references two-stage DoD
+- Needs Decision section references named owner + deadline + default recommendation
+- Systemic Issues section with four subsections
+- Verification Scorecard section exists
+- Current Policy Snapshot referenced in Do Now template
+
+**Behavioral contract assertions:**
+- Do Now gate: all six gate requirements listed (config diff, owner, outcome DoD, evidence, rollback, IaC location)
+- Heuristic exclusion: "heuristic alone never qualifies for Do Now" or equivalent
+- IaC Location: all four statuses defined (Confirmed, Likely, Search Required, Unknown)
+- Search Required: four required components listed (repo hint, policy ID, PromQL fragment, replacement guidance)
+- Investigate: `structural` included in evidence basis options (not just measured|heuristic)
+- Investigate: "To Upgrade" field references Do Now gate requirements
+- Verification: "every mutated field" or equivalent generalized verification language
+- Confidence/Readiness: standardized vocabulary present (PR-Ready, Stage 1, Decision Pending)
+- Decision Summary: capped at 8-12 items
+- Outcome rules: finding-type-aligned outcomes (not just incident reduction)
 
 ---
 
