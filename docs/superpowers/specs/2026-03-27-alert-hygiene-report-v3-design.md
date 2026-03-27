@@ -96,7 +96,8 @@ One compact table at the top of the report. Capped at 8-12 items. Each row links
 
 **Confidence / Readiness vocabulary:**
 - `High / PR-Ready` — Do Now items
-- `Medium / Stage 1` — Investigate items
+- `High / Stage 1` — Investigate items that are structurally proven or measured but failed a Do Now gate requirement (e.g., missing IaC location or owner)
+- `Medium / Stage 1` — Investigate items based on heuristic evidence or requiring hypothesis validation
 - `High / Decision Pending` — Needs Decision items
 
 **Primary Expected Outcome rules by category:**
@@ -105,6 +106,8 @@ One compact table at the top of the report. Capped at 8-12 items. Each row links
 - **Needs Decision:** Decision closure (e.g., "Alerting strategy chosen by deadline")
 
 **Sort order:** Do Now by impact descending, Investigate by urgency, Needs Decision by deadline ascending.
+
+**Selection rule when findings exceed 12 rows:** Every non-empty category gets at least 1 row. Remaining slots are filled by descending priority within each category. If the report has more than 12 items total, the summary table includes a note: *"Showing top {N} of {total} findings. See detailed sections below for complete list."*
 
 **No Status column.** The report is a static analysis artifact. If maintained as a live tracker, Status can be added, but that is not the default.
 
@@ -173,7 +176,7 @@ If any are missing, the item drops to Investigate regardless of confidence level
 |---|---|---|
 | **Confirmed** | Exact file path verified | Yes |
 | **Likely** | Strong candidate path, search path explicit | Yes |
-| **Search Required** | Must include ALL four: (1) likely repo/module hint, (2) policy ID as search token, (3) unique PromQL fragment, (4) exact replacement guidance | Yes |
+| **Search Required** | Must include ALL four: (1) likely repo/module hint, (2) policy ID as search token, (3) unique identifying fragment appropriate to the policy type (PromQL fragment, condition filter string, label key, or channel name), (4) exact replacement guidance | Yes |
 | **Unknown** | Cannot identify owning repo/file | No — drops to Investigate |
 
 ### PromQL Change Spec Rules
@@ -189,7 +192,7 @@ If any are missing, the item drops to Investigate regardless of confidence level
 Replaces the current Medium-Confidence per-item template. Uses a two-stage DoD to prevent parking-lot investigations.
 
 ```markdown
-### {N}. {investigation_title} [{confidence} / Stage 1]
+### {N}. {investigation_title} [{High|Medium} / Stage 1]
 
 **Policy ID:** projects/{project}/alertPolicies/{id}
 **Target Owner:** {team}
@@ -403,12 +406,13 @@ Beyond updating string-presence assertions for renamed sections, the content tes
 - Do Now gate: all six gate requirements listed (config diff, owner, outcome DoD, evidence, rollback, IaC location)
 - Heuristic exclusion: "heuristic alone never qualifies for Do Now" or equivalent
 - IaC Location: all four statuses defined (Confirmed, Likely, Search Required, Unknown)
-- Search Required: four required components listed (repo hint, policy ID, PromQL fragment, replacement guidance)
+- Search Required: four required components listed (repo hint, policy ID, identifying fragment, replacement guidance) — fragment type is policy-type-appropriate, not PromQL-only
 - Investigate: `structural` included in evidence basis options (not just measured|heuristic)
 - Investigate: "To Upgrade" field references Do Now gate requirements
+- Investigate: both `High / Stage 1` and `Medium / Stage 1` readiness levels defined
 - Verification: "every mutated field" or equivalent generalized verification language
-- Confidence/Readiness: standardized vocabulary present (PR-Ready, Stage 1, Decision Pending)
-- Decision Summary: capped at 8-12 items
+- Confidence/Readiness: standardized vocabulary present (PR-Ready, High / Stage 1, Medium / Stage 1, Decision Pending)
+- Decision Summary: capped at 8-12 items with minimum-representation-per-category selection rule
 - Outcome rules: finding-type-aligned outcomes (not just incident reduction)
 
 ---
