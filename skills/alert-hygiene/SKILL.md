@@ -5,7 +5,7 @@ description: Use when facing flapping alerts, alert fatigue, recurring noisy inc
 
 # Alert Hygiene Analysis
 
-Use when facing alert noise, flapping alerts, alert fatigue, threshold audits, or SLO-alert redesign questions. Analyzes alert policies and incident history for a single GCP monitoring project. Produces a confidence-grouped prescriptive report: high-confidence next actions (structural flaws, arithmetic mismatches), medium-confidence actions (pattern-only inferences), and needs-analyst items (ambiguous intent, SLO candidates). Runs straight through from data pull to final report.
+Use when facing alert noise, flapping alerts, alert fatigue, threshold audits, or SLO-alert redesign questions. Analyzes alert policies and incident history for a single GCP monitoring project. Produces an action-class prescriptive report: Do Now items (PR-ready config changes with strict gating), Investigate items (bounded discovery with two-stage DoD), and Needs Decision items (strategy/policy choices with named owners). Runs straight through from data pull to final report.
 
 **When NOT to use:**
 - Active incident investigation — use incident-analysis instead (tiered log investigation with mitigation playbooks)
@@ -226,7 +226,7 @@ Read `metric_types_in_inventory` from the compute-clusters output. Compare again
 
 ### Stage 5: Produce Report
 
-Write the final report as markdown using the Report Skeleton template below. Group by confidence band, not by action type.
+Write the final report as markdown using the Report Skeleton template below. Group findings by action class (Do Now / Investigate / Needs Decision), not by confidence band. Apply the Do Now Gate to determine which items qualify for the Do Now section. Items that fail the gate drop to Investigate regardless of confidence level.
 
 ## Prescriptive Reasoning by Pattern
 
@@ -287,7 +287,7 @@ Low-frequency, distinct, potentially well-calibrated.
 ### Latency alerts (P99/P95/P90 > Xms)
 
 - If multiple percentile alerts exist for the same service (P90, P95, P99), the lower percentile dominates. Recommend consolidating to one.
-- If the alert has high noise_score: route to **Needs Analyst Input** as SLO-redesign candidate. The skill cannot determine whether the service is user-facing or what SLI/SLO targets are appropriate. Frame as: *"This latency alert is a candidate for SLO burn-rate redesign if the service is user-facing. Analyst must confirm SLI target and error budget."*
+- If the alert has high noise_score: route to **Needs Decision** as SLO-redesign candidate. The skill cannot determine whether the service is user-facing or what SLI/SLO targets are appropriate. Frame as: *"This latency alert is a candidate for SLO burn-rate redesign if the service is user-facing. Analyst must confirm SLI target and error budget."*
 
 ### Queue/message broker alerts
 
@@ -329,57 +329,174 @@ Include a Definitions section in every report (after Executive Summary, before P
 | **Raw/episode ratio** | Flapping indicator. 1:1 = clean signal. >5:1 = noisy. >20:1 = structural flaw |
 | **Noise score** | 0-10 composite of ratio, duration, retrigger interval, and time-of-day pattern |
 | **Evidence basis** | Whether a numeric prescription is `measured` (from validated metric query with stated scope) or `heuristic` (rule of thumb — must be flagged for validation) |
+| **Open-incident hours** | Sum of all incident durations in the analysis window, measured in hours. Captures both volume and persistence of alert noise. |
 
-## Confidence Levels
+## Confidence Levels and Readiness
 
-| Level | Criteria | How to flag |
-|-------|----------|-------------|
-| High | Frequency pattern AND metric validation agree, or structural flaw is unambiguous (e.g., auto_close NOT SET with permanent-fire condition) | State recommendation directly. Evidence basis must be `measured` or `structural`. |
-| Medium | Verdict based on frequency pattern only (no metric validation performed) | State recommendation, note "based on incident pattern only — validate {specific metric query} before applying". Add **To upgrade:** field with the specific diagnostic step. |
-| Low | Data insufficient, inference from time-of-day concentration alone, or evidence contradicts | State recommendation with explicit inline flag: *"Low confidence — verify X before applying"*. Move to Needs Analyst Input if intent is ambiguous. |
+Confidence determines evidence quality. Readiness determines action class. An item can be high-confidence but not Do Now-ready if it fails a gate requirement.
+
+| Confidence | Evidence Criteria | Readiness | Action Class |
+|------------|------------------|-----------|--------------|
+| High | Frequency + metric/structural evidence agree, or structural flaw unambiguous | PR-Ready (all gate requirements met) | Do Now |
+| High | Structural/measured evidence strong, but missing gate requirement (IaC location, owner, etc.) | Stage 1 (gate requirement resolution) | Investigate |
+| Medium | Frequency pattern only, no metric validation | Stage 1 (hypothesis validation) | Investigate |
+| High | Skill cannot determine intent — SLO redesign, ambiguous ownership, policy strategy | Decision Pending | Needs Decision |
+| Low | Data insufficient, inference from time-of-day alone, or evidence contradicts | Stage 1 | Investigate (with inline low-confidence flag) |
+
+**Confidence / Readiness vocabulary for Decision Summary:**
+- `High / PR-Ready` — Do Now items
+- `High / Stage 1` — Investigate items that are structurally proven or measured but failed a Do Now gate requirement
+- `Medium / Stage 1` — Investigate items based on heuristic evidence or requiring hypothesis validation
+- `High / Decision Pending` — Needs Decision items
+
+**Heuristic alone never qualifies for Do Now.** Evidence basis must be `measured` or `structural` to pass the Do Now gate.
 
 ## Report Structure
 
-The report is grouped by confidence band, not by verdict type. This lets the user act immediately on high-confidence items while knowing which items need their judgment. The Priority Order appears early (BLUF — Bottom Line Up Front) so an engineering manager can approve the top actions within 30 seconds.
+The report is grouped by action class (Do Now / Investigate / Needs Decision), not by confidence band. The Decision Summary appears early (BLUF) so an engineering lead can triage the top actions within 30 seconds. Detailed finding sections provide the execution-ready schemas below.
 
-### Per-Item Template
+### Do Now Gate — All Required
 
-Every cluster item — in any confidence band — uses this standardized block. The structure must be scannable: a reviewer skimming headers and bold fields should understand the recommendation without reading prose.
+An item qualifies for Do Now only if it has ALL of the following:
+
+1. Exact current -> proposed config diff with derivation for every proposed value
+2. Named target owner (not "unlabeled" or "service owner")
+3. Numeric, time-bounded Outcome DoD with both primary and guardrail metrics
+4. Pre-change evidence (measured or structural — **heuristic alone never qualifies for Do Now**)
+5. Rollback signal with a derived threshold (not arbitrary)
+6. IaC Location status of Confirmed, Likely, or Search Required
+
+If any are missing, the item drops to Investigate regardless of confidence level.
+
+### IaC Location Rules
+
+| Status | Meaning | Do Now eligible? |
+|--------|---------|-----------------|
+| **Confirmed** | Exact file path verified | Yes |
+| **Likely** | Strong candidate path, search path explicit | Yes |
+| **Search Required** | Must include ALL four: (1) likely repo/module hint, (2) policy ID as search token, (3) unique identifying fragment appropriate to the policy type (PromQL fragment, condition filter string, label key, or channel name), (4) exact replacement guidance | Yes |
+| **Unknown** | Cannot identify owning repo/file | No — drops to Investigate |
+
+### PromQL Change Spec Rules
+
+- **Simple edits** (scalar threshold, window, auto_close): show exact current and proposed fragment
+- **Complex edits** (multi-clause PromQL, aggregation changes): show full affected clause or precise change spec
+- Never rely on blind copy-paste as the standard; aim for exact replacement guidance
+
+### Metric Families by Finding Type
+
+| Finding type | Primary metric | Guardrail metric |
+|---|---|---|
+| Noise tuning | Raw incidents or open-incident hours | Detection latency for real incidents |
+| auto_close fixes | Median open duration | N/A when change cannot hide signal |
+| Routing/ownership | Correct owner/channel coverage | No alert dropped during transition |
+| Orphaned alerts | Explicit close/remove/route decision | N/A |
+| Coverage gaps | Implementation milestone | N/A |
+
+Guardrail thresholds must be derived from evidence, not arbitrary. Guardrail = N/A only when the change cannot plausibly hide a real signal.
+
+### Do Now Per-Item Template
 
 ```
-### {N}. {Action}: {policy_name} — {raw} incidents [{confidence}]
+### {N}. {Action}: {policy_name} [High / PR-Ready]
+
 **Policy ID:** projects/{project}/alertPolicies/{id} | **Condition:** {condition_name}
-**Owner:** squad={label} | service={name} | project={resource_project}
-**Threshold:** {comparison} {threshold_value} | eval: {eval_window_sec}s | auto_close: {auto_close_sec}s | condition: `{condition_filter_excerpt_60chars}`
-**Notification reach:** {N} channels (count only — channel type resolution requires separate API calls not in v1)
+**Target Owner:** {current_label} -> {target_team}
+**Scope:** {projects affected}
+**Notification Reach:** {N} channels
 
-**Observed:** {only what the data shows — metrics, timestamps, counts, ratios}
-**Inferred:** {hypotheses from patterns, each with confidence qualifier}
-**Evidence basis:** {measured|heuristic} — {query text or reasoning}
+#### Current Policy Snapshot
+(Include fields relevant to the finding type. Not all fields apply to every finding.)
 
-**Action:**
-1. {specific config change with exact old -> new values}
-2. ...
+**For threshold/query changes:**
+**Threshold:** {comparison} {threshold_value} | eval: {eval_window_sec}s | auto_close: {auto_close_sec}s
+**Condition:** `{condition_filter_or_query_excerpt_60chars}`
 
-**Expected impact:** ~{X}% reduction ({from} -> ~{to})
-**Impact derivation:** {one-line method, e.g., "Of N incidents, M (X%) had duration <Y — these would not fire under proposed config"}
+**For routing/ownership changes:**
+**Current Label:** squad={current} | **Current Channels:** {channel list or count}
 
-**Risk of change:** {low|medium} — {what could go wrong, e.g., "may miss transient sub-2s queries"}
-**Rollback signal:** If {metric} exceeds {value} within 48h of change, revert.
-**Related:** {cross-references to other sections mentioning this policy, if any}
+**For all Do Now items:**
+**IaC Location:** [{Confirmed|Likely|Search Required}] {path or search guidance}
+
+**Situation:** {what is happening — 1-2 sentences}
+**Impact:** {why it matters — incident counts, duration, team effect}
+
+#### Configuration Diff & Derivation
+| Parameter | Current | Proposed | Derivation |
+|-----------|---------|----------|------------|
+| {param}   | {value} | {value}  | {why this value was chosen} |
+
+**Pre-change Evidence:** {metric query result or structural proof with stated scope}
+**Evidence Basis:** {measured|structural} — {query text or reasoning}
+
+**Outcome DoD:**
+- **Primary:** {numeric, time-bounded, aligned to finding type} (e.g., "raw incidents < 15 within 14d")
+- **Guardrail:** {what must NOT degrade} (e.g., "no genuine backlog > 1000 goes undetected")
+
+**Rollback Signal:** {derived threshold + timeframe for revert}
+**Related:** {cross-references to other findings or systemic issues}
 ```
 
-For **Medium-Confidence** items, add after the block:
+### Investigate Per-Item Template
+
 ```
-**To upgrade:** {specific diagnostic step that would make this high-confidence, e.g., "Run `fetch cloud_sql | p95(query_latency) | last 14d` to validate baseline"}
+### {N}. {investigation_title} [{High|Medium} / Stage 1]
+
+**Policy ID:** projects/{project}/alertPolicies/{id}
+**Target Owner:** {team}
+**Scope:** {projects affected}
+**Notification Reach:** {N} channels
+
+**Situation:** {what is happening — 1-2 sentences}
+**Impact:** {why it matters — incident counts, team effect}
+**Hypothesis:** {explicit, testable hypothesis}
+
+**Stage 1 DoD (Discovery — this ticket):**
+- {specific diagnostic steps}
+- **Closes when:** hypothesis confirmed/refuted AND follow-up action documented as a separate item
+- **Timebox:** {N} days
+
+**Stage 2 (Execution — spawned follow-up):**
+- **If confirmed:** {specific action with its own numeric outcome DoD}
+- **If refuted:** {alternative action or close with rationale}
+
+**Evidence Basis:** {measured|structural|heuristic} — {current evidence}
+**To Upgrade:** {specific step that would make this item Do Now-ready (e.g., locate IaC path, assign owner, validate metric baseline)}
 ```
 
-For **Needs Analyst Input** items, replace Action/Impact/Risk with:
+### Two-Stage DoD Rules
+
+- Stage 1 closes on hypothesis confirmed/refuted + explicit next action documented
+- Stage 2 is a completely separate follow-up item with its own numeric, time-bounded outcome DoD
+- This prevents mixing discovery work with delivery work in a single ticket
+
+### Structurally Proven but Not-Yet-PR-Ready Items
+
+Items with structural or measured evidence that fail the Do Now gate (e.g., missing IaC location, missing owner) land in Investigate with their full evidence preserved. The `To Upgrade` field states exactly which gate requirement is missing. Stage 1 for these items is not hypothesis validation — it is resolving the missing gate requirement (e.g., "locate IaC path," "assign owner"). Once resolved, the item can be promoted to Do Now in the next report cycle or follow-up.
+
+### Needs Decision Per-Item Template
+
 ```
-**Question:** {specific question the analyst must answer}
-**If yes:** {action A with specific values}
-**If no:** {action B}
+### {N}. {decision_title} [High / Decision Pending]
+
+**Situation:** {what is happening — 1-2 sentences}
+**Impact:** {why it matters — incident counts, redundancy, team effect}
+
+**Decision Required:** {specific question that must be answered}
+**Named Decision Owner:** {person or role — not generic "product owner"}
+**Deadline:** {date — advisory, not auto-enforced}
+**Default Recommendation:** {what the report recommends if no decision is made}
+
+**Options:**
+- **If A:** {action with expected outcome}
+- **If B:** {action with expected outcome}
 ```
+
+### Needs Decision Rules
+
+- Deadline is advisory — the report does not auto-execute changes
+- Default Recommendation is guidance for the decision owner, not an ultimatum
+- Every Needs Decision item must have a named owner, not a generic role
 
 ### Report Skeleton
 
@@ -389,9 +506,23 @@ For **Needs Analyst Input** items, replace Action/Impact/Risk with:
 
 ## Executive Summary
 - {total_policies} policies ({enabled} enabled, {disabled} disabled), {total_incidents} raw incidents -> {total_episodes} episodes across {cluster_count} clusters
+- Baseline metrics: {open_incident_hours} open-incident hours, {routed_volume} routed incidents, {ownerless_count} ownerless alerts
 - Top findings (3-5 bullets with incident counts)
-- {high_count} high-confidence actions, {medium_count} medium-confidence, {analyst_count} needs analyst input
-- Config-only changes (items 1-N) reduce raw volume by an estimated {X} incidents ({Y}%)
+- {do_now_count} Do Now actions, {investigate_count} investigations, {decision_count} needs decision
+- Modeled impact (estimated, scope: Do Now items only): {X} incidents reduced ({Y}%), {Z} open-incident hours reclaimed
+
+## Decision Summary
+Capped at 8-12 items. Each Finding is linked to detailed section via anchor. Every non-empty category gets at least 1 row. After minimum representation, remaining rows filled in global priority order: Do Now by impact, then Investigate by urgency, then Needs Decision by deadline.
+
+| Category | Finding (linked to detailed section) | Target Owner | Confidence / Readiness | Effort | Risk | Primary Expected Outcome | Next Action |
+|----------|---------|--------------|----------------------|--------|------|--------------------------|-------------|
+
+Primary Expected Outcome rules:
+- Do Now: primary success outcome aligned to finding type (incident reduction, median duration, owner coverage)
+- Investigate: Stage 1 closure result
+- Needs Decision: decision closure
+
+If more than 12 items total: *"Showing top {N} of {total} findings. See detailed sections below for complete list."*
 
 ## Methodology
 - **Data source:** GCP Monitoring API (REST, paginated)
@@ -404,7 +535,13 @@ For **Needs Analyst Input** items, replace Action/Impact/Risk with:
 - **To reproduce:** Run the three scripts with same `--project` and `--days`, then apply Stage 3-5 reasoning from this skill
 
 ## Definitions
-(Key Terms table from the skill — raw incidents, episodes, raw/episode ratio with severity bands, noise score, evidence basis)
+(Key Terms table from the skill — raw incidents, episodes, raw/episode ratio with severity bands, noise score, evidence basis, open-incident hours)
+
+| Term | Definition |
+|------|-----------|
+| **Open-incident hours** | Sum of all incident durations in the analysis window, measured in hours. Captures both volume and persistence of alert noise. |
+
+(Plus existing terms: raw incidents, episodes, raw/episode ratio, noise score, evidence basis)
 
 ## Action Type Legend
 - **Tune the alert** — the alert is miscalibrated. Specific config changes listed.
@@ -413,66 +550,72 @@ For **Needs Analyst Input** items, replace Action/Impact/Risk with:
 - **Add/extend coverage** — a high-value blind spot exists.
 - **No action** — well-calibrated, low-frequency. Keep as-is.
 
-## Recommended Priority Order
+## Systemic Issues
+Thematic and non-exhaustive — surfaces structural debt patterns without duplicating detailed findings.
 
-### Track A: Config Changes
-Sequential, executable in one change window. Ordered by impact * confidence / effort.
+### Ownership/Routing Debt
+- Unlabeled policies ranked by incident volume (source: `unlabeled_ranking` from compute-clusters output)
+- Misrouted alerts (e.g., prod alerts labeled as staging)
 
-| # | Action | Policy ID | Effort | Incidents Reduced | Channels | Owner | Confidence | Risk |
-|---|--------|-----------|--------|-------------------|----------|-------|------------|------|
-
-### Track B: Investigations
-Assign to teams now, run in parallel with Track A config changes.
-
-| # | Investigation | Scope | Owner | First Diagnostic Step | User-Facing? |
-|---|--------------|-------|-------|----------------------|-------------|
-
-## High-Confidence Actions
-Items where frequency pattern AND metric/structural evidence agree. Safe to act on directly.
-
-### 1. {Action}: {policy_name} — {raw} incidents [High]
-(full per-item template)
-
-## Medium-Confidence Actions
-Items based on frequency pattern only. Likely correct but validate the specific values before applying.
-
-### 1. {Action}: {policy_name} — {raw} incidents [Medium]
-(full per-item template + **To upgrade:** field)
-
-## Needs Analyst Input
-Items where the skill cannot determine intent — SLO redesign candidates (requires knowing which services are user-facing and what SLI/SLO targets are appropriate), ambiguous label ownership, intentional-state questions. SLO items default here unless the report can prove user-facing criticality and a validated current baseline.
-
-### 1. {policy_name} — {raw} incidents
-(per-item template with Question/If-yes/If-no variant)
-
-## Coverage Gaps
-| Gap | Action | Implementation | Rationale | Upstream Signal For |
-(last column cross-references existing clusters this gap would detect earlier)
-
-## Label/Scope Inconsistencies
-| Policy | Policy ID | Current Label | Fires On | Incidents Affected | Required Fix | Related |
-
-### Unlabeled Policies by Incident Volume
-Top 10 policies without squad/team/owner label, ranked by total raw incidents (source: `unlabeled_ranking` from compute-clusters output):
+Top 10 policies without squad/team/owner label, ranked by total raw incidents:
 
 | # | Policy | Policy ID | Raw ({days}d) | Episodes | Channels | Suggested Owner |
 |---|--------|-----------|--------------|----------|----------|----------------|
 
 "Suggested Owner" is left as "⚠ assign" unless resource project or metric type implies a specific team.
 
+### Dead/Orphaned Config
+- Zero-channel policies (no notification path)
+- Disabled-but-still-noisy policies
+
+### Missing Coverage
+Coverage gaps from comparison of `metric_types_in_inventory` against Coverage Gap Checklist:
+
+| Gap | Action | Implementation | Rationale | Upstream Signal For |
+(last column cross-references existing clusters this gap would detect earlier)
+
+### Inventory Health
+- Silent policy ratio (zero incidents in analysis window)
+- Condition type breakdown (PromQL vs conditionThreshold vs MQL)
+- Enabled/disabled counts
+
+## Actionable Findings: Do Now
+
+**Global Implementation Standard:**
+For all Do Now items, the following standard applies:
+1. IaC PR is approved and merged
+2. Engineer confirms via GCP Monitoring Console that **every mutated field** matches the proposed config in production:
+   - For threshold/query changes: verify PromQL condition, thresholds, eval window, auto_close
+   - For routing/label changes: verify squad/team labels, notification channels
+   - For scope changes: verify project/resource selectors
+3. Confirm no accidental changes to fields outside the change spec (scope, channels, labels, conditions)
+4. Record merge date for 14-day outcome review
+
+Per-finding Immediate Verification is added only when the verification steps are non-obvious or high-risk (scope moves across projects, duplicate policy consolidation, multi-policy edits, channel rewiring).
+
+### 1. {Action}: {policy_name} [High / PR-Ready]
+(Do Now per-item template)
+
+## Actionable Findings: Investigate
+
+### 1. {investigation_title} [{High|Medium} / Stage 1]
+(Investigate per-item template with Two-Stage DoD)
+
+## Needs Decision
+
+### 1. {decision_title} [High / Decision Pending]
+(Needs Decision per-item template)
+
 ## Keep — No Action Required
 Brief section with 5-10 representative well-calibrated clusters and one-liner rationale for each (e.g., "fires <2x/14d, threshold well above baseline, correct routing"). Demonstrates the analysis evaluated the full inventory.
 
-## Verification Plan
-Re-run this analysis in {days} days. Expected results per top cluster:
-- {cluster_1}: <{target} (from {current})
-- {cluster_2}: <{target} (from {current})
-- Total raw: <{target} (from {current})
+## Verification Scorecard
+Rolled-up outcomes for all Do Now items. Re-run analysis in {days} days to verify.
 
-## Appendix: Frequency Table
-Full cluster table sorted by raw incidents: cluster key, raw, episodes, distinct resources, median duration, median retrigger, noise score, pattern, verdict, confidence.
+| Finding | Baseline | Target | Owner | Merge Date | Review Date | Primary Success Criteria | Guardrail | Confidence |
+|---------|----------|--------|-------|------------|-------------|--------------------------|-----------|------------|
 
-## Appendix: Evidence Coverage
+## Evidence Ledger / Reproduction
 Grouped by validation method. Reviewer action: `metric query` and `config inspection` items are audit-complete; `pattern analysis` items need reviewer judgment before applying.
 
 ### Config inspection — provable from policy definition
@@ -486,16 +629,11 @@ Grouped by validation method. Reviewer action: `metric query` and `config inspec
 
 ### Not attempted — specific API limitation
 | Cluster | Limitation | Why it can't be a single query |
+
+## Appendix: Frequency Table
+Full cluster table sorted by raw incidents: cluster key, raw, episodes, distinct resources, median duration, median retrigger, noise score, pattern, verdict, confidence.
+
+## Appendix: Evidence Coverage
+| Cluster | Metric Validated? | Evidence Basis | Sample Scope | Dedupe Window | Confidence |
+(lets reviewer see which recommendations rest on metric validation vs pattern-only inference)
 ```
-
-## Action Types
-
-Each cluster gets one of these action types (can appear in any confidence band). Include the Action Type Legend in every report for reviewer reference.
-
-| Action | Meaning | Default Confidence Band |
-|--------|---------|------------------------|
-| **Tune the alert** | The alert is miscalibrated. Specific config changes listed (threshold, duration, auto_close, volume floor, mute window). | High or Medium (depends on evidence basis) |
-| **Fix the underlying issue** | The alert is correct. The service has a real problem. Investigation pointers provided. | High or Medium |
-| **Redesign around SLO** | Replace threshold alerting with burn-rate/error-budget alerting. | Needs Analyst Input (unless user-facing criticality and current baseline are proven) |
-| **Add/extend coverage** | A high-value blind spot exists or current coverage is scoped incorrectly. | Medium (unless gap is linked to existing incident cluster) |
-| **No action** | Well-calibrated, low-frequency. Keep as-is. | High (report in Keep section) |

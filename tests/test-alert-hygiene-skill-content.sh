@@ -31,10 +31,12 @@ assert_contains "threshold recommendation" "threshold" "${SKILL_CONTENT}"
 assert_contains "duration recommendation" "duration" "${SKILL_CONTENT}"
 assert_contains "auto_close recommendation" "auto_close" "${SKILL_CONTENT}"
 
-# --- Confidence-grouped output ---
-assert_contains "high confidence section" "High-Confidence Actions" "${SKILL_CONTENT}"
-assert_contains "medium confidence section" "Medium-Confidence Actions" "${SKILL_CONTENT}"
-assert_contains "analyst input section" "Needs Analyst Input" "${SKILL_CONTENT}"
+# --- Action-class grouped output (v3) ---
+assert_contains "do now section" "Actionable Findings: Do Now" "${SKILL_CONTENT}"
+assert_contains "investigate section" "Actionable Findings: Investigate" "${SKILL_CONTENT}"
+assert_contains "needs decision section" "Needs Decision" "${SKILL_CONTENT}"
+assert_contains "decision summary section" "Decision Summary" "${SKILL_CONTENT}"
+assert_contains "systemic issues section" "Systemic Issues" "${SKILL_CONTENT}"
 
 # --- Action types ---
 assert_contains "tune action" "Tune the alert" "${SKILL_CONTENT}"
@@ -65,25 +67,93 @@ assert_contains "low confidence inline flag" "Low" "${SKILL_CONTENT}"
 assert_contains "frequency table" "frequency table" "${SKILL_CONTENT}"
 assert_contains "prescriptive" "prescriptive" "${SKILL_CONTENT}"
 
-# --- Per-item template fields ---
-assert_contains "observed/inferred split" "Observed:" "${SKILL_CONTENT}"
-assert_contains "inferred field" "Inferred:" "${SKILL_CONTENT}"
-assert_contains "evidence basis field" "Evidence basis:" "${SKILL_CONTENT}"
-assert_contains "owner routing field" "Owner:" "${SKILL_CONTENT}"
+# --- Do Now per-item template fields (v3) ---
 assert_contains "policy ID field" "Policy ID:" "${SKILL_CONTENT}"
-assert_contains "notification reach field" "Notification reach:" "${SKILL_CONTENT}"
-assert_contains "risk of change field" "Risk of change:" "${SKILL_CONTENT}"
-assert_contains "rollback signal field" "Rollback signal:" "${SKILL_CONTENT}"
-assert_contains "impact derivation field" "Impact derivation:" "${SKILL_CONTENT}"
-assert_contains "to upgrade field for medium" "To upgrade:" "${SKILL_CONTENT}"
+assert_contains "target owner field" "Target Owner:" "${SKILL_CONTENT}"
+assert_contains "scope field" "Scope:" "${SKILL_CONTENT}"
+assert_contains "notification reach field" "Notification Reach:" "${SKILL_CONTENT}"
+assert_contains "current policy snapshot" "Current Policy Snapshot" "${SKILL_CONTENT}"
+assert_contains "iac location field" "IaC Location:" "${SKILL_CONTENT}"
+assert_contains "config diff table" "Configuration Diff" "${SKILL_CONTENT}"
+assert_contains "derivation column" "Derivation" "${SKILL_CONTENT}"
+assert_contains "pre-change evidence field" "Pre-change Evidence:" "${SKILL_CONTENT}"
+assert_contains "evidence basis field" "Evidence Basis:" "${SKILL_CONTENT}"
+assert_contains "outcome dod field" "Outcome DoD:" "${SKILL_CONTENT}"
+assert_contains "primary metric" "Primary:" "${SKILL_CONTENT}"
+assert_contains "guardrail metric" "Guardrail:" "${SKILL_CONTENT}"
+assert_contains "rollback signal field" "Rollback Signal:" "${SKILL_CONTENT}"
+
+# --- Investigate per-item template fields (v3) ---
+assert_contains "hypothesis field" "Hypothesis:" "${SKILL_CONTENT}"
+assert_contains "stage 1 dod" "Stage 1 DoD" "${SKILL_CONTENT}"
+assert_contains "stage 2 follow-up" "Stage 2" "${SKILL_CONTENT}"
+assert_contains "to upgrade field" "To Upgrade:" "${SKILL_CONTENT}"
+
+# --- Needs Decision per-item template fields (v3) ---
+assert_contains "decision required field" "Decision Required:" "${SKILL_CONTENT}"
+assert_contains "named decision owner" "Named Decision Owner:" "${SKILL_CONTENT}"
+assert_contains "deadline field" "Deadline:" "${SKILL_CONTENT}"
+assert_contains "default recommendation" "Default Recommendation:" "${SKILL_CONTENT}"
+
+# --- Do Now gate behavioral contract ---
+assert_contains "do now gate" "Do Now Gate" "${SKILL_CONTENT}"
+assert_contains "heuristic exclusion" "heuristic alone never qualifies for Do Now" "${SKILL_CONTENT}"
+assert_contains "iac confirmed status" "Confirmed" "${SKILL_CONTENT}"
+assert_contains "iac likely status" "Likely" "${SKILL_CONTENT}"
+assert_contains "iac search required status" "Search Required" "${SKILL_CONTENT}"
+assert_contains "iac unknown drops" "Unknown" "${SKILL_CONTENT}"
+assert_contains "search req repo hint" "repo" "${SKILL_CONTENT}"
+assert_contains "search req policy id" "policy ID" "${SKILL_CONTENT}"
+assert_contains "search req identifying fragment" "identifying fragment" "${SKILL_CONTENT}"
+assert_contains "search req replacement guidance" "replacement guidance" "${SKILL_CONTENT}"
+
+# --- Investigate behavioral contract ---
+assert_contains "investigate structural evidence" "measured|structural|heuristic" "${SKILL_CONTENT}"
+assert_contains "two-stage dod rule" "Two-Stage DoD" "${SKILL_CONTENT}"
+assert_contains "structurally proven gate-blocked" "Structurally Proven" "${SKILL_CONTENT}"
+
+# --- Confidence/Readiness vocabulary ---
+assert_contains "pr-ready readiness" "PR-Ready" "${SKILL_CONTENT}"
+assert_contains "high stage 1 readiness" "High / Stage 1" "${SKILL_CONTENT}"
+assert_contains "medium stage 1 readiness" "Medium / Stage 1" "${SKILL_CONTENT}"
+assert_contains "decision pending readiness" "Decision Pending" "${SKILL_CONTENT}"
+
+# --- Systemic Issues subsections ---
+assert_contains "ownership routing debt" "Ownership/Routing Debt" "${SKILL_CONTENT}"
+assert_contains "dead orphaned config" "Dead/Orphaned Config" "${SKILL_CONTENT}"
+assert_contains "missing coverage" "Missing Coverage" "${SKILL_CONTENT}"
+assert_contains "inventory health" "Inventory Health" "${SKILL_CONTENT}"
+
+# --- Verification metric families ---
+assert_contains "metric family noise" "Noise tuning" "${SKILL_CONTENT}"
+assert_contains "metric family auto_close" "auto_close fixes" "${SKILL_CONTENT}"
+assert_contains "metric family routing" "Routing/ownership" "${SKILL_CONTENT}"
+assert_contains "finding-type-aligned outcome" "aligned to finding type" "${SKILL_CONTENT}"
+
+# --- Definitions additions ---
+assert_contains "open-incident hours defined" "open-incident hours" "${SKILL_CONTENT}"
+
+# --- Skill intro describes v3 action-class model ---
+assert_contains "intro do now" "Do Now" "${SKILL_CONTENT}"
+assert_contains "intro investigate" "Investigate" "${SKILL_CONTENT}"
+assert_contains "intro needs decision" "Needs Decision" "${SKILL_CONTENT}"
 
 # --- Report sections ---
 assert_contains "definitions section" "Definitions" "${SKILL_CONTENT}"
 assert_contains "action type legend" "Action Type Legend" "${SKILL_CONTENT}"
-assert_contains "dual track A" "Track A" "${SKILL_CONTENT}"
-assert_contains "dual track B" "Track B" "${SKILL_CONTENT}"
+# --- Decision Summary table columns ---
+assert_contains "summary category column" "Category" "${SKILL_CONTENT}"
+assert_contains "summary target owner column" "Target Owner" "${SKILL_CONTENT}"
+assert_contains "summary readiness column" "Confidence / Readiness" "${SKILL_CONTENT}"
+assert_contains "summary expected outcome column" "Primary Expected Outcome" "${SKILL_CONTENT}"
+assert_contains "summary next action column" "Next Action" "${SKILL_CONTENT}"
+assert_contains "summary cap rule" "8-12" "${SKILL_CONTENT}"
+assert_contains "summary selection rule" "non-empty category" "${SKILL_CONTENT}"
+assert_contains "summary anchor links" "linked to detailed section" "${SKILL_CONTENT}"
 assert_contains "keep section" "No Action Required" "${SKILL_CONTENT}"
-assert_contains "verification plan" "Verification Plan" "${SKILL_CONTENT}"
+assert_contains "verification scorecard" "Verification Scorecard" "${SKILL_CONTENT}"
+assert_contains "global implementation standard" "Global Implementation Standard" "${SKILL_CONTENT}"
+assert_contains "every mutated field" "every mutated field" "${SKILL_CONTENT}"
 assert_contains "evidence coverage appendix" "Evidence Coverage" "${SKILL_CONTENT}"
 
 # --- Evidence basis methodology ---
