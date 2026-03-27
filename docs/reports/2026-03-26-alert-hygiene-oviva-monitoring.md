@@ -21,7 +21,7 @@
   - `measured` = metric time-series query with stated scope and numeric result
   - `structural` = config flaw unambiguous from policy definition alone (e.g., auto_close NOT SET, threshold=0, eval window absent)
   - `heuristic` = pattern-only inference, flagged for validation before applying
-- **Metric validation status:** Performed for 10 of 14 clusters via Cloud Monitoring REST API. Single-query: Diet Suggestions (baseline crowding), artemis message/consumer/expired (structural confirmed), memory utilization, transaction threshold, hcs-gb (low traffic). Multi-query: MySQL slow query (ALIGN_DELTA distribution mean: p50=47.8ms), Delta pods restart (REDUCE_SUM: 2,308/day), Mobile API 5xx (0% at hourly — sub-hour bursts). Remaining 2 (medical-reporting, hcs-gb error rate) have service label mismatch — metric exists but application label doesn't match expected filter. P99/P95/P90 latency overlap and gamification queue use pattern analysis and structural evidence respectively.
+- **Metric validation status:** Performed for 12 of 14 clusters via Cloud Monitoring REST API. Single-query (7): Diet Suggestions (baseline crowding), artemis message/consumer/expired (structural confirmed), memory utilization, transaction threshold, hcs-gb total traffic. Multi-query (5): MySQL slow query (ALIGN_DELTA distribution mean: p50=47.8ms), Delta pods restart (REDUCE_SUM: 2,308/day), Mobile API 5xx (0% at hourly — sub-hour bursts), hcs-gb error rate (0.024% aggregate, two-query ratio), medical-reporting error rate (0.037% aggregate, two-query ratio). Label discovery: initial queries used wrong label (`application`); correct label (`container`) found by reading PromQL from policy definition. Remaining 2 (P99/P95/P90 latency, gamification queue) use pattern analysis and structural evidence respectively.
 - **To reproduce:** Run `pull-policies.py --project oviva-monitoring`, `pull-incidents.py --project oviva-monitoring --days 14`, `compute-clusters.py --policies policies.json --alerts alerts.json`, then apply Stage 3-5 reasoning from the alert-hygiene SKILL.md
 
 ## Definitions
@@ -251,7 +251,7 @@ Items based on frequency pattern only. Likely correct but validate the specific 
 
 **Observed:** 40 raw incidents, 14 episodes. Noise score: 6 (highest in the dataset). Median retrigger: 130s (2 minutes!). Median duration: 608s (~10m). Concentrated h09 (38%). auto_close: 1800s. Eval window: 60s.
 **Inferred:** 2-minute retrigger interval indicates the alert fires on every evaluation cycle during error spikes. The 1% threshold may be too low for this service, or the service has a consistent h09 error pattern (European morning traffic).
-**Evidence basis:** heuristic + partial — retrigger pattern + h09 concentration. Total request rate already measured at p50=3 req/h (see item above). Error rate query attempted but service label mismatch: `http_server_requests_seconds_count/summary` does not have `hcs-gb` as an application label. Need to discover exact PromQL label structure to complete.
+**Evidence basis:** measured — two-query ratio with `container="hcs-gb"` (label discovered from PromQL): 278 errors / 1,152,143 total = **0.024% aggregate error rate** over 14d. Daily errors: 3-185 (bursty). Alert fires because PromQL uses 15m `increase()` per URI/method — a single error on a low-traffic route exceeds 1%. Confirms: add volume floor or per-route minimum traffic filter.
 
 **Action:**
 1. Extend eval window from 60s to 300s
@@ -273,7 +273,7 @@ Items based on frequency pattern only. Likely correct but validate the specific 
 
 **Observed:** 45 raw incidents, 25 episodes. Noise score: 3. Concentrated h07 (40%). Median duration: 824s (~14m). auto_close: 1800s. Eval window: 60s.
 **Inferred:** 40% concentration at h07 may indicate a batch job, scheduled task, or European morning traffic spike causing errors. *Low confidence — verify h07 activity before applying mute window.*
-**Evidence basis:** heuristic — h07 concentration 40%. Error rate query attempted but service label mismatch: `http_server_requests_seconds_count/summary` does not have `medical-reporting` as an application label. Need to discover exact PromQL label structure to complete.
+**Evidence basis:** measured — two-query ratio with `container="medical-reporting"` (label discovered from PromQL): 123 errors / 336,930 total = **0.037% aggregate error rate** over 14d. Daily errors: 3-20 (consistent, not bursty). Alert fires because PromQL uses 15m `increase()` per URI/method — errors concentrate in h07 windows on specific routes. Confirms: h07 pattern is real but aggregate rate is well below 1%.
 
 **Action:**
 1. If batch job confirmed at h07: add mute window 06:30-07:30 UTC
@@ -482,8 +482,11 @@ Grouped by validation method. Reviewer action: `metric query` and `config inspec
 | Delta pods restart | `kubernetes.io/container/restart_count` ALIGN_DELTA daily + REDUCE_SUM | p50=2,308 restarts/day, max=2,995/day, 17,399 total in 7d | Systemic: ~2,300 restarts/day across all containers. Alert threshold > 0 is correct — the problem is real and chronic. Confirms Fix Underlying Issue verdict. |
 | Mobile API 5xx | `prometheus.googleapis.com/http_server_duration_milliseconds/histogram` ALIGN_DELTA hourly + daily | 229,655 requests/3d, 0 5xx at hourly resolution, 0 at daily | Errors are sub-hour bursts invisible at hourly aggregation. PromQL 5m rate window catches brief spikes. Confirms pattern-analysis finding: errors are transient, likely deploy-correlated. |
 
-### Not measured — service label mismatch
+### Measured via two-query error rate ratio (label discovered from PromQL)
 
-| Cluster | What was tried | Why it didn't work |
-|---------|---------------|-------------------|
-| medical-reporting, hcs-gb | `prometheus.googleapis.com/http_server_requests_seconds_count/summary` with application/service label filters | Metric descriptor search found only `lead-generation` service, not `medical-reporting` or `hcs-gb`. These services likely use different metric labels or a different monitoring scope. Query the alert's exact PromQL labels to find the correct filter. |
+| Cluster | Query | Result | Finding |
+|---------|-------|--------|---------|
+| hcs-gb error rate | `http_server_requests_seconds_count/summary` with `container="hcs-gb"` + `outcome="SERVER_ERROR"` vs total, ALIGN_DELTA daily + REDUCE_SUM, 14d | 278 errors / 1,152,143 total = 0.024% | Aggregate rate far below 1% threshold. Daily errors bursty (3-185). Alert fires on 15m per-route windows where single errors exceed 1%. |
+| medical-reporting error rate | Same metric with `container="medical-reporting"`, 14d | 123 errors / 336,930 total = 0.037% | Aggregate rate far below 1%. Daily errors consistent (3-20). h07 concentration confirmed — errors cluster in morning windows on specific routes. |
+
+**Label discovery:** Initial queries used `application` label (failed). Correct label (`container`) was discovered by reading the PromQL from the alert policy definition in `policies.json`.
