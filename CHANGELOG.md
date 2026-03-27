@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Alert-hygiene report restructured from confidence-band grouping (High/Medium/Needs Analyst) to action-class structure (Do Now / Investigate / Needs Decision) with strict Do Now gating, two-stage investigation DoDs, Decision Summary table, Verification Scorecard, and Systemic Issues consolidation
+
 ### Added
 - Bounded disambiguation probes for incident-analysis CLASSIFY: SHORTLIST artifact, targeted disambiguation probes section, one-round anti-looping with pre-probe fingerprint
 - Playbook `disambiguation_probe` schema on dependency-failure, config-regression, and infra-failure playbooks
