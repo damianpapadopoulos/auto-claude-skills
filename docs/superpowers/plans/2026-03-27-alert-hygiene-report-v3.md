@@ -66,6 +66,7 @@ assert_contains "summary expected outcome column" "Primary Expected Outcome" "${
 assert_contains "summary next action column" "Next Action" "${SKILL_CONTENT}"
 assert_contains "summary cap rule" "8-12" "${SKILL_CONTENT}"
 assert_contains "summary selection rule" "non-empty category" "${SKILL_CONTENT}"
+assert_contains "summary anchor links" "linked to detailed section" "${SKILL_CONTENT}"
 ```
 
 - [ ] **Step 3: Replace Verification Plan assertion with Verification Scorecard**
@@ -148,6 +149,7 @@ assert_contains "iac search required status" "Search Required" "${SKILL_CONTENT}
 assert_contains "iac unknown drops" "Unknown" "${SKILL_CONTENT}"
 assert_contains "search req repo hint" "repo" "${SKILL_CONTENT}"
 assert_contains "search req policy id" "policy ID" "${SKILL_CONTENT}"
+assert_contains "search req identifying fragment" "identifying fragment" "${SKILL_CONTENT}"
 assert_contains "search req replacement guidance" "replacement guidance" "${SKILL_CONTENT}"
 ```
 
@@ -191,6 +193,11 @@ assert_contains "finding-type-aligned outcome" "aligned to finding type" "${SKIL
 
 # --- Definitions additions ---
 assert_contains "open-incident hours defined" "open-incident hours" "${SKILL_CONTENT}"
+
+# --- Skill intro describes v3 action-class model ---
+assert_contains "intro do now" "Do Now" "${SKILL_CONTENT}"
+assert_contains "intro investigate" "Investigate" "${SKILL_CONTENT}"
+assert_contains "intro needs decision" "Needs Decision" "${SKILL_CONTENT}"
 ```
 
 - [ ] **Step 10: Run tests to verify they fail**
@@ -513,9 +520,9 @@ Replace lines 384-489 (the entire Report Skeleton code block, from `### Report S
 - Modeled impact (estimated, scope: Do Now items only): {X} incidents reduced ({Y}%), {Z} open-incident hours reclaimed
 
 ## Decision Summary
-Capped at 8-12 items. Every non-empty category gets at least 1 row. After minimum representation, remaining rows filled in global priority order: Do Now by impact, then Investigate by urgency, then Needs Decision by deadline.
+Capped at 8-12 items. Each Finding is linked to detailed section via anchor. Every non-empty category gets at least 1 row. After minimum representation, remaining rows filled in global priority order: Do Now by impact, then Investigate by urgency, then Needs Decision by deadline.
 
-| Category | Finding | Target Owner | Confidence / Readiness | Effort | Risk | Primary Expected Outcome | Next Action |
+| Category | Finding (linked to detailed section) | Target Owner | Confidence / Readiness | Effort | Risk | Primary Expected Outcome | Next Action |
 |----------|---------|--------------|----------------------|--------|------|--------------------------|-------------|
 
 Primary Expected Outcome rules:
@@ -692,17 +699,31 @@ Each cluster gets one of these action types (can appear in any confidence band).
 | **No action** | Well-calibrated, low-frequency. Keep as-is. | High (report in Keep section) |
 ```
 
-- [ ] **Step 2: Run full content test suite**
+- [ ] **Step 2: Update the skill intro paragraph**
+
+Replace line 8 of `skills/alert-hygiene/SKILL.md`:
+
+```markdown
+Use when facing alert noise, flapping alerts, alert fatigue, threshold audits, or SLO-alert redesign questions. Analyzes alert policies and incident history for a single GCP monitoring project. Produces a confidence-grouped prescriptive report: high-confidence next actions (structural flaws, arithmetic mismatches), medium-confidence actions (pattern-only inferences), and needs-analyst items (ambiguous intent, SLO candidates). Runs straight through from data pull to final report.
+```
+
+With:
+
+```markdown
+Use when facing alert noise, flapping alerts, alert fatigue, threshold audits, or SLO-alert redesign questions. Analyzes alert policies and incident history for a single GCP monitoring project. Produces an action-class prescriptive report: Do Now items (PR-ready config changes with strict gating), Investigate items (bounded discovery with two-stage DoD), and Needs Decision items (strategy/policy choices with named owners). Runs straight through from data pull to final report.
+```
+
+- [ ] **Step 3: Run full content test suite**
 
 Run: `bash tests/test-alert-hygiene-skill-content.sh`
 Expected: PASS — all assertions pass.
 
-- [ ] **Step 3: Run full test suite to verify no regressions**
+- [ ] **Step 4: Run full test suite to verify no regressions**
 
 Run: `bash tests/run-tests.sh`
 Expected: All test files pass.
 
-- [ ] **Step 4: Commit all changes**
+- [ ] **Step 5: Commit all changes**
 
 ```bash
 git add skills/alert-hygiene/SKILL.md tests/test-alert-hygiene-skill-content.sh
@@ -747,6 +768,9 @@ Report v3: action-class structure replaces confidence-band grouping.
 | Systemic Issues section (4 subsections) | Task 4 (skeleton) |
 | Open-incident hours definition | Task 4 |
 | Latency alerts reference updated | Task 4 |
+| Decision Summary anchor-linked findings | Task 1 (assertion) + Task 4 (skeleton) |
+| Search Required identifying fragment assertion | Task 1 (assertion) + Task 3 (gate) |
+| Skill intro updated to v3 model | Task 5 |
 | Content test structural assertions | Task 1 |
 | Content test behavioral contract assertions | Task 1 |
 | Finding-type-aligned outcomes | Task 3 (metric families) + Task 4 (summary rules) |
