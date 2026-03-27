@@ -118,8 +118,9 @@ assert_contains "SKILL.md has SHORTLIST artifact" "SHORTLIST:" "${SKILL_CONTENT}
 assert_contains "SKILL.md has classification_fingerprint" "classification_fingerprint" "${SKILL_CONTENT}"
 assert_contains "SKILL.md has disambiguation_round" "disambiguation_round" "${SKILL_CONTENT}"
 assert_contains "SKILL.md has pre_probe fingerprint" "pre_probe" "${SKILL_CONTENT}"
-assert_contains "SKILL.md has Step 2b" "Step 2b" "${SKILL_CONTENT}"
+assert_contains "SKILL.md has MITIGATE Step 2b (inventory)" "Step 2b: Establish Inventory" "${SKILL_CONTENT}"
 assert_contains "SKILL.md has Targeted Disambiguation Probes" "Targeted Disambiguation Probes" "${SKILL_CONTENT}"
+assert_not_contains "SKILL.md has no duplicate Step 2b in INVESTIGATE" "### Step 2b: Targeted" "${SKILL_CONTENT}"
 assert_contains "SKILL.md has scope exception for dependency probes" "declared/known dependencies" "${SKILL_CONTENT}"
 assert_contains "SKILL.md has one probe round limit" "one probe round" "${SKILL_CONTENT}"
 

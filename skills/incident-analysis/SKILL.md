@@ -208,7 +208,7 @@ round for the same classification fingerprint.
 
 **Low confidence (< 60):**
 Transition to INVESTIGATE Steps 1-5 only (limited investigation). Include the SHORTLIST
-handoff artifact (same format as medium-confidence) so that Step 2b can consume it.
+handoff artifact (same format as medium-confidence) so that the Targeted Disambiguation Probes section can consume it.
 Findings feed back to CLASSIFY for reclassification.
 
 ### Loop Termination
@@ -316,7 +316,7 @@ Use LQL scoped to service + severity + time window identified in Stage 1.
 
 Stack traces, error messages, request IDs, trace IDs.
 
-### Step 2b: Targeted Disambiguation Probes
+### Targeted Disambiguation Probes (Conditional — CLASSIFY Handoff)
 
 When entered from the CLASSIFY low-confidence path with a SHORTLIST handoff artifact,
 execute the disambiguation probes listed for each runner-up. Probes are read-only,

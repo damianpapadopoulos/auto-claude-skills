@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Bounded disambiguation probes for incident-analysis CLASSIFY: SHORTLIST artifact, Step 2b targeted probes, one-round anti-looping with pre-probe fingerprint
+- Bounded disambiguation probes for incident-analysis CLASSIFY: SHORTLIST artifact, targeted disambiguation probes section, one-round anti-looping with pre-probe fingerprint
 - Playbook `disambiguation_probe` schema on dependency-failure, config-regression, and infra-failure playbooks
 - Step 4b source analysis within INVESTIGATE: bad-release gated code analysis at deployed ref, post-hop workload resolution, structured output contract
 - `/investigate` command entry point pre-populating MITIGATE scope inputs
