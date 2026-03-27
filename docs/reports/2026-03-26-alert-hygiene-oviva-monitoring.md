@@ -21,7 +21,7 @@
   - `measured` = metric time-series query with stated scope and numeric result
   - `structural` = config flaw unambiguous from policy definition alone (e.g., auto_close NOT SET, threshold=0, eval window absent)
   - `heuristic` = pattern-only inference, flagged for validation before applying
-- **Metric validation status:** Performed for 7 of 14 clusters via Cloud Monitoring REST API (`curl` + `gcloud auth print-access-token`). PromQL metrics mapped to Cloud Monitoring equivalents (e.g., `prometheus.googleapis.com/METRIC/gauge`). Validated: Diet Suggestions (baseline crowding confirmed), artemis message/consumer/expired counts (structural flaws confirmed), memory utilization (below threshold), transaction threshold (baseline measured), hcs-gb (low traffic confirmed). Not measurable from single time-series query: error rate ratios (Mobile API, medical-reporting — requires two filtered series + division), histogram quantiles (MySQL slow query, P99/P95/P90 — requires bucket computation), high-cardinality counters (pod restarts — daily delta loses signal).
+- **Metric validation status:** Performed for 7 of 14 clusters via Cloud Monitoring REST API (`curl` + `gcloud auth print-access-token`). PromQL metrics mapped to Cloud Monitoring equivalents (e.g., `prometheus.googleapis.com/METRIC/gauge`). Validated: Diet Suggestions (baseline crowding confirmed), artemis message/consumer/expired counts (structural flaws confirmed), memory utilization (below threshold), transaction threshold (baseline measured), hcs-gb (low traffic confirmed). Remaining 4 clusters (MySQL slow query, Delta pods restart, Mobile API 5xx, medical-reporting) are measurable via multi-query patterns (distribution mean, cross-series aggregation, two-query error rate ratio) but were not executed because `gcloud auth` expired during this session. See Evidence Coverage appendix for the specific approach per cluster.
 - **To reproduce:** Run `pull-policies.py --project oviva-monitoring`, `pull-incidents.py --project oviva-monitoring --days 14`, `compute-clusters.py --policies policies.json --alerts alerts.json`, then apply Stage 3-5 reasoning from the alert-hygiene SKILL.md
 
 ## Definitions
@@ -228,7 +228,7 @@ Items based on frequency pattern only. Likely correct but validate the specific 
 
 **Observed:** 143 raw incidents (72 + 71 from two near-identical policies). Flapping. Noise score: 4. Median duration: 315-322s (~5m). Concentrated h23 (39%). auto_close: 1800s (OK). Eval window: 60s.
 **Inferred:** 39% concentration at h23 suggests deploy-time transients but below the 50% threshold for high confidence. Two separate policy IDs with identical names may be a duplication.
-**Evidence basis:** heuristic — time-of-day concentration below 50%, possible deploy correlation. Error rate metric requires ratio of two status-filtered series (not a single time-series query).
+**Evidence basis:** heuristic — time-of-day concentration below 50%, possible deploy correlation. Metric validation not attempted — auth expired before two-query ratio execution (see Evidence Coverage appendix for approach).
 
 **Action:**
 1. Extend eval window from 60s to 300s to ride through deploy-time transients
@@ -251,7 +251,7 @@ Items based on frequency pattern only. Likely correct but validate the specific 
 
 **Observed:** 40 raw incidents, 14 episodes. Noise score: 6 (highest in the dataset). Median retrigger: 130s (2 minutes!). Median duration: 608s (~10m). Concentrated h09 (38%). auto_close: 1800s. Eval window: 60s.
 **Inferred:** 2-minute retrigger interval indicates the alert fires on every evaluation cycle during error spikes. The 1% threshold may be too low for this service, or the service has a consistent h09 error pattern (European morning traffic).
-**Evidence basis:** heuristic — retrigger pattern + time-of-day concentration. Error rate metric requires ratio of two status-filtered series (not a single time-series query).
+**Evidence basis:** heuristic — retrigger pattern + time-of-day concentration. Metric validation not attempted — auth expired before two-query ratio execution (see Evidence Coverage appendix for approach).
 
 **Action:**
 1. Extend eval window from 60s to 300s
@@ -273,7 +273,7 @@ Items based on frequency pattern only. Likely correct but validate the specific 
 
 **Observed:** 45 raw incidents, 25 episodes. Noise score: 3. Concentrated h07 (40%). Median duration: 824s (~14m). auto_close: 1800s. Eval window: 60s.
 **Inferred:** 40% concentration at h07 may indicate a batch job, scheduled task, or European morning traffic spike causing errors. *Low confidence — verify h07 activity before applying mute window.*
-**Evidence basis:** heuristic — time-of-day concentration at 40% (below 50% threshold). Error rate metric requires ratio of two status-filtered series (not a single time-series query).
+**Evidence basis:** heuristic — time-of-day concentration at 40% (below 50% threshold). Metric validation not attempted — auth expired before two-query ratio execution (see Evidence Coverage appendix for approach).
 
 **Action:**
 1. If batch job confirmed at h07: add mute window 06:30-07:30 UTC
@@ -318,7 +318,7 @@ Items where the skill cannot determine intent — SLO redesign candidates, ambig
 
 **Observed:** Separate policies exist for P99, P95, and P90 latency on the same services. P99: 33+16=49 raw. P95: 8+6=14 raw. P90: 7 raw. The lower percentile dominates notification noise. All have auto_close=3600s and eval=60s.
 **Inferred:** This is a candidate for SLO burn-rate redesign if these services are user-facing. Burn-rate alerting on a single SLI (e.g., P99 < 500ms) with multi-window detection would replace all three percentile alerts with better signal.
-**Evidence basis:** heuristic — percentile overlap pattern. Error rate metric requires ratio of two status-filtered series (not a single time-series query).
+**Evidence basis:** heuristic — percentile overlap pattern. Metric validation not attempted — auth expired before two-query ratio execution (see Evidence Coverage appendix for approach).
 
 **Question:** Are these services user-facing with defined SLI/SLO targets?
 **If yes:** Redesign around SLO burn-rate alerting. Replace P99/P95/P90 with a single burn-rate policy per service. This eliminates percentile overlap and provides error-budget context.
@@ -474,10 +474,13 @@ Grouped by validation method. Reviewer action: `metric query` and `config inspec
 | medical-reporting error | h07 concentration 40%, 14m median duration | Check CI/CD or cron schedule for h07 activity; if >80% match → high confidence | 1 cluster |
 | P99/P95/P90 Latency overlap | Three percentile alerts on same services, lower percentile dominates noise | Analyst confirms: are services user-facing with SLI/SLO targets? If yes → SLO redesign. If no → consolidate to P99 only. | Multiple |
 
-### Not attempted — specific API limitation
+### Not attempted — auth expired before multi-query execution
 
-| Cluster | Limitation | Why it can't be a single query |
-|---------|-----------|-------------------------------|
-| MySQL slow query (both) | CUMULATIVE DISTRIBUTION metric | `histogram_quantile` computation requires bucket boundaries from distribution; `ALIGN_PERCENTILE_*` not supported on CUMULATIVE distributions via REST API |
-| Delta pods restart | CUMULATIVE counter, high cardinality | 1,187 distinct containers; short alignment (10m) x 14d x 1,187 series exceeds page limits; daily ALIGN_DELTA loses individual restart events |
-| Mobile API 5xx, medical-reporting | Error rate = ratio of two series | Requires 5xx-filtered count / total count — two separate queries + division, not a single list_time_series call |
+These clusters are measurable via multi-query patterns (documented in SKILL.md Stage 3b). Queries were not executed because `gcloud auth` expired during this session. Re-run with valid auth to complete.
+
+| Cluster | Multi-query approach | Expected result |
+|---------|---------------------|-----------------|
+| MySQL slow query (both) | `ALIGN_DELTA` on CUMULATIVE DISTRIBUTION → extract `distributionValue.mean` for average latency per period | Mean query latency baseline vs threshold — confirms whether 60s eval window catches transient spikes |
+| Delta pods restart | `ALIGN_DELTA` 1h + `crossSeriesReducer=REDUCE_SUM` → total restarts/hour across all containers | Hourly restart rate baseline — confirms chronic systemic issue without enumerating 1,187 containers |
+| Mobile API 5xx | Two queries: (1) `status=starts_with("5")` for errors, (2) unfiltered for total. Divide in Python. | Actual error rate vs 1% threshold — confirms whether h23 spikes are deploy-correlated |
+| medical-reporting | Same two-query ratio with `application="medical-reporting"` label filter | Actual error rate vs 1% threshold — confirms whether h07 concentration is batch/deploy |

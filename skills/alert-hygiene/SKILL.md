@@ -170,16 +170,50 @@ Write results to `$WORK_DIR`, not to conversation context. Parse with `python3` 
 
 If the metric type cannot be mapped, the query returns no data, or the suffix is wrong: note the reason and keep `heuristic` basis. A no-data result is itself a finding — the metric may be misconfigured or the resource labels may not match.
 
-**Scope:** Query all heuristic-basis clusters. Also validate structural items where measurement adds insight (e.g., confirming queue baselines show all zeros at hourly MAX proves the `> 0` threshold fires on sub-hour transients). If API errors or rate limits occur, prioritize by raw incident count.
+**Scope:** Query all clusters, not just heuristic-basis. Structural items also benefit from measurement (e.g., confirming queue baselines are zero proves the `> 0` threshold fires on transients). If API errors or rate limits occur, prioritize by raw incident count.
 
-**Known measurement limitations** (state these accurately in the Evidence Coverage appendix — do not use generic "deferred" or "PromQL custom format"):
+**Multi-query patterns** — these are NOT limitations, they are standard approaches. Use them:
 
-| Metric kind | Limitation | What to report |
+| Metric kind | Approach | Example |
 |---|---|---|
-| CUMULATIVE DISTRIBUTION (e.g., `dbinsights.googleapis.com/perquery/latencies`) | `histogram_quantile` computation requires bucket boundaries; `ALIGN_PERCENTILE_*` not supported on CUMULATIVE distributions | "No — requires histogram quantile computation not available from single time-series query" |
-| Error rate ratios (e.g., 5xx / total requests) | Requires two status-filtered series + division; not a single query | "No — error rate requires ratio of status-filtered series" |
-| High-cardinality CUMULATIVE counters (e.g., pod restart count across 1,000+ containers) | Daily ALIGN_DELTA loses individual events; short alignment periods hit page limits | "No — high-cardinality counter, daily delta loses individual signal" |
-| Custom PromQL with no Cloud Monitoring equivalent | Rare — most Prometheus metrics map via `prometheus.googleapis.com/METRIC/SUFFIX` | "No — no Cloud Monitoring equivalent found after trying gauge/counter/summary/histogram suffixes" |
+| **CUMULATIVE DISTRIBUTION** (e.g., perquery latencies) | `ALIGN_DELTA` extracts the delta distribution per period. Read `distributionValue.mean` for average latency and `distributionValue.count` for query volume. | `dbinsights.googleapis.com/perquery/latencies` + ALIGN_DELTA daily → mean latency per day |
+| **Error rate ratios** (5xx / total) | Two queries: (1) filter by status label for errors, (2) unfiltered for total. Divide in Python. Write both results to `$WORK_DIR`. | Query with `metric.labels.status=starts_with("5")` for errors, without for total. Compute `error_count / total_count`. |
+| **High-cardinality counters** (e.g., 1,000+ containers) | Use `aggregation.crossSeriesReducer=REDUCE_SUM` to aggregate across all series. Gives total restart rate without enumerating each container. | `kubernetes.io/container/restart_count` + ALIGN_DELTA 1h + REDUCE_SUM → total restarts/hour across all containers |
+| **Custom PromQL with no Cloud Monitoring equivalent** | Rare — most Prometheus metrics map via `prometheus.googleapis.com/METRIC/SUFFIX`. Try `/gauge`, `/counter`, `/summary`, `/histogram` suffixes. If none return data, list metric descriptors with `starts_with` filter. | `metricDescriptors?filter=metric.type = starts_with("prometheus.googleapis.com/METRIC_PREFIX")` |
+
+**Tier 2 two-query ratio pattern** (error rate example):
+
+```bash
+WORK_DIR="${WORK_DIR:-$(mktemp -d /tmp/ah-XXXXXX)}"
+
+# Query 1: error count (5xx)
+FILTER_ERR=$(mktemp "$WORK_DIR/ts-err-XXXXXX.txt")
+cat > "$FILTER_ERR" << 'FILTER'
+metric.type = "prometheus.googleapis.com/http_server_requests_seconds_count/summary"
+AND metric.labels.status = starts_with("5")
+AND metric.labels.application = "SERVICE_NAME"
+FILTER
+# ... curl to $WORK_DIR/ts-err-result.json
+
+# Query 2: total count
+FILTER_TOTAL=$(mktemp "$WORK_DIR/ts-total-XXXXXX.txt")
+cat > "$FILTER_TOTAL" << 'FILTER'
+metric.type = "prometheus.googleapis.com/http_server_requests_seconds_count/summary"
+AND metric.labels.application = "SERVICE_NAME"
+FILTER
+# ... curl to $WORK_DIR/ts-total-result.json
+
+# Compute ratio
+python3 -c "
+import json
+err = sum(float(pt['value']['doubleValue']) for s in json.load(open('$WORK_DIR/ts-err-result.json')).get('timeSeries',[]) for pt in s['points'] if 'doubleValue' in pt.get('value',{}))
+total = sum(float(pt['value']['doubleValue']) for s in json.load(open('$WORK_DIR/ts-total-result.json')).get('timeSeries',[]) for pt in s['points'] if 'doubleValue' in pt.get('value',{}))
+print(f'error_rate={err/total*100:.2f}% ({err:.0f}/{total:.0f})') if total > 0 else print('no data')
+"
+rm -f "$FILTER_ERR" "$FILTER_TOTAL"
+```
+
+If a multi-query approach is available but not executed (e.g., auth expired), state the approach and mark as "not attempted — auth expired" rather than claiming an API limitation.
 
 ### Stage 4: Coverage Gap Check
 
