@@ -107,7 +107,7 @@ One compact table at the top of the report. Capped at 8-12 items. Each row links
 
 **Sort order:** Do Now by impact descending, Investigate by urgency, Needs Decision by deadline ascending.
 
-**Selection rule when findings exceed 12 rows:** Every non-empty category gets at least 1 row. Remaining slots are filled by descending priority within each category. If the report has more than 12 items total, the summary table includes a note: *"Showing top {N} of {total} findings. See detailed sections below for complete list."*
+**Selection rule when findings exceed 12 rows:** Every non-empty category gets at least 1 row. After minimum representation, fill remaining rows in global priority order: Do Now by impact, then Investigate by urgency, then Needs Decision by deadline. If the report has more than 12 items total, the summary table includes a note: *"Showing top {N} of {total} findings. See detailed sections below for complete list."*
 
 **No Status column.** The report is a static analysis artifact. If maintained as a live tracker, Status can be added, but that is not the default.
 
