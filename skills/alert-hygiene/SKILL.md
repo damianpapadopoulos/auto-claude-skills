@@ -142,6 +142,7 @@ Use MCP `list_time_series` (Tier 1) or REST API via temp-file pattern (Tier 2). 
 **Tier 2 query pattern** (uses session temp file per Behavioral Constraint 2):
 
 ```bash
+WORK_DIR="${WORK_DIR:-$(mktemp -d /tmp/ah-XXXXXX)}"
 FILTER_FILE=$(mktemp "$WORK_DIR/ts-filter-XXXXXX.txt")
 cat > "$FILTER_FILE" << 'FILTER'
 metric.type = "prometheus.googleapis.com/jvm_threads_live_threads/gauge"
@@ -169,7 +170,16 @@ Write results to `$WORK_DIR`, not to conversation context. Parse with `python3` 
 
 If the metric type cannot be mapped, the query returns no data, or the suffix is wrong: note the reason and keep `heuristic` basis. A no-data result is itself a finding — the metric may be misconfigured or the resource labels may not match.
 
-**Cap:** Maximum 5 validation queries per run. Prioritize clusters where the recommendation involves a specific numeric threshold change (not just "set auto_close"). Also validate structural items where measurement adds insight (e.g., confirming queue baselines show all zeros at hourly MAX proves the `> 0` threshold fires on sub-hour transients).
+**Scope:** Query all heuristic-basis clusters. Also validate structural items where measurement adds insight (e.g., confirming queue baselines show all zeros at hourly MAX proves the `> 0` threshold fires on sub-hour transients). If API errors or rate limits occur, prioritize by raw incident count.
+
+**Known measurement limitations** (state these accurately in the Evidence Coverage appendix — do not use generic "deferred" or "PromQL custom format"):
+
+| Metric kind | Limitation | What to report |
+|---|---|---|
+| CUMULATIVE DISTRIBUTION (e.g., `dbinsights.googleapis.com/perquery/latencies`) | `histogram_quantile` computation requires bucket boundaries; `ALIGN_PERCENTILE_*` not supported on CUMULATIVE distributions | "No — requires histogram quantile computation not available from single time-series query" |
+| Error rate ratios (e.g., 5xx / total requests) | Requires two status-filtered series + division; not a single query | "No — error rate requires ratio of status-filtered series" |
+| High-cardinality CUMULATIVE counters (e.g., pod restart count across 1,000+ containers) | Daily ALIGN_DELTA loses individual events; short alignment periods hit page limits | "No — high-cardinality counter, daily delta loses individual signal" |
+| Custom PromQL with no Cloud Monitoring equivalent | Rare — most Prometheus metrics map via `prometheus.googleapis.com/METRIC/SUFFIX` | "No — no Cloud Monitoring equivalent found after trying gauge/counter/summary/histogram suffixes" |
 
 ### Stage 4: Coverage Gap Check
 
@@ -427,8 +437,19 @@ Re-run this analysis in {days} days. Expected results per top cluster:
 Full cluster table sorted by raw incidents: cluster key, raw, episodes, distinct resources, median duration, median retrigger, noise score, pattern, verdict, confidence.
 
 ## Appendix: Evidence Coverage
-| Cluster | Metric Validated? | Evidence Basis | Sample Scope | Dedupe Window | Confidence |
-(lets reviewer see which recommendations rest on metric validation vs pattern-only inference)
+Grouped by validation method. Reviewer action: `metric query` and `config inspection` items are audit-complete; `pattern analysis` items need reviewer judgment before applying.
+
+### Config inspection — provable from policy definition
+| Cluster | What was checked | Finding | Scope |
+
+### Metric query — validated against Cloud Monitoring time-series
+| Cluster | Query | Result | Finding |
+
+### Pattern analysis — inferred from incident frequency/timing, needs validation before applying
+| Cluster | Pattern observed | What would upgrade this | Scope |
+
+### Not attempted — specific API limitation
+| Cluster | Limitation | Why it can't be a single query |
 ```
 
 ## Action Types
