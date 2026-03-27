@@ -320,7 +320,7 @@ Check the policy inventory for coverage of these high-value signals. For each, f
 
 ## Key Terms
 
-Include a Definitions section in every report (after Executive Summary, before Priority Order) with these terms:
+Include a Definitions section in every report (after Methodology, before Action Type Legend) with these terms:
 
 | Term | Definition |
 |------|-----------|
@@ -510,6 +510,7 @@ Items with structural or measured evidence that fail the Do Now gate (e.g., miss
 - Top findings (3-5 bullets with incident counts)
 - {do_now_count} Do Now actions, {investigate_count} investigations, {decision_count} needs decision
 - Modeled impact (estimated, scope: Do Now items only): {X} incidents reduced ({Y}%), {Z} open-incident hours reclaimed
+- Note: modeled impact must never override measured baseline metrics. Always label projections as estimated with scope and confidence.
 
 ## Decision Summary
 Capped at 8-12 items. Each Finding is linked to detailed section via anchor. Every non-empty category gets at least 1 row. After minimum representation, remaining rows filled in global priority order: Do Now by impact, then Investigate by urgency, then Needs Decision by deadline.
@@ -580,6 +581,7 @@ Coverage gaps from comparison of `metric_types_in_inventory` against Coverage Ga
 - Enabled/disabled counts
 
 ## Actionable Findings: Do Now
+Items ordered by impact descending.
 
 **Global Implementation Standard:**
 For all Do Now items, the following standard applies:
@@ -597,11 +599,13 @@ Per-finding Immediate Verification is added only when the verification steps are
 (Do Now per-item template)
 
 ## Actionable Findings: Investigate
+Items ordered by urgency.
 
 ### 1. {investigation_title} [{High|Medium} / Stage 1]
 (Investigate per-item template with Two-Stage DoD)
 
 ## Needs Decision
+Items ordered by deadline ascending.
 
 ### 1. {decision_title} [High / Decision Pending]
 (Needs Decision per-item template)
