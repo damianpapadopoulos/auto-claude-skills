@@ -188,4 +188,52 @@ test_exit_code_always_zero() {
 test_exit_code_always_zero
 
 # ---------------------------------------------------------------------------
+# 8. kubectl present and reachable
+# ---------------------------------------------------------------------------
+test_kubectl_ready() {
+    echo "-- test: kubectl present and reachable --"
+    setup_test_env
+
+    mkdir -p "${TEST_TMPDIR}/bin"
+    cat > "${TEST_TMPDIR}/bin/kubectl" << 'KEOF'
+#!/bin/bash
+echo "Kubernetes control plane is running"
+exit 0
+KEOF
+    chmod +x "${TEST_TMPDIR}/bin/kubectl"
+
+    local output
+    output="$(PATH="${TEST_TMPDIR}/bin:/usr/bin:/bin" bash "${PREFLIGHT}" 2>/dev/null)"
+
+    local kubectl_status
+    kubectl_status="$(printf '%s' "${output}" | jq -r '.kubectl' 2>/dev/null)"
+    assert_equals "kubectl is ready" "ready" "${kubectl_status}"
+
+    teardown_test_env
+}
+test_kubectl_ready
+
+# ---------------------------------------------------------------------------
+# 9. MCP unavailable when claude.json exists but lacks observability key
+# ---------------------------------------------------------------------------
+test_mcp_unavailable_with_other_servers() {
+    echo "-- test: MCP unavailable when claude.json has other servers --"
+    setup_test_env
+
+    cat > "${HOME}/.claude.json" << 'MCPEOF'
+{"mcpServers":{"other-server":{"command":"node","args":["server.js"]}}}
+MCPEOF
+
+    local output
+    output="$(PATH=/usr/bin:/bin bash "${PREFLIGHT}" 2>/dev/null)"
+
+    local obs_mcp_status
+    obs_mcp_status="$(printf '%s' "${output}" | jq -r '.observability_mcp' 2>/dev/null)"
+    assert_equals "observability_mcp is unavailable" "unavailable" "${obs_mcp_status}"
+
+    teardown_test_env
+}
+test_mcp_unavailable_with_other_servers
+
+# ---------------------------------------------------------------------------
 print_summary
