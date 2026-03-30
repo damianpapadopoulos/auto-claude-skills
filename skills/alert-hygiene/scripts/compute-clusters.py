@@ -346,11 +346,56 @@ def main():
 
     results.sort(key=lambda x: -x['raw_incidents'])
     metric_types = extract_metric_types(policies)
+
+    # Build policy-level raw counts for inventory enrichment
+    policy_raw = defaultdict(int)
+    for c in results:
+        pfn = c.get('policy_full_name', '')
+        policy_raw[pfn] += c.get('raw_incidents', 0)
+
     unlabeled = compute_unlabeled_ranking(policies, results)
+
+    # Inventory-level enrichment
+    enabled_policies = [p for p in policies if p.get('enabled', True)]
+    cluster_policy_ids = set(c.get('policy_full_name', '') for c in results)
+
+    zero_channel = [
+        {
+            'policy_name': p['displayName'],
+            'policy_id': p['name'],
+            'enabled': True,
+            'raw_incidents': policy_raw.get(p['name'], 0),
+            'squad': p.get('userLabels', {}).get('squad', '-'),
+        }
+        for p in enabled_policies
+        if len(p.get('notificationChannels', [])) == 0
+    ]
+
+    disabled_but_noisy = [
+        {
+            'policy_name': p['displayName'],
+            'policy_id': p['name'],
+            'raw_incidents': policy_raw.get(p['name'], 0),
+            'squad': p.get('userLabels', {}).get('squad', '-'),
+        }
+        for p in policies
+        if not p.get('enabled', True) and policy_raw.get(p['name'], 0) > 0
+    ]
+
+    silent_ids = set(p['name'] for p in enabled_policies) - cluster_policy_ids
+    cond_types = Counter(
+        c.get('type', 'unknown') for p in policies for c in p.get('conditions', [])
+    )
+
     output = {
         'clusters': results,
         'metric_types_in_inventory': metric_types,
         'unlabeled_ranking': unlabeled,
+        'zero_channel_policies': zero_channel,
+        'disabled_but_noisy_policies': disabled_but_noisy,
+        'silent_policy_count': len(silent_ids),
+        'silent_policy_total': len(enabled_policies),
+        'condition_type_breakdown': dict(cond_types),
     }
     with open(args.output, 'w') as f:
         json.dump(output, f, indent=2)

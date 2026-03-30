@@ -293,6 +293,48 @@ print(chronic.get('total_open_hours', 'MISSING'))
 # 10 incidents x 5 hours = 50 hours
 assert_equals "chronic cluster total_open_hours computed" "50.0" "${CHRONIC_HOURS}"
 
+# Validate zero_channel_policies — must fail with MISSING before implementation, not silently pass with default []
+ZERO_CH_RAW=$(python3 -c "
+import json
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+zc = data.get('zero_channel_policies')
+print('MISSING' if zc is None else len(zc))
+" 2>/dev/null)
+assert_equals "zero zero-channel policies in fixture" "0" "${ZERO_CH_RAW}"
+
+# Validate disabled_but_noisy_policies — must fail with MISSING before implementation
+DISABLED_NOISY_RAW=$(python3 -c "
+import json
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+dn = data.get('disabled_but_noisy_policies')
+print('MISSING' if dn is None else len(dn))
+" 2>/dev/null)
+assert_equals "zero disabled-but-noisy in base fixture" "0" "${DISABLED_NOISY_RAW}"
+
+# Validate silent_policy_count and silent_policy_total
+SILENT_COUNT=$(python3 -c "
+import json
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+print(data.get('silent_policy_count', 'MISSING'))
+" 2>/dev/null)
+assert_equals "zero silent policies (both have incidents)" "0" "${SILENT_COUNT}"
+
+SILENT_TOTAL=$(python3 -c "
+import json
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+print(data.get('silent_policy_total', 'MISSING'))
+" 2>/dev/null)
+assert_equals "silent_policy_total equals enabled policy count" "2" "${SILENT_TOTAL}"
+
+# Validate condition_type_breakdown
+COND_BREAKDOWN=$(python3 -c "
+import json
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+bd = data.get('condition_type_breakdown', {})
+print(bd.get('conditionThreshold', 'MISSING'))
+" 2>/dev/null)
+assert_equals "condition_type_breakdown has 2 conditionThreshold" "2" "${COND_BREAKDOWN}"
+
 # --- Scenario: cross-project alerts stay separated ---
 python3 -c "
 import json
@@ -380,6 +422,101 @@ assert_equals "empty alerts still extracts metric types from policies" "2" "${EM
 
 # Cleanup
 rm -rf "${FIXTURES_DIR}"
+
+# --- Scenario: disabled noisy policy detected ---
+DISABLED_FIXTURES=$(mktemp -d /tmp/ah-disabled-XXXXXX)
+
+cat > "${DISABLED_FIXTURES}/policies.json" << 'FIXTURE'
+[
+  {
+    "name": "projects/test/alertPolicies/active1",
+    "displayName": "Active alert",
+    "enabled": true,
+    "userLabels": {"squad": "prod_alerts"},
+    "conditions": [{"displayName": "c1", "type": "conditionThreshold", "filter": "metric.type=\"custom/m\"", "query": "", "comparison": "COMPARISON_GT", "thresholdValue": 100, "evaluationInterval": "60s", "duration": "300s", "aggregations": []}],
+    "autoClose": "1800s",
+    "notificationChannels": ["projects/test/notificationChannels/1"],
+    "combiner": "OR"
+  },
+  {
+    "name": "projects/test/alertPolicies/disabled1",
+    "displayName": "Disabled noisy alert",
+    "enabled": false,
+    "userLabels": {"squad": "stale_alerts"},
+    "conditions": [{"displayName": "c2", "type": "conditionPrometheusQueryLanguage", "filter": "", "query": "rate(m[5m]) > 1", "comparison": "", "thresholdValue": null, "evaluationInterval": "60s", "duration": "300s", "aggregations": []}],
+    "autoClose": "",
+    "notificationChannels": ["projects/test/notificationChannels/1"],
+    "combiner": "OR"
+  }
+]
+FIXTURE
+
+python3 -c "
+import json
+from datetime import datetime, timedelta, timezone
+alerts = []
+base = datetime(2026, 3, 20, 10, 0, 0, tzinfo=timezone.utc)
+# 5 incidents for the disabled policy
+for i in range(5):
+    open_t = base + timedelta(hours=i*2)
+    close_t = open_t + timedelta(minutes=30)
+    alerts.append({
+        'name': f'projects/test/alerts/disabled-{i}',
+        'state': 'CLOSED',
+        'openTime': open_t.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        'closeTime': close_t.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        'policyName': 'projects/test/alertPolicies/disabled1',
+        'policyDisplayName': 'Disabled noisy alert',
+        'policyLabels': {'squad': 'stale_alerts'},
+        'resourceType': 'k8s_container',
+        'resourceProject': 'test-prod',
+        'resourceLabels': {'project_id': 'test-prod', 'pod_name': 'pod-1'},
+        'metricType': 'custom/metric',
+        'conditionName': '',
+    })
+with open('${DISABLED_FIXTURES}/alerts.json', 'w') as f:
+    json.dump(alerts, f, indent=2)
+" 2>&1
+
+python3 "${SCRIPTS_DIR}/compute-clusters.py" \
+    --policies "${DISABLED_FIXTURES}/policies.json" \
+    --alerts "${DISABLED_FIXTURES}/alerts.json" \
+    --output "${DISABLED_FIXTURES}/clusters.json" 2>&1
+assert_equals "disabled-noisy compute-clusters runs" "0" "$?"
+
+DISABLED_NOISY_COUNT=$(python3 -c "
+import json
+data = json.load(open('${DISABLED_FIXTURES}/clusters.json'))
+dn = data.get('disabled_but_noisy_policies')
+print('MISSING' if dn is None else len(dn))
+" 2>/dev/null)
+assert_equals "disabled-noisy fixture has 1 disabled noisy policy" "1" "${DISABLED_NOISY_COUNT}"
+
+DISABLED_NOISY_NAME=$(python3 -c "
+import json
+data = json.load(open('${DISABLED_FIXTURES}/clusters.json'))
+dn = data['disabled_but_noisy_policies']
+print(dn[0]['policy_name'])
+" 2>/dev/null)
+assert_equals "disabled noisy policy name correct" "Disabled noisy alert" "${DISABLED_NOISY_NAME}"
+
+DISABLED_NOISY_RAW2=$(python3 -c "
+import json
+data = json.load(open('${DISABLED_FIXTURES}/clusters.json'))
+dn = data['disabled_but_noisy_policies']
+print(dn[0]['raw_incidents'])
+" 2>/dev/null)
+assert_equals "disabled noisy policy has 5 raw incidents" "5" "${DISABLED_NOISY_RAW2}"
+
+# Active policy should appear as silent (no incidents for it)
+DISABLED_SILENT=$(python3 -c "
+import json
+data = json.load(open('${DISABLED_FIXTURES}/clusters.json'))
+print(data.get('silent_policy_count', 'MISSING'))
+" 2>/dev/null)
+assert_equals "active policy with no incidents is silent" "1" "${DISABLED_SILENT}"
+
+rm -rf "${DISABLED_FIXTURES}"
 
 # --- normalize_service_name ---
 NORM_RESULT=$(python3 -c "
@@ -587,6 +724,31 @@ c = [c for c in data['clusters'] if 'queue' in c['policy_name'].lower()][0]
 print(c.get('signal_family', 'MISSING'))
 " 2>/dev/null)
 assert_equals "queue alert classified as other" "other" "${SIGFAM_QUEUE}"
+
+# Validate zero_channel_policies from skey fixture (skey2 has no channels)
+SKEY_ZERO_CH=$(python3 -c "
+import json
+data = json.load(open('${SKEY_FIXTURES}/clusters.json'))
+zc = data.get('zero_channel_policies', [])
+print(len(zc))
+" 2>/dev/null)
+assert_equals "skey fixture has 1 zero-channel policy" "1" "${SKEY_ZERO_CH}"
+
+SKEY_ZERO_CH_NAME=$(python3 -c "
+import json
+data = json.load(open('${SKEY_FIXTURES}/clusters.json'))
+zc = data.get('zero_channel_policies', [])
+print(zc[0]['policy_name'] if zc else 'MISSING')
+" 2>/dev/null)
+assert_equals "zero-channel policy is Queue backlog alert" "Queue backlog alert" "${SKEY_ZERO_CH_NAME}"
+
+SKEY_ZERO_CH_RAW=$(python3 -c "
+import json
+data = json.load(open('${SKEY_FIXTURES}/clusters.json'))
+zc = data.get('zero_channel_policies', [])
+print(zc[0].get('raw_incidents', 'MISSING') if zc else 'MISSING')
+" 2>/dev/null)
+assert_equals "zero-channel policy raw_incidents populated" "5" "${SKEY_ZERO_CH_RAW}"
 
 rm -rf "${SKEY_FIXTURES}"
 
