@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- On-demand observability preflight script (`scripts/obs-preflight.sh`) — checks gcloud auth, kubectl connectivity, and observability MCP configuration with JSON output and fail-open behavior
+- Preflight wired into incident-analysis Step 1, alert-hygiene Tier Detection, and /investigate command as first step before tier selection
+- REVIEW-before-SHIP guard in openspec-guard.sh (Check 4) — warns on git commit/push when requesting-code-review is in composition chain but not completed
+- CLAUDE.md rules: "proceed means continue" (infer next step from context) and "no full-file rewrites" (use targeted edits, preserve existing data)
+
 ### Changed
 - Alert-hygiene report restructured from confidence-band grouping (High/Medium/Needs Analyst) to action-class structure (Do Now / Investigate / Needs Decision) with strict Do Now gating, two-stage investigation DoDs, Decision Summary table, Verification Scorecard, and Systemic Issues consolidation
 
