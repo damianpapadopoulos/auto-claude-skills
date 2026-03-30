@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Alert-hygiene: `service_key` and `signal_family` fields in compute-clusters.py for deterministic service identity and signal classification
+- Alert-hygiene Stage 1: optional SLO config enrichment via GitHub API with Ruby stdlib YAML parsing and two-sided normalization contract
+- Alert-hygiene Stage 4: routing validation — zero-channel policy detection, unlabeled high-noise policy promotion, label inconsistency promotion to Investigate
+- Alert-hygiene Stage 4: SLO coverage cross-reference — migration candidates (no SLO) and redundancy candidates (SLO + noisy threshold alerts)
+- Alert-hygiene Stage 5: IaC location resolution via `gh search code` — upgrades Search Required to Likely with repo:path reference
+- Two-sided Python/Ruby normalization contract test ensuring service_key and SLO name matching stays aligned
+
+### Added
 - On-demand observability preflight script (`scripts/obs-preflight.sh`) — checks gcloud auth, kubectl connectivity, and observability MCP configuration with JSON output and fail-open behavior
 - Preflight wired into incident-analysis Step 1, alert-hygiene Tier Detection, and /investigate command as first step before tier selection
 - REVIEW-before-SHIP guard in openspec-guard.sh (Check 4) — warns on git commit/push when requesting-code-review is in composition chain but not completed
