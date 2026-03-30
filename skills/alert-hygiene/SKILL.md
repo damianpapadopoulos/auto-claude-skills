@@ -293,6 +293,26 @@ Read `metric_types_in_inventory` from the compute-clusters output. Compare again
 - If the metric type does not exist: report "add new".
 - Cross-reference each gap with existing noisy clusters that the gap metric would detect upstream (e.g., probe failure coverage → would provide early signal for pod restart clusters).
 
+#### Routing Validation
+
+Check for routing and ownership gaps using policy-level and cluster-level data from `$WORK_DIR`.
+
+**Zero-channel policies (policy-level):**
+Scan `policies.json` for entries where `notificationChannels` is empty AND `enabled` is true. These fire but notify nobody — invisible failures.
+- Policies with `raw_incidents > 10` (cross-reference against `clusters.json`): promote to **Investigate** with action: *"Silent alert — fires but has no notification channels. Add a notification channel or disable."*
+- Policies with low/zero incidents: surface in **Systemic Issues > Dead/Orphaned Config** — *"Zero-channel policy: {displayName} — enabled but no notification path."*
+
+**Unlabeled high-noise policies (policy-level):**
+The existing `unlabeled_ranking` table stays in Systemic Issues. Additionally, for top entries with `raw_incidents > 10`:
+- Promote to **Investigate** with ownership language: *"No squad/team/owner label — ownership is implicit and unauditable. {N} incidents in {days}d have no traceable owner."*
+- Do not reference org-specific routing fallback channels. The skill is generic.
+- Leave suggested owner as "⚠ assign" — the skill does not infer squad ownership from service names.
+
+**Label inconsistency promotion (cluster-level):**
+For clusters where `label_inconsistency` is true AND `raw_incidents > 5`:
+- Promote to **Investigate** as a cluster-level finding: *"Label mismatch — staging/test label on a production resource. {N} incidents may be misrouted or ignored."*
+- Do NOT merge into the policy-level unlabeled table — entity types stay separate.
+
 ### Stage 5: Produce Report
 
 Write the final report as markdown using the Report Skeleton template below. Group findings by action class (Do Now / Investigate / Needs Decision), not by confidence band. Apply the Do Now Gate to determine which items qualify for the Do Now section. Items that fail the gate drop to Investigate regardless of confidence level.
