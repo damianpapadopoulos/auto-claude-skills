@@ -211,4 +211,23 @@ assert_contains "SKILL.md says Confirmed not achievable from search" \
 assert_contains "SKILL.md mentions gh auth status precondition" \
     "gh auth status" "${SKILL_CONTENT}"
 
+# --- Report quality improvements (v4) ---
+
+# Investigate template: Proposed Config Diff
+assert_contains "investigate proposed config diff" "Proposed Config Diff" "${SKILL_CONTENT}"
+assert_contains "investigate gate blocker field" "Gate Blocker:" "${SKILL_CONTENT}"
+
+# Dead/Orphaned Config reads from script output
+assert_contains "dead orphaned reads zero_channel_policies" "zero_channel_policies" "${SKILL_CONTENT}"
+assert_contains "dead orphaned reads disabled_but_noisy" "disabled_but_noisy_policies" "${SKILL_CONTENT}"
+
+# Inventory Health reads from script output
+assert_contains "inventory health reads silent_policy_count" "silent_policy_count" "${SKILL_CONTENT}"
+assert_contains "inventory health reads silent_policy_total" "silent_policy_total" "${SKILL_CONTENT}"
+assert_contains "inventory health reads condition_type_breakdown" "condition_type_breakdown" "${SKILL_CONTENT}"
+
+# Mandatory Needs Decision trigger
+assert_contains "mandatory needs decision triggers section" "Mandatory Needs Decision Triggers" "${SKILL_CONTENT}"
+assert_contains "silent policy cleanup trigger" "Silent Policy Cleanup" "${SKILL_CONTENT}"
+
 print_summary

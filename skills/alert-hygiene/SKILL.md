@@ -671,6 +671,12 @@ Items with structural or measured evidence that fail the Do Now gate (e.g., miss
 - Default Recommendation is guidance for the decision owner, not an ultimatum
 - Every Needs Decision item must have a named owner, not a generic role
 
+### Mandatory Needs Decision Triggers
+
+The following Needs Decision items are mandatory when their trigger condition is met:
+
+- **Silent Policy Cleanup:** If `silent_policy_total > 0` and `silent_policy_count / silent_policy_total > 0.5` (more than half of enabled policies had zero incidents in the analysis window), include a "Silent Policy Cleanup" Needs Decision item with exact counts from compute-clusters output.
+
 ### Report Skeleton
 
 ```markdown
@@ -739,8 +745,16 @@ Top 10 policies without squad/team/owner label, ranked by total raw incidents:
 "Suggested Owner" is left as "⚠ assign" unless resource project or metric type implies a specific team.
 
 ### Dead/Orphaned Config
-- Zero-channel policies (no notification path)
-- Disabled-but-still-noisy policies
+Read from compute-clusters output — do not compute ad-hoc.
+
+**Zero-channel policies:** Read `zero_channel_policies` array. If non-empty, render table:
+
+| Policy | Policy ID | Raw ({days}d) | Squad |
+|--------|-----------|---------------|-------|
+
+If empty: *"No zero-channel policies found."*
+
+**Disabled-but-still-noisy:** Read `disabled_but_noisy_policies` array. If non-empty, render table with same columns. If empty: *"No disabled-but-noisy policies."*
 
 ### Missing Coverage
 Coverage gaps from comparison of `metric_types_in_inventory` against Coverage Gap Checklist:
@@ -749,9 +763,11 @@ Coverage gaps from comparison of `metric_types_in_inventory` against Coverage Ga
 (last column cross-references existing clusters this gap would detect earlier)
 
 ### Inventory Health
-- Silent policy ratio (zero incidents in analysis window)
-- Condition type breakdown (PromQL vs conditionThreshold vs MQL)
-- Enabled/disabled counts
+Read from compute-clusters output — do not compute ad-hoc.
+
+- **Silent policy ratio:** `silent_policy_count` / `silent_policy_total` from compute-clusters output
+- **Condition type breakdown:** render `condition_type_breakdown` dict from compute-clusters output
+- **Enabled/disabled counts:** from Stage 1 policy pull (no change)
 
 ## Actionable Findings: Do Now
 Items ordered by impact descending.
