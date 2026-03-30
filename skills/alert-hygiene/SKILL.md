@@ -621,10 +621,10 @@ Every Do Now and Investigate finding gets one `**Links:**` line directly after `
 |-----------|---------|----------|------------|
 | {param}   | {value} | {value}  | {why this value was chosen} |
 
-**Evidence Basis:** {measured|structural|heuristic} — {detail}
 **Gate Blocker:** {which Do Now gate requirement is missing}
 **To Upgrade:** {resolve blocker} → promotes to Do Now
 
+**Evidence Basis:** {measured|structural|heuristic} — {current evidence}
 **Hypothesis:** {explicit, testable hypothesis}
 
 **Stage 1 DoD (Discovery — this ticket):**

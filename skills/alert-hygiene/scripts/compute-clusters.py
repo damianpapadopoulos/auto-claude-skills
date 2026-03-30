@@ -173,13 +173,11 @@ def extract_metric_types(policies):
     return sorted(types)
 
 
-def compute_unlabeled_ranking(policies, clusters):
+def compute_unlabeled_ranking(policies, clusters, policy_raw):
     """Rank unlabeled policies by incident volume for actionable reporting."""
-    policy_raw = defaultdict(int)
     policy_eps = defaultdict(int)
     for c in clusters:
         pfn = c.get('policy_full_name', '')
-        policy_raw[pfn] += c.get('raw_incidents', 0)
         policy_eps[pfn] += c.get('deduped_episodes', 0)
 
     ranking = []
@@ -353,7 +351,7 @@ def main():
         pfn = c.get('policy_full_name', '')
         policy_raw[pfn] += c.get('raw_incidents', 0)
 
-    unlabeled = compute_unlabeled_ranking(policies, results)
+    unlabeled = compute_unlabeled_ranking(policies, results, policy_raw)
 
     # Inventory-level enrichment
     enabled_policies = [p for p in policies if p.get('enabled', True)]
