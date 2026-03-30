@@ -334,6 +334,42 @@ For each service_key that IS in `slo-services.json` AND has noisy user-facing th
 
 Write the final report as markdown using the Report Skeleton template below. Group findings by action class (Do Now / Investigate / Needs Decision), not by confidence band. Apply the Do Now Gate to determine which items qualify for the Do Now section. Items that fail the gate drop to Investigate regardless of confidence level.
 
+#### IaC Location Resolution via GitHub Search
+
+During Do Now gate evaluation, attempt to upgrade IaC Location tier for candidates using `gh search code`. This is optional enrichment — if it adds nothing, the report is identical to the version without it.
+
+**Preconditions:** `{github_org}` was provided AND `gh` is available AND authenticated (`gh auth status`). If any fail, skip entirely. This prevents avoidable fallback churn on private repos where `gh` exists but lacks auth.
+
+**When to search:** Only for items that pass all other Do Now gate requirements (config diff, named owner, outcome DoD, measured/structural evidence, rollback signal) but have IaC Location of Search Required or Unknown.
+
+**Rate limit:** `gh search code` allows 10 requests/minute. Cap at top 10 candidates by raw incident count. Remaining items keep their existing IaC Location tier.
+
+**Search strategy per item:**
+
+```bash
+# Primary: policy ID (bare numeric ID — matches both inline resources and module refs)
+gh search code --owner "$github_org" "{policy_id}" \
+  --extension tf --json path,repository --limit 5 \
+  > "$WORK_DIR/iac-search-${policy_id}.json" 2>/dev/null
+
+# Secondary: only if primary returned 0 results
+PRIMARY_HITS=$(python3 -c "import json; print(len(json.load(open('$WORK_DIR/iac-search-${policy_id}.json'))))" 2>/dev/null || echo 0)
+if [ "$PRIMARY_HITS" = "0" ]; then
+  # Use the PromQL fragment, condition filter string, or label key
+  # already captured in Stage 3 for the Search Required spec
+  gh search code --owner "$github_org" "{identifying_fragment}" \
+    --extension tf --json path,repository --limit 5 \
+    > "$WORK_DIR/iac-search-${policy_id}.json" 2>/dev/null
+fi
+```
+
+Do not search by `display_name` — too generic and noisy.
+
+**Result interpretation:**
+- **1+ plausible results:** Upgrade to IaC Location = **Likely**. Include top `repo:path` in the finding. Add note: *"Search match at {repo}:{path} — verify before applying."*
+- **0 results after both tokens:** **Preserve original tier.** Search Required stays Search Required. Unknown stays Unknown. A failed search must NOT upgrade Unknown to Search Required — that would incorrectly make a Do-Now-ineligible item eligible.
+- **Confirmed is not achievable from search alone** — would require opening the file and verifying match context.
+
 ## Prescriptive Reasoning by Pattern
 
 ### Flapping (raw/episode > 3, raw > 10)
