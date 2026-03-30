@@ -644,17 +644,20 @@ During Do Now gate evaluation, attempt to upgrade IaC Location tier for candidat
 **Search strategy per item:**
 
 ```bash
-# Primary: policy ID (most unique token)
-gh search code --owner "$github_org" "alertPolicies/{policy_id}" \
+# Primary: policy ID (bare numeric ID — matches both inline resources and module refs)
+gh search code --owner "$github_org" "{policy_id}" \
   --extension tf --json path,repository --limit 5 \
   > "$WORK_DIR/iac-search-${policy_id}.json" 2>/dev/null
 
-# Secondary (if primary returns 0 results): identifying fragment
-# Use the PromQL fragment, condition filter string, or label key
-# already captured in Stage 3 for the Search Required spec
-gh search code --owner "$github_org" "{identifying_fragment}" \
-  --extension tf --json path,repository --limit 5 \
-  > "$WORK_DIR/iac-search-${policy_id}.json" 2>/dev/null
+# Secondary: only if primary returned 0 results
+PRIMARY_HITS=$(python3 -c "import json; print(len(json.load(open('$WORK_DIR/iac-search-${policy_id}.json'))))" 2>/dev/null || echo 0)
+if [ "$PRIMARY_HITS" = "0" ]; then
+  # Use the PromQL fragment, condition filter string, or label key
+  # already captured in Stage 3 for the Search Required spec
+  gh search code --owner "$github_org" "{identifying_fragment}" \
+    --extension tf --json path,repository --limit 5 \
+    > "$WORK_DIR/iac-search-${policy_id}.json" 2>/dev/null
+fi
 ```
 
 Do not search by `display_name` — too generic and noisy.
@@ -751,7 +754,79 @@ git commit -m "test(alert-hygiene): add content assertions for new SKILL.md sect
 
 ---
 
-### Task 10: Run full test suite and verify
+### Task 10: Two-sided normalization contract test
+
+**Files:**
+- Test: `tests/test-alert-hygiene-scripts.sh`
+
+The spec requires that Ruby SLO-name normalization and Python `normalize_service_name()` produce identical output for the same inputs. This test runs both and compares.
+
+- [ ] **Step 1: Write the cross-language normalization test**
+
+Add to `tests/test-alert-hygiene-scripts.sh` before `# --- Trigger config ---`:
+
+```bash
+# --- Two-sided normalization contract: Python == Ruby ---
+NORM_CONTRACT=$(python3 -c "
+import sys, subprocess, json
+sys.path.insert(0, '${SCRIPTS_DIR}')
+from importlib import import_module
+cc = import_module('compute-clusters')
+
+cases = [
+    'diet-suggestions-prod',
+    'Diet_Suggestions',
+    'hcs.gb.staging',
+    'user-service',
+    'my-app-pta',
+    'simple',
+    'Foo.Bar_Baz-prod',
+]
+
+# Python side
+py_results = [cc.normalize_service_name(c) for c in cases]
+
+# Ruby side (same normalization rules)
+ruby_code = '''
+require \"json\"
+cases = JSON.parse(ARGV[0])
+results = cases.map { |n| n.downcase.gsub(/[_.]/, \"-\").gsub(/-(prod|staging|pta)$/, \"\") }
+puts JSON.generate(results)
+'''
+ruby_out = subprocess.check_output(
+    ['ruby', '-e', ruby_code, json.dumps(cases)],
+    text=True
+).strip()
+rb_results = json.loads(ruby_out)
+
+mismatches = []
+for c, py, rb in zip(cases, py_results, rb_results):
+    if py != rb:
+        mismatches.append(f'{c}: py={py!r} rb={rb!r}')
+
+if mismatches:
+    print('MISMATCH: ' + '; '.join(mismatches))
+else:
+    print('contract_holds')
+" 2>&1)
+assert_equals "Python/Ruby normalization contract holds" "contract_holds" "${NORM_CONTRACT}"
+```
+
+- [ ] **Step 2: Run test to verify it passes**
+
+Run: `bash tests/test-alert-hygiene-scripts.sh 2>&1 | grep -E '(normalization contract|PASS|FAIL)' | tail -5`
+Expected: PASS for `Python/Ruby normalization contract holds`
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add tests/test-alert-hygiene-scripts.sh
+git commit -m "test(alert-hygiene): add two-sided Python/Ruby normalization contract test"
+```
+
+---
+
+### Task 11: Run full test suite and verify
 
 **Files:** None (verification only)
 
