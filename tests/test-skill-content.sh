@@ -160,4 +160,32 @@ else
     _record_fail "Step 4b appears before Step 5" "Step 4b line=${step4b_line:-missing}, Step 5 line=${step5_line:-missing}"
 fi
 
+# --- Observability preflight wiring ---
+test_incident_analysis_references_preflight() {
+    echo "-- test: incident-analysis references obs-preflight --"
+    local skill="${PROJECT_ROOT}/skills/incident-analysis/SKILL.md"
+    local content
+    content="$(cat "${skill}")"
+    assert_contains "incident-analysis references obs-preflight" "obs-preflight.sh" "${content}"
+}
+test_incident_analysis_references_preflight
+
+test_alert_hygiene_references_preflight() {
+    echo "-- test: alert-hygiene references obs-preflight --"
+    local skill="${PROJECT_ROOT}/skills/alert-hygiene/SKILL.md"
+    local content
+    content="$(cat "${skill}")"
+    assert_contains "alert-hygiene references obs-preflight" "obs-preflight.sh" "${content}"
+}
+test_alert_hygiene_references_preflight
+
+test_investigate_references_preflight() {
+    echo "-- test: investigate references obs-preflight --"
+    local cmd="${PROJECT_ROOT}/commands/investigate.md"
+    local content
+    content="$(cat "${cmd}")"
+    assert_contains "investigate references obs-preflight" "obs-preflight.sh" "${content}"
+}
+test_investigate_references_preflight
+
 print_summary

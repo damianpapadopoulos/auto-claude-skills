@@ -56,6 +56,14 @@ If the user has not approved a mitigation proposal within the playbook's `freshn
 
 ### Step 1: Detect Available Tools
 
+Run the shared observability preflight to check environment readiness:
+
+```bash
+bash "$(dirname "$0")/../scripts/obs-preflight.sh"
+```
+
+Parse the JSON output to select the execution tier:
+
 Determine the execution tier by checking what tools are available:
 
 **Tier 1 — MCP (`@google-cloud/observability-mcp`):**

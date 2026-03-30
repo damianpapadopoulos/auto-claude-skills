@@ -38,6 +38,14 @@ When an inference has less than high confidence (e.g., inferring a nightly batch
 
 ## Tier Detection
 
+Run the shared observability preflight before data access:
+
+```bash
+bash "$(dirname "$0")/../scripts/obs-preflight.sh"
+```
+
+If `gcloud` is `unauthenticated`, run `gcloud auth login` before proceeding. If `gcloud` is `missing`, fall to Tier 3.
+
 ### Tier 1 — REST API via scripts (default for inventory and bulk)
 
 Default path for all data pull. Uses `gcloud auth print-access-token` for auth, `curl` for requests, Python scripts for pagination and extraction. MCP truncates at ~100K characters and cannot handle monitoring projects with >50 policies — REST has no such limits.
