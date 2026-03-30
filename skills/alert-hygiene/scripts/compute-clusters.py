@@ -134,6 +134,27 @@ def extract_service_key(condition_filter, condition_query):
     return None
 
 
+def classify_signal_family(condition_filter, condition_query, metric_type):
+    """Classify alert signal family from condition semantics.
+
+    Priority: query/filter content > metric_type name.
+    Returns: error_rate | latency | availability | other.
+    """
+    combined = (condition_filter + ' ' + condition_query).lower()
+    mt_lower = metric_type.lower()
+    # Priority 1: error_rate — status match in query/filter
+    if re.search(r'(status\s*[=~]+\s*"?5|status\s*=\s*starts_with\(\s*"5|5xx|error|status\s*>=\s*500)', combined):
+        return 'error_rate'
+    # Priority 2: latency — percentile/duration/response_time
+    if re.search(r'(percentile|latenc|duration|response.time)', combined + ' ' + mt_lower):
+        return 'latency'
+    # Priority 3: availability — uptime/probe/health
+    if re.search(r'(uptime|probe|health)', mt_lower):
+        return 'availability'
+    # Default
+    return 'other'
+
+
 def extract_metric_types(policies):
     """Extract all metric types referenced in policy conditions."""
     types = set()

@@ -408,6 +408,38 @@ print('all_passed')
 " 2>&1)
 assert_equals "extract_service_key handles all cases" "all_passed" "${SKEY_RESULT}"
 
+# --- classify_signal_family ---
+SIGFAM_RESULT=$(python3 -c "
+import sys; sys.path.insert(0, '${SCRIPTS_DIR}')
+from importlib import import_module
+cc = import_module('compute-clusters')
+cases = [
+    # error_rate: status match in query
+    ('', 'rate(http_requests{status=~\"5..\"}[5m]) > 0.01', 'custom/http_requests', 'error_rate'),
+    # error_rate: error in filter
+    ('metric.labels.status = starts_with(\"5\")', '', 'prometheus.googleapis.com/http_server_requests_seconds_count/summary', 'error_rate'),
+    # latency: duration metric
+    ('', 'avg(rate(http_duration_sum[5m])) / avg(rate(http_duration_count[5m])) > 0.5', 'custom/http_duration', 'latency'),
+    # latency: latency in metric type
+    ('metric.type=\"dbinsights.googleapis.com/perquery/latencies\"', '', 'dbinsights.googleapis.com/perquery/latencies', 'latency'),
+    # latency: response_time in metric type
+    ('', '', 'prometheus.googleapis.com/http_response_time/gauge', 'latency'),
+    # availability: uptime in metric type
+    ('', '', 'monitoring.googleapis.com/uptime_check/check_passed', 'availability'),
+    # availability: probe in metric type
+    ('', '', 'kubernetes.io/container/probe/failure_count', 'availability'),
+    # other: queue metric
+    ('', '', 'pubsub.googleapis.com/subscription/num_undelivered_messages', 'other'),
+    # other: generic custom metric
+    ('', 'sum(rate(m[5m])) > 100', 'custom/metric', 'other'),
+]
+for filt, query, mt, expected in cases:
+    result = cc.classify_signal_family(filt, query, mt)
+    assert result == expected, f'filter={filt!r}, query={query!r}, mt={mt!r} -> {result!r}, expected {expected!r}'
+print('all_passed')
+" 2>&1)
+assert_equals "classify_signal_family handles all cases" "all_passed" "${SIGFAM_RESULT}"
+
 # --- Trigger config ---
 TRIGGERS_FILE="${PROJECT_ROOT}/config/default-triggers.json"
 TRIGGER_ENTRY=$(python3 -c "
