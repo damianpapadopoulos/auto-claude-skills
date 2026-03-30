@@ -315,6 +315,7 @@ def main():
             'distinct_resources': distinct_res,
             'median_duration_sec': med_dur,
             'median_retrigger_sec': med_retrig,
+            'total_open_hours': round(sum(durations) / 3600, 1) if durations else 0,
             'tod_pattern': tod,
             'pattern': pattern,
             'noise_score': noise_score,

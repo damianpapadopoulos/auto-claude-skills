@@ -274,6 +274,25 @@ print(data['unlabeled_ranking'][0]['total_raw'])
 " 2>/dev/null)
 assert_equals "unlabeled policy has 10 raw incidents" "10" "${UNLABELED_RAW}"
 
+# Validate total_open_hours per cluster
+FLAP_HOURS=$(python3 -c "
+import json
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+flap = [c for c in data['clusters'] if 'flapping' in c['policy_name'].lower()][0]
+print(flap.get('total_open_hours', 'MISSING'))
+" 2>/dev/null)
+# 50 incidents x 5 min = 250 min = 4.17 hours
+assert_equals "flapping cluster total_open_hours computed" "4.2" "${FLAP_HOURS}"
+
+CHRONIC_HOURS=$(python3 -c "
+import json
+data = json.load(open('${FIXTURES_DIR}/clusters.json'))
+chronic = [c for c in data['clusters'] if 'chronic' in c['policy_name'].lower()][0]
+print(chronic.get('total_open_hours', 'MISSING'))
+" 2>/dev/null)
+# 10 incidents x 5 hours = 50 hours
+assert_equals "chronic cluster total_open_hours computed" "50.0" "${CHRONIC_HOURS}"
+
 # --- Scenario: cross-project alerts stay separated ---
 python3 -c "
 import json
