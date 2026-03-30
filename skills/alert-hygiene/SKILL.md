@@ -173,6 +173,7 @@ Run compute-clusters.py. This produces a structured output with three sections:
 - `tod_pattern`, `pattern` (flapping/chronic/recurring/burst/isolated)
 - `noise_score`, `noise_reasons`, `label_inconsistency`
 - `threshold_value`, `comparison`, `condition_filter`, `condition_query`, `condition_type`, `condition_match`
+- `service_key` (normalized service identity from condition labels, or null), `signal_family` (error_rate/latency/availability/other)
 
 **Inventory-level fields:**
 - `metric_types_in_inventory` — deduplicated set of all metric types across all policy conditions
