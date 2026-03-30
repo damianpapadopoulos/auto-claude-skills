@@ -571,6 +571,46 @@ assert_equals "queue alert classified as other" "other" "${SIGFAM_QUEUE}"
 
 rm -rf "${SKEY_FIXTURES}"
 
+# --- Two-sided normalization contract: Python == Ruby ---
+NORM_CONTRACT=$(python3 -c "
+import sys, subprocess, json
+sys.path.insert(0, '${SCRIPTS_DIR}')
+from importlib import import_module
+cc = import_module('compute-clusters')
+
+cases = [
+    'diet-suggestions-prod',
+    'Diet_Suggestions',
+    'hcs.gb.staging',
+    'user-service',
+    'my-app-pta',
+    'simple',
+    'Foo.Bar_Baz-prod',
+]
+
+# Python side
+py_results = [cc.normalize_service_name(c) for c in cases]
+
+# Ruby side (same normalization rules)
+ruby_code = 'require \"json\"; cases = JSON.parse(ARGV[0]); results = cases.map { |n| n.downcase.gsub(/[_.]/, \"-\").gsub(/-(prod|staging|pta)\$/, \"\") }; puts JSON.generate(results)'
+ruby_out = subprocess.check_output(
+    ['ruby', '-e', ruby_code, json.dumps(cases)],
+    text=True
+).strip()
+rb_results = json.loads(ruby_out)
+
+mismatches = []
+for c, py, rb in zip(cases, py_results, rb_results):
+    if py != rb:
+        mismatches.append(f'{c}: py={py!r} rb={rb!r}')
+
+if mismatches:
+    print('MISMATCH: ' + '; '.join(mismatches))
+else:
+    print('contract_holds')
+" 2>&1)
+assert_equals "Python/Ruby normalization contract holds" "contract_holds" "${NORM_CONTRACT}"
+
 # --- Trigger config ---
 TRIGGERS_FILE="${PROJECT_ROOT}/config/default-triggers.json"
 TRIGGER_ENTRY=$(python3 -c "
