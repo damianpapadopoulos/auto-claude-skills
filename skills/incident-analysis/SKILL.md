@@ -64,8 +64,6 @@ bash "$(dirname "$0")/../scripts/obs-preflight.sh"
 
 Parse the JSON output to select the execution tier:
 
-Determine the execution tier by checking what tools are available:
-
 **Tier 1 — MCP (`@google-cloud/observability-mcp`):**
 If you have access to `list_log_entries`, `search_traces`, `get_trace`, `list_time_series`, or `list_alert_policies` as MCP tools in this session, use Tier 1.
 
