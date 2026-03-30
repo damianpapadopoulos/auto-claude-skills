@@ -99,6 +99,15 @@ def check_label_inconsistency(policy_labels, resource_project):
     return staging_label and prod_resource
 
 
+def normalize_service_name(name):
+    """Normalize service name: lowercase, replace separators, strip env suffixes."""
+    if not name:
+        return None
+    n = name.lower().replace('_', '-').replace('.', '-')
+    n = re.sub(r'-(prod|staging|pta)$', '', n)
+    return n or None
+
+
 def extract_metric_types(policies):
     """Extract all metric types referenced in policy conditions."""
     types = set()

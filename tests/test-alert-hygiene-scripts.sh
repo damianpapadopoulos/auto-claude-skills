@@ -362,6 +362,26 @@ assert_equals "empty alerts still extracts metric types from policies" "2" "${EM
 # Cleanup
 rm -rf "${FIXTURES_DIR}"
 
+# --- normalize_service_name ---
+NORM_RESULT=$(python3 -c "
+import sys; sys.path.insert(0, '${SCRIPTS_DIR}')
+from importlib import import_module
+cc = import_module('compute-clusters')
+cases = [
+    ('diet-suggestions-prod', 'diet-suggestions'),
+    ('Diet_Suggestions', 'diet-suggestions'),
+    ('hcs.gb.staging', 'hcs-gb'),
+    ('user-service', 'user-service'),
+    ('my-app-pta', 'my-app'),
+    ('simple', 'simple'),
+]
+for inp, expected in cases:
+    result = cc.normalize_service_name(inp)
+    assert result == expected, f'{inp!r} -> {result!r}, expected {expected!r}'
+print('all_passed')
+" 2>&1)
+assert_equals "normalize_service_name handles all cases" "all_passed" "${NORM_RESULT}"
+
 # --- Trigger config ---
 TRIGGERS_FILE="${PROJECT_ROOT}/config/default-triggers.json"
 TRIGGER_ENTRY=$(python3 -c "
