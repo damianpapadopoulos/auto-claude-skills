@@ -313,6 +313,23 @@ For clusters where `label_inconsistency` is true AND `raw_incidents > 5`:
 - Promote to **Investigate** as a cluster-level finding: *"Label mismatch — staging/test label on a production resource. {N} incidents may be misrouted or ignored."*
 - Do NOT merge into the policy-level unlabeled table — entity types stay separate.
 
+#### SLO Coverage Cross-Reference
+
+Only run this section when `$WORK_DIR/slo-source-status.json` has `"status": "ok"`. Read `$WORK_DIR/slo-services.json` (normalized service names) and cross-reference against cluster data.
+
+**Service grouping:** Group clusters by `service_key` from `clusters.json`. Skip clusters where `service_key` is `null`. Only consider clusters with `signal_family` in (`error_rate`, `latency`, `availability`) — exclude `other`.
+
+**SLO migration candidates:**
+For each service_key with `total_raw_incidents > 20` across user-facing clusters AND NOT in `slo-services.json`:
+- Surface in **Coverage Gaps** table: *"SLO review candidate — {service_key} has {N} noisy user-facing threshold alerts ({families}), no SLO definition."*
+
+**SLO review candidates (redundancy check):**
+For each service_key that IS in `slo-services.json` AND has noisy user-facing threshold alerts:
+- Surface as **Needs Decision** item: *"Service {service_key} has an SLO definition and also {N} noisy user-facing threshold alerts; review for redundancy or intentional overlap."*
+- Do not claim same-signal overlap — `slo-services.json` carries service names only, not signal coverage metadata.
+
+**Matching rules:** Both `service_key` and SLO service names are normalized (lowercase, env suffixes stripped, separators unified). Only exact-match after normalization. Unmatched service_keys are excluded, not fuzzy-guessed.
+
 ### Stage 5: Produce Report
 
 Write the final report as markdown using the Report Skeleton template below. Group findings by action class (Do Now / Investigate / Needs Decision), not by confidence band. Apply the Do Now Gate to determine which items qualify for the Do Now section. Items that fail the gate drop to Investigate regardless of confidence level.
