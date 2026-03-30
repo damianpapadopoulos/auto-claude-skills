@@ -332,6 +332,15 @@ def main():
             'condition_query': matched_cond.get('query', '') if matched_cond else '',
             'condition_type': matched_cond.get('type', '') if matched_cond else '',
             'condition_match': cond_match,
+            'service_key': extract_service_key(
+                matched_cond.get('filter', '') if matched_cond else '',
+                matched_cond.get('query', '') if matched_cond else '',
+            ),
+            'signal_family': classify_signal_family(
+                matched_cond.get('filter', '') if matched_cond else '',
+                matched_cond.get('query', '') if matched_cond else '',
+                mt,
+            ),
         })
 
     results.sort(key=lambda x: -x['raw_incidents'])

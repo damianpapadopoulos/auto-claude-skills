@@ -440,6 +440,137 @@ print('all_passed')
 " 2>&1)
 assert_equals "classify_signal_family handles all cases" "all_passed" "${SIGFAM_RESULT}"
 
+# --- service_key and signal_family in cluster output ---
+SKEY_FIXTURES=$(mktemp -d /tmp/ah-skey-XXXXXX)
+
+cat > "${SKEY_FIXTURES}/policies.json" << 'FIXTURE'
+[
+  {
+    "name": "projects/test/alertPolicies/skey1",
+    "displayName": "Error rate for diet-suggestions-prod",
+    "enabled": true,
+    "userLabels": {"squad": "cosmos_alerts"},
+    "conditions": [{
+      "displayName": "error rate > 1%",
+      "type": "conditionPrometheusQueryLanguage",
+      "filter": "",
+      "query": "rate(http_server_requests_seconds_count{container=\"diet-suggestions-prod\", status=~\"5..\"}[5m]) / rate(http_server_requests_seconds_count{container=\"diet-suggestions-prod\"}[5m]) > 0.01",
+      "comparison": "",
+      "thresholdValue": null,
+      "evaluationInterval": "60s",
+      "duration": "300s",
+      "aggregations": []
+    }],
+    "autoClose": "300s",
+    "notificationChannels": ["projects/test/notificationChannels/1"],
+    "combiner": "OR"
+  },
+  {
+    "name": "projects/test/alertPolicies/skey2",
+    "displayName": "Queue backlog alert",
+    "enabled": true,
+    "userLabels": {},
+    "conditions": [{
+      "displayName": "backlog > 1000",
+      "type": "conditionThreshold",
+      "filter": "metric.type=\"pubsub.googleapis.com/subscription/num_undelivered_messages\"",
+      "query": "",
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 1000,
+      "evaluationInterval": "60s",
+      "duration": "300s",
+      "aggregations": []
+    }],
+    "autoClose": "",
+    "notificationChannels": [],
+    "combiner": "OR"
+  }
+]
+FIXTURE
+
+python3 -c "
+import json
+from datetime import datetime, timedelta, timezone
+alerts = []
+base = datetime(2026, 3, 20, 10, 0, 0, tzinfo=timezone.utc)
+for i in range(25):
+    open_t = base + timedelta(minutes=i*30)
+    close_t = open_t + timedelta(minutes=10)
+    alerts.append({
+        'name': f'projects/test/alerts/skey1-{i}',
+        'state': 'CLOSED',
+        'openTime': open_t.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        'closeTime': close_t.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        'policyName': 'projects/test/alertPolicies/skey1',
+        'policyDisplayName': 'Error rate for diet-suggestions-prod',
+        'policyLabels': {'squad': 'cosmos_alerts'},
+        'resourceType': 'k8s_container',
+        'resourceProject': 'oviva-k8s-prod',
+        'resourceLabels': {'project_id': 'oviva-k8s-prod', 'pod_name': 'pod-1'},
+        'metricType': 'prometheus.googleapis.com/http_server_requests_seconds_count/summary',
+        'conditionName': 'projects/test/alertPolicies/skey1/conditions/A',
+    })
+for i in range(5):
+    open_t = base + timedelta(hours=i*4)
+    close_t = open_t + timedelta(hours=2)
+    alerts.append({
+        'name': f'projects/test/alerts/skey2-{i}',
+        'state': 'CLOSED',
+        'openTime': open_t.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        'closeTime': close_t.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        'policyName': 'projects/test/alertPolicies/skey2',
+        'policyDisplayName': 'Queue backlog alert',
+        'policyLabels': {},
+        'resourceType': 'pubsub_subscription',
+        'resourceProject': 'oviva-k8s-prod',
+        'resourceLabels': {'project_id': 'oviva-k8s-prod', 'subscription': 'my-sub'},
+        'metricType': 'pubsub.googleapis.com/subscription/num_undelivered_messages',
+        'conditionName': 'projects/test/alertPolicies/skey2/conditions/A',
+    })
+with open('${SKEY_FIXTURES}/alerts.json', 'w') as f:
+    json.dump(alerts, f, indent=2)
+" 2>&1
+
+python3 "${SCRIPTS_DIR}/compute-clusters.py" \
+    --policies "${SKEY_FIXTURES}/policies.json" \
+    --alerts "${SKEY_FIXTURES}/alerts.json" \
+    --output "${SKEY_FIXTURES}/clusters.json" 2>&1
+assert_equals "skey compute-clusters runs" "0" "$?"
+
+SKEY_DIET=$(python3 -c "
+import json
+data = json.load(open('${SKEY_FIXTURES}/clusters.json'))
+c = [c for c in data['clusters'] if 'diet' in c['policy_name'].lower()][0]
+print(c.get('service_key', 'MISSING'))
+" 2>/dev/null)
+assert_equals "diet-suggestions service_key extracted and normalized" "diet-suggestions" "${SKEY_DIET}"
+
+SIGFAM_DIET=$(python3 -c "
+import json
+data = json.load(open('${SKEY_FIXTURES}/clusters.json'))
+c = [c for c in data['clusters'] if 'diet' in c['policy_name'].lower()][0]
+print(c.get('signal_family', 'MISSING'))
+" 2>/dev/null)
+assert_equals "diet-suggestions classified as error_rate" "error_rate" "${SIGFAM_DIET}"
+
+SKEY_QUEUE=$(python3 -c "
+import json
+data = json.load(open('${SKEY_FIXTURES}/clusters.json'))
+c = [c for c in data['clusters'] if 'queue' in c['policy_name'].lower()][0]
+print(c.get('service_key'))
+" 2>/dev/null)
+assert_equals "queue alert has null service_key" "None" "${SKEY_QUEUE}"
+
+SIGFAM_QUEUE=$(python3 -c "
+import json
+data = json.load(open('${SKEY_FIXTURES}/clusters.json'))
+c = [c for c in data['clusters'] if 'queue' in c['policy_name'].lower()][0]
+print(c.get('signal_family', 'MISSING'))
+" 2>/dev/null)
+assert_equals "queue alert classified as other" "other" "${SIGFAM_QUEUE}"
+
+rm -rf "${SKEY_FIXTURES}"
+
 # --- Trigger config ---
 TRIGGERS_FILE="${PROJECT_ROOT}/config/default-triggers.json"
 TRIGGER_ENTRY=$(python3 -c "
