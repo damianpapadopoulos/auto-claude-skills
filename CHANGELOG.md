@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Alert-hygiene: per-cluster `total_open_hours` computed from actual incident durations (fixes 2.7x inflation from `raw * median` estimation)
+- Alert-hygiene: five inventory-level enrichment fields in compute-clusters.py — `zero_channel_policies`, `disabled_but_noisy_policies`, `silent_policy_count`, `silent_policy_total`, `condition_type_breakdown`
+- Alert-hygiene: Proposed Config Diff section in Investigate template — preserves PR-ready config changes when items are demoted from Do Now due to missing gate requirements
+- Alert-hygiene: mandatory report skeleton sections (Dead/Orphaned Config, Inventory Health, Silent Policy Cleanup trigger) reading from deterministic script output instead of ad-hoc LLM computation
+
+### Added
 - Alert-hygiene: `service_key` and `signal_family` fields in compute-clusters.py for deterministic service identity and signal classification
 - Alert-hygiene Stage 1: optional SLO config enrichment via GitHub API with Ruby stdlib YAML parsing and two-sided normalization contract
 - Alert-hygiene Stage 4: routing validation — zero-channel policy detection, unlabeled high-noise policy promotion, label inconsistency promotion to Investigate
