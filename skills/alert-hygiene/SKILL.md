@@ -612,6 +612,19 @@ Every Do Now and Investigate finding gets one `**Links:**` line directly after `
 
 **Situation:** {what is happening — 1-2 sentences}
 **Impact:** {why it matters — incident counts, team effect}
+
+#### Proposed Config Diff (pending gate resolution)
+> Include this section ONLY when evidence basis is `measured` or `structural` AND a specific
+> config diff is derivable. Omit entirely for heuristic-only items.
+
+| Parameter | Current | Proposed | Derivation |
+|-----------|---------|----------|------------|
+| {param}   | {value} | {value}  | {why this value was chosen} |
+
+**Evidence Basis:** {measured|structural|heuristic} — {detail}
+**Gate Blocker:** {which Do Now gate requirement is missing}
+**To Upgrade:** {resolve blocker} → promotes to Do Now
+
 **Hypothesis:** {explicit, testable hypothesis}
 
 **Stage 1 DoD (Discovery — this ticket):**
@@ -622,9 +635,6 @@ Every Do Now and Investigate finding gets one `**Links:**` line directly after `
 **Stage 2 (Execution — spawned follow-up):**
 - **If confirmed:** {specific action with its own numeric outcome DoD}
 - **If refuted:** {alternative action or close with rationale}
-
-**Evidence Basis:** {measured|structural|heuristic} — {current evidence}
-**To Upgrade:** {specific step that would make this item Do Now-ready (e.g., locate IaC path, assign owner, validate metric baseline)}
 ```
 
 ### Two-Stage DoD Rules
