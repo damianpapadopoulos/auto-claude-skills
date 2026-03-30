@@ -382,6 +382,32 @@ print('all_passed')
 " 2>&1)
 assert_equals "normalize_service_name handles all cases" "all_passed" "${NORM_RESULT}"
 
+# --- extract_service_key ---
+SKEY_RESULT=$(python3 -c "
+import sys; sys.path.insert(0, '${SCRIPTS_DIR}')
+from importlib import import_module
+cc = import_module('compute-clusters')
+cases = [
+    # container_name in filter
+    ('metric.type=\"custom/m\" AND resource.labels.container_name=\"diet-suggestions-prod\"', '', 'diet-suggestions'),
+    # short-form container in PromQL query
+    ('', 'rate(http_requests{container=\"hcs-gb\"}[5m]) > 100', 'hcs-gb'),
+    # application label in filter
+    ('metric.labels.application=\"user-service\"', '', 'user-service'),
+    # service label in query
+    ('', 'rate(errors{service=\"payment.service.staging\"}[5m]) > 0.01', 'payment-service'),
+    # no extractable service
+    ('metric.type=\"custom/m\"', 'sum(rate(m[5m])) > 100', None),
+    # container_name takes priority over application
+    ('resource.labels.container_name=\"foo\" AND metric.labels.application=\"bar\"', '', 'foo'),
+]
+for filt, query, expected in cases:
+    result = cc.extract_service_key(filt, query)
+    assert result == expected, f'filter={filt!r}, query={query!r} -> {result!r}, expected {expected!r}'
+print('all_passed')
+" 2>&1)
+assert_equals "extract_service_key handles all cases" "all_passed" "${SKEY_RESULT}"
+
 # --- Trigger config ---
 TRIGGERS_FILE="${PROJECT_ROOT}/config/default-triggers.json"
 TRIGGER_ENTRY=$(python3 -c "

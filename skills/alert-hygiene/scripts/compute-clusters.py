@@ -108,6 +108,32 @@ def normalize_service_name(name):
     return n or None
 
 
+def extract_service_key(condition_filter, condition_query):
+    """Extract deterministic service identity from condition filter/query.
+
+    Priority: container_name > container > application > service > None.
+    Returns normalized name or None.
+    """
+    combined = condition_filter + ' ' + condition_query
+    # Priority 1: container_name (full form)
+    m = re.search(r'resource\.labels\.container_name\s*=\s*"([^"]+)"', combined)
+    if m:
+        return normalize_service_name(m.group(1))
+    # Priority 2: container (short form, common in PromQL)
+    m = re.search(r'container\s*=\s*"([^"]+)"', combined)
+    if m:
+        return normalize_service_name(m.group(1))
+    # Priority 3: application label
+    m = re.search(r'(?:metric\.labels\.)?application\s*=\s*"([^"]+)"', combined)
+    if m:
+        return normalize_service_name(m.group(1))
+    # Priority 4: service label
+    m = re.search(r'(?:metric\.labels\.)?service\s*=\s*"([^"]+)"', combined)
+    if m:
+        return normalize_service_name(m.group(1))
+    return None
+
+
 def extract_metric_types(policies):
     """Extract all metric types referenced in policy conditions."""
     types = set()
