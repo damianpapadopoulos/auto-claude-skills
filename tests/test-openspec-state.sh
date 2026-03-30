@@ -154,6 +154,115 @@ test_write_provenance_produces_source_json() {
 test_write_provenance_produces_source_json
 
 # ---------------------------------------------------------------------------
+# REVIEW-before-SHIP guard tests
+# ---------------------------------------------------------------------------
+
+GUARD_HOOK="${PROJECT_ROOT}/hooks/openspec-guard.sh"
+
+# Helper: run the guard hook with a git commit command and given state files
+run_guard() {
+    local session_token="$1"
+    local phase="$2"
+    local comp_state="$3"  # JSON string for composition state, or empty
+
+    # Create session token
+    printf '%s' "${session_token}" > "${HOME}/.claude/.skill-session-token"
+
+    # Create signal file with phase
+    jq -n --arg p "${phase}" '{skill:"test",phase:$p}' \
+        > "${HOME}/.claude/.skill-last-invoked-${session_token}"
+
+    # Create composition state if provided
+    if [ -n "${comp_state}" ]; then
+        printf '%s' "${comp_state}" > "${HOME}/.claude/.skill-composition-state-${session_token}"
+    fi
+
+    # Feed a git commit command to the hook
+    printf '{"tool_input":{"command":"git commit -m test"}}' | \
+        bash "${GUARD_HOOK}" 2>/dev/null
+}
+
+test_review_completed_no_warning() {
+    echo "-- test: REVIEW completed — no review warning --"
+    setup_test_env
+    mkdir -p "${HOME}/.claude"
+
+    # Fake a git repo so openspec check doesn't error
+    mkdir -p "${TEST_TMPDIR}/repo/.git"
+    cd "${TEST_TMPDIR}/repo"
+    git init -q
+
+    local comp='{"chain":["brainstorming","writing-plans","executing-plans","requesting-code-review","verification-before-completion","openspec-ship","finishing-a-development-branch"],"current_index":6,"completed":["brainstorming","writing-plans","executing-plans","requesting-code-review","verification-before-completion","openspec-ship"],"updated_at":"2026-03-30T10:00:00Z"}'
+
+    local output
+    output="$(run_guard "test-review-ok-$$" "SHIP" "${comp}")"
+
+    assert_not_contains "no REVIEW warning" "REVIEW GUARD" "${output}"
+
+    teardown_test_env
+}
+test_review_completed_no_warning
+
+test_review_skipped_emits_warning() {
+    echo "-- test: REVIEW skipped — emits warning --"
+    setup_test_env
+    mkdir -p "${HOME}/.claude"
+
+    mkdir -p "${TEST_TMPDIR}/repo/.git"
+    cd "${TEST_TMPDIR}/repo"
+    git init -q
+
+    # completed list is missing requesting-code-review
+    local comp='{"chain":["brainstorming","writing-plans","executing-plans","requesting-code-review","verification-before-completion"],"current_index":4,"completed":["brainstorming","writing-plans","executing-plans"],"updated_at":"2026-03-30T10:00:00Z"}'
+
+    local output
+    output="$(run_guard "test-review-skip-$$" "SHIP" "${comp}")"
+
+    assert_contains "REVIEW warning present" "REVIEW GUARD" "${output}"
+
+    teardown_test_env
+}
+test_review_skipped_emits_warning
+
+test_no_composition_state_no_warning() {
+    echo "-- test: no composition state — no review warning --"
+    setup_test_env
+    mkdir -p "${HOME}/.claude"
+
+    mkdir -p "${TEST_TMPDIR}/repo/.git"
+    cd "${TEST_TMPDIR}/repo"
+    git init -q
+
+    local output
+    output="$(run_guard "test-no-comp-$$" "SHIP" "")"
+
+    assert_not_contains "no REVIEW warning without comp state" "REVIEW GUARD" "${output}"
+
+    teardown_test_env
+}
+test_no_composition_state_no_warning
+
+test_non_ship_phase_skips_guard() {
+    echo "-- test: non-SHIP phase — guard exits early --"
+    setup_test_env
+    mkdir -p "${HOME}/.claude"
+
+    mkdir -p "${TEST_TMPDIR}/repo/.git"
+    cd "${TEST_TMPDIR}/repo"
+    git init -q
+
+    local comp='{"chain":["brainstorming","writing-plans"],"current_index":1,"completed":["brainstorming"],"updated_at":"2026-03-30T10:00:00Z"}'
+
+    local output
+    output="$(run_guard "test-non-ship-$$" "IMPLEMENT" "${comp}")"
+
+    assert_not_contains "no warning on non-SHIP phase" "REVIEW GUARD" "${output}"
+
+    teardown_test_env
+}
+test_non_ship_phase_skips_guard
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

@@ -102,6 +102,25 @@ if [ "${_unsynced}" = "true" ]; then
     _WARNINGS="${_WARNINGS}OPENSPEC GUARD: Archived delta specs may not be synced to canonical specs at openspec/specs/. Consider running openspec validate or manually merging delta changes before committing."
 fi
 
+# --- Check 4: Has REVIEW (requesting-code-review) been completed? ---
+_review_ok=true
+_COMP_STATE="${HOME}/.claude/.skill-composition-state-${_SESSION_TOKEN}"
+if [ -f "${_COMP_STATE}" ] && command -v jq >/dev/null 2>&1; then
+    # Only warn if requesting-code-review is in the chain but not in completed
+    _in_chain=false
+    _in_completed=false
+    jq -e '.chain | index("requesting-code-review")' "${_COMP_STATE}" >/dev/null 2>&1 && _in_chain=true
+    jq -e '.completed | index("requesting-code-review")' "${_COMP_STATE}" >/dev/null 2>&1 && _in_completed=true
+    if [ "${_in_chain}" = "true" ] && [ "${_in_completed}" = "false" ]; then
+        _review_ok=false
+    fi
+fi
+if [ "${_review_ok}" = "false" ]; then
+    [ -n "${_WARNINGS}" ] && _WARNINGS="${_WARNINGS}
+"
+    _WARNINGS="${_WARNINGS}REVIEW GUARD: requesting-code-review is in the composition chain but was not completed. Invoke Skill(superpowers:requesting-code-review) before shipping, or proceed if review is not needed for this change."
+fi
+
 # --- Emit combined warnings ---
 if [ -n "${_WARNINGS}" ]; then
     if command -v jq >/dev/null 2>&1; then
