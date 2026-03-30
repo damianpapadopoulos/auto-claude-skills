@@ -99,6 +99,62 @@ def check_label_inconsistency(policy_labels, resource_project):
     return staging_label and prod_resource
 
 
+def normalize_service_name(name):
+    """Normalize service name: lowercase, replace separators, strip env suffixes."""
+    if not name:
+        return None
+    n = name.lower().replace('_', '-').replace('.', '-')
+    n = re.sub(r'-(prod|staging|pta)$', '', n)
+    return n or None
+
+
+def extract_service_key(condition_filter, condition_query):
+    """Extract deterministic service identity from condition filter/query.
+
+    Priority: container_name > container > application > service > None.
+    Returns normalized name or None.
+    """
+    combined = condition_filter + ' ' + condition_query
+    # Priority 1: container_name (full form)
+    m = re.search(r'resource\.labels\.container_name\s*=\s*"([^"]+)"', combined)
+    if m:
+        return normalize_service_name(m.group(1))
+    # Priority 2: container (short form, common in PromQL)
+    m = re.search(r'container\s*=\s*"([^"]+)"', combined)
+    if m:
+        return normalize_service_name(m.group(1))
+    # Priority 3: application label
+    m = re.search(r'(?:metric\.labels\.)?application\s*=\s*"([^"]+)"', combined)
+    if m:
+        return normalize_service_name(m.group(1))
+    # Priority 4: service label
+    m = re.search(r'(?:metric\.labels\.)?service\s*=\s*"([^"]+)"', combined)
+    if m:
+        return normalize_service_name(m.group(1))
+    return None
+
+
+def classify_signal_family(condition_filter, condition_query, metric_type):
+    """Classify alert signal family from condition semantics.
+
+    Priority: query/filter content > metric_type name.
+    Returns: error_rate | latency | availability | other.
+    """
+    combined = (condition_filter + ' ' + condition_query).lower()
+    mt_lower = metric_type.lower()
+    # Priority 1: error_rate — status match in query/filter
+    if re.search(r'(status\s*[=~]+\s*"?5|status\s*=\s*starts_with\(\s*"5|5xx|error|status\s*>=\s*500)', combined):
+        return 'error_rate'
+    # Priority 2: latency — percentile/duration/response_time
+    if re.search(r'(percentile|latenc|duration|response.time)', combined + ' ' + mt_lower):
+        return 'latency'
+    # Priority 3: availability — uptime/probe/health
+    if re.search(r'(uptime|probe|health)', mt_lower):
+        return 'availability'
+    # Default
+    return 'other'
+
+
 def extract_metric_types(policies):
     """Extract all metric types referenced in policy conditions."""
     types = set()
@@ -276,6 +332,15 @@ def main():
             'condition_query': matched_cond.get('query', '') if matched_cond else '',
             'condition_type': matched_cond.get('type', '') if matched_cond else '',
             'condition_match': cond_match,
+            'service_key': extract_service_key(
+                matched_cond.get('filter', '') if matched_cond else '',
+                matched_cond.get('query', '') if matched_cond else '',
+            ),
+            'signal_family': classify_signal_family(
+                matched_cond.get('filter', '') if matched_cond else '',
+                matched_cond.get('query', '') if matched_cond else '',
+                mt,
+            ),
         })
 
     results.sort(key=lambda x: -x['raw_incidents'])

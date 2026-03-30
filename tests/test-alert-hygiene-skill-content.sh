@@ -169,4 +169,46 @@ assert_contains "scope restriction" "monitoring project" "${SKILL_CONTENT}"
 assert_contains "step 0 validation" "Stage 0" "${SKILL_CONTENT}"
 assert_contains "fail early" "Fail early" "${SKILL_CONTENT}"
 
+# --- New sections from terraform/routing/SLO refinements ---
+
+# SLO enrichment in Stage 1
+assert_contains "SKILL.md has SLO enrichment section" \
+    "SLO Config Enrichment" "${SKILL_CONTENT}"
+assert_contains "SKILL.md mentions slo-services.json artifact" \
+    "slo-services.json" "${SKILL_CONTENT}"
+assert_contains "SKILL.md mentions slo-source-status.json artifact" \
+    "slo-source-status.json" "${SKILL_CONTENT}"
+assert_contains "SKILL.md SLO uses Ruby not PyYAML" \
+    "ruby -ryaml -rjson" "${SKILL_CONTENT}"
+
+# Routing validation in Stage 4
+assert_contains "SKILL.md has routing validation section" \
+    "Routing Validation" "${SKILL_CONTENT}"
+assert_contains "SKILL.md mentions zero-channel policies" \
+    "Zero-channel policies" "${SKILL_CONTENT}"
+assert_contains "SKILL.md mentions unlabeled high-noise" \
+    "ownership is implicit and unauditable" "${SKILL_CONTENT}"
+assert_contains "SKILL.md mentions label inconsistency promotion" \
+    "Label inconsistency promotion" "${SKILL_CONTENT}"
+
+# SLO cross-reference in Stage 4
+assert_contains "SKILL.md has SLO cross-reference section" \
+    "SLO Coverage Cross-Reference" "${SKILL_CONTENT}"
+assert_contains "SKILL.md mentions SLO migration candidates" \
+    "SLO migration candidate" "${SKILL_CONTENT}"
+assert_contains "SKILL.md gates SLO xref on signal_family" \
+    "signal_family" "${SKILL_CONTENT}"
+assert_contains "SKILL.md excludes other from SLO xref" \
+    "exclude" "${SKILL_CONTENT}"
+
+# IaC location resolution in Stage 5
+assert_contains "SKILL.md has IaC search section" \
+    "IaC Location Resolution" "${SKILL_CONTENT}"
+assert_contains "SKILL.md preserves original tier on no results" \
+    "Preserve original tier" "${SKILL_CONTENT}"
+assert_contains "SKILL.md says Confirmed not achievable from search" \
+    "Confirmed is not achievable from search alone" "${SKILL_CONTENT}"
+assert_contains "SKILL.md mentions gh auth status precondition" \
+    "gh auth status" "${SKILL_CONTENT}"
+
 print_summary

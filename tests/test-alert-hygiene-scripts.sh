@@ -362,6 +362,255 @@ assert_equals "empty alerts still extracts metric types from policies" "2" "${EM
 # Cleanup
 rm -rf "${FIXTURES_DIR}"
 
+# --- normalize_service_name ---
+NORM_RESULT=$(python3 -c "
+import sys; sys.path.insert(0, '${SCRIPTS_DIR}')
+from importlib import import_module
+cc = import_module('compute-clusters')
+cases = [
+    ('diet-suggestions-prod', 'diet-suggestions'),
+    ('Diet_Suggestions', 'diet-suggestions'),
+    ('hcs.gb.staging', 'hcs-gb'),
+    ('user-service', 'user-service'),
+    ('my-app-pta', 'my-app'),
+    ('simple', 'simple'),
+]
+for inp, expected in cases:
+    result = cc.normalize_service_name(inp)
+    assert result == expected, f'{inp!r} -> {result!r}, expected {expected!r}'
+print('all_passed')
+" 2>&1)
+assert_equals "normalize_service_name handles all cases" "all_passed" "${NORM_RESULT}"
+
+# --- extract_service_key ---
+SKEY_RESULT=$(python3 -c "
+import sys; sys.path.insert(0, '${SCRIPTS_DIR}')
+from importlib import import_module
+cc = import_module('compute-clusters')
+cases = [
+    # container_name in filter
+    ('metric.type=\"custom/m\" AND resource.labels.container_name=\"diet-suggestions-prod\"', '', 'diet-suggestions'),
+    # short-form container in PromQL query
+    ('', 'rate(http_requests{container=\"hcs-gb\"}[5m]) > 100', 'hcs-gb'),
+    # application label in filter
+    ('metric.labels.application=\"user-service\"', '', 'user-service'),
+    # service label in query
+    ('', 'rate(errors{service=\"payment.service.staging\"}[5m]) > 0.01', 'payment-service'),
+    # no extractable service
+    ('metric.type=\"custom/m\"', 'sum(rate(m[5m])) > 100', None),
+    # container_name takes priority over application
+    ('resource.labels.container_name=\"foo\" AND metric.labels.application=\"bar\"', '', 'foo'),
+]
+for filt, query, expected in cases:
+    result = cc.extract_service_key(filt, query)
+    assert result == expected, f'filter={filt!r}, query={query!r} -> {result!r}, expected {expected!r}'
+print('all_passed')
+" 2>&1)
+assert_equals "extract_service_key handles all cases" "all_passed" "${SKEY_RESULT}"
+
+# --- classify_signal_family ---
+SIGFAM_RESULT=$(python3 -c "
+import sys; sys.path.insert(0, '${SCRIPTS_DIR}')
+from importlib import import_module
+cc = import_module('compute-clusters')
+cases = [
+    # error_rate: status match in query
+    ('', 'rate(http_requests{status=~\"5..\"}[5m]) > 0.01', 'custom/http_requests', 'error_rate'),
+    # error_rate: error in filter
+    ('metric.labels.status = starts_with(\"5\")', '', 'prometheus.googleapis.com/http_server_requests_seconds_count/summary', 'error_rate'),
+    # latency: duration metric
+    ('', 'avg(rate(http_duration_sum[5m])) / avg(rate(http_duration_count[5m])) > 0.5', 'custom/http_duration', 'latency'),
+    # latency: latency in metric type
+    ('metric.type=\"dbinsights.googleapis.com/perquery/latencies\"', '', 'dbinsights.googleapis.com/perquery/latencies', 'latency'),
+    # latency: response_time in metric type
+    ('', '', 'prometheus.googleapis.com/http_response_time/gauge', 'latency'),
+    # availability: uptime in metric type
+    ('', '', 'monitoring.googleapis.com/uptime_check/check_passed', 'availability'),
+    # availability: probe in metric type
+    ('', '', 'kubernetes.io/container/probe/failure_count', 'availability'),
+    # other: queue metric
+    ('', '', 'pubsub.googleapis.com/subscription/num_undelivered_messages', 'other'),
+    # other: generic custom metric
+    ('', 'sum(rate(m[5m])) > 100', 'custom/metric', 'other'),
+]
+for filt, query, mt, expected in cases:
+    result = cc.classify_signal_family(filt, query, mt)
+    assert result == expected, f'filter={filt!r}, query={query!r}, mt={mt!r} -> {result!r}, expected {expected!r}'
+print('all_passed')
+" 2>&1)
+assert_equals "classify_signal_family handles all cases" "all_passed" "${SIGFAM_RESULT}"
+
+# --- service_key and signal_family in cluster output ---
+SKEY_FIXTURES=$(mktemp -d /tmp/ah-skey-XXXXXX)
+
+cat > "${SKEY_FIXTURES}/policies.json" << 'FIXTURE'
+[
+  {
+    "name": "projects/test/alertPolicies/skey1",
+    "displayName": "Error rate for diet-suggestions-prod",
+    "enabled": true,
+    "userLabels": {"squad": "cosmos_alerts"},
+    "conditions": [{
+      "displayName": "error rate > 1%",
+      "type": "conditionPrometheusQueryLanguage",
+      "filter": "",
+      "query": "rate(http_server_requests_seconds_count{container=\"diet-suggestions-prod\", status=~\"5..\"}[5m]) / rate(http_server_requests_seconds_count{container=\"diet-suggestions-prod\"}[5m]) > 0.01",
+      "comparison": "",
+      "thresholdValue": null,
+      "evaluationInterval": "60s",
+      "duration": "300s",
+      "aggregations": []
+    }],
+    "autoClose": "300s",
+    "notificationChannels": ["projects/test/notificationChannels/1"],
+    "combiner": "OR"
+  },
+  {
+    "name": "projects/test/alertPolicies/skey2",
+    "displayName": "Queue backlog alert",
+    "enabled": true,
+    "userLabels": {},
+    "conditions": [{
+      "displayName": "backlog > 1000",
+      "type": "conditionThreshold",
+      "filter": "metric.type=\"pubsub.googleapis.com/subscription/num_undelivered_messages\"",
+      "query": "",
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 1000,
+      "evaluationInterval": "60s",
+      "duration": "300s",
+      "aggregations": []
+    }],
+    "autoClose": "",
+    "notificationChannels": [],
+    "combiner": "OR"
+  }
+]
+FIXTURE
+
+python3 -c "
+import json
+from datetime import datetime, timedelta, timezone
+alerts = []
+base = datetime(2026, 3, 20, 10, 0, 0, tzinfo=timezone.utc)
+for i in range(25):
+    open_t = base + timedelta(minutes=i*30)
+    close_t = open_t + timedelta(minutes=10)
+    alerts.append({
+        'name': f'projects/test/alerts/skey1-{i}',
+        'state': 'CLOSED',
+        'openTime': open_t.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        'closeTime': close_t.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        'policyName': 'projects/test/alertPolicies/skey1',
+        'policyDisplayName': 'Error rate for diet-suggestions-prod',
+        'policyLabels': {'squad': 'cosmos_alerts'},
+        'resourceType': 'k8s_container',
+        'resourceProject': 'oviva-k8s-prod',
+        'resourceLabels': {'project_id': 'oviva-k8s-prod', 'pod_name': 'pod-1'},
+        'metricType': 'prometheus.googleapis.com/http_server_requests_seconds_count/summary',
+        'conditionName': 'projects/test/alertPolicies/skey1/conditions/A',
+    })
+for i in range(5):
+    open_t = base + timedelta(hours=i*4)
+    close_t = open_t + timedelta(hours=2)
+    alerts.append({
+        'name': f'projects/test/alerts/skey2-{i}',
+        'state': 'CLOSED',
+        'openTime': open_t.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        'closeTime': close_t.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        'policyName': 'projects/test/alertPolicies/skey2',
+        'policyDisplayName': 'Queue backlog alert',
+        'policyLabels': {},
+        'resourceType': 'pubsub_subscription',
+        'resourceProject': 'oviva-k8s-prod',
+        'resourceLabels': {'project_id': 'oviva-k8s-prod', 'subscription': 'my-sub'},
+        'metricType': 'pubsub.googleapis.com/subscription/num_undelivered_messages',
+        'conditionName': 'projects/test/alertPolicies/skey2/conditions/A',
+    })
+with open('${SKEY_FIXTURES}/alerts.json', 'w') as f:
+    json.dump(alerts, f, indent=2)
+" 2>&1
+
+python3 "${SCRIPTS_DIR}/compute-clusters.py" \
+    --policies "${SKEY_FIXTURES}/policies.json" \
+    --alerts "${SKEY_FIXTURES}/alerts.json" \
+    --output "${SKEY_FIXTURES}/clusters.json" 2>&1
+assert_equals "skey compute-clusters runs" "0" "$?"
+
+SKEY_DIET=$(python3 -c "
+import json
+data = json.load(open('${SKEY_FIXTURES}/clusters.json'))
+c = [c for c in data['clusters'] if 'diet' in c['policy_name'].lower()][0]
+print(c.get('service_key', 'MISSING'))
+" 2>/dev/null)
+assert_equals "diet-suggestions service_key extracted and normalized" "diet-suggestions" "${SKEY_DIET}"
+
+SIGFAM_DIET=$(python3 -c "
+import json
+data = json.load(open('${SKEY_FIXTURES}/clusters.json'))
+c = [c for c in data['clusters'] if 'diet' in c['policy_name'].lower()][0]
+print(c.get('signal_family', 'MISSING'))
+" 2>/dev/null)
+assert_equals "diet-suggestions classified as error_rate" "error_rate" "${SIGFAM_DIET}"
+
+SKEY_QUEUE=$(python3 -c "
+import json
+data = json.load(open('${SKEY_FIXTURES}/clusters.json'))
+c = [c for c in data['clusters'] if 'queue' in c['policy_name'].lower()][0]
+print(c.get('service_key'))
+" 2>/dev/null)
+assert_equals "queue alert has null service_key" "None" "${SKEY_QUEUE}"
+
+SIGFAM_QUEUE=$(python3 -c "
+import json
+data = json.load(open('${SKEY_FIXTURES}/clusters.json'))
+c = [c for c in data['clusters'] if 'queue' in c['policy_name'].lower()][0]
+print(c.get('signal_family', 'MISSING'))
+" 2>/dev/null)
+assert_equals "queue alert classified as other" "other" "${SIGFAM_QUEUE}"
+
+rm -rf "${SKEY_FIXTURES}"
+
+# --- Two-sided normalization contract: Python == Ruby ---
+NORM_CONTRACT=$(python3 -c "
+import sys, subprocess, json
+sys.path.insert(0, '${SCRIPTS_DIR}')
+from importlib import import_module
+cc = import_module('compute-clusters')
+
+cases = [
+    'diet-suggestions-prod',
+    'Diet_Suggestions',
+    'hcs.gb.staging',
+    'user-service',
+    'my-app-pta',
+    'simple',
+    'Foo.Bar_Baz-prod',
+]
+
+# Python side
+py_results = [cc.normalize_service_name(c) for c in cases]
+
+# Ruby side (same normalization rules)
+ruby_code = 'require \"json\"; cases = JSON.parse(ARGV[0]); results = cases.map { |n| n.downcase.gsub(/[_.]/, \"-\").gsub(/-(prod|staging|pta)\$/, \"\") }; puts JSON.generate(results)'
+ruby_out = subprocess.check_output(
+    ['ruby', '-e', ruby_code, json.dumps(cases)],
+    text=True
+).strip()
+rb_results = json.loads(ruby_out)
+
+mismatches = []
+for c, py, rb in zip(cases, py_results, rb_results):
+    if py != rb:
+        mismatches.append(f'{c}: py={py!r} rb={rb!r}')
+
+if mismatches:
+    print('MISMATCH: ' + '; '.join(mismatches))
+else:
+    print('contract_holds')
+" 2>&1)
+assert_equals "Python/Ruby normalization contract holds" "contract_holds" "${NORM_CONTRACT}"
+
 # --- Trigger config ---
 TRIGGERS_FILE="${PROJECT_ROOT}/config/default-triggers.json"
 TRIGGER_ENTRY=$(python3 -c "

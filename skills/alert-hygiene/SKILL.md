@@ -103,6 +103,66 @@ Run pull-policies.py and pull-incidents.py with the validated project. Verify no
 - Total incidents in window
 - Policies by squad label
 
+#### Optional: SLO Config Enrichment
+
+After pulling policies and incidents, attempt to fetch SLO service definitions from GitHub. This is optional enrichment — the core analysis runs without it.
+
+**Preconditions:** `{github_org}` was provided in Stage 0 AND `gh` CLI is available AND authenticated (`gh auth status` succeeds). If any precondition fails, write fallback artifacts and skip.
+
+**Flow:**
+
+```bash
+REPO="${github_org}/monitoring"
+
+# Short-circuit if preconditions not met
+if [ -z "${github_org:-}" ]; then
+  echo '{"status":"unavailable","reason":"github_org_not_provided","count":0}' \
+    > "$WORK_DIR/slo-source-status.json"
+  echo '[]' > "$WORK_DIR/slo-services.json"
+elif ! command -v gh &>/dev/null || ! gh auth status &>/dev/null 2>&1; then
+  echo '{"status":"unavailable","reason":"gh_not_available","count":0}' \
+    > "$WORK_DIR/slo-source-status.json"
+  echo '[]' > "$WORK_DIR/slo-services.json"
+else
+  # Step 1: fetch (checked)
+  if ! gh api "repos/$REPO/contents/tf/slo-config.yaml" \
+       --jq '.content' > "$WORK_DIR/slo-raw-b64.txt" 2>"$WORK_DIR/slo-fetch-err.txt"; then
+    echo '{"status":"unavailable","reason":"fetch_failed","count":0}' \
+      > "$WORK_DIR/slo-source-status.json"
+    echo '[]' > "$WORK_DIR/slo-services.json"
+  # Step 2: decode (checked)
+  elif ! base64 -d < "$WORK_DIR/slo-raw-b64.txt" > "$WORK_DIR/slo-config.yaml" 2>/dev/null; then
+    echo '{"status":"unavailable","reason":"decode_failed","count":0}' \
+      > "$WORK_DIR/slo-source-status.json"
+    echo '[]' > "$WORK_DIR/slo-services.json"
+  # Step 3: extract service names (checked — Ruby stdlib YAML, no PyYAML)
+  elif ! ruby -ryaml -rjson -e '
+    cfg = YAML.safe_load(File.read(ARGV[0])) || {}
+    services = (cfg["services"] || []).map { |s| s["name"] }.compact
+      .map { |n| n.downcase.gsub(/[_.]/, "-").gsub(/-(prod|staging|pta)$/, "") }
+    File.write(ARGV[1], JSON.generate(services))
+    File.write(ARGV[2], JSON.generate({
+      status: services.empty? ? "empty" : "ok",
+      count: services.length
+    }))
+  ' "$WORK_DIR/slo-config.yaml" "$WORK_DIR/slo-services.json" \
+    "$WORK_DIR/slo-source-status.json" 2>"$WORK_DIR/slo-parse-err.txt"; then
+    echo '{"status":"unavailable","reason":"parse_failed","count":0}' \
+      > "$WORK_DIR/slo-source-status.json"
+    echo '[]' > "$WORK_DIR/slo-services.json"
+  fi
+  rm -f "$WORK_DIR/slo-raw-b64.txt"
+fi
+```
+
+**On-disk artifacts (always written, every branch):**
+- `slo-services.json` — normalized service name list or `[]`
+- `slo-source-status.json` — `{"status": "ok|empty|unavailable", "reason": "...", "count": N}`
+
+Names in `slo-services.json` are normalized with the same rules as `service_key` in compute-clusters.py: lowercase, strip environment suffixes (`-prod`, `-staging`, `-pta`), replace separators (`_`, `.`) with `-`.
+
+**Stage 1 report line addition:** `"{M} services with SLO definitions"` when status is `ok`, `"SLO config: {reason}"` otherwise.
+
 ### Stage 2: Compute Cluster Stats
 
 Run compute-clusters.py. This produces a structured output with three sections:
@@ -113,6 +173,7 @@ Run compute-clusters.py. This produces a structured output with three sections:
 - `tod_pattern`, `pattern` (flapping/chronic/recurring/burst/isolated)
 - `noise_score`, `noise_reasons`, `label_inconsistency`
 - `threshold_value`, `comparison`, `condition_filter`, `condition_query`, `condition_type`, `condition_match`
+- `service_key` (normalized service identity from condition labels, or null), `signal_family` (error_rate/latency/availability/other)
 
 **Inventory-level fields:**
 - `metric_types_in_inventory` — deduplicated set of all metric types across all policy conditions
@@ -233,9 +294,82 @@ Read `metric_types_in_inventory` from the compute-clusters output. Compare again
 - If the metric type does not exist: report "add new".
 - Cross-reference each gap with existing noisy clusters that the gap metric would detect upstream (e.g., probe failure coverage → would provide early signal for pod restart clusters).
 
+#### Routing Validation
+
+Check for routing and ownership gaps using policy-level and cluster-level data from `$WORK_DIR`.
+
+**Zero-channel policies (policy-level):**
+Scan `policies.json` for entries where `notificationChannels` is empty AND `enabled` is true. These fire but notify nobody — invisible failures.
+- Policies with `raw_incidents > 10` (cross-reference against `clusters.json`): promote to **Investigate** with action: *"Silent alert — fires but has no notification channels. Add a notification channel or disable."*
+- Policies with low/zero incidents: surface in **Systemic Issues > Dead/Orphaned Config** — *"Zero-channel policy: {displayName} — enabled but no notification path."*
+
+**Unlabeled high-noise policies (policy-level):**
+The existing `unlabeled_ranking` table stays in Systemic Issues. Additionally, for top entries with `raw_incidents > 10`:
+- Promote to **Investigate** with ownership language: *"No squad/team/owner label — ownership is implicit and unauditable. {N} incidents in {days}d have no traceable owner."*
+- Do not reference org-specific routing fallback channels. The skill is generic.
+- Leave suggested owner as "⚠ assign" — the skill does not infer squad ownership from service names.
+
+**Label inconsistency promotion (cluster-level):**
+For clusters where `label_inconsistency` is true AND `raw_incidents > 5`:
+- Promote to **Investigate** as a cluster-level finding: *"Label mismatch — staging/test label on a production resource. {N} incidents may be misrouted or ignored."*
+- Do NOT merge into the policy-level unlabeled table — entity types stay separate.
+
+#### SLO Coverage Cross-Reference
+
+Only run this section when `$WORK_DIR/slo-source-status.json` has `"status": "ok"`. Read `$WORK_DIR/slo-services.json` (normalized service names) and cross-reference against cluster data.
+
+**Service grouping:** Group clusters by `service_key` from `clusters.json`. Skip clusters where `service_key` is `null`. Only consider clusters with `signal_family` in (`error_rate`, `latency`, `availability`) — exclude `other`.
+
+**SLO migration candidates:**
+For each service_key with `total_raw_incidents > 20` across user-facing clusters AND NOT in `slo-services.json`:
+- Surface in **Coverage Gaps** table: *"SLO review candidate — {service_key} has {N} noisy user-facing threshold alerts ({families}), no SLO definition."*
+
+**SLO review candidates (redundancy check):**
+For each service_key that IS in `slo-services.json` AND has noisy user-facing threshold alerts:
+- Surface as **Needs Decision** item: *"Service {service_key} has an SLO definition and also {N} noisy user-facing threshold alerts; review for redundancy or intentional overlap."*
+- Do not claim same-signal overlap — `slo-services.json` carries service names only, not signal coverage metadata.
+
+**Matching rules:** Both `service_key` and SLO service names are normalized (lowercase, env suffixes stripped, separators unified). Only exact-match after normalization. Unmatched service_keys are excluded, not fuzzy-guessed.
+
 ### Stage 5: Produce Report
 
 Write the final report as markdown using the Report Skeleton template below. Group findings by action class (Do Now / Investigate / Needs Decision), not by confidence band. Apply the Do Now Gate to determine which items qualify for the Do Now section. Items that fail the gate drop to Investigate regardless of confidence level.
+
+#### IaC Location Resolution via GitHub Search
+
+During Do Now gate evaluation, attempt to upgrade IaC Location tier for candidates using `gh search code`. This is optional enrichment — if it adds nothing, the report is identical to the version without it.
+
+**Preconditions:** `{github_org}` was provided AND `gh` is available AND authenticated (`gh auth status`). If any fail, skip entirely. This prevents avoidable fallback churn on private repos where `gh` exists but lacks auth.
+
+**When to search:** Only for items that pass all other Do Now gate requirements (config diff, named owner, outcome DoD, measured/structural evidence, rollback signal) but have IaC Location of Search Required or Unknown.
+
+**Rate limit:** `gh search code` allows 10 requests/minute. Cap at top 10 candidates by raw incident count. Remaining items keep their existing IaC Location tier.
+
+**Search strategy per item:**
+
+```bash
+# Primary: policy ID (bare numeric ID — matches both inline resources and module refs)
+gh search code --owner "$github_org" "{policy_id}" \
+  --extension tf --json path,repository --limit 5 \
+  > "$WORK_DIR/iac-search-${policy_id}.json" 2>/dev/null
+
+# Secondary: only if primary returned 0 results
+PRIMARY_HITS=$(python3 -c "import json; print(len(json.load(open('$WORK_DIR/iac-search-${policy_id}.json'))))" 2>/dev/null || echo 0)
+if [ "$PRIMARY_HITS" = "0" ]; then
+  # Use the PromQL fragment, condition filter string, or label key
+  # already captured in Stage 3 for the Search Required spec
+  gh search code --owner "$github_org" "{identifying_fragment}" \
+    --extension tf --json path,repository --limit 5 \
+    > "$WORK_DIR/iac-search-${policy_id}.json" 2>/dev/null
+fi
+```
+
+Do not search by `display_name` — too generic and noisy.
+
+**Result interpretation:**
+- **1+ plausible results:** Upgrade to IaC Location = **Likely**. Include top `repo:path` in the finding. Add note: *"Search match at {repo}:{path} — verify before applying."*
+- **0 results after both tokens:** **Preserve original tier.** Search Required stays Search Required. Unknown stays Unknown. A failed search must NOT upgrade Unknown to Search Required — that would incorrectly make a Do-Now-ineligible item eligible.
+- **Confirmed is not achievable from search alone** — would require opening the file and verifying match context.
 
 ## Prescriptive Reasoning by Pattern
 
