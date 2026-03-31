@@ -238,6 +238,7 @@ FILTER
 TOKEN=$(gcloud auth print-access-token)
 FILTER_ENC=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(open(sys.argv[1]).read().strip().replace('\n', ' ')))" "$FILTER_FILE")
 
+# Note: REDUCE_MAX for gauges; use REDUCE_SUM for counters per the table above
 curl -s -H "Authorization: Bearer $TOKEN" \
   "https://monitoring.googleapis.com/v3/projects/$PROJECT/timeSeries?filter=$FILTER_ENC&interval.startTime=${START_TIME}&interval.endTime=${END_TIME}&aggregation.alignmentPeriod=3600s&aggregation.perSeriesAligner=ALIGN_MAX&aggregation.crossSeriesReducer=REDUCE_MAX&pageSize=100000" \
   -o "$WORK_DIR/ts-result.json" ; rm -f "$FILTER_FILE"
@@ -249,7 +250,7 @@ Write results to `$WORK_DIR`, not to conversation context. Parse with `python3` 
 
 After every query, validate the result before computing percentiles:
 
-1. **Point count check:** For a 14-day window with 1h alignment, expect ~336 points per reduced series. If fewer than 50 points are returned, flag the result as `insufficient sample` and note the actual count. Do NOT use sparse results to derive threshold recommendations — they produce unreliable percentiles.
+1. **Point count check:** For a 14-day window with 1h alignment, expect ~336 points per reduced series. If fewer than 50 points are returned, flag the result as `insufficient sample` and note the actual count. Do NOT use sparse results to derive threshold recommendations — they produce unreliable percentiles. For distribution metrics with daily alignment (~14 expected points), use a minimum threshold of 7 points instead of 50.
 2. **Series count check:** After REDUCE_MAX/REDUCE_SUM, expect exactly 1 series. If >1 series is returned, the reducer was not applied — re-query with the correct reducer.
 3. **Pagination check:** If the response contains `nextPageToken`, the result is truncated. Re-query with higher `pageSize` or paginate. Do NOT compute percentiles from truncated data.
 4. **Evidence block logging:** Every metric validation result MUST log in the Evidence Ledger: metric type, filter, aligner, reducer, alignment period, series count, point count, and numeric results. This makes cross-report comparisons auditable.
@@ -289,7 +290,7 @@ metric.type = "prometheus.googleapis.com/http_server_requests_seconds_count/summ
 AND metric.labels.status = starts_with("5")
 AND metric.labels.application = "SERVICE_NAME"
 FILTER
-# ... curl to $WORK_DIR/ts-err-result.json
+# ... curl with crossSeriesReducer=REDUCE_SUM&pageSize=100000 to $WORK_DIR/ts-err-result.json
 
 # Query 2: total count
 FILTER_TOTAL=$(mktemp "$WORK_DIR/ts-total-XXXXXX.txt")
@@ -297,7 +298,7 @@ cat > "$FILTER_TOTAL" << 'FILTER'
 metric.type = "prometheus.googleapis.com/http_server_requests_seconds_count/summary"
 AND metric.labels.application = "SERVICE_NAME"
 FILTER
-# ... curl to $WORK_DIR/ts-total-result.json
+# ... curl with crossSeriesReducer=REDUCE_SUM&pageSize=100000 to $WORK_DIR/ts-total-result.json
 
 # Compute ratio
 python3 -c "
