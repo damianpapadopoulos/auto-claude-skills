@@ -207,9 +207,22 @@ For custom Prometheus metrics, the suffix depends on the metric type: try `/gaug
 
 When `threshold_value` is null (PromQL conditions), extract from the query string. PromQL thresholds appear as a comparison operator at the end or after a closing parenthesis: `... > 1000`, `... < 0.01`, `... == 0`. Match with: `[><=!]+\s*([\d.]+)\s*$` on the query text.
 
+**Mandatory Query Parameters by Metric Class:**
+
+Every metric validation query MUST specify ALL THREE aggregation parameters. Omitting `crossSeriesReducer` when multiple series exist produces sparse, unrepresentative samples.
+
+| Metric class | perSeriesAligner | alignmentPeriod | crossSeriesReducer | Expected points (14d) |
+|---|---|---|---|---|
+| Gauge (JVM threads, memory util, disk util) | ALIGN_MAX | 3600s | REDUCE_MAX | ~336 |
+| Counter/delta (request count, restart count) | ALIGN_DELTA | 3600s | REDUCE_SUM | ~336 |
+| Distribution (DB Insights latency) | ALIGN_DELTA | 86400s | — (per-hash) | ~14 |
+| Error rate (ratio of two counters) | ALIGN_DELTA + REDUCE_SUM | 3600s | REDUCE_SUM (per query) | ~336 each |
+
+When in doubt, use REDUCE_MAX for gauges and REDUCE_SUM for counters. Never omit the reducer for metrics that may have multiple series (per-pod, per-container, per-node).
+
 **Step 3 — Query the metric.**
 
-Use MCP `list_time_series` (Tier 1) or REST API via temp-file pattern (Tier 2). Use `ALIGN_MAX` (hourly) for threshold comparison, `ALIGN_MEAN` for baseline assessment.
+Use MCP `list_time_series` (Tier 1) or REST API via temp-file pattern (Tier 2). Select aligner and reducer from the Mandatory Query Parameters table above based on the metric class.
 
 **Tier 2 query pattern** (uses session temp file per Behavioral Constraint 2):
 
@@ -226,11 +239,22 @@ TOKEN=$(gcloud auth print-access-token)
 FILTER_ENC=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(open(sys.argv[1]).read().strip().replace('\n', ' ')))" "$FILTER_FILE")
 
 curl -s -H "Authorization: Bearer $TOKEN" \
-  "https://monitoring.googleapis.com/v3/projects/$PROJECT/timeSeries?filter=$FILTER_ENC&interval.startTime=${START_TIME}&interval.endTime=${END_TIME}&aggregation.alignmentPeriod=3600s&aggregation.perSeriesAligner=ALIGN_MAX&pageSize=20" \
+  "https://monitoring.googleapis.com/v3/projects/$PROJECT/timeSeries?filter=$FILTER_ENC&interval.startTime=${START_TIME}&interval.endTime=${END_TIME}&aggregation.alignmentPeriod=3600s&aggregation.perSeriesAligner=ALIGN_MAX&aggregation.crossSeriesReducer=REDUCE_MAX&pageSize=100000" \
   -o "$WORK_DIR/ts-result.json" ; rm -f "$FILTER_FILE"
 ```
 
 Write results to `$WORK_DIR`, not to conversation context. Parse with `python3` one-liner to extract p50/p95.
+
+**Result Quality Gate — MANDATORY before using any metric result:**
+
+After every query, validate the result before computing percentiles:
+
+1. **Point count check:** For a 14-day window with 1h alignment, expect ~336 points per reduced series. If fewer than 50 points are returned, flag the result as `insufficient sample` and note the actual count. Do NOT use sparse results to derive threshold recommendations — they produce unreliable percentiles.
+2. **Series count check:** After REDUCE_MAX/REDUCE_SUM, expect exactly 1 series. If >1 series is returned, the reducer was not applied — re-query with the correct reducer.
+3. **Pagination check:** If the response contains `nextPageToken`, the result is truncated. Re-query with higher `pageSize` or paginate. Do NOT compute percentiles from truncated data.
+4. **Evidence block logging:** Every metric validation result MUST log in the Evidence Ledger: metric type, filter, aligner, reducer, alignment period, series count, point count, and numeric results. This makes cross-report comparisons auditable.
+
+If a query fails the quality gate, mark the evidence basis as `heuristic (insufficient sample: N points)` instead of `measured`. Do not promote to Do Now based on insufficient samples.
 
 **Step 4 — Compare against threshold.**
 
@@ -240,7 +264,7 @@ Write results to `$WORK_DIR`, not to conversation context. Parse with `python3` 
 
 **Step 5 — Handle failures.**
 
-If the metric type cannot be mapped, the query returns no data, or the suffix is wrong: note the reason and keep `heuristic` basis. A no-data result is itself a finding — the metric may be misconfigured or the resource labels may not match.
+If the metric type cannot be mapped, the query returns no data, the suffix is wrong, or the result fails the quality gate: note the reason and keep `heuristic` basis. A no-data result is itself a finding — the metric may be misconfigured or the resource labels may not match. An insufficient-sample result (< 50 points) means the query parameters need adjustment (missing reducer, low pageSize, or metric sparsity) — do not treat it as measured evidence.
 
 **Scope:** Query all clusters, not just heuristic-basis. Structural items also benefit from measurement (e.g., confirming queue baselines are zero proves the `> 0` threshold fires on transients). If API errors or rate limits occur, prioritize by raw incident count.
 

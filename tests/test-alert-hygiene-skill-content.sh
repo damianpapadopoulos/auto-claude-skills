@@ -230,4 +230,17 @@ assert_contains "inventory health reads condition_type_breakdown" "condition_typ
 assert_contains "mandatory needs decision triggers section" "Mandatory Needs Decision Triggers" "${SKILL_CONTENT}"
 assert_contains "silent policy cleanup trigger" "Silent Policy Cleanup" "${SKILL_CONTENT}"
 
+# --- Metric validation query standardization (v5) ---
+assert_contains "mandatory query params table" "Mandatory Query Parameters" "${SKILL_CONTENT}"
+assert_contains "crossSeriesReducer in template" "crossSeriesReducer=REDUCE_MAX" "${SKILL_CONTENT}"
+assert_contains "pageSize 100000 in template" "pageSize=100000" "${SKILL_CONTENT}"
+assert_contains "REDUCE_MAX for gauges" "REDUCE_MAX" "${SKILL_CONTENT}"
+assert_contains "REDUCE_SUM for counters" "REDUCE_SUM" "${SKILL_CONTENT}"
+assert_contains "result quality gate" "Result Quality Gate" "${SKILL_CONTENT}"
+assert_contains "point count check" "fewer than 50 points" "${SKILL_CONTENT}"
+assert_contains "series count check" "exactly 1 series" "${SKILL_CONTENT}"
+assert_contains "pagination check" "nextPageToken" "${SKILL_CONTENT}"
+assert_contains "evidence block logging" "series count, point count" "${SKILL_CONTENT}"
+assert_contains "insufficient sample basis" "insufficient sample" "${SKILL_CONTENT}"
+
 print_summary
