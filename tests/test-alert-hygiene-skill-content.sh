@@ -104,7 +104,7 @@ assert_contains "iac search required status" "Search Required" "${SKILL_CONTENT}
 assert_contains "iac unknown drops" "Unknown" "${SKILL_CONTENT}"
 assert_contains "search req repo hint" "repo" "${SKILL_CONTENT}"
 assert_contains "search req policy id" "policy ID" "${SKILL_CONTENT}"
-assert_contains "search req identifying fragment" "identifying fragment" "${SKILL_CONTENT}"
+assert_contains "search req display name hint" "display_name" "${SKILL_CONTENT}"
 assert_contains "search req replacement guidance" "replacement guidance" "${SKILL_CONTENT}"
 
 # --- Investigate behavioral contract ---
@@ -204,10 +204,10 @@ assert_contains "SKILL.md excludes other from SLO xref" \
 # IaC location resolution in Stage 5
 assert_contains "SKILL.md has IaC search section" \
     "IaC Location Resolution" "${SKILL_CONTENT}"
-assert_contains "SKILL.md preserves original tier on no results" \
-    "Preserve original tier" "${SKILL_CONTENT}"
-assert_contains "SKILL.md says Confirmed not achievable from search" \
-    "Confirmed is not achievable from search alone" "${SKILL_CONTENT}"
+assert_contains "SKILL.md warns against gh search code" \
+    "Do not use" "${SKILL_CONTENT}"
+assert_contains "SKILL.md explains policy IDs not in TF source" \
+    "Policy IDs are GCP-generated" "${SKILL_CONTENT}"
 assert_contains "SKILL.md mentions gh auth status precondition" \
     "gh auth status" "${SKILL_CONTENT}"
 

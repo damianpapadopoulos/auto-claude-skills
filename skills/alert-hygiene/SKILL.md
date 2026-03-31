@@ -92,7 +92,7 @@ Before any analysis, discover and validate the monitoring project:
 3. If the user does not provide a project, check if recent incident context or prior conversation names it. If not, ask once with the guidance above.
 4. Verify incidents return non-empty: run pull-incidents.py with `--days 1` as a quick check. If zero incidents but policies exist, the window may be too narrow or incidents are in a different project — warn with specifics.
 5. If both return data: `"Monitoring project: {project}, {N} policies found, incidents available. Proceeding with {days}-day analysis."`
-6. **GitHub org for IaC links:** Check if recent conversation or CLAUDE.md names a GitHub org. If not, ask once: *"Which GitHub org hosts your monitoring IaC? (e.g., `oviva-ag`). Used for Search IaC links in the report — skip if not applicable."* Store as `{github_org}` for Stage 5 link construction. If the user skips, omit Search IaC links.
+6. **GitHub org and IaC repos for links:** Check if recent conversation or CLAUDE.md names a GitHub org and IaC repos. If not, ask once: *"Which GitHub org hosts your monitoring IaC, and which repo(s)? (e.g., `oviva-ag`, repos `monitoring` and `k8s`). Used for IaC links in the report — skip if not applicable."* Store as `{github_org}` and `{iac_repos}` (list). If the user skips, omit IaC links.
 
 Fail early — do not proceed to Stage 1 with an empty or wrong project.
 
@@ -163,6 +163,159 @@ Names in `slo-services.json` are normalized with the same rules as `service_key`
 
 **Stage 1 report line addition:** `"{M} services with SLO definitions"` when status is `ok`, `"SLO config: {reason}"` otherwise.
 
+#### Optional: IaC Module Discovery
+
+After SLO enrichment, build a `display_name → file_path` mapping by walking the IaC repo tree via `gh api`. This replaces the previous `gh search code` approach, which returned zero results because GCP-generated policy IDs never appear in Terraform source.
+
+**Preconditions:** `{github_org}` and `{iac_repos}` were provided in Stage 0 AND `gh` is available AND authenticated. If any fail, write fallback and skip.
+
+**Why repo tree walk instead of `gh search code`:**
+- Policy IDs are assigned at `terraform apply` time — they do not exist in `.tf` files, so searching for them always returns 0 results
+- `gh search code` has a 10 req/min rate limit and frequently hits 403 on private orgs
+- `gh api` (used here) has a 5,000 req/hour limit and works reliably on private repos
+- The results are deterministic: if a `display_name` matches, the file path is confirmed
+
+**Flow:**
+
+For each repo in `{iac_repos}` that contains a `tf/` directory:
+
+```bash
+REPO="${github_org}/${iac_repo}"
+IAC_DIR="$WORK_DIR/iac-discovery"
+mkdir -p "$IAC_DIR"
+
+# Step 1: List module directories
+gh api "repos/$REPO/contents/tf/modules" --jq '.[].name' \
+  > "$IAC_DIR/module-names.txt" 2>/dev/null
+
+# Step 2: For each module, fetch the main TF file and extract display_name values
+python3 -c "
+import subprocess, json, re, os
+repo = '$REPO'
+iac_dir = '$IAC_DIR'
+modules = open(f'{iac_dir}/module-names.txt').read().strip().split('\n')
+mapping = {}
+for mod in modules:
+    # Try common TF file names in the module
+    for fname in ['main.tf', 'google_monitoring_alert_policy.tf', f'{mod}.tf']:
+        try:
+            result = subprocess.run(
+                ['gh', 'api', f'repos/{repo}/contents/tf/modules/{mod}/{fname}',
+                 '--jq', '.content'],
+                capture_output=True, text=True, timeout=10)
+            if result.returncode != 0:
+                continue
+            import base64
+            content = base64.b64decode(result.stdout.strip()).decode('utf-8')
+            # Extract display_name values from TF
+            for m in re.finditer(r'display_name\s*=\s*\"([^\"]+)\"', content):
+                dn = m.group(1)
+                # Skip condition display names (inside conditions {} blocks)
+                # Only keep top-level policy display_name
+                mapping[dn] = {
+                    'repo': repo,
+                    'module': mod,
+                    'file': f'tf/modules/{mod}/{fname}',
+                    'type': 'module_definition'
+                }
+            break  # Found file, stop trying alternatives
+        except Exception:
+            continue
+
+# Step 3: Also scan squad directories for module invocations
+try:
+    result = subprocess.run(
+        ['gh', 'api', f'repos/{repo}/contents/tf/squads', '--jq', '.[].name'],
+        capture_output=True, text=True, timeout=10)
+    squads = result.stdout.strip().split('\n') if result.returncode == 0 else []
+except Exception:
+    squads = []
+
+for squad in squads:
+    try:
+        result = subprocess.run(
+            ['gh', 'api', f'repos/{repo}/contents/tf/squads/{squad}',
+             '--jq', '.[].name'],
+            capture_output=True, text=True, timeout=10)
+        files = [f for f in result.stdout.strip().split('\n')
+                 if f.endswith('.tf')]
+    except Exception:
+        continue
+    for fname in files:
+        try:
+            result = subprocess.run(
+                ['gh', 'api',
+                 f'repos/{repo}/contents/tf/squads/{squad}/{fname}',
+                 '--jq', '.content'],
+                capture_output=True, text=True, timeout=10)
+            if result.returncode != 0:
+                continue
+            content = base64.b64decode(result.stdout.strip()).decode('utf-8')
+            for m in re.finditer(r'display_name\s*=\s*\"([^\"]+)\"', content):
+                dn = m.group(1)
+                mapping[dn] = {
+                    'repo': repo,
+                    'module': squad,
+                    'file': f'tf/squads/{squad}/{fname}',
+                    'type': 'squad_definition'
+                }
+        except Exception:
+            continue
+
+# Step 4: Scan root-level .tf files for module invocations
+try:
+    result = subprocess.run(
+        ['gh', 'api', f'repos/{repo}/contents/tf', '--jq', '.[].name'],
+        capture_output=True, text=True, timeout=10)
+    root_files = [f for f in result.stdout.strip().split('\n')
+                  if f.endswith('.tf')]
+except Exception:
+    root_files = []
+
+for fname in root_files:
+    try:
+        result = subprocess.run(
+            ['gh', 'api', f'repos/{repo}/contents/tf/{fname}',
+             '--jq', '.content'],
+            capture_output=True, text=True, timeout=10)
+        if result.returncode != 0:
+            continue
+        content = base64.b64decode(result.stdout.strip()).decode('utf-8')
+        # Extract module invocations: module \"name\" { source = \"./modules/X\"
+        for m in re.finditer(
+            r'module\s+\"([^\"]+)\"\s*\{[^}]*source\s*=\s*\"([^\"]+)\"',
+            content, re.DOTALL):
+            mod_name = m.group(1)
+            mod_source = m.group(2)
+            # Store invocation location for modules we already know about
+            mod_key = mod_source.split('/')[-1] if '/' in mod_source else mod_source
+            for dn, info in mapping.items():
+                if info['module'] == mod_key:
+                    info['invocation_file'] = f'tf/{fname}'
+    except Exception:
+        continue
+
+with open(f'{iac_dir}/iac-modules.json', 'w') as f:
+    json.dump(mapping, f, indent=2)
+with open(f'{iac_dir}/iac-status.json', 'w') as f:
+    json.dump({'status': 'ok' if mapping else 'empty',
+               'count': len(mapping)}, f)
+print(f'Discovered {len(mapping)} display_name → file_path mappings')
+"
+```
+
+**On-disk artifacts (always written):**
+- `iac-discovery/iac-modules.json` — `{display_name: {repo, module, file, type, invocation_file?}}`
+- `iac-discovery/iac-status.json` — `{"status": "ok|empty|unavailable", "count": N}`
+
+**Display-name matching rules:**
+- The PromQL `display_name` in TF often contains Terraform variable interpolations (e.g., `"[${var.cluster}] Mobile API HTTP 5xx Error Rate (critical)"`). Strip `${var.XXX}` to a regex-compatible `.*` and match against the policy's `display_name` from `policies.json`.
+- If a policy `display_name` matches multiple TF display_names (e.g., parameterized modules instantiated per-cluster), prefer the module definition file over squad files.
+
+**Fallback: repo-level search link.** When a policy `display_name` does not match any discovered TF file, generate a fallback link to the repo tree for manual search: `https://github.com/{org}/{repo}/tree/main/tf`. This is always more useful than a GitHub code search for a policy ID.
+
+**Stage 1 report line addition:** `"{N} IaC module mappings discovered"` when status is `ok`, `"IaC discovery: {reason}"` otherwise.
+
 ### Stage 2: Compute Cluster Stats
 
 Run compute-clusters.py. This produces a structured output with three sections:
@@ -199,8 +352,9 @@ Most PromQL conditions use metrics that ARE queryable via Cloud Monitoring under
 | `kubernetes_io:METRIC_PATH` | `kubernetes.io/METRIC_PATH` | `kubernetes_io:container_restart_count` → `kubernetes.io/container/restart_count` |
 | `SERVICE_COM:METRIC` | `SERVICE.com/METRIC` | `dbinsights_googleapis_com:perquery_latencies` → `dbinsights.googleapis.com/perquery/latencies` |
 | `METRIC_NAME` (custom) | `prometheus.googleapis.com/METRIC_NAME/SUFFIX` | `jvm_threads_live_threads` → `prometheus.googleapis.com/jvm_threads_live_threads/gauge` |
+| `METRIC_NAME_count` (histogram _count) | `prometheus.googleapis.com/METRIC_NAME/histogram` | `http_server_duration_milliseconds_count` → `prometheus.googleapis.com/http_server_duration_milliseconds/histogram` (use `distributionValue.count` for request counts) |
 
-For custom Prometheus metrics, the suffix depends on the metric type: try `/gauge` first, then `/counter`, `/summary`, `/histogram` if no data returns. If none return data, list metric descriptors with `filter=metric.type = starts_with("prometheus.googleapis.com/METRIC_PREFIX")` to find the actual suffix.
+For custom Prometheus metrics, the suffix depends on the metric type: try `/gauge` first, then `/counter`, `/summary`, `/histogram` if no data returns. **Important:** When PromQL references `METRIC_count` (the `_count` component of a histogram), the Cloud Monitoring equivalent is the parent histogram type (`/histogram`), NOT a separate `_count` metric. The request count is in the `distributionValue.count` field of the distribution result. If none return data, list metric descriptors with `filter=metric.type = starts_with("prometheus.googleapis.com/METRIC_PREFIX")` to find the actual suffix.
 
 **Label discovery from PromQL:** Cloud Monitoring labels don't always match what you'd guess. Read the PromQL query from `policies.json` to find the actual label names used. For example, `http_server_requests_seconds_count{container="hcs-gb"}` tells you the Cloud Monitoring filter needs `metric.labels.container = "hcs-gb"` — not `metric.labels.application` or `metric.labels.service`. Always check the PromQL before constructing filters. PromQL labels on the metric selector map to `metric.labels.X` in Cloud Monitoring.
 
@@ -277,6 +431,7 @@ If the metric type cannot be mapped, the query returns no data, the suffix is wr
 | **CUMULATIVE DISTRIBUTION** (e.g., perquery latencies) | `ALIGN_DELTA` extracts the delta distribution per period. Read `distributionValue.mean` for average latency and `distributionValue.count` for query volume. | `dbinsights.googleapis.com/perquery/latencies` + ALIGN_DELTA daily → mean latency per day |
 | **Error rate ratios** (5xx / total) | Two queries: (1) filter by status label for errors, (2) unfiltered for total. Divide in Python. Write both results to `$WORK_DIR`. | Query with `metric.labels.status=starts_with("5")` for errors, without for total. Compute `error_count / total_count`. |
 | **High-cardinality counters** (e.g., 1,000+ containers) | Use `aggregation.crossSeriesReducer=REDUCE_SUM` to aggregate across all series. Gives total restart rate without enumerating each container. | `kubernetes.io/container/restart_count` + ALIGN_DELTA 1h + REDUCE_SUM → total restarts/hour across all containers |
+| **Histogram-based error rates** (e.g., `rate(metric_count{status=~"5.."}[5m])`) | When PromQL uses `_count` from a histogram metric (e.g., `http_server_duration_milliseconds_count`), the Cloud Monitoring equivalent is the `/histogram` type — NOT a separate `_count` metric. Query `prometheus.googleapis.com/METRIC_NAME/histogram` with `ALIGN_DELTA`. The `distributionValue.count` field gives the request count per period. For error-rate ratios: query with status label filter for 5xx (count = error volume), then without filter (count = total volume). Compute ratio from the two `count` sums. | `prometheus.googleapis.com/http_server_duration_milliseconds/histogram` + ALIGN_DELTA 1h → `distributionValue.count` per period. Two queries: with `http_status_code=~"5.."` for errors, without for total. |
 | **Custom PromQL with no Cloud Monitoring equivalent** | Rare — most Prometheus metrics map via `prometheus.googleapis.com/METRIC/SUFFIX`. Try `/gauge`, `/counter`, `/summary`, `/histogram` suffixes. If none return data, list metric descriptors with `starts_with` filter. | `metricDescriptors?filter=metric.type = starts_with("prometheus.googleapis.com/METRIC_PREFIX")` |
 
 **Tier 2 two-query ratio pattern** (error rate example):
@@ -361,41 +516,23 @@ For each service_key that IS in `slo-services.json` AND has noisy user-facing th
 
 Write the final report as markdown using the Report Skeleton template below. Group findings by action class (Do Now / Investigate / Needs Decision), not by confidence band. Apply the Do Now Gate to determine which items qualify for the Do Now section. Items that fail the gate drop to Investigate regardless of confidence level.
 
-#### IaC Location Resolution via GitHub Search
+#### IaC Location Resolution via Module Discovery
 
-During Do Now gate evaluation, attempt to upgrade IaC Location tier for candidates using `gh search code`. This is optional enrichment — if it adds nothing, the report is identical to the version without it.
+During Do Now gate evaluation, resolve IaC Location for each finding using the `iac-modules.json` mapping built in Stage 1.
 
-**Preconditions:** `{github_org}` was provided AND `gh` is available AND authenticated (`gh auth status`). If any fail, skip entirely. This prevents avoidable fallback churn on private repos where `gh` exists but lacks auth.
+**Resolution rules (in priority order):**
 
-**When to search:** Only for items that pass all other Do Now gate requirements (config diff, named owner, outcome DoD, measured/structural evidence, rollback signal) but have IaC Location of Search Required or Unknown.
+1. **Confirmed:** The policy's `display_name` matches a `display_name` extracted from a TF file in `iac-modules.json` (accounting for `${var.XXX}` interpolation). The file path is known and verified from the repo tree. Use direct link.
+2. **Likely:** The policy's metric type, PromQL fragment, or resource type matches a known TF module name (e.g., policy using `artemis_consumer_count` → module `message_broker_alerts`), but `display_name` didn't match exactly (e.g., due to complex interpolation). Include the candidate file path.
+3. **Search Required:** No match in `iac-modules.json`, but `{iac_repos}` were provided. Include a link to the repo tree (`https://github.com/{org}/{repo}/tree/main/tf`) for manual search, plus the policy display_name as a search hint.
+4. **Unknown:** No `{iac_repos}` provided or IaC discovery failed entirely.
 
-**Rate limit:** `gh search code` allows 10 requests/minute. Cap at top 10 candidates by raw incident count. Remaining items keep their existing IaC Location tier.
+**Link construction:**
+- **Confirmed/Likely:** Direct link to the file: `https://github.com/{org}/{repo}/blob/main/{file_path}`
+- **Search Required:** Link to the TF directory: `https://github.com/{org}/{repo}/tree/main/tf`
+- If an `invocation_file` exists (module is instantiated from a separate file with threshold/label variables), include it as a second link: the module definition for the PromQL template, and the invocation file for the configurable values (thresholds, labels, duration).
 
-**Search strategy per item:**
-
-```bash
-# Primary: policy ID (bare numeric ID — matches both inline resources and module refs)
-gh search code --owner "$github_org" "{policy_id}" \
-  --extension tf --json path,repository --limit 5 \
-  > "$WORK_DIR/iac-search-${policy_id}.json" 2>/dev/null
-
-# Secondary: only if primary returned 0 results
-PRIMARY_HITS=$(python3 -c "import json; print(len(json.load(open('$WORK_DIR/iac-search-${policy_id}.json'))))" 2>/dev/null || echo 0)
-if [ "$PRIMARY_HITS" = "0" ]; then
-  # Use the PromQL fragment, condition filter string, or label key
-  # already captured in Stage 3 for the Search Required spec
-  gh search code --owner "$github_org" "{identifying_fragment}" \
-    --extension tf --json path,repository --limit 5 \
-    > "$WORK_DIR/iac-search-${policy_id}.json" 2>/dev/null
-fi
-```
-
-Do not search by `display_name` — too generic and noisy.
-
-**Result interpretation:**
-- **1+ plausible results:** Upgrade to IaC Location = **Likely**. Include top `repo:path` in the finding. Add note: *"Search match at {repo}:{path} — verify before applying."*
-- **0 results after both tokens:** **Preserve original tier.** Search Required stays Search Required. Unknown stays Unknown. A failed search must NOT upgrade Unknown to Search Required — that would incorrectly make a Do-Now-ineligible item eligible.
-- **Confirmed is not achievable from search alone** — would require opening the file and verifying match context.
+**Do not use `gh search code`** for IaC resolution. Policy IDs are GCP-generated at `terraform apply` time and never appear in `.tf` source. GitHub code search for policy IDs always returns zero results.
 
 ## Prescriptive Reasoning by Pattern
 
@@ -541,10 +678,10 @@ If any are missing, the item drops to Investigate regardless of confidence level
 
 | Status | Meaning | Do Now eligible? |
 |--------|---------|-----------------|
-| **Confirmed** | Exact file path verified | Yes |
-| **Likely** | Strong candidate path, search path explicit | Yes |
-| **Search Required** | Must include ALL four: (1) likely repo/module hint, (2) policy ID as search token, (3) unique identifying fragment appropriate to the policy type (PromQL fragment, condition filter string, label key, or channel name), (4) exact replacement guidance | Yes |
-| **Unknown** | Cannot identify owning repo/file | No — drops to Investigate |
+| **Confirmed** | Exact file path verified via repo tree walk (display_name match) | Yes |
+| **Likely** | Strong candidate path from metric/module name correlation, not exact display_name match | Yes |
+| **Search Required** | No match in IaC discovery, but repo tree link provided for manual search. Must include: (1) link to `tf/` directory in repo, (2) policy display_name as search hint, (3) exact replacement guidance | Yes |
+| **Unknown** | No IaC repos provided or discovery failed entirely | No — drops to Investigate |
 
 ### PromQL Change Spec Rules
 
@@ -574,12 +711,13 @@ Every Do Now and Investigate finding gets one `**Links:**` line directly after `
 |-------|-------------|------|
 | Open policy | `https://console.cloud.google.com/monitoring/alerting/policies/{id}?project={monitoring_project}` | Concrete policy ID available |
 | Open alert policies | `https://console.cloud.google.com/monitoring/alerting?project={monitoring_project}` | No concrete policy ID (fallback) |
-| Search IaC | `https://github.com/search?q=org%3A{github_org}+{id}&type=code` | `{github_org}` provided in Stage 0 |
+| View IaC | `https://github.com/{org}/{repo}/blob/main/{file_path}` | IaC Location is Confirmed or Likely (direct file link from Stage 1 module discovery) |
+| Browse IaC | `https://github.com/{org}/{repo}/tree/main/tf` | IaC Location is Search Required (link to TF directory for manual search) |
 | Incident history | `https://console.cloud.google.com/monitoring/alerting/incidents?project={monitoring_project}` | Investigate only: next step is reviewing firing/timing patterns |
 | Validate metric | `https://console.cloud.google.com/monitoring/metrics-explorer?project={monitoring_project}` | Investigate only: next step is metric validation AND report has enough query detail |
 
-**Do Now:** Open policy + Search IaC (2 links).
-**Investigate:** Open policy + Search IaC + optional contextual third link (max 3). Omit third link if it would require inventing missing query details.
+**Do Now:** Open policy + View IaC (or Browse IaC) (2 links). When an invocation file exists (threshold/label config separate from module definition), include both: View IaC (module) + View IaC (invocation) + Open policy (3 links).
+**Investigate:** Open policy + View/Browse IaC + optional contextual third link (max 3). Omit third link if it would require inventing missing query details.
 **Do not** embed URLs in `Policy ID` or `IaC Location` fields — keep those plain text.
 
 ### Do Now Per-Item Template
@@ -591,7 +729,7 @@ Every Do Now and Investigate finding gets one `**Links:**` line directly after `
 **Target Owner:** {current_label} -> {target_team}
 **Scope:** {projects affected}
 **Notification Reach:** {N} channels
-**Links:** [Open policy](https://console.cloud.google.com/monitoring/alerting/policies/{id}?project={project}) · [Search IaC](https://github.com/search?q=org%3A{github_org}+{id}&type=code)
+**Links:** [Open policy](https://console.cloud.google.com/monitoring/alerting/policies/{id}?project={project}) · [View IaC](https://github.com/{org}/{repo}/blob/main/{file_path})
 
 #### Current Policy Snapshot
 (Include fields relevant to the finding type. Not all fields apply to every finding.)
@@ -634,7 +772,7 @@ Every Do Now and Investigate finding gets one `**Links:**` line directly after `
 **Target Owner:** {team}
 **Scope:** {projects affected}
 **Notification Reach:** {N} channels
-**Links:** [Open policy](https://console.cloud.google.com/monitoring/alerting/policies/{id}?project={project}) · [Search IaC](https://github.com/search?q=org%3A{github_org}+{id}&type=code)
+**Links:** [Open policy](https://console.cloud.google.com/monitoring/alerting/policies/{id}?project={project}) · [View IaC](https://github.com/{org}/{repo}/blob/main/{file_path})
 
 **Situation:** {what is happening — 1-2 sentences}
 **Impact:** {why it matters — incident counts, team effect}
@@ -846,8 +984,12 @@ Grouped by validation method. Reviewer action: `metric query` and `config inspec
 ### Pattern analysis — inferred from incident frequency/timing, needs validation before applying
 | Cluster | Pattern observed | What would upgrade this | Scope |
 
-### Not attempted — specific API limitation
-| Cluster | Limitation | Why it can't be a single query |
+### Not attempted — specific blocker (auth expired, quota exhausted, metric not emitted)
+> This section is for genuine blockers only. Do NOT list metrics here when a multi-query approach exists
+> (e.g., histogram _count via /histogram type, error-rate ratios via two-query pattern).
+> Check the Multi-query patterns table in Stage 3b before classifying a metric as "not attempted".
+
+| Cluster | Blocker | What was tried |
 
 ## Appendix: Frequency Table
 Full cluster table sorted by raw incidents: cluster key, raw, episodes, distinct resources, median duration, median retrigger, noise score, pattern, verdict, confidence.
