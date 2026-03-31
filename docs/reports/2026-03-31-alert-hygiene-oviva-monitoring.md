@@ -3,7 +3,7 @@
 
 ## Executive Summary
 - 487 policies (484 enabled, 3 disabled), 4,793 raw incidents → 2,691 episodes across 137 clusters
-- Baseline metrics: 37,719 open-incident hours, 2,039 routed incidents, 2,754 ownerless incidents
+- Baseline metrics: 37,719 open-incident hours, 2,039 routed incidents, 2,754 ownerless incidents (98% resolved to suggested owner via CODEOWNERS)
 - **Top noise sources:** Pod restart (hb-it) accounts for 1,110 raw incidents (23%) and 8,546 open-hours; MySQL slow-query outlier policies produce 1,551 raw incidents across 4 clusters with `staging_alerts` label on production data (label mismatch); Artemis message broker alerts (3 policies) contribute 342 raw incidents and 17,477 open-hours in permanent-fire state; Diet Suggestions thread alert fires 372 times with JVM threads above threshold 61% of the time
 - 23 services have SLO definitions; 384/484 enabled policies (79%) had zero incidents in the analysis window
 - 4 Do Now actions, 8 investigations, 3 needs decision
@@ -13,16 +13,16 @@
 
 | Category | Finding | Target Owner | Confidence / Readiness | Effort | Risk | Primary Expected Outcome | Next Action |
 |----------|---------|--------------|----------------------|--------|------|--------------------------|-------------|
-| Do Now | [1. Artemis expired messages: raise threshold](#1-tune-the-alert-message-broker-queue-expired-messages-high--pr-ready) | ⚠ assign | High / PR-Ready | S | Low | Raw < 5/14d, reclaim ~2,100 oh | Merge IaC PR |
-| Do Now | [2. Artemis never-empty: raise threshold + set auto_close](#2-tune-the-alert-message-queue-is-never-empty-high--pr-ready) | ⚠ assign | High / PR-Ready | S | Low | Raw < 10/14d, reclaim ~10,500 oh | Merge IaC PR |
-| Do Now | [3. Artemis without-consumer: set auto_close](#3-tune-the-alert-message-broker-queue-without-consumer-high--pr-ready) | ⚠ assign | High / PR-Ready | S | Low | Raw < 30/14d, reclaim ~4,800 oh | Merge IaC PR |
-| Do Now | [4. MySQL outlier: fix label mismatch](#4-fix-routing-mysql-slow-query-outlier-label-mismatch-high--pr-ready) | xenon_alerts | High / PR-Ready | S | Low | 1,551 incidents correctly routed | Merge IaC PR |
-| Investigate | [1. Pod restart hb-it: systemic](#1-investigate-systemic-pod-restarts-on-oviva-k8s-hb-it-high--stage-1) | ⚠ assign | High / Stage 1 | M | Med | Identify top restarting containers | Triage top containers |
-| Investigate | [2. Diet Suggestions thread count](#2-investigate-diet-suggestions-thread-count-alert-tuning-medium--stage-1) | ⚠ assign | Medium / Stage 1 | S | Low | Validate if threshold 1000 is correct | Query thread baseline |
-| Investigate | [3. Mobile API 5xx concentrated at h23](#3-investigate-mobile-api-5xx-concentrated-at-h23-medium--stage-1) | ⚠ assign | Medium / Stage 1 | S | Low | Confirm deploy-time cause | Correlate with deploys |
-| Investigate | [4. goal-setting P99 latency](#4-investigate-goal-setting-p99-latency--9s-medium--stage-1) | ⚠ assign | Medium / Stage 1 | S | Low | Validate threshold | Query P99 baseline |
-| Investigate | [5. Node memory oviva-k8s](#5-investigate-node-memory-utilization-oviva-k8s-high--stage-1) | xenon_alerts | High / Stage 1 | M | Med | Confirm 47% above threshold | Add auto_close |
-| Investigate | [6. Max memory limit utilization](#6-investigate-max-memory-limit-utilization-prod1-medium--stage-1) | ⚠ assign | Medium / Stage 1 | S | Low | Identify hot container | Right-size memory limits |
+| Do Now | [1. Artemis expired messages: raise threshold](#1-tune-the-alert-message-broker-queue-expired-messages-high--pr-ready) | @oviva-ag/devops-codeowners | High / PR-Ready | S | Low | Raw < 5/14d, reclaim ~2,100 oh | Merge IaC PR |
+| Do Now | [2. Artemis never-empty: raise threshold + set auto_close](#2-tune-the-alert-message-queue-is-never-empty-high--pr-ready) | @oviva-ag/devops-codeowners | High / PR-Ready | S | Low | Raw < 10/14d, reclaim ~10,500 oh | Merge IaC PR |
+| Do Now | [3. Artemis without-consumer: set auto_close](#3-tune-the-alert-message-broker-queue-without-consumer-high--pr-ready) | @oviva-ag/devops-codeowners | High / PR-Ready | S | Low | Raw < 30/14d, reclaim ~4,800 oh | Merge IaC PR |
+| Do Now | [4. MySQL outlier: fix label mismatch](#4-fix-routing-mysql-slow-query-outlier-label-mismatch-high--pr-ready) | @oviva-ag/devops-codeowners | High / PR-Ready | S | Low | 1,551 incidents correctly routed | Merge IaC PR |
+| Investigate | [1. Pod restart hb-it: systemic](#1-investigate-systemic-pod-restarts-on-oviva-k8s-hb-it-high--stage-1) | @oviva-ag/devops-codeowners | High / Stage 1 | M | Med | Identify top restarting containers | Triage top containers |
+| Investigate | [2. Diet Suggestions thread count](#2-investigate-diet-suggestions-thread-count-alert-tuning-medium--stage-1) | @oviva-ag/cosmos | Medium / Stage 1 | S | Low | Validate if threshold 1000 is correct | Query thread baseline |
+| Investigate | [3. Mobile API 5xx concentrated at h23](#3-investigate-mobile-api-5xx-concentrated-at-h23-medium--stage-1) | @oviva-ag/devops-codeowners | Medium / Stage 1 | S | Low | Confirm deploy-time cause | Correlate with deploys |
+| Investigate | [4. goal-setting P99 latency](#4-investigate-goal-setting-p99-latency--9s-medium--stage-1) | @oviva-ag/argon | Medium / Stage 1 | S | Low | Validate threshold | Query P99 baseline |
+| Investigate | [5. Node memory oviva-k8s](#5-investigate-node-memory-utilization-oviva-k8s-high--stage-1) | @oviva-ag/devops-codeowners | High / Stage 1 | M | Med | Confirm 47% above threshold | Add auto_close |
+| Investigate | [6. Max memory limit utilization](#6-investigate-max-memory-limit-utilization-prod1-medium--stage-1) | @oviva-ag/argon | Medium / Stage 1 | S | Low | Identify hot container | Right-size memory limits |
 | Investigate | [7. hcs-gb error rate](#7-investigate-hcs-gb-error-rate-high--stage-1) | mars_alerts | High / Stage 1 | S | Low | Validate transient nature | Add min-volume clause |
 | Investigate | [8. medical-reporting error rate at h07](#8-investigate-medical-reporting-error-rate-concentrated-at-h07-medium--stage-1) | mars_alerts | Medium / Stage 1 | S | Low | Confirm deploy-time cause | Correlate with deploys |
 | Needs Decision | [1. Silent policy cleanup](#1-silent-policy-cleanup-high--decision-pending) | Platform lead | High / Decision Pending | M | Low | Decide retain/disable for 384 policies | Audit |
@@ -67,22 +67,24 @@
 
 57% of raw incidents (2,754/4,793) fire on policies without a squad/team/owner label. These alerts route through default channels and have no traceable owner.
 
+**CODEOWNERS/squad-directory resolution:** 63/137 ownerless clusters (2,697/2,754 raw incidents = 98%) resolved to a suggested owner via IaC file path cross-reference against `oviva-ag/monitoring/CODEOWNERS` and squad directory structure. 0 clusters remain truly unresolvable (remaining low-volume clusters all map to a known squad or devops-codeowners).
+
 The `staging_alerts` label is applied to MySQL slow-query outlier policies that fire on production projects (`oviva-k8s-prod`, `oviva-k8s-dg-prod`) — 1,551 raw incidents may be misrouted or ignored because the label implies non-production severity.
 
 Top 10 policies without squad/team/owner label, ranked by total raw incidents:
 
 | # | Policy | Policy ID | Raw (14d) | Episodes | Channels | Suggested Owner |
 |---|--------|-----------|-----------|----------|----------|-----------------|
-| 1 | Delta pods restart in project | .../9019907273249855951 | 1,431 | 1,374 | 1 | ⚠ assign |
-| 2 | Diet Suggestions Active Thread Count Alert (DG) | .../15443736973066518795 | 372 | 129 | 1 | ⚠ assign |
-| 3 | Message broker queue without consumer | .../17467897932493204533 | 216 | 46 | 1 | ⚠ assign |
-| 4 | Message queue is never empty | .../6098275769612771826 | 177 | 42 | 1 | ⚠ assign |
-| 5 | Message broker queue expired messages | .../5600771186676456661 | 83 | 14 | 1 | ⚠ assign |
-| 6 | [.*-prod1] Mobile API HTTP 5xx Error Rate (critical) | .../11760810637840310856 | 78 | 23 | 1 | ⚠ assign |
-| 7 | [.*-prod1] Mobile API HTTP 5xx Error Rate (critical) | .../6767865470347481271 | 77 | 23 | 1 | ⚠ assign |
-| 8 | [.*-prod1] HTTP P99 Latency w/o 5xx Errors | .../8924582844325366421 | 77 | 47 | 1 | ⚠ assign |
-| 9 | [.*-prod1] Max memory limit utilization | .../16568293729673736416 | 33 | 20 | 1 | ⚠ assign |
-| 10 | [.*-prod1] Max memory limit utilization | .../15451110698797130466 | 26 | 20 | 1 | ⚠ assign |
+| 1 | Delta pods restart in project | .../9019907273249855951 | 1,431 | 1,374 | 1 | @oviva-ag/devops-codeowners |
+| 2 | Diet Suggestions Active Thread Count Alert (DG) | .../15443736973066518795 | 372 | 129 | 1 | @oviva-ag/cosmos |
+| 3 | Message broker queue without consumer | .../17467897932493204533 | 216 | 46 | 1 | @oviva-ag/devops-codeowners |
+| 4 | Message queue is never empty | .../6098275769612771826 | 177 | 42 | 1 | @oviva-ag/devops-codeowners |
+| 5 | Message broker queue expired messages | .../5600771186676456661 | 83 | 14 | 1 | @oviva-ag/devops-codeowners |
+| 6 | [.*-prod1] Mobile API HTTP 5xx Error Rate (critical) | .../11760810637840310856 | 78 | 23 | 1 | @oviva-ag/devops-codeowners |
+| 7 | [.*-prod1] Mobile API HTTP 5xx Error Rate (critical) | .../6767865470347481271 | 77 | 23 | 1 | @oviva-ag/devops-codeowners |
+| 8 | [.*-prod1] HTTP P99 Latency w/o 5xx Errors | .../8924582844325366421 | 77 | 47 | 1 | @oviva-ag/argon |
+| 9 | [.*-prod1] Max memory limit utilization | .../16568293729673736416 | 33 | 20 | 1 | @oviva-ag/argon |
+| 10 | [.*-prod1] Max memory limit utilization | .../15451110698797130466 | 26 | 20 | 1 | @oviva-ag/argon |
 
 ### Dead/Orphaned Config
 
@@ -121,7 +123,7 @@ For all Do Now items:
 ### 1. Tune the alert: Message broker queue expired messages [High / PR-Ready]
 
 **Policy ID:** projects/oviva-monitoring/alertPolicies/5600771186676456661 | **Condition:** Queue has expired messages
-**Target Owner:** ⚠ assign (currently unlabeled)
+**Target Owner:** @oviva-ag/devops-codeowners (from CODEOWNERS on `tf/modules/message_broker_alerts/`)
 **Scope:** oviva-k8s-hb-it (namespace it, pta, prod)
 **Notification Reach:** 1 channel
 **Links:** [Open policy](https://console.cloud.google.com/monitoring/alerting/policies/5600771186676456661?project=oviva-monitoring) · [View IaC (module)](https://github.com/oviva-ag/monitoring/blob/main/tf/modules/message_broker_alerts/google_monitoring_alert_policy.tf) · [View IaC (invocation)](https://github.com/oviva-ag/monitoring/blob/main/tf/message-broker-alerts.tf)
@@ -156,7 +158,7 @@ For all Do Now items:
 ### 2. Tune the alert: Message queue is never empty [High / PR-Ready]
 
 **Policy ID:** projects/oviva-monitoring/alertPolicies/6098275769612771826 | **Condition:** Queue was never empty in last 24 hours
-**Target Owner:** ⚠ assign (currently unlabeled)
+**Target Owner:** @oviva-ag/devops-codeowners (from CODEOWNERS on `tf/modules/message_broker_alerts/`)
 **Scope:** oviva-k8s-hb-it, oviva-k8s-dg-prod, oviva-k8s-prod (all namespaces matching it|pta|prod)
 **Notification Reach:** 1 channel
 **Links:** [Open policy](https://console.cloud.google.com/monitoring/alerting/policies/6098275769612771826?project=oviva-monitoring) · [View IaC (module)](https://github.com/oviva-ag/monitoring/blob/main/tf/modules/message_broker_alerts/google_monitoring_alert_policy.tf) · [View IaC (invocation)](https://github.com/oviva-ag/monitoring/blob/main/tf/message-broker-alerts.tf)
@@ -192,7 +194,7 @@ For all Do Now items:
 ### 3. Tune the alert: Message broker queue without consumer [High / PR-Ready]
 
 **Policy ID:** projects/oviva-monitoring/alertPolicies/17467897932493204533 | **Condition:** Queue has messages but no consumer
-**Target Owner:** ⚠ assign (currently unlabeled)
+**Target Owner:** @oviva-ag/devops-codeowners (from CODEOWNERS on `tf/modules/message_broker_alerts/`)
 **Scope:** oviva-k8s-hb-it, oviva-k8s-dg-prod, oviva-k8s-prod, oviva-k8s (all namespaces)
 **Notification Reach:** 1 channel
 **Links:** [Open policy](https://console.cloud.google.com/monitoring/alerting/policies/17467897932493204533?project=oviva-monitoring) · [View IaC (module)](https://github.com/oviva-ag/monitoring/blob/main/tf/modules/message_broker_alerts/google_monitoring_alert_policy.tf) · [View IaC (invocation)](https://github.com/oviva-ag/monitoring/blob/main/tf/message-broker-alerts.tf)
@@ -262,7 +264,7 @@ For all Do Now items:
 ### 1. Investigate: Systemic pod restarts on oviva-k8s-hb-it [High / Stage 1]
 
 **Policy ID:** projects/oviva-monitoring/alertPolicies/9019907273249855951
-**Target Owner:** ⚠ assign
+**Target Owner:** @oviva-ag/devops-codeowners (from CODEOWNERS on `tf/modules/k8s_pods_restart_alert/`)
 **Scope:** oviva-k8s-hb-it (1,110 raw), oviva-k8s-dg-pta (182), oviva-k8s (68), oviva-k8s-dg-prod (37), oviva-k8s-prod (34)
 **Notification Reach:** 1 channel
 **Links:** [Open policy](https://console.cloud.google.com/monitoring/alerting/policies/9019907273249855951?project=oviva-monitoring) · [View IaC (module)](https://github.com/oviva-ag/monitoring/blob/main/tf/modules/k8s_pods_restart_alert/main.tf) · [View IaC (invocation)](https://github.com/oviva-ag/monitoring/blob/main/tf/main.tf)
@@ -276,8 +278,8 @@ For all Do Now items:
 | auto_close | NOT SET | 21600s (6h) | Matches the 6h lookback window; prevents incident accumulation while keeping detection active |
 | threshold | > 5 | > 5 (no change) | Threshold is reasonable; the problem is the number of restarting containers, not the threshold sensitivity |
 
-**Gate Blocker:** Missing owner (unlabeled). Pod restarts span all projects — need platform team ownership assignment.
-**To Upgrade:** Assign owner → promotes to Do Now for auto_close addition.
+**Gate Blocker:** Pod restarts span all projects (1,053 distinct resources in hb-it alone). Need to identify top restarting containers before tuning — blind auto_close addition would suppress signal without understanding the cause.
+**To Upgrade:** Identify top containers and confirm expected vs unexpected restarts → promotes to Do Now for auto_close + optional PromQL exclusion.
 
 **Evidence Basis:** measured — REST time-series query: `kubernetes.io/container/restart_count`, project=oviva-k8s-hb-it, 1h ALIGN_DELTA + REDUCE_SUM, 346 points. Min=5, Max=1,015, Median=42, p95=864.
 **Hypothesis:** The hb-it cluster has a large number of CronJob or test-workload containers that restart normally. The 87% h22 concentration on the oviva-k8s cluster suggests nightly batch-triggered restarts.
@@ -297,7 +299,7 @@ For all Do Now items:
 ### 2. Investigate: Diet Suggestions thread count alert tuning [Medium / Stage 1]
 
 **Policy ID:** projects/oviva-monitoring/alertPolicies/15443736973066518795
-**Target Owner:** ⚠ assign
+**Target Owner:** @oviva-ag/cosmos (from squad directory `tf/squads/cosmos/diet_suggestions.tf`)
 **Scope:** oviva-k8s-dg-prod (cluster oviva-dg-prod1)
 **Notification Reach:** 1 channel
 **Links:** [Open policy](https://console.cloud.google.com/monitoring/alerting/policies/15443736973066518795?project=oviva-monitoring) · [Browse IaC](https://github.com/oviva-ag/monitoring/tree/main/tf)
@@ -305,8 +307,8 @@ For all Do Now items:
 **Situation:** JVM live thread count for `diet-suggestions` on `oviva-dg-prod1` exceeds 1,000 threshold 61.3% of the time (p50=1,148, p95=2,085). The alert fires 372 raw / 129 episodes with auto_close=1800s already set. The recurring pattern (not flapping) suggests the baseline is above the threshold rather than oscillating around it.
 **Impact:** 376.5 open-hours, second-highest by raw incidents for a service-specific alert.
 
-**Gate Blocker:** Missing owner (unlabeled). Need to confirm whether 1,000 threads is actually problematic for this JVM configuration.
-**To Upgrade:** (1) Assign owner (2) Confirm correct threshold based on JVM max thread pool config → promotes to Do Now for threshold raise.
+**Gate Blocker:** Need to confirm whether 1,000 threads is actually problematic for this JVM configuration — threshold may be correct (indicating a real thread leak) or too low (normal operating baseline).
+**To Upgrade:** Confirm correct threshold based on JVM max thread pool config → promotes to Do Now for threshold raise.
 
 **Evidence Basis:** measured — REST time-series query: `prometheus.googleapis.com/jvm_threads_live_threads/gauge`, container=diet-suggestions, cluster=oviva-dg-prod1, 1h ALIGN_MAX + REDUCE_MAX, 346 points. Min=135, Max=3,213, p50=1,148, p95=2,085. 212/346 (61.3%) above threshold.
 **Hypothesis:** The thread count threshold of 1,000 is too low for the diet-suggestions service's normal operating baseline. The service likely has a thread pool configured for higher concurrency.
@@ -326,7 +328,7 @@ For all Do Now items:
 ### 3. Investigate: Mobile API 5xx concentrated at h23 [Medium / Stage 1]
 
 **Policy ID:** projects/oviva-monitoring/alertPolicies/11760810637840310856 and .../6767865470347481271
-**Target Owner:** ⚠ assign
+**Target Owner:** @oviva-ag/devops-codeowners (from CODEOWNERS on `tf/modules/mobile_api_http_5xx_alert/`)
 **Scope:** .*-prod1 clusters (backend-core container)
 **Notification Reach:** 1 channel each
 **Links:** [Open policy](https://console.cloud.google.com/monitoring/alerting/policies/11760810637840310856?project=oviva-monitoring) · [View IaC](https://github.com/oviva-ag/monitoring/blob/main/tf/modules/mobile_api_http_5xx_alert/main.tf)
@@ -334,8 +336,8 @@ For all Do Now items:
 **Situation:** Two identical policies (critical tier) fire 155 raw / 46 episodes with 40% concentration at hour 23 (UTC). The 6% threshold on `/api/rest/mobile-api/.*` routes fires on low-traffic windows where a few 5xx responses spike the error rate. The PromQL uses `rate(...[5m])` without a minimum volume clause. Auto_close is correctly set at 300s.
 **Impact:** 14.9 open-hours total — low impact per incident, but high frequency during overnight low-traffic window. *Inferred nightly maintenance/deploy from 40% h23 concentration — verify before applying mute window.*
 
-**Gate Blocker:** Missing owner (unlabeled). Need to confirm h23 cause (deploy window, low traffic, or genuine errors).
-**To Upgrade:** (1) Assign owner (2) Confirm h23 root cause → if low-traffic: add volume floor, promotes to Do Now.
+**Gate Blocker:** Need to confirm h23 cause (deploy window, low traffic, or genuine errors) before prescribing a fix.
+**To Upgrade:** Confirm h23 root cause → if low-traffic: add volume floor, promotes to Do Now.
 
 **Evidence Basis:** measured — the metric exists as `prometheus.googleapis.com/http_server_duration_milliseconds/histogram` (CUMULATIVE). The `distributionValue.count` field provides request volume. Query confirmed 1 series with ~1.4M–1.9M requests/day (mean latency 75–77ms). The PromQL `rate(http_server_duration_milliseconds_count{...}[5m])` uses the histogram's count component. Time-of-day concentration from incident data.
 **Hypothesis:** The h23 concentration is caused by low request volume during off-peak hours, where a single 5xx request produces a >6% error rate on a route with <20 requests in the 5m window.
@@ -355,7 +357,7 @@ For all Do Now items:
 ### 4. Investigate: goal-setting P99 latency > 9s [Medium / Stage 1]
 
 **Policy ID:** projects/oviva-monitoring/alertPolicies/8924582844325366421
-**Target Owner:** ⚠ assign
+**Target Owner:** @oviva-ag/argon (from squad directory `tf/squads/argon/main.tf` — invokes `golden_signals_micrometer_http_requests_alerts`)
 **Scope:** .*-prod1 clusters (goal-setting container)
 **Notification Reach:** 1 channel
 **Links:** [Open policy](https://console.cloud.google.com/monitoring/alerting/policies/8924582844325366421?project=oviva-monitoring) · [Browse IaC](https://github.com/oviva-ag/monitoring/tree/main/tf)
@@ -363,8 +365,8 @@ For all Do Now items:
 **Situation:** HTTP P99 latency for `goal-setting` exceeds 9s threshold. 77 raw / 47 episodes (1.6:1 ratio — relatively clean signal), median duration 6m, auto_close=3600s. The recurring pattern across spread time-of-day suggests genuine latency issues, not deploy-time transients.
 **Impact:** 13.9 open-hours — moderate. But the 9s P99 threshold itself is very high — if the service has a response-time SLA, this may indicate an upstream problem.
 
-**Gate Blocker:** Missing owner (unlabeled). IaC location unknown — no TF module matches this specific per-service latency pattern.
-**To Upgrade:** (1) Assign owner (2) Validate P99 baseline → if threshold is appropriate, investigate underlying latency.
+**Gate Blocker:** Need to validate P99 baseline for goal-setting before prescribing threshold change.
+**To Upgrade:** Establish P99 baseline → if threshold is too low, raise it (promotes to Do Now); if genuine latency, investigate root cause.
 
 **Evidence Basis:** heuristic — metric type `__missing__` in cluster data (PromQL-only condition, no Cloud Monitoring equivalent readily available)
 **Hypothesis:** The goal-setting service has genuine P99 latency spikes above 9s, potentially from cold-start or database contention.
@@ -419,7 +421,7 @@ For all Do Now items:
 ### 6. Investigate: Max memory limit utilization [.*-prod1] [Medium / Stage 1]
 
 **Policy ID:** projects/oviva-monitoring/alertPolicies/16568293729673736416 and .../15451110698797130466
-**Target Owner:** ⚠ assign
+**Target Owner:** @oviva-ag/argon (from squad directory `tf/squads/argon/main.tf` — invokes `golden_signals_max_resource_usage_alerts`)
 **Scope:** .*-prod1 clusters (analyser, chat-message-suggestion, clinical-case-report, note-taker, coach-task-manager, message-triaging)
 **Notification Reach:** 1 channel each
 **Links:** [Open policy](https://console.cloud.google.com/monitoring/alerting/policies/16568293729673736416?project=oviva-monitoring) · [View IaC](https://github.com/oviva-ag/monitoring/blob/main/tf/modules/golden_signals_max_resource_usage_alerts)
@@ -427,8 +429,8 @@ For all Do Now items:
 **Situation:** Two policies (different `prod1` clusters) fire 59 raw / 40 episodes for 6 containers exceeding 90% memory limit utilization. Metric validation on `analyser` shows p50=0.171, p95=0.185 — well below 0.9. The alert fires on a different container in the list. Auto_close is set at 3600s. Recurring pattern, median duration ~12m.
 **Impact:** 118.6 open-hours total. The recurring 12m episodes suggest one or two containers periodically spike above 90% then recover.
 
-**Gate Blocker:** Missing owner (unlabeled). Need to identify which specific container(s) are the hot spot.
-**To Upgrade:** (1) Identify hot container(s) (2) Assign owner → promotes to service-team action item.
+**Gate Blocker:** Need to identify which specific container(s) are the hot spot — `analyser` confirmed NOT the culprit (max 18.6%).
+**To Upgrade:** Identify hot container(s) → promotes to service-team action item with right-sizing recommendation.
 
 **Evidence Basis:** measured — `kubernetes.io/container/memory/limit_utilization` for `analyser` on prod1: p50=0.171, p95=0.185, max=0.186 — NOT the hot container. The 0.9 threshold is appropriate; the firing container is one of the other 5 in the selector.
 **Hypothesis:** One of `chat-message-suggestion`, `clinical-case-report`, `note-taker`, `coach-task-manager`, or `message-triaging` periodically exceeds 90% memory limit.
@@ -588,10 +590,10 @@ The threshold alerts (>1% error rate per URI) and SLO burn-rate alerts may be pr
 
 | Finding | Baseline (14d) | Target | Owner | Merge Date | Review Date | Primary Success Criteria | Guardrail | Confidence |
 |---------|-----------------|--------|-------|------------|-------------|--------------------------|-----------|------------|
-| 1. Artemis expired | 72 raw, 2,102 oh | <5 raw, <50 oh | ⚠ assign | — | +14d | Raw < 5 | No burst >100 undetected | High |
-| 2. Artemis never-empty | 175 raw, 10,488 oh | <10 raw, <100 oh | ⚠ assign | — | +14d | Raw < 10 | Backlog >1000 6h detected | High |
-| 3. Artemis no-consumer | 229 raw, 9,782 oh | <30 raw, <500 oh | ⚠ assign | — | +14d | Raw < 30 | Zero-consumer 1h+ detected | High |
-| 4. MySQL label fix | 1,551 misrouted | 0 misrouted | xenon_alerts | — | +14d | 100% correct label | No alerts dropped | High |
+| 1. Artemis expired | 72 raw, 2,102 oh | <5 raw, <50 oh | @oviva-ag/devops-codeowners | — | +14d | Raw < 5 | No burst >100 undetected | High |
+| 2. Artemis never-empty | 175 raw, 10,488 oh | <10 raw, <100 oh | @oviva-ag/devops-codeowners | — | +14d | Raw < 10 | Backlog >1000 6h detected | High |
+| 3. Artemis no-consumer | 229 raw, 9,782 oh | <30 raw, <500 oh | @oviva-ag/devops-codeowners | — | +14d | Raw < 30 | Zero-consumer 1h+ detected | High |
+| 4. MySQL label fix | 1,551 misrouted | 0 misrouted | @oviva-ag/devops-codeowners | — | +14d | 100% correct label | No alerts dropped | High |
 
 ---
 

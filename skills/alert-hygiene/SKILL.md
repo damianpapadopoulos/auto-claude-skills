@@ -314,7 +314,68 @@ print(f'Discovered {len(mapping)} display_name → file_path mappings')
 
 **Fallback: repo-level search link.** When a policy `display_name` does not match any discovered TF file, generate a fallback link to the repo tree for manual search: `https://github.com/{org}/{repo}/tree/main/tf`. This is always more useful than a GitHub code search for a policy ID.
 
-**Stage 1 report line addition:** `"{N} IaC module mappings discovered"` when status is `ok`, `"IaC discovery: {reason}"` otherwise.
+#### Optional: Ownership Resolution via CODEOWNERS
+
+After IaC module discovery, resolve suggested owners for policies that lack a `squad` label by cross-referencing IaC file paths against CODEOWNERS.
+
+**Two-layer resolution:**
+
+1. **CODEOWNERS match (mechanical):** For each IaC file path in `iac-modules.json`, find the matching CODEOWNERS rule (last match wins, per git spec). This resolves policies whose module definition or invocation file has a specific CODEOWNERS entry. Typically resolves high-volume infrastructure alerts (pod restarts, message broker, MySQL, ingress, WAF).
+
+2. **Squad-directory inference (structural):** For policies defined or invoked from `tf/squads/{squad}/*.tf`, the squad directory itself implies ownership — even if the CODEOWNERS rule for that path is generic. A module invocation in `tf/squads/cosmos/diet_suggestions.tf` means cosmos owns that alert regardless of whether CODEOWNERS maps `tf/squads/cosmos/*` to `@org/cosmos` or a generic owner. The squad directory name is the authoritative signal.
+
+**Flow:**
+
+```bash
+# Fetch CODEOWNERS (single gh api call)
+gh api "repos/$REPO/contents/CODEOWNERS" --jq '.content' 2>/dev/null \
+  | base64 -d > "$IAC_DIR/CODEOWNERS" 2>/dev/null
+```
+
+Then in Python:
+
+```python
+# Parse CODEOWNERS rules
+codeowner_rules = []  # [(glob_pattern, [owners])]
+for line in open(f'{iac_dir}/CODEOWNERS'):
+    line = line.strip()
+    if not line or line.startswith('#'):
+        continue
+    parts = line.split()
+    codeowner_rules.append((parts[0], [p for p in parts[1:] if p.startswith('@')]))
+
+def resolve_owner(filepath):
+    """Last matching CODEOWNERS rule wins (git spec)."""
+    matched = None
+    for pattern, owners in codeowner_rules:
+        # Convert CODEOWNERS glob to simple match
+        if fnmatch.fnmatch(filepath, pattern) or filepath.startswith(pattern.rstrip('*')):
+            matched = owners
+    return matched
+
+# For each entry in iac-modules.json:
+# 1. Check if file is in tf/squads/{squad}/ → squad name is the owner
+# 2. Else resolve via CODEOWNERS match on the file path
+# 3. Store as 'suggested_owner' in the mapping
+```
+
+**On-disk artifacts (appended to existing):**
+- `iac-discovery/iac-modules.json` — each entry gains `suggested_owner` field (team handle or null)
+- `iac-discovery/codeowners-status.json` — `{"status": "ok|unavailable", "rules": N}`
+
+**Owner resolution priority for report "Target Owner" field:**
+1. Policy's existing `squad` label (already set in TF via `user_labels`) — highest priority, use as-is
+2. Squad-directory inference from IaC file path (e.g., `tf/squads/cosmos/` → `@org/cosmos`)
+3. CODEOWNERS match on IaC file path (e.g., `tf/modules/message_broker_alerts/` → `@org/devops-codeowners`)
+4. No match → `⚠ assign`
+
+**Report integration:**
+- When `suggested_owner` is available and the policy has no squad label, use `suggested_owner` in the "Target Owner" field with a note: `{suggested_owner} (from CODEOWNERS)` or `{squad_name} (from squad directory)`
+- In the Systemic Issues > Ownership/Routing Debt section, report resolution coverage: `"{N}/{M} ownerless clusters resolved via CODEOWNERS/squad-directory inference"`
+
+**Stage 1 report line additions:**
+- `"{N} IaC module mappings discovered"` when status is `ok`, `"IaC discovery: {reason}"` otherwise
+- `"{N} CODEOWNERS rules loaded, {M} ownerless clusters resolved"` when CODEOWNERS available
 
 ### Stage 2: Compute Cluster Stats
 
@@ -900,13 +961,19 @@ Thematic and non-exhaustive — surfaces structural debt patterns without duplic
 ### Ownership/Routing Debt
 - Unlabeled policies ranked by incident volume (source: `unlabeled_ranking` from compute-clusters output)
 - Misrouted alerts (e.g., prod alerts labeled as staging)
+- Resolution coverage from CODEOWNERS/squad-directory inference (source: `iac-discovery/iac-modules.json`)
 
 Top 10 policies without squad/team/owner label, ranked by total raw incidents:
 
 | # | Policy | Policy ID | Raw ({days}d) | Episodes | Channels | Suggested Owner |
 |---|--------|-----------|--------------|----------|----------|----------------|
 
-"Suggested Owner" is left as "⚠ assign" unless resource project or metric type implies a specific team.
+**Suggested Owner resolution:** Populate from the ownership resolution in Stage 1:
+1. If the policy's IaC file is in `tf/squads/{squad}/` → use the squad team handle (e.g., `@org/cosmos`)
+2. Else if CODEOWNERS matches the IaC file path → use the CODEOWNERS team (e.g., `@org/devops-codeowners`)
+3. Else → `⚠ assign`
+
+Include a coverage summary: *"{N}/{M} ownerless clusters ({X}% of ownerless raw incidents) resolved via CODEOWNERS/squad-directory inference."*
 
 ### Dead/Orphaned Config
 Read from compute-clusters output — do not compute ad-hoc.
