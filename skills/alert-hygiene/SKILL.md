@@ -170,6 +170,7 @@ Run compute-clusters.py. This produces a structured output with three sections:
 **Per-cluster fields (`clusters` array):**
 - `raw_incidents`, `deduped_episodes`, `dedupe_window_sec`
 - `distinct_resources`, `median_duration_sec`, `median_retrigger_sec`
+- `total_open_hours` — sum of actual incident durations (openTime to closeTime) in hours. **MANDATORY source for all open-incident-hours figures in the report.** Do NOT compute open-hours ad-hoc from `raw * median_duration` — that formula is inaccurate in both directions (overstates retrigger clusters, understates chronic long-tail clusters). If this field is missing or 0 for a cluster, the installed script version may predate this feature — re-run with the local source script.
 - `tod_pattern`, `pattern` (flapping/chronic/recurring/burst/isolated)
 - `noise_score`, `noise_reasons`, `label_inconsistency`
 - `threshold_value`, `comparison`, `condition_filter`, `condition_query`, `condition_type`, `condition_match`

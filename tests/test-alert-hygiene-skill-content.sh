@@ -230,6 +230,10 @@ assert_contains "inventory health reads condition_type_breakdown" "condition_typ
 assert_contains "mandatory needs decision triggers section" "Mandatory Needs Decision Triggers" "${SKILL_CONTENT}"
 assert_contains "silent policy cleanup trigger" "Silent Policy Cleanup" "${SKILL_CONTENT}"
 
+# --- Open-incident hours sourcing (v5) ---
+assert_contains "total_open_hours field documented" "total_open_hours" "${SKILL_CONTENT}"
+assert_contains "ad-hoc formula forbidden" "Do NOT compute open-hours ad-hoc" "${SKILL_CONTENT}"
+
 # --- Metric validation query standardization (v5) ---
 assert_contains "mandatory query params table" "Mandatory Query Parameters" "${SKILL_CONTENT}"
 assert_contains "crossSeriesReducer in template" "crossSeriesReducer=REDUCE_MAX" "${SKILL_CONTENT}"
