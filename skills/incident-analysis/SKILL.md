@@ -512,11 +512,9 @@ Before transitioning to POSTMORTEM, answer each question explicitly in the synth
 
 ### Step 9: Transition to POSTMORTEM
 
-**Investigation path offer:** If the investigation involved hypothesis revisions (Step 5 ran more than once) or completeness gate loop-backs (any question triggered a return to Step 1), offer to generate an investigation path appendix:
+**Investigation path (mandatory):** Always generate the investigation path appendix as a subsection under Investigation Notes (section 8). The investigation path is the most valuable part of the postmortem for future investigators — it shows not just what was found, but what was considered and ruled out, preventing others from re-exploring dead ends.
 
-> "Investigation involved N hypothesis revisions. Include investigation path appendix? (Adds ~1 page under Investigation Notes — shows the question → evidence → conclusion chain and ruled-out hypotheses.)"
-
-If accepted, generate using the format in the Investigation Notes template (question → decisive evidence → conclusion per step, explicit Ruled out: lines for dead ends, Hypothesis revised: markers where thinking changed, Reviewer takeaway at the end). Include as a subsection under Investigation Notes (section 8). If declined or the investigation was straightforward (no revisions, no loop-backs), omit it.
+Generate using the format in the Investigation Notes template (question → decisive evidence → conclusion per step, explicit Ruled out: lines for dead ends, Hypothesis revised: markers where thinking changed, Reviewer takeaway at the end). For straightforward investigations with no hypothesis revisions, the path will be shorter but still documents the ruled-out alternatives and the evidence chain that confirmed the root cause.
 
 ## EXECUTE
 
