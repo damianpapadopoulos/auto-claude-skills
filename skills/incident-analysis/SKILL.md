@@ -365,22 +365,26 @@ After all probes complete, feed results back to CLASSIFY for reclassification.
 
 If a `node-resource-exhaustion` playbook is available, transition to CLASSIFY for structured scoring.
 
-**Shared resource escalation (conditional):** If Step 3 identifies a shared resource under pressure (database, message broker, cache cluster, shared API gateway) — evidenced by connection pool exhaustion, lock contention, serialization errors, or elevated latency across multiple consumers — expand investigation to map the full consumer set:
+**Shared resource escalation (mandatory when detected):** If the degraded service is used by multiple consumers (authorization service, database, message broker, cache cluster, shared API gateway), this escalation is **mandatory**, not optional. Detection heuristic — any of these confirm a shared dependency:
+- Multiple different services show correlated errors in the same time window
+- The degraded service's access logs show requests from multiple distinct peer addresses/pods
+- The degraded service is a known infrastructure component (SpiceDB, Redis, PostgreSQL, RabbitMQ, etc.)
 
-1. **Enumerate all tenants:** List every service/user that connects to the shared resource. For databases: query connection metrics grouped by user/database, or check infrastructure-as-code for connection configurations. Do not assume the symptomatic services are the only consumers — the trigger may come from a non-symptomatic consumer flooding the resource.
-2. **Check deployment history for all consumers:** Query deployments across ALL consumers in the preceding 72 hours (not just the incident day). Account for delayed triggers: cached configurations, lazy initialization, and traffic-pattern-dependent code paths that may not execute until weekday/peak hours.
-3. **Identify the dominant pressure source:** Compare resource consumption across consumers. The service generating the most load (connections, transactions, I/O) on the shared resource is a candidate trigger — even if that service itself shows no user-facing errors.
+When a shared dependency is identified:
+
+1. **Enumerate callers from access logs:** Extract the distinct peer addresses (caller IPs) from the shared service's own logs during the incident window. Group by caller and count. Identify the top 3 callers by volume.
+2. **Identify caller services:** For each dominant caller IP, resolve to a service name via trace correlation (`get_trace` on a trace ID from that caller's requests), pod events (health probe targets contain pod IPs), or log correlation.
+3. **Check each dominant caller's ERROR logs:** Query `severity>=ERROR` for each identified caller service in the same time window. This is the critical step that infrastructure-only investigation misses — a caller may be in a failure/retry loop that is *generating* the shared dependency overload, not just suffering from it.
+4. **Check deployment history for all dominant callers:** Query deployments across dominant callers in the preceding 72 hours (not just the incident day). Account for delayed triggers: cached configurations, lazy initialization, and traffic-pattern-dependent code paths that may not execute until weekday/peak hours.
+5. **Compare caller distribution to baseline:** Compare the current caller distribution to a **different day's same time window** (not just the same day's morning). If a single caller's share increased by >2x compared to baseline, it is a suspect — especially if that caller is also logging errors. If access logs or caller IP resolution are unavailable, note "caller distribution not assessed" and flag as an open question.
+6. **Check for amplification loops:** If any dominant caller shows error counts disproportionate to normal traffic volume, check for amplification signatures:
+   - Rapidly repeating identical error messages from a single source (same exception, same stack frame)
+   - Message broker redelivery patterns (JMS/AMQP poison-pill messages that fail processing and get requeued)
+   - Transaction management annotations that acquire new connections per retry (`REQUIRES_NEW`, nested transactions)
+   - Error counts that cannot be explained by user traffic volume (e.g., 60K errors in a 2-hour window from a low-traffic service)
+   When an amplification loop is identified, trace it to the original failing operation — that operation's failure reason (not the resource exhaustion it caused) is the root cause.
 
 This escalation is bounded to the shared resource's known consumer set. It does not permit unbounded global searches.
-
-**Amplification loop detection (conditional):** If Step 3 reveals connection pool exhaustion or resource saturation with error counts disproportionate to normal traffic volume, check for amplification loops — a single failing operation retried aggressively can generate orders-of-magnitude more pressure than normal traffic. Signatures include:
-
-- Rapidly repeating identical error messages from a single source (same exception, same stack frame)
-- Message broker redelivery patterns (JMS/AMQP poison-pill messages that fail processing and get requeued)
-- Transaction management annotations that acquire new connections per retry (`REQUIRES_NEW`, nested transactions)
-- Error counts that cannot be explained by user traffic volume (e.g., 60K errors in a 2-hour window from a low-traffic service)
-
-When an amplification loop is identified, trace it to the original failing operation — that operation's failure reason (not the resource exhaustion it caused) is likely the root cause.
 
 ### Step 4: Autonomous Trace Correlation (Tier 1 Only)
 
