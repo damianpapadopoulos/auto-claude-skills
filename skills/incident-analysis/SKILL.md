@@ -335,6 +335,18 @@ Not all errors are equally informative. Classify extracted signals into three ti
 
 **Investigate Tier 1 errors first**, even if they appear in services outside your current scope. A single anomalous error in an adjacent service is often more diagnostic than dozens of infrastructure errors in the symptomatic service. When Tier 1 errors are found in adjacent services, they are candidates for scope expansion — note them for Step 3.
 
+**Container exit code guide** (when container termination status is available from pod describe or events):
+
+| Exit Code | Signal | Meaning | Investigation Route |
+|-----------|--------|---------|-------------------|
+| 0 | Normal exit | Container completed successfully | Check if this is a long-running service that should not exit — possible entrypoint/command misconfiguration |
+| 1 | Application error | Uncaught exception or assertion failure | Check previous container logs for stack trace → route to bad-release or config-regression |
+| 137 | SIGKILL (OOMKilled) | Kernel OOM killer terminated the process | Check memory limits vs actual usage → route to resource-overload or node-resource-exhaustion. A restart will not help if limits are too low. |
+| 139 | SIGSEGV | Segmentation fault in native code | Check recent deployment for native dependency changes → route to bad-release |
+| 143 | SIGTERM | Graceful termination timeout exceeded | Check `terminationGracePeriodSeconds`, shutdown hooks, long-running connections. Not necessarily a failure — may indicate slow shutdown. |
+
+Use exit codes to route investigation before proposing mitigation. Exit code 137 (OOMKilled) means restart is pointless — the pod will OOM again. Exit code 1 after a deploy points to bad-release, not workload-restart.
+
 ### Targeted Disambiguation Probes (Conditional — CLASSIFY Handoff)
 
 When entered from the CLASSIFY low-confidence path with a SHORTLIST handoff artifact,
