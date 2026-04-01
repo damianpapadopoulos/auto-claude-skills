@@ -17,13 +17,55 @@ signals:
   contradiction_penalty: 15
 
 investigation_steps: |
-  When this playbook matches, shift investigation from application logs to infrastructure:
-  1. Identify the affected node(s) from pod distribution
-  2. Query node memory/CPU metrics — check for chronic overcommit (hours, not minutes)
-  3. Check kubelet logs for housekeeping delays and probe failures
-  4. Check GCE serial console for kernel-level indicators
-  5. Assess blast radius: what other pods/services are on the same node?
-  6. Check scheduling: are resource requests realistic vs actual usage?
+  When this playbook matches, shift investigation from application logs to infrastructure.
+  Follow this sequence — each step may narrow or redirect the root cause.
+
+  ## 1. Identify Affected Nodes
+  - Determine which node(s) host the failing pods from pod distribution
+  - Check if failures are localized to one node or spread across multiple
+
+  ## 2. Node Condition Discrimination
+  - Describe the affected node: check Conditions section for Ready status,
+    MemoryPressure, DiskPressure, PIDPressure, NetworkUnavailable
+  - Compare condition lastTransitionTime timestamps with incident start time
+  - If MemoryPressure/DiskPressure/PIDPressure preceded NotReady: resource
+    exhaustion is the trigger — shift to node-resource-exhaustion playbook
+  - If NotReady without pressure conditions: kubelet or network issue — continue
+
+  ## 3. Kubelet Health
+  - Check kubelet logs for: crash reasons, OOM kills, startup failures,
+    housekeeping delays, probe failures, eviction events
+  - Filter for error patterns: 'panic', 'fatal', 'connection refused',
+    'certificate', 'timeout', 'runtime'
+  - If kubelet is not running or repeatedly crashing: check system logs
+    (journalctl, dmesg) for kernel-level issues or OOM kills of kubelet itself
+
+  ## 4. Container Runtime Health
+  - Verify the container runtime (containerd/CRI-O) is healthy and responsive
+  - If runtime errors appear in kubelet logs (ContainerRuntimeDown,
+    RuntimeUnhealthy): kubelet depends on runtime and fails if runtime is down
+  - Check runtime logs for disk space, socket, or process issues
+
+  ## 5. Node-to-Control-Plane Connectivity
+  - If no recent heartbeat updates or kubelet shows network errors: verify
+    network connectivity between the node and the API server
+  - Check for network partitioning, firewall rule changes, or DNS issues
+  - If multiple nodes show similar patterns simultaneously: indicates
+    cluster-wide issue (API server, network infrastructure, control plane)
+
+  ## 6. Kubelet Certificate Validity
+  - If kubelet logs show certificate errors or authentication failures:
+    check client certificate validity and expiration date
+  - Compare certificate expiration with NotReady transition time
+  - If cert expired: kubelet cannot authenticate to API server
+
+  ## 7. Blast Radius and Scheduling
+  - Assess: what other pods/services run on the affected node?
+  - Check node resource metrics: memory/CPU allocatable utilization
+  - Check GCE serial console for kernel-level indicators
+  - Check scheduling: are resource requests realistic vs actual usage?
+  - If multiple nodes are affected: check for common patterns
+    (same node pool, same zone, same instance type)
 
 queries:
   node_status_scan:
