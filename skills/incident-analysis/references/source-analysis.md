@@ -1,24 +1,41 @@
 # Step 4b: Source Analysis — Reference Procedure
 
 Conditional step within INVESTIGATE. Analyzes source code at the deployed version
-when actionable stack traces are available and a bad-release scenario is plausible.
+when actionable stack traces are available and a bad-release or repo-backed
+config-change scenario is plausible.
 
 ## Gate Conditions
 
-All must be true:
+All must be true (bad-release path):
 1. **Bad-release gate:** `recent_deploy_detected` signal is detected, OR deploy timestamp
-   falls within the incident window or within 4 hours before incident start. Config-regression,
-   dependency-failure, and infra-failure categories do not trigger this step.
+   falls within the incident window or within 4 hours before incident start.
 2. **Actionable stack frame:** At least one stack frame from Step 2 resolves to a source file
    (not minified, compiled, or generated code). Skip frames from third-party libraries.
 3. **Resolvable deployed ref:** Deployment metadata provides an image tag or SHA that can be
    mapped to a git ref.
 
-If any condition is not met, skip with structured output:
+OR all must be true (config-change path):
+1. **Config-change gate:** `config_change_correlated_with_errors` signal is detected AND
+   the config change is repo-backed (has a git ref — e.g., Helm chart in a config repo,
+   application.yaml in the service repo). ConfigMap-only or console-applied changes without
+   a git ref do NOT trigger this path.
+2. **Actionable stack frame:** Same as above.
+3. **Resolvable deployed ref:** Same as above.
+
+When triggered via the config-change path, the procedure is identical but Step 4 (Check
+Recent Commits) prioritizes config files (*.yaml, *.properties, *.json, *.toml, *.env)
+alongside source files in the commit search.
+
+**User override:** If the user explicitly requests source analysis (e.g., "check the changes
+in the service code"), bypass the category gate (condition 1 in either path) but NOT the
+other bounds. Conditions 2-3 remain enforced. The procedure, scope constraints, token budget,
+and bounded-evidence rules are unchanged.
+
+If no gate is met and no user override, skip with structured output:
 ```yaml
 source_analysis:
   status: skipped
-  skip_reason: "no actionable stack frame" | "deployed ref unresolvable" | "not bad-release category"
+  skip_reason: "no actionable stack frame" | "deployed ref unresolvable" | "not bad-release or config-change category"
 ```
 
 ## Post-Hop Workload Resolution

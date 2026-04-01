@@ -497,12 +497,19 @@ If evidence is ambiguous or borderline, do NOT hop — present trace timeline an
 
 Analyzes source code at the deployed version to identify regression candidates. Runs after Step 4 if trace correlation ran; if Step 4 was skipped, runs here on the currently scoped service.
 
-**Gate — all required:**
+**Gate — all required (bad-release path):**
 1. Actionable stack frame from Step 2 (skip minified/compiled/generated frames)
 2. Resolvable deployed ref (image tag or SHA from Step 2b deployment metadata)
-3. Bad-release category: `recent_deploy_detected` signal detected, OR deploy within incident window, OR deploy within 4 hours before incident start. Config-regression, dependency-failure, and infra-failure do **not** trigger this step.
+3. Bad-release category: `recent_deploy_detected` signal detected, OR deploy within incident window, OR deploy within 4 hours before incident start.
 
-**If any condition is not met:** Set `source_analysis.status: skipped` with `skip_reason` and proceed to Step 5.
+**OR all required (config-change path):**
+1. Actionable stack frame from Step 2
+2. Resolvable deployed ref
+3. `config_change_correlated_with_errors` signal detected AND config change is repo-backed (has a git ref). ConfigMap-only or console-applied changes do not trigger this path.
+
+**User override:** If the user explicitly requests source analysis, bypass the category gate (condition 3) but NOT conditions 1-2 or the procedure bounds.
+
+**If no gate is met:** Set `source_analysis.status: skipped` with `skip_reason` and proceed to Step 5.
 
 **Post-hop rule:** If Step 4 shifted investigation to Service B, resolve Service B's workload identity from trace/log resource labels (not by assuming deployment name matches service name). Do one bounded deployment-metadata lookup for that workload. If workload identity is ambiguous, skip with reason.
 
@@ -511,7 +518,9 @@ Analyzes source code at the deployed version to identify regression candidates. 
 2. Map top 1-2 actionable stack frames to source files; verify at deployed ref
 3. Read error location +/- 15 lines context (bounded evidence — never full files or diffs)
 4. Check last 3 commits within 48h for regression candidates
-5. Emit structured output: `source_analysis.status` (`reviewed_no_regression` | `candidate_found` | `skipped` | `unavailable`), `source_files[]`, `regression_candidates[]`
+4.5. Cross-reference candidates with observed log patterns (`explains_patterns[]`, `cannot_explain_patterns[]`)
+4.5b. If no candidate explains dominant error: bounded expansion (same-commit siblings, then same-package peers)
+5. Emit structured output: `source_analysis.status`, `source_files[]`, `regression_candidates[]`, `analysis_basis`
 
 **Tool tiers:** GitHub API (Tier 1) → `git show` (Tier 2) → provide URL for manual inspection (Tier 3).
 
