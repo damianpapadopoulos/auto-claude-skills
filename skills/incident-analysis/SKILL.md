@@ -314,7 +314,7 @@ No command proposed at this confidence level. Gathering more evidence for reclas
 
 ## Stage 2 — INVESTIGATE
 
-**Re-entry from CLASSIFY (< 60 path):** When entered from the CLASSIFY low-confidence path, only Steps 1-5 run. Steps 6-9 (Flight Plan, context synthesis, completeness gate, POSTMORTEM transition) are SKIPPED. Findings feed back to CLASSIFY for reclassification.
+**Re-entry from CLASSIFY (< 60 path):** When entered from the CLASSIFY low-confidence path, only Steps 1-5 run. Steps 6-9 (Flight Plan, Timeline Extraction, context synthesis, completeness gate, POSTMORTEM transition) are SKIPPED. Findings feed back to CLASSIFY for reclassification.
 
 ### Step 1: Query Logs with Narrowed Filter
 
@@ -334,6 +334,18 @@ Not all errors are equally informative. Classify extracted signals into three ti
 | 3 | **Expected application** — known error types at baseline rates | Low — tells you **what** is normal | Authentication failures at typical rates, validation errors, 4xx responses |
 
 **Investigate Tier 1 errors first**, even if they appear in services outside your current scope. A single anomalous error in an adjacent service is often more diagnostic than dozens of infrastructure errors in the symptomatic service. When Tier 1 errors are found in adjacent services, they are candidates for scope expansion — note them for Step 3.
+
+**Container exit code guide** (when container termination status is available from pod describe or events):
+
+| Exit Code | Signal | Meaning | Investigation Route |
+|-----------|--------|---------|-------------------|
+| 0 | Normal exit | Container completed successfully | Check if this is a long-running service that should not exit — possible entrypoint/command misconfiguration |
+| 1 | Application error | Uncaught exception or assertion failure | Check previous container logs for stack trace → route to bad-release or config-regression |
+| 137 | SIGKILL (OOMKilled) | Kernel OOM killer terminated the process | Check memory limits vs actual usage → route to resource-overload or node-resource-exhaustion. A restart will not help if limits are too low. |
+| 139 | SIGSEGV | Segmentation fault in native code | Check recent deployment for native dependency changes → route to bad-release |
+| 143 | SIGTERM | Graceful termination timeout exceeded | Check `terminationGracePeriodSeconds`, shutdown hooks, long-running connections. Not necessarily a failure — may indicate slow shutdown. |
+
+Use exit codes to route investigation before proposing mitigation. Exit code 137 (OOMKilled) means restart is pointless — the pod will OOM again. Exit code 1 after a deploy points to bad-release, not workload-restart.
 
 ### Targeted Disambiguation Probes (Conditional — CLASSIFY Handoff)
 
@@ -356,6 +368,54 @@ After all probes complete, feed results back to CLASSIFY for reclassification.
 - Error grouping (frequency, first/last occurrence)
 - Recent deployment correlation (deploy timestamp vs. error spike?)
 - Resource metrics (CPU, memory, latency) if available
+
+**CrashLoopBackOff triage (conditional — when `crash_loop_detected` signal is present):**
+
+Before proposing workload-restart, complete the diagnostic sequence defined in the `workload-restart` playbook's `investigation_steps`. The sequence requires: pod describe → scoped events → termination reason and exit code (see exit code guide in Step 2) → previous container logs → deployment/probe configuration → rollout history correlation. Each step may redirect to a different root-cause playbook:
+- Exit code 137 (OOMKilled) → resource-overload or node-resource-exhaustion, not restart
+- Exit code 1 with stack trace after recent deploy → bad-release investigation
+- Events show ImagePullBackOff or CreateContainerConfigError → pod-start failure branch below
+- Crash onset correlates with rollout timestamp → bad-release-rollback investigation
+- Only if triage is inconclusive and no other playbook has higher confidence does workload-restart remain a candidate.
+
+**Probe and startup-envelope checks (conditional — when `liveness_probe_failures` signal is present or pod restart count is high without clear application errors):**
+
+Before attributing failures to application state, verify whether probe configuration is appropriate:
+1. **Probe configuration review:** Extract `initialDelaySeconds`, `timeoutSeconds`, `periodSeconds`, `failureThreshold`, and `startupProbe` (if any) from the pod spec
+2. **Startup time analysis:** Compare `initialDelaySeconds` to actual container startup time. If startup takes longer than the initial delay and no startupProbe is configured, liveness probes will kill the container before it is ready — this is a probe misconfiguration, not an application failure
+3. **Timeout budget:** Is `timeoutSeconds` realistic for what the probe endpoint does? If the probe hits a database or external service, network latency may exceed the timeout under load
+4. **Restart cadence:** Calculate time between restarts. If it matches `initialDelaySeconds + (failureThreshold x periodSeconds)`, the probe is killing the container during startup — fix probe config, not restart
+5. **Dependency reachability:** Does the probe endpoint depend on services that are currently unavailable? (database, cache, upstream API). If so, the probe failure is a symptom of dependency failure — route to dependency-failure investigation
+
+Routing from probe findings — **this branch is guidance-only (no autonomous mutations)**:
+- Probe timing causes restarts during startup → record "probe misconfiguration" as root cause in the investigation synthesis and recommend a config fix (increase `initialDelaySeconds`, add `startupProbe`) as a **postmortem action item**. Do NOT propose workload-restart — a restart will hit the same probe wall. There is no commandable playbook for probe config changes; the fix is a code/manifest change tracked through the normal development workflow.
+- Probe endpoint depends on unavailable dependency → route to dependency-failure investigation
+- Probe config is reasonable and application genuinely fails health checks → continue with workload-failure classification
+
+**Pod-start failure branch (conditional — when events show `ImagePullBackOff`, `ErrImagePull`, or `CreateContainerConfigError`):**
+
+These symptoms indicate the pod cannot start at all — this is fundamentally different from a running application crashing. Investigate before classifying:
+
+1. **ImagePullBackOff / ErrImagePull:**
+   - Extract the exact error message from pod events: "unauthorized" (credential issue), "not found" or "manifest unknown" (wrong image/tag), "timeout" or "connection refused" (registry unreachable)
+   - Verify the image reference (registry, repository, tag) in the deployment spec
+   - Check `imagePullSecrets` configuration: does the Secret exist, is it type `kubernetes.io/dockerconfigjson`, are credentials valid and not expired?
+   - If image tag was recently changed → route to bad-release (wrong tag pushed)
+   - If `imagePullSecrets` were changed or Secret is missing → route to config-regression
+   - If registry is unreachable and no config changed → route to dependency-failure (registry as external dependency)
+
+2. **CreateContainerConfigError:**
+   - Check for missing ConfigMap or Secret references in the pod spec
+   - Check if a referenced ConfigMap or Secret was recently deleted or renamed
+   - Check environment variable references that point to non-existent keys
+   - Route to config-regression for further investigation
+
+3. **Volume mount failures** (`FailedMount`, `FailedAttachVolume`):
+   - Check PVC status (Pending, Lost, Bound) and StorageClass availability
+   - Check if the volume or StorageClass was recently modified
+   - Route to infra-failure if the storage backend is unhealthy
+
+This branch is non-mutating — it gathers evidence that feeds back into CLASSIFY for root-cause playbook selection. Do not propose restart or rollback from this branch.
 
 **Infrastructure escalation (conditional):** If Step 3 reveals that multiple pods or services are failing simultaneously — especially with `context deadline exceeded`, widespread probe timeouts, or errors localized to a single node — the root cause is likely at the node or infrastructure level, not the application level. Shift investigation to:
 - Node resource metrics (memory/CPU allocatable utilization)
@@ -437,12 +497,19 @@ If evidence is ambiguous or borderline, do NOT hop — present trace timeline an
 
 Analyzes source code at the deployed version to identify regression candidates. Runs after Step 4 if trace correlation ran; if Step 4 was skipped, runs here on the currently scoped service.
 
-**Gate — all required:**
+**Gate — all required (bad-release path):**
 1. Actionable stack frame from Step 2 (skip minified/compiled/generated frames)
 2. Resolvable deployed ref (image tag or SHA from Step 2b deployment metadata)
-3. Bad-release category: `recent_deploy_detected` signal detected, OR deploy within incident window, OR deploy within 4 hours before incident start. Config-regression, dependency-failure, and infra-failure do **not** trigger this step.
+3. Bad-release category: `recent_deploy_detected` signal detected, OR deploy within incident window, OR deploy within 4 hours before incident start.
 
-**If any condition is not met:** Set `source_analysis.status: skipped` with `skip_reason` and proceed to Step 5.
+**OR all required (config-change path):**
+1. Actionable stack frame from Step 2
+2. Resolvable deployed ref
+3. `config_change_correlated_with_errors` signal detected AND config change is repo-backed (has a git ref). ConfigMap-only or console-applied changes do not trigger this path.
+
+**User override:** If the user explicitly requests source analysis, bypass the category gate (condition 3) but NOT conditions 1-2 or the procedure bounds.
+
+**If no gate is met:** Set `source_analysis.status: skipped` with `skip_reason` and proceed to Step 5.
 
 **Post-hop rule:** If Step 4 shifted investigation to Service B, resolve Service B's workload identity from trace/log resource labels (not by assuming deployment name matches service name). Do one bounded deployment-metadata lookup for that workload. If workload identity is ambiguous, skip with reason.
 
@@ -451,7 +518,9 @@ Analyzes source code at the deployed version to identify regression candidates. 
 2. Map top 1-2 actionable stack frames to source files; verify at deployed ref
 3. Read error location +/- 15 lines context (bounded evidence — never full files or diffs)
 4. Check last 3 commits within 48h for regression candidates
-5. Emit structured output: `source_analysis.status` (`reviewed_no_regression` | `candidate_found` | `skipped` | `unavailable`), `source_files[]`, `regression_candidates[]`
+4.5. Cross-reference candidates with observed log patterns (`explains_patterns[]`, `cannot_explain_patterns[]`)
+4.5b. If no candidate explains dominant error: bounded expansion (same-commit siblings, then same-package peers)
+5. Emit structured output: `source_analysis.status`, `source_files[]`, `regression_candidates[]`, `analysis_basis`
 
 **Tool tiers:** GitHub API (Tier 1) → `git show` (Tier 2) → provide URL for manual inspection (Tier 3).
 
@@ -475,6 +544,12 @@ State the hypothesis in one sentence. Then:
 
    **Mandatory evidence for traffic-pattern hypotheses:** If the hypothesis attributes the trigger to a traffic pattern change (e.g., "afternoon peak traffic"), verify against a baseline from a **different day at the same time** (or the nearest comparable stable window if traffic patterns changed recently). Compare: caller distribution, call volume per caller, and method mix. If the pattern matches the baseline (same callers, same volume), the traffic hypothesis is supported. If one caller's volume is anomalously high, investigate that caller's health before accepting the hypothesis.
 
+5. **Capacity headroom check (when resource-related signals are present):** Compare current resource utilization against the nearest stable baseline (different day, same time window). Record:
+   - Current vs baseline: node CPU/memory allocatable utilization, pod count, sum of resource requests
+   - Headroom drift: has available capacity been shrinking over days/weeks? (query 7-day trend if metrics available)
+   - HPA/quota status: is HPA at maximum replicas? Are resource quotas near limits?
+   If headroom has been chronically shrinking, note as a contributing factor even if an acute trigger is identified. The acute trigger may recur at lower thresholds — the chronic drift makes the system fragile. If headroom data is unavailable, state "capacity headroom not assessed" and flag as an open question.
+
    If no acute change is found after active search, the hypothesis is weaker — note it as "chronic contributing factor without identified trigger" rather than confirmed root cause.
 
 ### Step 6: Flight Plan
@@ -486,11 +561,31 @@ Before touching any code, output a bulleted list of:
 
 Ask for explicit developer approval before proceeding.
 
+### Step 6b: Timeline Extraction
+
+Before synthesizing (Step 7), extract candidate timeline events from all evidence collected during Steps 1-5. This gives Step 7 a structured input rather than relying on attention-based reconstruction.
+
+For each timestamped event found in collected evidence, extract:
+- **timestamp_utc:** the event timestamp in UTC
+- **time_precision:** `exact` (from log/metric timestamp with second-level or better granularity), `minute` (from deploy event, alert firing, or minute-resolution metric), or `approximate` (from user report, estimated from context)
+- **event_kind:** one of `log_entry` | `metric_alert` | `deploy_event` | `probe_event` | `user_report` | `recovery_signal`
+- **description:** one-sentence description of what happened
+- **evidence_source:** where this was observed (e.g., "SpiceDB gRPC logs", "k8s events")
+
+**Dedupe rules:**
+- If two events describe the same occurrence at different precisions, keep the higher-precision entry. E.g., "~14:18 SpiceDB spike" (approximate, user report) is superseded by "14:18:23 CheckPermission 4335ms" (exact, gRPC log).
+- If `log_entry` and `metric_alert` cover the same moment, keep both — they are different evidence types for the same event.
+- Deploy events from deployment metadata and from audit logs are the same event; keep the one with more detail.
+
+**Scope:** Steps 1-5 evidence only. Exclude Flight Plan items (Step 6) — those are proposed actions, not observed events.
+
+Sort chronologically. Present the candidate list to Step 7 for curation into the final timeline.
+
 ### Step 7: Context Discipline — Synthesize
 
 Write a synthesized summary as an explicit output block. The summary MUST include all of the following (not just timeline and root cause):
 
-1. **Timeline:** Chronological sequence of events with UTC timestamps and evidence sources
+1. **Timeline:** Curate the candidate timeline from Step 6b into the final timeline. Remove noise, merge related events, verify chronological ordering. Each entry retains `time_precision` and `evidence_source` from Step 6b. Flag any candidate events removed during curation (and why) so the completeness gate can assess coverage.
 2. **Root cause:** The primary hypothesis with supporting evidence
 3. **ruled-out hypotheses:** Each alternative considered, the disconfirming evidence found, and why it was eliminated
 4. **hypothesis revisions:** Where the investigation changed direction, what triggered the revision, and what the previous hypothesis was
@@ -658,6 +753,12 @@ Must include verified recovery timestamp.
 ## 6. Contributing Factors
 Ordered by impact (most impactful first, not discovery order).
 Each factor: what it is, why it made things worse.
+When resource exhaustion or capacity constraints contributed to the incident, include a **Capacity Context** entry:
+- Current utilization vs allocatable (node level, at incident time)
+- Resource request coverage: actual/requested ratio for key workloads
+- HPA scaling ceiling: current replicas vs max, and whether max was reached
+- Whether the condition is chronic (weeks of headroom drift) or acute (single event triggered exhaustion)
+This prevents "increase resource limits" action items without context on whether the headroom trend is systemic.
 
 ## 7. Lessons Learned
 What went well, what went wrong, where we got lucky.

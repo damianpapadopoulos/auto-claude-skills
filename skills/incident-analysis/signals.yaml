@@ -214,6 +214,49 @@ signals:
         recency_window_seconds: 900
 
   # ---------------------------------------------------------------------------
+  # Pod-start failure signals
+  # ---------------------------------------------------------------------------
+
+  image_pull_failure:
+    title: "Image pull failure (ImagePullBackOff or ErrImagePull)"
+    base_weight: 15
+    detection:
+      method: event_presence
+      params:
+        event_type: ImagePullBackOff
+        alternate_events:
+          - ErrImagePull
+          - FailedToPullImage
+        recency_window_seconds: 1800
+
+  config_error_detected:
+    title: "Container config error (missing ConfigMap/Secret/env ref)"
+    base_weight: 10
+    detection:
+      method: event_presence
+      params:
+        event_type: CreateContainerConfigError
+        alternate_events:
+          - InvalidConfigMap
+        recency_window_seconds: 1800
+
+  # ---------------------------------------------------------------------------
+  # Node-runtime signals
+  # ---------------------------------------------------------------------------
+
+  kubelet_not_running:
+    title: "kubelet not running or not posting status"
+    base_weight: 15
+    detection:
+      method: event_presence
+      params:
+        event_type: KubeletNotReady
+        alternate_events:
+          - KubeletDown
+          - NodeUnreachable
+        recency_window_seconds: 1800
+
+  # ---------------------------------------------------------------------------
   # Caller behavior signals
   # ---------------------------------------------------------------------------
 

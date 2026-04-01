@@ -111,6 +111,73 @@ for fixture_file in "${FIXTURE_DIR}"/*.json; do
             _record_fail "${fname}: dominant_callers_identified is array" "got type: ${dom_callers_type}"
         fi
     fi
+
+    # Timeline completeness (Improvement A)
+    timeline_min="$(jq -r '.expected.timeline_events_min // empty' "${fixture_file}")"
+    if [ -n "${timeline_min}" ]; then
+        if [ "${timeline_min}" -gt 0 ] 2>/dev/null; then
+            _record_pass "${fname}: timeline_events_min is positive (${timeline_min})"
+        else
+            _record_fail "${fname}: timeline_events_min is positive" "got: ${timeline_min}"
+        fi
+    fi
+
+    timeline_recovery="$(jq -r '.expected.timeline_has_recovery // empty' "${fixture_file}")"
+    if [ -n "${timeline_recovery}" ]; then
+        case "${timeline_recovery}" in
+            true|false)
+                _record_pass "${fname}: timeline_has_recovery is boolean (${timeline_recovery})" ;;
+            *)
+                _record_fail "${fname}: timeline_has_recovery is boolean" "got: ${timeline_recovery}" ;;
+        esac
+    fi
+
+    # Timeline precision labels (Improvement A)
+    precision="$(jq -r '.expected.timeline_precision_labels // empty' "${fixture_file}")"
+    if [ -n "${precision}" ]; then
+        case "${precision}" in
+            true|false)
+                _record_pass "${fname}: timeline_precision_labels is boolean (${precision})" ;;
+            *)
+                _record_fail "${fname}: timeline_precision_labels is boolean" "got: ${precision}" ;;
+        esac
+    fi
+
+    # Source analysis status (Improvements B, C, D)
+    sa_status="$(jq -r '.expected.source_analysis_status // empty' "${fixture_file}")"
+    if [ -n "${sa_status}" ]; then
+        case "${sa_status}" in
+            skipped|reviewed_no_regression|candidate_found|unavailable)
+                _record_pass "${fname}: source_analysis_status valid (${sa_status})" ;;
+            *)
+                _record_fail "${fname}: source_analysis_status valid" \
+                  "expected skipped|reviewed_no_regression|candidate_found|unavailable, got: ${sa_status}" ;;
+        esac
+    fi
+
+    # Analysis basis (Improvement C) — null is a valid value (Step 4b didn't fire)
+    if jq -e '.expected | has("source_analysis_basis")' "${fixture_file}" >/dev/null 2>&1; then
+        sa_basis="$(jq -r '.expected.source_analysis_basis | tostring' "${fixture_file}")"
+        case "${sa_basis}" in
+            primary_frame|bounded_expansion_same_commit|bounded_expansion_same_package)
+                _record_pass "${fname}: source_analysis_basis valid (${sa_basis})" ;;
+            null)
+                _record_pass "${fname}: source_analysis_basis is null (Step 4b skipped)" ;;
+            *)
+                _record_fail "${fname}: source_analysis_basis valid" "got: ${sa_basis}" ;;
+        esac
+    fi
+
+    # Cross-reference patterns (Improvement B) — false is a valid value
+    if jq -e '.expected | has("cross_reference_patterns")' "${fixture_file}" >/dev/null 2>&1; then
+        xref="$(jq -r '.expected.cross_reference_patterns | tostring' "${fixture_file}")"
+        case "${xref}" in
+            true|false)
+                _record_pass "${fname}: cross_reference_patterns is boolean (${xref})" ;;
+            *)
+                _record_fail "${fname}: cross_reference_patterns is boolean" "got: ${xref}" ;;
+        esac
+    fi
 done
 
 print_summary

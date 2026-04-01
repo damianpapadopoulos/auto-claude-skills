@@ -1,24 +1,41 @@
 # Step 4b: Source Analysis — Reference Procedure
 
 Conditional step within INVESTIGATE. Analyzes source code at the deployed version
-when actionable stack traces are available and a bad-release scenario is plausible.
+when actionable stack traces are available and a bad-release or repo-backed
+config-change scenario is plausible.
 
 ## Gate Conditions
 
-All must be true:
+All must be true (bad-release path):
 1. **Bad-release gate:** `recent_deploy_detected` signal is detected, OR deploy timestamp
-   falls within the incident window or within 4 hours before incident start. Config-regression,
-   dependency-failure, and infra-failure categories do not trigger this step.
+   falls within the incident window or within 4 hours before incident start.
 2. **Actionable stack frame:** At least one stack frame from Step 2 resolves to a source file
    (not minified, compiled, or generated code). Skip frames from third-party libraries.
 3. **Resolvable deployed ref:** Deployment metadata provides an image tag or SHA that can be
    mapped to a git ref.
 
-If any condition is not met, skip with structured output:
+OR all must be true (config-change path):
+1. **Config-change gate:** `config_change_correlated_with_errors` signal is detected AND
+   the config change is repo-backed (has a git ref — e.g., Helm chart in a config repo,
+   application.yaml in the service repo). ConfigMap-only or console-applied changes without
+   a git ref do NOT trigger this path.
+2. **Actionable stack frame:** Same as above.
+3. **Resolvable deployed ref:** Same as above.
+
+When triggered via the config-change path, the procedure is identical but Step 4 (Check
+Recent Commits) prioritizes config files (*.yaml, *.properties, *.json, *.toml, *.env)
+alongside source files in the commit search.
+
+**User override:** If the user explicitly requests source analysis (e.g., "check the changes
+in the service code"), bypass the category gate (condition 1 in either path) but NOT the
+other bounds. Conditions 2-3 remain enforced. The procedure, scope constraints, token budget,
+and bounded-evidence rules are unchanged.
+
+If no gate is met and no user override, skip with structured output:
 ```yaml
 source_analysis:
   status: skipped
-  skip_reason: "no actionable stack frame" | "deployed ref unresolvable" | "not bad-release category"
+  skip_reason: "no actionable stack frame" | "deployed ref unresolvable" | "not bad-release or config-change category"
 ```
 
 ## Post-Hop Workload Resolution
@@ -92,11 +109,52 @@ Look for regression indicators:
 
 For monorepos: path-filter to service root if mapping is known.
 
+### Step 4.5: Cross-Reference with Observed Errors
+
+For each regression candidate from Step 4:
+1. State which observed error pattern(s) from INVESTIGATE Step 2 this change could explain.
+   Be specific: "removed null check → could produce the NPE in UserController:142 seen in
+   logs at 14:18."
+2. State which observed patterns it CANNOT explain. E.g., "this change only affects the
+   /users endpoint, but errors were also seen on /diet-suggestions."
+3. If no candidate explains the dominant error pattern, note: "no commit explains primary
+   error pattern" — this weakens the bad-release hypothesis and should be reflected in
+   Step 5 hypothesis formation.
+
+### Step 4.5b: Bounded Expansion (conditional)
+
+Gate: `source_analysis.status == reviewed_no_regression` after Step 4.5, AND no candidate's
+`explains_patterns` includes the dominant error pattern from INVESTIGATE Step 2. This fires
+when: (a) `regression_candidates` is empty, (b) candidates exist but all have empty
+`explains_patterns`, OR (c) candidates explain secondary symptoms but not the dominant error.
+
+Expand the search using commit and module proximity:
+
+1. **Same-commit siblings:** Other files changed in the same candidate commits from Step 4
+   (i.e., files that were part of the same commit as the analyzed file). Max 5 files,
+   excluding lockfiles, generated code, test files, docs. If a candidate is found, stop —
+   do not proceed to step 2.
+2. **Same-package peers (only if step 1 found no candidate):** Check files in the same
+   module/package as the mapped stack frame (e.g., same Java package, same Python module,
+   same Go package) that were modified within the 48h window. Max 3 files.
+
+For each expanded file, apply Step 4.5 cross-reference: can this change explain the observed
+error patterns?
+
+Output: update `source_analysis` with:
+```yaml
+  analysis_basis: "primary_frame" | "bounded_expansion_same_commit" | "bounded_expansion_same_package"
+```
+
+If expansion still yields no candidate, status remains `reviewed_no_regression` with
+`analysis_basis: "bounded_expansion_same_package"` (indicating expansion was attempted).
+
 ### Step 5: Emit Structured Output
 
 ```yaml
 source_analysis:
   status: reviewed_no_regression | candidate_found
+  analysis_basis: "primary_frame"
   deployed_ref: "v2.3.1"
   resolved_commit_sha: "abc123def456..."
   source_files:
@@ -111,12 +169,38 @@ source_analysis:
       date: "2026-03-24T10:30:00Z"
       summary: "removed null check in getUser()"
       files: ["UserController.java"]
+      explains_patterns: ["NPE in UserController:142", "null user in toDto()"]
+      cannot_explain_patterns: ["DEADLINE_EXCEEDED on SpiceDB calls"]
 ```
 
-When no regression is found:
+When candidates were reviewed but none explain the dominant error (Step 4.5b depends
+on this distinction from the empty-list case below):
 ```yaml
 source_analysis:
   status: reviewed_no_regression
+  analysis_basis: "primary_frame"
+  deployed_ref: "v2.3.1"
+  resolved_commit_sha: "abc123def456..."
+  source_files:
+    - path: "src/main/java/com/oviva/user/UserController.java"
+      line: 142
+      code_context: "user.toDto() — no obvious defect at deployed version"
+      status: analyzed
+  regression_candidates:
+    - commit_sha: "def456..."
+      date: "2026-03-24T10:30:00Z"
+      summary: "removed null check in getUser()"
+      files: ["UserController.java"]
+      explains_patterns: []
+      cannot_explain_patterns: ["DEADLINE_EXCEEDED on SpiceDB calls"]
+  cross_reference_note: "no commit explains primary error pattern — bad-release hypothesis weakened"
+```
+
+When no candidates were found at all (empty list, no cross-reference possible):
+```yaml
+source_analysis:
+  status: reviewed_no_regression
+  analysis_basis: "primary_frame"
   deployed_ref: "v2.3.1"
   resolved_commit_sha: "abc123def456..."
   source_files:
@@ -125,6 +209,7 @@ source_analysis:
       code_context: "user.toDto() — no obvious defect at deployed version"
       status: analyzed
   regression_candidates: []
+  cross_reference_note: null
 ```
 
 ## Failure Handling
@@ -140,7 +225,8 @@ The user must know a data source was unavailable. Never silently degrade.
 ## Scope Constraints
 
 - **Same service only.** No multi-repo traversal.
-- **Bounded:** Max 1-2 top actionable stack frames, 1-2 files, last 3 commits within 48h.
+- **Bounded:** Max 1-2 top actionable stack frames, 1-2 primary files, last 3 commits within
+  48h. Bounded expansion (Step 4.5b): max 5 same-commit siblings + 3 same-package peers.
 - **Read-only.** No code modification suggestions (that's the Flight Plan in Step 6).
 - **No blame analysis** or authorship tracking.
 
