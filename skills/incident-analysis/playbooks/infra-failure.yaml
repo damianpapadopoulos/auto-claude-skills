@@ -10,6 +10,7 @@ signals:
     - multi_pod_probe_timeout
     - node_memory_overcommit
     - kubelet_housekeeping_degraded
+    - kubelet_not_running
   contradicting:
     - error_rate_spike_correlated_with_deploy
   veto_signals: []

@@ -10,6 +10,7 @@ description: >
 signals:
   supporting:
     - config_change_correlated_with_errors
+    - config_error_detected
   contradicting: []
   veto_signals: []
   contradiction_penalty: 0
