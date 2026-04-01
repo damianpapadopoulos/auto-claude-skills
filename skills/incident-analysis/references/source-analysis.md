@@ -92,6 +92,18 @@ Look for regression indicators:
 
 For monorepos: path-filter to service root if mapping is known.
 
+### Step 4.5: Cross-Reference with Observed Errors
+
+For each regression candidate from Step 4:
+1. State which observed error pattern(s) from INVESTIGATE Step 2 this change could explain.
+   Be specific: "removed null check → could produce the NPE in UserController:142 seen in
+   logs at 14:18."
+2. State which observed patterns it CANNOT explain. E.g., "this change only affects the
+   /users endpoint, but errors were also seen on /diet-suggestions."
+3. If no candidate explains the dominant error pattern, note: "no commit explains primary
+   error pattern" — this weakens the bad-release hypothesis and should be reflected in
+   Step 5 hypothesis formation.
+
 ### Step 5: Emit Structured Output
 
 ```yaml
@@ -111,9 +123,33 @@ source_analysis:
       date: "2026-03-24T10:30:00Z"
       summary: "removed null check in getUser()"
       files: ["UserController.java"]
+      explains_patterns: ["NPE in UserController:142", "null user in toDto()"]
+      cannot_explain_patterns: ["DEADLINE_EXCEEDED on SpiceDB calls"]
 ```
 
-When no regression is found:
+When candidates were reviewed but none explain the dominant error (Step 4.5b depends
+on this distinction from the empty-list case below):
+```yaml
+source_analysis:
+  status: reviewed_no_regression
+  deployed_ref: "v2.3.1"
+  resolved_commit_sha: "abc123def456..."
+  source_files:
+    - path: "src/main/java/com/oviva/user/UserController.java"
+      line: 142
+      code_context: "user.toDto() — no obvious defect at deployed version"
+      status: analyzed
+  regression_candidates:
+    - commit_sha: "def456..."
+      date: "2026-03-24T10:30:00Z"
+      summary: "removed null check in getUser()"
+      files: ["UserController.java"]
+      explains_patterns: []
+      cannot_explain_patterns: ["DEADLINE_EXCEEDED on SpiceDB calls"]
+  cross_reference_note: "no commit explains primary error pattern — bad-release hypothesis weakened"
+```
+
+When no candidates were found at all (empty list, no cross-reference possible):
 ```yaml
 source_analysis:
   status: reviewed_no_regression
@@ -125,6 +161,7 @@ source_analysis:
       code_context: "user.toDto() — no obvious defect at deployed version"
       status: analyzed
   regression_candidates: []
+  cross_reference_note: null
 ```
 
 ## Failure Handling
