@@ -19,6 +19,8 @@ During active investigation, all application-level file reads, log queries, and 
 
 **Infrastructure escalation exception:** When Step 3 (Single-Service Deep Dive) identifies multi-pod or multi-service failures that indicate a node-level or infrastructure-level root cause, the scope expands to the affected node(s) and their infrastructure signals (kubelet logs, serial console, audit logs, node-level metrics). This escalation is bounded — queries target the specific node(s) implicated by the application-level evidence, not the entire cluster. The completeness gate (Step 8, Q6) may require checking peer nodes for systemic risk; this is also permitted under this exception.
 
+**Shared resource and error taxonomy exception:** When Step 2 identifies Tier 1 (anomalous) errors in services adjacent to the symptomatic one, or when Step 3 identifies a shared resource under pressure with evidence of multi-consumer impact, the scope expands to the shared resource's known consumer set (deployment history, connection metrics, error logs). This escalation is bounded to declared consumers of the identified resource, not the entire organization or cluster.
+
 ### 3. Temp-File Execution Pattern (Tier 2 Only)
 
 For any LQL query longer than 5 words or containing quotes/regex, write the query to a session-scoped temp file via `mktemp` and execute via file read. This avoids escaping failures and concurrent-session race conditions:
