@@ -104,11 +104,40 @@ For each regression candidate from Step 4:
    error pattern" — this weakens the bad-release hypothesis and should be reflected in
    Step 5 hypothesis formation.
 
+### Step 4.5b: Bounded Expansion (conditional)
+
+Gate: `source_analysis.status == reviewed_no_regression` after Step 4.5, AND no candidate's
+`explains_patterns` includes the dominant error pattern from INVESTIGATE Step 2. This fires
+when: (a) `regression_candidates` is empty, (b) candidates exist but all have empty
+`explains_patterns`, OR (c) candidates explain secondary symptoms but not the dominant error.
+
+Expand the search using commit and module proximity:
+
+1. **Same-commit siblings:** Other files changed in the same candidate commits from Step 4
+   (i.e., files that were part of the same commit as the analyzed file). Max 5 files,
+   excluding lockfiles, generated code, test files, docs. If a candidate is found, stop —
+   do not proceed to step 2.
+2. **Same-package peers (only if step 1 found no candidate):** Check files in the same
+   module/package as the mapped stack frame (e.g., same Java package, same Python module,
+   same Go package) that were modified within the 48h window. Max 3 files.
+
+For each expanded file, apply Step 4.5 cross-reference: can this change explain the observed
+error patterns?
+
+Output: update `source_analysis` with:
+```yaml
+  analysis_basis: "primary_frame" | "bounded_expansion_same_commit" | "bounded_expansion_same_package"
+```
+
+If expansion still yields no candidate, status remains `reviewed_no_regression` with
+`analysis_basis: "bounded_expansion_same_package"` (indicating expansion was attempted).
+
 ### Step 5: Emit Structured Output
 
 ```yaml
 source_analysis:
   status: reviewed_no_regression | candidate_found
+  analysis_basis: "primary_frame"
   deployed_ref: "v2.3.1"
   resolved_commit_sha: "abc123def456..."
   source_files:
@@ -132,6 +161,7 @@ on this distinction from the empty-list case below):
 ```yaml
 source_analysis:
   status: reviewed_no_regression
+  analysis_basis: "primary_frame"
   deployed_ref: "v2.3.1"
   resolved_commit_sha: "abc123def456..."
   source_files:
@@ -153,6 +183,7 @@ When no candidates were found at all (empty list, no cross-reference possible):
 ```yaml
 source_analysis:
   status: reviewed_no_regression
+  analysis_basis: "primary_frame"
   deployed_ref: "v2.3.1"
   resolved_commit_sha: "abc123def456..."
   source_files:
@@ -177,7 +208,8 @@ The user must know a data source was unavailable. Never silently degrade.
 ## Scope Constraints
 
 - **Same service only.** No multi-repo traversal.
-- **Bounded:** Max 1-2 top actionable stack frames, 1-2 files, last 3 commits within 48h.
+- **Bounded:** Max 1-2 top actionable stack frames, 1-2 primary files, last 3 commits within
+  48h. Bounded expansion (Step 4.5b): max 5 same-commit siblings + 3 same-package peers.
 - **Read-only.** No code modification suggestions (that's the Flight Plan in Step 6).
 - **No blame analysis** or authorship tracking.
 
