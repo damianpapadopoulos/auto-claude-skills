@@ -482,7 +482,21 @@ With:
 1. **Timeline:** Curate the candidate timeline from Step 6b into the final timeline. Remove noise, merge related events, verify chronological ordering. Each entry retains `time_precision` and `evidence_source` from Step 6b. Flag any candidate events removed during curation (and why) so the completeness gate can assess coverage.
 ```
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Update low-confidence re-entry note**
+
+In SKILL.md line 317, update the CLASSIFY re-entry note to include the new Step 6b. Replace:
+
+```markdown
+**Re-entry from CLASSIFY (< 60 path):** When entered from the CLASSIFY low-confidence path, only Steps 1-5 run. Steps 6-9 (Flight Plan, context synthesis, completeness gate, POSTMORTEM transition) are SKIPPED. Findings feed back to CLASSIFY for reclassification.
+```
+
+With:
+
+```markdown
+**Re-entry from CLASSIFY (< 60 path):** When entered from the CLASSIFY low-confidence path, only Steps 1-5 run. Steps 6-9 (Flight Plan, Timeline Extraction, context synthesis, completeness gate, POSTMORTEM transition) are SKIPPED. Findings feed back to CLASSIFY for reclassification.
+```
+
+- [ ] **Step 4: Commit**
 
 ```bash
 git add skills/incident-analysis/SKILL.md
