@@ -421,13 +421,13 @@ install_registry_with_incident_analysis() {
       "name": "incident-analysis",
       "role": "domain",
       "phase": "DEBUG",
-      "triggers": ["(incident|postmortem|outage|root.cause|error.spike|log.analysis|production.error|staging.error)", "(connection.*(fail|refus|timeout|pool|exhaust|acquir)|oom.?kill|memory.pressure|cpu.*(throttl|saturat)|crash.?loop|liveness.probe|node.not.ready|upstream.*(fail|error|timeout))", "(sigterm|sigkill|shutdown.*(error|fail|grace)|active.connection|cloud.?sql|proxy.*(restart|error|fail|crash)|pod.*(restart|crash|evict)|latency.*(spike|p99)|p99.*(latency|spike|degrad)|request.timeout|circuit.break|deploy.*(fail|rollback))"],
+      "triggers": ["(incident|postmortem|outage|root.cause|error.spike|log.analysis|production.error|staging.error)", "(connection.*(fail|refus|timeout|pool|exhaust|acquir)|oom.?kill|memory.pressure|cpu.*(throttl|saturat)|crash.?loop|liveness.probe|node.not.ready|upstream.*(fail|error|timeout)|image.?pull.?(back.?off|fail|error)|err.?image.?pull|config.?(error|missing)|create.?container.?config|failed.?mount|pvc.*(pending|fail))", "(sigterm|sigkill|shutdown.*(error|fail|grace)|active.connection|cloud.?sql|proxy.*(restart|error|fail|crash)|pod.*(restart|crash|evict)|latency.*(spike|p99)|p99.*(latency|spike|degrad)|request.timeout|circuit.break|deploy.*(fail|rollback))"],
       "trigger_mode": "regex",
       "priority": 20,
       "precedes": [],
       "requires": [],
       "invoke": "Skill(auto-claude-skills:incident-analysis)",
-      "keywords": ["incident", "postmortem", "outage", "error spike", "connection failure", "connection pool", "cloud sql proxy", "graceful shutdown", "active connections", "health check", "pod restart", "latency spike", "request timeout"],
+      "keywords": ["incident", "postmortem", "outage", "error spike", "connection failure", "connection pool", "cloud sql proxy", "graceful shutdown", "active connections", "health check", "ImagePullBackOff", "image pull error", "CreateContainerConfigError", "missing ConfigMap", "missing Secret", "FailedMount", "pod restart", "latency spike", "request timeout"],
       "available": true,
       "enabled": true
     }] | .methodology_hints += [{
@@ -4599,11 +4599,56 @@ test_slo_burn_rate_routes_to_incident_analysis() {
     teardown_test_env
 }
 
+test_incident_analysis_triggers_on_image_pull_failure() {
+    echo "-- test: incident-analysis triggers on ImagePullBackOff --"
+    setup_test_env
+    install_registry_with_incident_analysis
+
+    local output context
+
+    output="$(run_hook "pods stuck in ImagePullBackOff after we pushed the new tag, getting ErrImagePull on the registry")"
+    context="$(extract_context "${output}")"
+    assert_contains "incident-analysis fires on image pull failure" "incident-analysis" "${context}"
+
+    teardown_test_env
+}
+
+test_incident_analysis_triggers_on_config_error() {
+    echo "-- test: incident-analysis triggers on CreateContainerConfigError --"
+    setup_test_env
+    install_registry_with_incident_analysis
+
+    local output context
+
+    output="$(run_hook "deployment is failing with CreateContainerConfigError, looks like a missing ConfigMap reference")"
+    context="$(extract_context "${output}")"
+    assert_contains "incident-analysis fires on config error" "incident-analysis" "${context}"
+
+    teardown_test_env
+}
+
+test_incident_analysis_triggers_on_volume_mount_failure() {
+    echo "-- test: incident-analysis triggers on FailedMount --"
+    setup_test_env
+    install_registry_with_incident_analysis
+
+    local output context
+
+    output="$(run_hook "pods pending with FailedMount, the PVC is stuck in pending state and volumes are not attaching")"
+    context="$(extract_context "${output}")"
+    assert_contains "incident-analysis fires on volume mount failure" "incident-analysis" "${context}"
+
+    teardown_test_env
+}
+
 test_incident_analysis_triggers_on_connection_failure
 test_incident_analysis_triggers_on_oom_kill
 test_incident_analysis_triggers_on_crash_loop
 test_incident_analysis_triggers_on_latency_spike
 test_incident_analysis_triggers_on_cloud_sql_proxy
+test_incident_analysis_triggers_on_image_pull_failure
+test_incident_analysis_triggers_on_config_error
+test_incident_analysis_triggers_on_volume_mount_failure
 test_incident_analysis_cofires_with_debugging
 test_investigate_command_routing
 test_slo_burn_rate_routes_to_incident_analysis
