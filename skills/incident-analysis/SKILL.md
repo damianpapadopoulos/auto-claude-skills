@@ -314,7 +314,7 @@ No command proposed at this confidence level. Gathering more evidence for reclas
 
 ## Stage 2 — INVESTIGATE
 
-**Re-entry from CLASSIFY (< 60 path):** When entered from the CLASSIFY low-confidence path, only Steps 1-5 run. Steps 6-9 (Flight Plan, context synthesis, completeness gate, POSTMORTEM transition) are SKIPPED. Findings feed back to CLASSIFY for reclassification.
+**Re-entry from CLASSIFY (< 60 path):** When entered from the CLASSIFY low-confidence path, only Steps 1-5 run. Steps 6-9 (Flight Plan, Timeline Extraction, context synthesis, completeness gate, POSTMORTEM transition) are SKIPPED. Findings feed back to CLASSIFY for reclassification.
 
 ### Step 1: Query Logs with Narrowed Filter
 
@@ -561,11 +561,31 @@ Before touching any code, output a bulleted list of:
 
 Ask for explicit developer approval before proceeding.
 
+### Step 6b: Timeline Extraction
+
+Before synthesizing (Step 7), extract candidate timeline events from all evidence collected during Steps 1-5. This gives Step 7 a structured input rather than relying on attention-based reconstruction.
+
+For each timestamped event found in collected evidence, extract:
+- **timestamp_utc:** the event timestamp in UTC
+- **time_precision:** `exact` (from log/metric timestamp with second-level or better granularity), `minute` (from deploy event, alert firing, or minute-resolution metric), or `approximate` (from user report, estimated from context)
+- **event_kind:** one of `log_entry` | `metric_alert` | `deploy_event` | `probe_event` | `user_report` | `recovery_signal`
+- **description:** one-sentence description of what happened
+- **evidence_source:** where this was observed (e.g., "SpiceDB gRPC logs", "k8s events")
+
+**Dedupe rules:**
+- If two events describe the same occurrence at different precisions, keep the higher-precision entry. E.g., "~14:18 SpiceDB spike" (approximate, user report) is superseded by "14:18:23 CheckPermission 4335ms" (exact, gRPC log).
+- If `log_entry` and `metric_alert` cover the same moment, keep both — they are different evidence types for the same event.
+- Deploy events from deployment metadata and from audit logs are the same event; keep the one with more detail.
+
+**Scope:** Steps 1-5 evidence only. Exclude Flight Plan items (Step 6) — those are proposed actions, not observed events.
+
+Sort chronologically. Present the candidate list to Step 7 for curation into the final timeline.
+
 ### Step 7: Context Discipline — Synthesize
 
 Write a synthesized summary as an explicit output block. The summary MUST include all of the following (not just timeline and root cause):
 
-1. **Timeline:** Chronological sequence of events with UTC timestamps and evidence sources
+1. **Timeline:** Curate the candidate timeline from Step 6b into the final timeline. Remove noise, merge related events, verify chronological ordering. Each entry retains `time_precision` and `evidence_source` from Step 6b. Flag any candidate events removed during curation (and why) so the completeness gate can assess coverage.
 2. **Root cause:** The primary hypothesis with supporting evidence
 3. **ruled-out hypotheses:** Each alternative considered, the disconfirming evidence found, and why it was eliminated
 4. **hypothesis revisions:** Where the investigation changed direction, what triggered the revision, and what the previous hypothesis was
