@@ -192,8 +192,10 @@ service directory" pulls unrelated churn in monorepos and is explicitly rejected
 ### Step 4.5b: Bounded Expansion (conditional)
 
 Gate: source_analysis.status == reviewed_no_regression after Step 4.5, AND
-either (a) regression_candidates is empty, OR (b) all candidates have empty
-explains_patterns (candidates exist but none explain the dominant error).
+no candidate's explains_patterns includes the dominant error pattern from
+INVESTIGATE Step 2. This fires when: (a) regression_candidates is empty,
+(b) candidates exist but all have empty explains_patterns, OR (c) candidates
+explain secondary symptoms but not the dominant error.
 
 Expand the search using commit and module proximity:
 
@@ -480,9 +482,10 @@ to review atomically. No cross-PR dependencies.
    structured output format improve this but do not guarantee completeness.
 3. The SpiceDB fixture extension uses ground truth from the human-authored postmortem, not
    from running the skill — consistent with the fixture authoring rules in README.md.
-4. Step 4.5b fires both when `regression_candidates` is empty (no commits found) AND when
-   all candidates have empty `explains_patterns` (candidates exist but none explain the
-   dominant error). Both conditions mean "primary analysis didn't find the cause."
+4. Step 4.5b fires when no candidate's `explains_patterns` includes the dominant error
+   pattern. This covers three cases: no candidates found, candidates with empty
+   `explains_patterns`, and candidates that explain secondary symptoms but not the dominant
+   error. All three mean "primary analysis didn't find the cause of the main problem."
 5. `time_precision` labels survive in the Step 7 synthesis block (investigation metadata)
    but are NOT carried into the final postmortem timeline table. The postmortem is for human
    readers; precision labels are investigation provenance.
