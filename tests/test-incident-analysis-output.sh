@@ -155,20 +155,22 @@ for fixture_file in "${FIXTURE_DIR}"/*.json; do
         esac
     fi
 
-    # Analysis basis (Improvement C)
-    sa_basis="$(jq -r '.expected.source_analysis_basis // empty' "${fixture_file}")"
-    if [ -n "${sa_basis}" ]; then
+    # Analysis basis (Improvement C) — null is a valid value (Step 4b didn't fire)
+    if jq -e '.expected | has("source_analysis_basis")' "${fixture_file}" >/dev/null 2>&1; then
+        sa_basis="$(jq -r '.expected.source_analysis_basis | tostring' "${fixture_file}")"
         case "${sa_basis}" in
             primary_frame|bounded_expansion_same_commit|bounded_expansion_same_package)
                 _record_pass "${fname}: source_analysis_basis valid (${sa_basis})" ;;
+            null)
+                _record_pass "${fname}: source_analysis_basis is null (Step 4b skipped)" ;;
             *)
                 _record_fail "${fname}: source_analysis_basis valid" "got: ${sa_basis}" ;;
         esac
     fi
 
-    # Cross-reference patterns (Improvement B)
-    xref="$(jq -r '.expected.cross_reference_patterns // empty' "${fixture_file}")"
-    if [ -n "${xref}" ]; then
+    # Cross-reference patterns (Improvement B) — false is a valid value
+    if jq -e '.expected | has("cross_reference_patterns")' "${fixture_file}" >/dev/null 2>&1; then
+        xref="$(jq -r '.expected.cross_reference_patterns | tostring' "${fixture_file}")"
         case "${xref}" in
             true|false)
                 _record_pass "${fname}: cross_reference_patterns is boolean (${xref})" ;;
