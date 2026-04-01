@@ -214,6 +214,29 @@ signals:
         recency_window_seconds: 900
 
   # ---------------------------------------------------------------------------
+  # Caller behavior signals
+  # ---------------------------------------------------------------------------
+
+  caller_retry_storm:
+    title: "Dominant caller in retry/error loop"
+    base_weight: 30
+    detection:
+      method: compound
+      params:
+        all_of:
+          - method: distribution
+            params:
+              group_by: peer_address
+              distribution_threshold: 0.5
+              min_sample_size: 20
+          - method: log_pattern
+            params:
+              pattern: "severity>=ERROR from dominant caller service"
+              source: caller_service_logs
+              min_occurrences: 10
+              recency_window_seconds: 600
+
+  # ---------------------------------------------------------------------------
   # Config / dependency signals
   # ---------------------------------------------------------------------------
 
