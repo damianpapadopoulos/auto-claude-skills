@@ -145,11 +145,26 @@ regression_candidates:
     cannot_explain_patterns: ["DEADLINE_EXCEEDED on SpiceDB calls"]
 ```
 
-When no candidate explains the primary error:
+When candidates were reviewed but none explain the dominant error, keep the candidates
+(so Step 4.5b can distinguish "no candidates found" from "candidates reviewed and ruled
+out") and add the weakening note:
+
+```yaml
+regression_candidates:
+  - commit_sha: "def456..."
+    date: "2026-03-24T10:30:00Z"
+    summary: "removed null check in getUser()"
+    files: ["UserController.java"]
+    explains_patterns: []
+    cannot_explain_patterns: ["DEADLINE_EXCEEDED on SpiceDB calls"]
+cross_reference_note: "no commit explains primary error pattern — bad-release hypothesis weakened"
+```
+
+When Step 4 found no commits at all (empty candidate list before cross-reference):
 
 ```yaml
 regression_candidates: []
-cross_reference_note: "no commit explains primary error pattern — bad-release hypothesis weakened"
+cross_reference_note: null
 ```
 
 ### Files Changed
@@ -176,8 +191,9 @@ service directory" pulls unrelated churn in monorepos and is explicitly rejected
 ```markdown
 ### Step 4.5b: Bounded Expansion (conditional)
 
-Gate: source_analysis.status == reviewed_no_regression after Step 4.5 (no
-regression candidate found from primary stack-frame analysis).
+Gate: source_analysis.status == reviewed_no_regression after Step 4.5, AND
+either (a) regression_candidates is empty, OR (b) all candidates have empty
+explains_patterns (candidates exist but none explain the dominant error).
 
 Expand the search using commit and module proximity:
 
@@ -273,9 +289,13 @@ unchanged.
 
 ### Files Changed
 
-- `skills/incident-analysis/SKILL.md` — Expand Step 4b gate (~75 words)
+- `skills/incident-analysis/SKILL.md` — Expand Step 4b gate (~75 words), update
+  `skip_reason` example from `"not bad-release category"` to
+  `"not bad-release or config-change category"`
 - `skills/incident-analysis/references/source-analysis.md` — Update Gate Conditions
-  section (~30 words), add config-file priority note to Step 4
+  section (~30 words), add config-file priority note to Step 4, update header from
+  "a bad-release scenario is plausible" (line 3-4) to cover config-change, update
+  `skip_reason` enum in skip example (line 17) to include the config-change case
 
 ---
 
@@ -325,6 +345,17 @@ if [ -n "$timeline_recovery" ]; then
             _record_pass "${fname}: timeline_has_recovery is boolean ($timeline_recovery)" ;;
         *)
             _record_fail "${fname}: timeline_has_recovery is boolean" "got: $timeline_recovery" ;;
+    esac
+fi
+
+# Timeline precision labels (Improvement A)
+precision="$(jq -r '.expected.timeline_precision_labels // empty' "$fixture_file")"
+if [ -n "$precision" ]; then
+    case "$precision" in
+        true|false)
+            _record_pass "${fname}: timeline_precision_labels is boolean ($precision)" ;;
+        *)
+            _record_fail "${fname}: timeline_precision_labels is boolean" "got: $precision" ;;
     esac
 fi
 
@@ -449,3 +480,9 @@ to review atomically. No cross-PR dependencies.
    structured output format improve this but do not guarantee completeness.
 3. The SpiceDB fixture extension uses ground truth from the human-authored postmortem, not
    from running the skill — consistent with the fixture authoring rules in README.md.
+4. Step 4.5b fires both when `regression_candidates` is empty (no commits found) AND when
+   all candidates have empty `explains_patterns` (candidates exist but none explain the
+   dominant error). Both conditions mean "primary analysis didn't find the cause."
+5. `time_precision` labels survive in the Step 7 synthesis block (investigation metadata)
+   but are NOT carried into the final postmortem timeline table. The postmortem is for human
+   readers; precision labels are investigation provenance.
