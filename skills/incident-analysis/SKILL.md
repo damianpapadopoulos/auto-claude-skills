@@ -472,6 +472,9 @@ State the hypothesis in one sentence. Then:
    - A traffic pattern change (weekday vs. weekend, batch job schedule, seasonal load)
    - A cache expiry, certificate rotation, or configuration reload with delayed effect
    - A concurrent failure in a different service that shares infrastructure (amplification loop — see Step 3)
+   - A caller entering a failure/retry loop (check Step 3 shared resource escalation findings — if dominant callers were not yet checked, return to Step 3 and complete the caller investigation before accepting a chronic hypothesis)
+
+   **Mandatory evidence for traffic-pattern hypotheses:** If the hypothesis attributes the trigger to a traffic pattern change (e.g., "afternoon peak traffic"), verify against a baseline from a **different day at the same time**. Compare: caller distribution, call volume per caller, and method mix. If the pattern matches the baseline (same callers, same volume), the traffic hypothesis is supported. If one caller's volume is anomalously high, investigate that caller's health before accepting the hypothesis.
 
    If no acute change is found after active search, the hypothesis is weaker — note it as "chronic contributing factor without identified trigger" rather than confirmed root cause.
 
@@ -511,8 +514,9 @@ Before transitioning to POSTMORTEM, answer each question explicitly in the synth
 | 6 | Is this condition systemic (other nodes/instances at similar risk)? | Checked or state "not assessed" |
 | 7 | Did the alerting system detect this? How quickly? | Which alerts fired, time from incident start to first alert, which alerts should have fired but didn't |
 | 8 | When did humans learn about it and what did they do? | First human awareness (alert, report, support ticket), first action taken, resolution action. Use user-provided context if available; state "not captured" if not. |
+| 9 | For shared-dependency failures: were dominant callers' error logs checked? | List top callers by volume, state whether their error logs were queried, and whether any caller was in a failure/retry loop. If shared-dependency escalation was not triggered, state "N/A — not a shared-dependency failure". |
 
-**Gate rule:** If questions 1-3 have confident answers, proceed to POSTMORTEM. Questions 4-8 may be "not assessed" if investigation time is constrained, but must be flagged as open items. If question 1, 2, or 3 is "No" or "Unknown," return to INVESTIGATE Step 1 — for questions 1-2 with a revised hypothesis, for question 3 with targeted recovery-evidence queries.
+**Gate rule:** If questions 1-3 have confident answers, proceed to POSTMORTEM. Questions 4-9 may be "not assessed" if investigation time is constrained, but must be flagged as open items. If question 1, 2, or 3 is "No" or "Unknown," return to INVESTIGATE Step 1 — for questions 1-2 with a revised hypothesis, for question 3 with targeted recovery-evidence queries.
 
 ### Step 9: Transition to POSTMORTEM
 
