@@ -197,7 +197,7 @@ echo "-- test: caller investigation rules --"
 # Step 3: shared resource escalation must contain mandatory caller checks
 STEP3_BLOCK=$(sed -n '/### Step 3: Single-Service Deep Dive/,/### Step 4/p' "${SKILL_FILE}")
 assert_contains "step 3: escalation is mandatory" "mandatory when detected" "${STEP3_BLOCK}"
-assert_contains "step 3: enumerate callers from access logs" "Enumerate callers from access logs" "${STEP3_BLOCK}"
+assert_contains "step 3: identify dominant callers" "Identify dominant callers" "${STEP3_BLOCK}"
 assert_contains "step 3: check dominant caller ERROR logs" "Check each dominant caller" "${STEP3_BLOCK}"
 assert_contains "step 3: compare to different day baseline" "different day" "${STEP3_BLOCK}"
 assert_contains "step 3: deployment history scoped to dominant callers" "deployment history for all dominant callers" "${STEP3_BLOCK}"

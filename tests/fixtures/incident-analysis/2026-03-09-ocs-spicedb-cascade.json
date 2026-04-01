@@ -18,7 +18,7 @@
     "playbook_classification": "dependency-failure",
     "signals_detected": [
       "cpu_saturation_detected",
-      "caller_retry_storm"
+      "dominant_caller_anomaly"
     ],
     "investigation_layer": "application",
     "caller_health_checked": true,

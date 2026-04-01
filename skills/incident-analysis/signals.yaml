@@ -217,8 +217,8 @@ signals:
   # Caller behavior signals
   # ---------------------------------------------------------------------------
 
-  caller_retry_storm:
-    title: "Dominant caller in retry/error loop"
+  dominant_caller_anomaly:
+    title: "Dominant caller driving disproportionate load with concurrent errors"
     base_weight: 30
     detection:
       method: compound

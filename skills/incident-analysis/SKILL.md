@@ -372,12 +372,11 @@ If a `node-resource-exhaustion` playbook is available, transition to CLASSIFY fo
 
 When a shared dependency is identified:
 
-1. **Enumerate callers from access logs:** Extract the distinct peer addresses (caller IPs) from the shared service's own logs during the incident window. Group by caller and count. Identify the top 3 callers by volume.
-2. **Identify caller services:** For each dominant caller IP, resolve to a service name via trace correlation (`get_trace` on a trace ID from that caller's requests), pod events (health probe targets contain pod IPs), or log correlation.
-3. **Check each dominant caller's ERROR logs:** Query `severity>=ERROR` for each identified caller service in the same time window. This is the critical step that infrastructure-only investigation misses — a caller may be in a failure/retry loop that is *generating* the shared dependency overload, not just suffering from it.
-4. **Check deployment history for all dominant callers:** Query deployments across dominant callers in the preceding 72 hours (not just the incident day). Account for delayed triggers: cached configurations, lazy initialization, and traffic-pattern-dependent code paths that may not execute until weekday/peak hours.
-5. **Compare caller distribution to baseline:** Compare the current caller distribution to a **different day's same time window** (not just the same day's morning). If a single caller's share increased by >2x compared to baseline, it is a suspect — especially if that caller is also logging errors. If access logs or caller IP resolution are unavailable, note "caller distribution not assessed" and flag as an open question.
-6. **Check for amplification loops:** If any dominant caller shows error counts disproportionate to normal traffic volume, check for amplification signatures:
+1. **Identify dominant callers/producers:** Using the best available evidence — access logs (peer addresses), distributed traces, broker consumer metrics, connection pool stats, or infrastructure-as-code — identify the top 3 callers by volume during the incident window. Resolve each to a service name via trace correlation, pod events, or log correlation.
+2. **Check each dominant caller's ERROR logs:** Query `severity>=ERROR` for each identified caller service in the same time window. This is the critical step that infrastructure-only investigation misses — a caller may be in a failure/retry loop that is *generating* the shared dependency overload, not just suffering from it.
+3. **Check deployment history for all dominant callers:** Query deployments across dominant callers in the preceding 72 hours (not just the incident day). Account for delayed triggers: cached configurations, lazy initialization, and traffic-pattern-dependent code paths that may not execute until weekday/peak hours.
+4. **Compare caller distribution to baseline:** Compare the current caller distribution to a **different day's same time window** (or the nearest comparable stable window if traffic patterns changed recently). If a single caller's share increased by >2x compared to baseline, it is a suspect — especially if that caller is also logging errors. If caller identification is unavailable through any evidence source, note "caller distribution not assessed" and flag as an open question.
+5. **Check for amplification loops:** If any dominant caller shows error counts disproportionate to normal traffic volume, check for amplification signatures:
    - Rapidly repeating identical error messages from a single source (same exception, same stack frame)
    - Message broker redelivery patterns (JMS/AMQP poison-pill messages that fail processing and get requeued)
    - Transaction management annotations that acquire new connections per retry (`REQUIRES_NEW`, nested transactions)
@@ -474,7 +473,7 @@ State the hypothesis in one sentence. Then:
    - A concurrent failure in a different service that shares infrastructure (amplification loop — see Step 3)
    - A caller entering a failure/retry loop (check Step 3 shared resource escalation findings — if dominant callers were not yet checked, return to Step 3 and complete the caller investigation before accepting a chronic hypothesis)
 
-   **Mandatory evidence for traffic-pattern hypotheses:** If the hypothesis attributes the trigger to a traffic pattern change (e.g., "afternoon peak traffic"), verify against a baseline from a **different day at the same time**. Compare: caller distribution, call volume per caller, and method mix. If the pattern matches the baseline (same callers, same volume), the traffic hypothesis is supported. If one caller's volume is anomalously high, investigate that caller's health before accepting the hypothesis.
+   **Mandatory evidence for traffic-pattern hypotheses:** If the hypothesis attributes the trigger to a traffic pattern change (e.g., "afternoon peak traffic"), verify against a baseline from a **different day at the same time** (or the nearest comparable stable window if traffic patterns changed recently). Compare: caller distribution, call volume per caller, and method mix. If the pattern matches the baseline (same callers, same volume), the traffic hypothesis is supported. If one caller's volume is anomalously high, investigate that caller's health before accepting the hypothesis.
 
    If no acute change is found after active search, the hypothesis is weaker — note it as "chronic contributing factor without identified trigger" rather than confirmed root cause.
 
@@ -514,7 +513,7 @@ Before transitioning to POSTMORTEM, answer each question explicitly in the synth
 | 6 | Is this condition systemic (other nodes/instances at similar risk)? | Checked or state "not assessed" |
 | 7 | Did the alerting system detect this? How quickly? | Which alerts fired, time from incident start to first alert, which alerts should have fired but didn't |
 | 8 | When did humans learn about it and what did they do? | First human awareness (alert, report, support ticket), first action taken, resolution action. Use user-provided context if available; state "not captured" if not. |
-| 9 | For shared-dependency failures: were dominant callers' error logs checked? | List top callers by volume, state whether their error logs were queried, and whether any caller was in a failure/retry loop. If shared-dependency escalation was not triggered, state "N/A — not a shared-dependency failure". |
+| 9 | For shared-dependency failures: was caller-side amplification investigated? | Describe how dominant callers were identified (logs, traces, metrics, broker stats), what evidence was checked, and whether any caller was amplifying the failure. If shared-dependency escalation was not triggered, state "N/A — not a shared-dependency failure". |
 
 **Gate rule:** If questions 1-3 have confident answers, proceed to POSTMORTEM. Questions 4-9 may be "not assessed" if investigation time is constrained, but must be flagged as open items. If question 1, 2, or 3 is "No" or "Unknown," return to INVESTIGATE Step 1 — for questions 1-2 with a revised hypothesis, for question 3 with targeted recovery-evidence queries.
 
