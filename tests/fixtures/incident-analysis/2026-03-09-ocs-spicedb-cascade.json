@@ -25,6 +25,12 @@
     "dominant_callers_identified": [
       "ocs_v2",
       "chat-message-suggestion"
-    ]
+    ],
+    "timeline_events_min": 10,
+    "timeline_has_recovery": true,
+    "timeline_precision_labels": true,
+    "source_analysis_status": "skipped",
+    "source_analysis_basis": null,
+    "cross_reference_patterns": false
   }
 }

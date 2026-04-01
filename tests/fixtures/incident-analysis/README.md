@@ -25,7 +25,13 @@ Fixtures for output quality testing of the incident-analysis skill.
     "root_cause_contains": ["OOMKilled", "memory limit"],
     "timeline_has_entries": true,
     "playbook_classification": "node-resource-exhaustion",
-    "signals_detected": ["memory_pressure_detected", "crash_loop_detected"]
+    "signals_detected": ["memory_pressure_detected", "crash_loop_detected"],
+    "timeline_events_min": 5,
+    "timeline_has_recovery": true,
+    "timeline_precision_labels": true,
+    "source_analysis_status": "skipped",
+    "source_analysis_basis": null,
+    "cross_reference_patterns": false
   }
 }
 ```
