@@ -100,7 +100,7 @@ if [ -f "${TRIGGERS_FILE}" ]; then
     assert_file_contains "triggers: ImagePullBackOff routes to incident-analysis" \
         "image.pull" "${TRIGGERS_FILE}"
     assert_file_contains "triggers: CreateContainerConfigError routes to incident-analysis" \
-        "config.error" "${TRIGGERS_FILE}"
+        "create.?container.?config" "${TRIGGERS_FILE}"
 fi
 
 # ---------------------------------------------------------------------------
