@@ -535,6 +535,12 @@ State the hypothesis in one sentence. Then:
 
    **Mandatory evidence for traffic-pattern hypotheses:** If the hypothesis attributes the trigger to a traffic pattern change (e.g., "afternoon peak traffic"), verify against a baseline from a **different day at the same time** (or the nearest comparable stable window if traffic patterns changed recently). Compare: caller distribution, call volume per caller, and method mix. If the pattern matches the baseline (same callers, same volume), the traffic hypothesis is supported. If one caller's volume is anomalously high, investigate that caller's health before accepting the hypothesis.
 
+5. **Capacity headroom check (when resource-related signals are present):** Compare current resource utilization against the nearest stable baseline (different day, same time window). Record:
+   - Current vs baseline: node CPU/memory allocatable utilization, pod count, sum of resource requests
+   - Headroom drift: has available capacity been shrinking over days/weeks? (query 7-day trend if metrics available)
+   - HPA/quota status: is HPA at maximum replicas? Are resource quotas near limits?
+   If headroom has been chronically shrinking, note as a contributing factor even if an acute trigger is identified. The acute trigger may recur at lower thresholds — the chronic drift makes the system fragile. If headroom data is unavailable, state "capacity headroom not assessed" and flag as an open question.
+
    If no acute change is found after active search, the hypothesis is weaker — note it as "chronic contributing factor without identified trigger" rather than confirmed root cause.
 
 ### Step 6: Flight Plan
@@ -718,6 +724,12 @@ Must include verified recovery timestamp.
 ## 6. Contributing Factors
 Ordered by impact (most impactful first, not discovery order).
 Each factor: what it is, why it made things worse.
+When resource exhaustion or capacity constraints contributed to the incident, include a **Capacity Context** entry:
+- Current utilization vs allocatable (node level, at incident time)
+- Resource request coverage: actual/requested ratio for key workloads
+- HPA scaling ceiling: current replicas vs max, and whether max was reached
+- Whether the condition is chronic (weeks of headroom drift) or acute (single event triggered exhaustion)
+This prevents "increase resource limits" action items without context on whether the headroom trend is systemic.
 
 ## 7. Lessons Learned
 What went well, what went wrong, where we got lucky.
