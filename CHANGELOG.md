@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Incident-analysis: Step 6b Timeline Extraction — structured candidate extraction with time_precision labels and dedupe rules before synthesis
+- Incident-analysis: Step 4.5 Cross-Reference — regression candidates annotated with explains_patterns/cannot_explain_patterns linking commits to observed log errors
+- Incident-analysis: Step 4.5b Bounded Expansion — same-commit and same-package expansion when primary stack-frame analysis finds no regression candidate
+- Incident-analysis: Config-change source analysis trigger using existing config_change_correlated_with_errors signal, plus user override (both require repo-backed git ref)
+
+### Fixed
+- Incident-analysis: test assertions now validate `false` and `null` fixture values using `jq has()` instead of `//` operator which treated them as falsy
+
+### Added
 - Alert-hygiene: per-cluster `total_open_hours` computed from actual incident durations (fixes 2.7x inflation from `raw * median` estimation)
 - Alert-hygiene: five inventory-level enrichment fields in compute-clusters.py — `zero_channel_policies`, `disabled_but_noisy_policies`, `silent_policy_count`, `silent_policy_total`, `condition_type_breakdown`
 - Alert-hygiene: Proposed Config Diff section in Investigate template — preserves PR-ready config changes when items are demoted from Do Now due to missing gate requirements
