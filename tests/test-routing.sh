@@ -421,7 +421,7 @@ install_registry_with_incident_analysis() {
       "name": "incident-analysis",
       "role": "domain",
       "phase": "DEBUG",
-      "triggers": ["(incident|postmortem|outage|root.cause|error.spike|log.analysis|production.error|staging.error)", "(connection.*(fail|refus|timeout|pool|exhaust|acquir)|oom.?kill|memory.pressure|cpu.*(throttl|saturat)|crash.?loop|liveness.probe|node.not.ready|upstream.*(fail|error|timeout)|image.?pull.?(back.?off|fail|error)|err.?image.?pull|config.?(error|missing)|create.?container.?config|failed.?mount|pvc.*(pending|fail))", "(sigterm|sigkill|shutdown.*(error|fail|grace)|active.connection|cloud.?sql|proxy.*(restart|error|fail|crash)|pod.*(restart|crash|evict)|latency.*(spike|p99)|p99.*(latency|spike|degrad)|request.timeout|circuit.break|deploy.*(fail|rollback))"],
+      "triggers": ["(incident|postmortem|outage|root.cause|error.spike|log.analysis|production.error|staging.error)", "(connection.*(fail|refus|timeout|pool|exhaust|acquir)|oom.?kill|memory.pressure|cpu.*(throttl|saturat)|crash.?loop|liveness.probe|node.not.ready|upstream.*(fail|error|timeout)|image.?pull.?(back.?off|fail|error)|err.?image.?pull|config.?(error|missing)|create.?container.?config|failed.?(mount|attach)|pvc.*(pending|fail))", "(sigterm|sigkill|shutdown.*(error|fail|grace)|active.connection|cloud.?sql|proxy.*(restart|error|fail|crash)|pod.*(restart|crash|evict)|latency.*(spike|p99)|p99.*(latency|spike|degrad)|request.timeout|circuit.break|deploy.*(fail|rollback))"],
       "trigger_mode": "regex",
       "priority": 20,
       "precedes": [],

@@ -16,7 +16,6 @@ signals:
     - error_rate_spike_correlated_with_deploy
     - recent_deploy_detected
     - no_prior_error_pattern
-    - image_pull_failure
   contradicting:
     - multiple_services_affected_simultaneously
     - resource_saturation_detected

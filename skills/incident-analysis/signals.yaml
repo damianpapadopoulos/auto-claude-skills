@@ -237,7 +237,6 @@ signals:
       params:
         event_type: CreateContainerConfigError
         alternate_events:
-          - FailedMount
           - InvalidConfigMap
         recency_window_seconds: 1800
 
