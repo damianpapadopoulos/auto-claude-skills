@@ -11,6 +11,7 @@ description: >
 signals:
   supporting:
     - upstream_dependency_errors
+    - caller_retry_storm
   contradicting: []
   veto_signals: []
   contradiction_penalty: 0
