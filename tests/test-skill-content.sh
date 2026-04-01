@@ -188,4 +188,29 @@ test_investigate_references_preflight() {
 }
 test_investigate_references_preflight
 
+# ---------------------------------------------------------------------------
+# Caller-layer investigation rules (shared-dependency incidents)
+# Scoped to specific SKILL.md sections to avoid false positives.
+# ---------------------------------------------------------------------------
+echo "-- test: caller investigation rules --"
+
+# Step 3: shared resource escalation must contain mandatory caller checks
+STEP3_BLOCK=$(sed -n '/### Step 3: Single-Service Deep Dive/,/### Step 4/p' "${SKILL_FILE}")
+assert_contains "step 3: escalation is mandatory" "mandatory when detected" "${STEP3_BLOCK}"
+assert_contains "step 3: identify dominant callers" "Identify dominant callers" "${STEP3_BLOCK}"
+assert_contains "step 3: check dominant caller ERROR logs" "Check each dominant caller" "${STEP3_BLOCK}"
+assert_contains "step 3: compare to different day baseline" "different day" "${STEP3_BLOCK}"
+assert_contains "step 3: deployment history scoped to dominant callers" "deployment history for all dominant callers" "${STEP3_BLOCK}"
+assert_contains "step 3: amplification loop inside caller check" "Check for amplification loops" "${STEP3_BLOCK}"
+
+# Step 5: chronic-vs-acute requires caller evidence for traffic hypotheses
+STEP5_BLOCK=$(sed -n '/### Step 5: Formulate Root Cause/,/### Step 6/p' "${SKILL_FILE}")
+assert_contains "step 5: caller retry loop candidate" "caller entering a failure/retry loop" "${STEP5_BLOCK}"
+assert_contains "step 5: traffic baseline from different day" "different day at the same time" "${STEP5_BLOCK}"
+
+# Step 8: completeness gate has caller-health question and updated rule
+GATE_BLOCK=$(sed -n '/### Step 8: Investigation Completeness Gate/,/### Step 9/p' "${SKILL_FILE}")
+assert_contains "gate: caller question exists" "dominant callers" "${GATE_BLOCK}"
+assert_contains "gate: rule covers Q9" "4-9" "${GATE_BLOCK}"
+
 print_summary

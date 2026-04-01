@@ -72,6 +72,45 @@ for fixture_file in "${FIXTURE_DIR}"/*.json; do
     else
         _record_fail "${fname}: expected has assertion fields" "empty expected object"
     fi
+
+    # Optional caller-investigation fields
+    inv_layer="$(jq -r '.expected.investigation_layer // empty' "${fixture_file}")"
+    if [ -n "${inv_layer}" ]; then
+        case "${inv_layer}" in
+            application|infrastructure|middleware)
+                _record_pass "${fname}: investigation_layer is valid (${inv_layer})"
+                ;;
+            *)
+                _record_fail "${fname}: investigation_layer is valid" "expected application|infrastructure|middleware, got: ${inv_layer}"
+                ;;
+        esac
+    fi
+
+    caller_checked="$(jq -r '.expected.caller_health_checked // empty' "${fixture_file}")"
+    if [ -n "${caller_checked}" ]; then
+        case "${caller_checked}" in
+            true|false)
+                _record_pass "${fname}: caller_health_checked is boolean (${caller_checked})"
+                ;;
+            *)
+                _record_fail "${fname}: caller_health_checked is boolean" "got: ${caller_checked}"
+                ;;
+        esac
+    fi
+
+    dom_callers_type="$(jq -r '.expected.dominant_callers_identified | type // empty' "${fixture_file}" 2>/dev/null)"
+    if [ -n "${dom_callers_type}" ] && [ "${dom_callers_type}" != "null" ]; then
+        if [ "${dom_callers_type}" = "array" ]; then
+            caller_count="$(jq '.expected.dominant_callers_identified | length' "${fixture_file}")"
+            if [ "${caller_count}" -gt 0 ] 2>/dev/null; then
+                _record_pass "${fname}: dominant_callers_identified is array with entries (${caller_count})"
+            else
+                _record_fail "${fname}: dominant_callers_identified has entries" "array is empty"
+            fi
+        else
+            _record_fail "${fname}: dominant_callers_identified is array" "got type: ${dom_callers_type}"
+        fi
+    fi
 done
 
 print_summary

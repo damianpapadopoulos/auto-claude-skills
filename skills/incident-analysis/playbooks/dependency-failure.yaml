@@ -11,6 +11,7 @@ description: >
 signals:
   supporting:
     - upstream_dependency_errors
+    - dominant_caller_anomaly
   contradicting: []
   veto_signals: []
   contradiction_penalty: 0
@@ -19,7 +20,7 @@ investigation_steps: |
   1. Identify failing dependency from error messages and traces
   2. Check dependency service health (pods, logs, metrics)
   3. Check Cloud SQL Proxy connections if database-related
-  4. Determine if dependency failure is primary or cascading
+  4. Determine if dependency failure is primary or caller-induced amplification — a caller in a retry loop, cache stampede, or fan-out bug can overload a healthy dependency, making it appear to be the root cause when it is actually the victim
 
 queries:
   dependency_error_scan:

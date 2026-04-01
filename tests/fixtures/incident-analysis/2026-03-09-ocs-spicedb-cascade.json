@@ -1,0 +1,30 @@
+{
+  "id": "2026-03-09-ocs-spicedb-cascade",
+  "description": "SpiceDB latency cascade triggered by chat-message-suggestion retry storm from broken Handlebars template cache. Infrastructure investigation found CPU saturation but the application-level trigger (poison-pill JMS messages causing tight retry loop) was only found by checking the dominant caller's own error logs.",
+  "source_postmortem": "docs/postmortems/2026-03-09-ocs-spicedb-latency-cascade.md",
+  "input": {
+    "service": "spicedb",
+    "environment": "oviva-k8s-prod",
+    "symptoms": "coaches reporting OCS access issues, multiple services returning 502/500, readiness probe failures across all nodes",
+    "time_window": "2026-03-09T13:00:00Z/2026-03-09T16:00:00Z"
+  },
+  "expected": {
+    "root_cause_contains": [
+      "retry storm",
+      "chat-message-suggestion",
+      "caller"
+    ],
+    "timeline_has_entries": true,
+    "playbook_classification": "dependency-failure",
+    "signals_detected": [
+      "cpu_saturation_detected",
+      "dominant_caller_anomaly"
+    ],
+    "investigation_layer": "application",
+    "caller_health_checked": true,
+    "dominant_callers_identified": [
+      "ocs_v2",
+      "chat-message-suggestion"
+    ]
+  }
+}

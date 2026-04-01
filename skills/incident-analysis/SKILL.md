@@ -365,22 +365,25 @@ After all probes complete, feed results back to CLASSIFY for reclassification.
 
 If a `node-resource-exhaustion` playbook is available, transition to CLASSIFY for structured scoring.
 
-**Shared resource escalation (conditional):** If Step 3 identifies a shared resource under pressure (database, message broker, cache cluster, shared API gateway) — evidenced by connection pool exhaustion, lock contention, serialization errors, or elevated latency across multiple consumers — expand investigation to map the full consumer set:
+**Shared resource escalation (mandatory when detected):** If the degraded service is used by multiple consumers (authorization service, database, message broker, cache cluster, shared API gateway), this escalation is **mandatory**, not optional. Detection heuristic — any of these confirm a shared dependency:
+- Multiple different services show correlated errors in the same time window
+- The degraded service's access logs show requests from multiple distinct peer addresses/pods
+- The degraded service is a known infrastructure component (SpiceDB, Redis, PostgreSQL, RabbitMQ, etc.)
 
-1. **Enumerate all tenants:** List every service/user that connects to the shared resource. For databases: query connection metrics grouped by user/database, or check infrastructure-as-code for connection configurations. Do not assume the symptomatic services are the only consumers — the trigger may come from a non-symptomatic consumer flooding the resource.
-2. **Check deployment history for all consumers:** Query deployments across ALL consumers in the preceding 72 hours (not just the incident day). Account for delayed triggers: cached configurations, lazy initialization, and traffic-pattern-dependent code paths that may not execute until weekday/peak hours.
-3. **Identify the dominant pressure source:** Compare resource consumption across consumers. The service generating the most load (connections, transactions, I/O) on the shared resource is a candidate trigger — even if that service itself shows no user-facing errors.
+When a shared dependency is identified:
+
+1. **Identify dominant callers/producers:** Using the best available evidence — access logs (peer addresses), distributed traces, broker consumer metrics, connection pool stats, or infrastructure-as-code — identify the top 3 callers by volume during the incident window. Resolve each to a service name via trace correlation, pod events, or log correlation.
+2. **Check each dominant caller's ERROR logs:** Query `severity>=ERROR` for each identified caller service in the same time window. This is the critical step that infrastructure-only investigation misses — a caller may be in a failure/retry loop that is *generating* the shared dependency overload, not just suffering from it.
+3. **Check deployment history for all dominant callers:** Query deployments across dominant callers in the preceding 72 hours (not just the incident day). Account for delayed triggers: cached configurations, lazy initialization, and traffic-pattern-dependent code paths that may not execute until weekday/peak hours.
+4. **Compare caller distribution to baseline:** Compare the current caller distribution to a **different day's same time window** (or the nearest comparable stable window if traffic patterns changed recently). If a single caller's share increased by >2x compared to baseline, it is a suspect — especially if that caller is also logging errors. If caller identification is unavailable through any evidence source, note "caller distribution not assessed" and flag as an open question.
+5. **Check for amplification loops:** If any dominant caller shows error counts disproportionate to normal traffic volume, check for amplification signatures:
+   - Rapidly repeating identical error messages from a single source (same exception, same stack frame)
+   - Message broker redelivery patterns (JMS/AMQP poison-pill messages that fail processing and get requeued)
+   - Transaction management annotations that acquire new connections per retry (`REQUIRES_NEW`, nested transactions)
+   - Error counts that cannot be explained by user traffic volume (e.g., 60K errors in a 2-hour window from a low-traffic service)
+   When an amplification loop is identified, trace it to the original failing operation — that operation's failure reason (not the resource exhaustion it caused) is the root cause.
 
 This escalation is bounded to the shared resource's known consumer set. It does not permit unbounded global searches.
-
-**Amplification loop detection (conditional):** If Step 3 reveals connection pool exhaustion or resource saturation with error counts disproportionate to normal traffic volume, check for amplification loops — a single failing operation retried aggressively can generate orders-of-magnitude more pressure than normal traffic. Signatures include:
-
-- Rapidly repeating identical error messages from a single source (same exception, same stack frame)
-- Message broker redelivery patterns (JMS/AMQP poison-pill messages that fail processing and get requeued)
-- Transaction management annotations that acquire new connections per retry (`REQUIRES_NEW`, nested transactions)
-- Error counts that cannot be explained by user traffic volume (e.g., 60K errors in a 2-hour window from a low-traffic service)
-
-When an amplification loop is identified, trace it to the original failing operation — that operation's failure reason (not the resource exhaustion it caused) is likely the root cause.
 
 ### Step 4: Autonomous Trace Correlation (Tier 1 Only)
 
@@ -468,6 +471,9 @@ State the hypothesis in one sentence. Then:
    - A traffic pattern change (weekday vs. weekend, batch job schedule, seasonal load)
    - A cache expiry, certificate rotation, or configuration reload with delayed effect
    - A concurrent failure in a different service that shares infrastructure (amplification loop — see Step 3)
+   - A caller entering a failure/retry loop (check Step 3 shared resource escalation findings — if dominant callers were not yet checked, return to Step 3 and complete the caller investigation before accepting a chronic hypothesis)
+
+   **Mandatory evidence for traffic-pattern hypotheses:** If the hypothesis attributes the trigger to a traffic pattern change (e.g., "afternoon peak traffic"), verify against a baseline from a **different day at the same time** (or the nearest comparable stable window if traffic patterns changed recently). Compare: caller distribution, call volume per caller, and method mix. If the pattern matches the baseline (same callers, same volume), the traffic hypothesis is supported. If one caller's volume is anomalously high, investigate that caller's health before accepting the hypothesis.
 
    If no acute change is found after active search, the hypothesis is weaker — note it as "chronic contributing factor without identified trigger" rather than confirmed root cause.
 
@@ -507,8 +513,9 @@ Before transitioning to POSTMORTEM, answer each question explicitly in the synth
 | 6 | Is this condition systemic (other nodes/instances at similar risk)? | Checked or state "not assessed" |
 | 7 | Did the alerting system detect this? How quickly? | Which alerts fired, time from incident start to first alert, which alerts should have fired but didn't |
 | 8 | When did humans learn about it and what did they do? | First human awareness (alert, report, support ticket), first action taken, resolution action. Use user-provided context if available; state "not captured" if not. |
+| 9 | For shared-dependency failures: was caller-side amplification investigated? | Describe how dominant callers were identified (logs, traces, metrics, broker stats), what evidence was checked, and whether any caller was amplifying the failure. If shared-dependency escalation was not triggered, state "N/A — not a shared-dependency failure". |
 
-**Gate rule:** If questions 1-3 have confident answers, proceed to POSTMORTEM. Questions 4-8 may be "not assessed" if investigation time is constrained, but must be flagged as open items. If question 1, 2, or 3 is "No" or "Unknown," return to INVESTIGATE Step 1 — for questions 1-2 with a revised hypothesis, for question 3 with targeted recovery-evidence queries.
+**Gate rule:** If questions 1-3 have confident answers, proceed to POSTMORTEM. Questions 4-9 may be "not assessed" if investigation time is constrained, but must be flagged as open items. If question 1, 2, or 3 is "No" or "Unknown," return to INVESTIGATE Step 1 — for questions 1-2 with a revised hypothesis, for question 3 with targeted recovery-evidence queries.
 
 ### Step 9: Transition to POSTMORTEM
 
