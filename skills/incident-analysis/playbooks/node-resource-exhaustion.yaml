@@ -33,11 +33,15 @@ investigation_steps: |
   - Which nodes host them? (pod distribution)
   - What are the resource requests, limits, and actual usage per pod?
   - What are the probe configurations (failureThreshold, timeoutSeconds)?
+  - What is the node's container runtime (containerd/CRI-O) and version?
 
   ## 2. Node Health Timeline
   - Query node non-evictable memory utilization for 6-12 hours before incident
   - Is this chronic (hours of >85%) or acute (sudden spike)?
   - Query kubelet logs for housekeeping delays (expected vs actual)
+  - Check node conditions: MemoryPressure, DiskPressure, PIDPressure
+    transition timestamps — did pressure conditions precede the failures?
+  - If DiskPressure: check container runtime storage, image cache, log volume
 
   ## 3. Trigger Identification
   - Query kubelet logs for probe failures around incident time
@@ -45,6 +49,8 @@ investigation_steps: |
   - Check GCE serial console for virtio_balloon failures and kernel memory pressure
   - Check audit logs for maintenance-controller, drain events, deployment events
   - Rule out: rolling deployment, HPA events, manual actions
+  - Check container runtime health: if runtime is unresponsive, kubelet cannot
+    execute probes regardless of node memory state
 
   ## 4. Blast Radius
   - What other pods/services run on the affected node?
@@ -56,12 +62,16 @@ investigation_steps: |
   - When were first successful connections re-established?
   - Were pods restarted in-place (same node) or rescheduled?
   - If restarted on same node: how long did restart take? (indicates ongoing pressure)
+  - If kubelet was restarted: check kubelet certificate validity — expired certs
+    prevent kubelet from reporting status and managing pods
 
   ## 6. Scheduling Math
   - Sum all container request_bytes on the affected node
   - Compare to node allocatable_bytes
   - Identify the largest contributors to the (actual - request) gap
   - Check if other nodes have similar overcommit patterns
+  - Record capacity headroom: (allocatable - sum_requests) / allocatable
+    If headroom < 15%, flag as chronic risk in postmortem contributing factors
 
 compatible_with:
   - infra-failure
