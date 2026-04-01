@@ -186,7 +186,29 @@ With:
       cannot_explain_patterns: ["DEADLINE_EXCEEDED on SpiceDB calls"]
 ```
 
-And update the "no regression found" example (currently lines 117-128) to add `cross_reference_note`:
+Add a NEW example after the existing candidate example for the reviewed-but-unexplaining case (candidates exist but none explain the dominant error — Step 4.5b depends on this distinction):
+
+```yaml
+source_analysis:
+  status: reviewed_no_regression
+  deployed_ref: "v2.3.1"
+  resolved_commit_sha: "abc123def456..."
+  source_files:
+    - path: "src/main/java/com/oviva/user/UserController.java"
+      line: 142
+      code_context: "user.toDto() — no obvious defect at deployed version"
+      status: analyzed
+  regression_candidates:
+    - commit_sha: "def456..."
+      date: "2026-03-24T10:30:00Z"
+      summary: "removed null check in getUser()"
+      files: ["UserController.java"]
+      explains_patterns: []
+      cannot_explain_patterns: ["DEADLINE_EXCEEDED on SpiceDB calls"]
+  cross_reference_note: "no commit explains primary error pattern — bad-release hypothesis weakened"
+```
+
+And update the existing "no regression found" example (currently lines 117-128) for the no-candidates-at-all case (empty list, no cross-reference possible):
 
 ```yaml
 source_analysis:
@@ -202,9 +224,9 @@ source_analysis:
   cross_reference_note: null
 ```
 
-- [ ] **Step 3: Renumber Step 5 to Step 6**
+- [ ] **Step 3: Keep Step 5 numbering unchanged**
 
-The current "### Step 5: Emit Structured Output" becomes "### Step 6: Emit Structured Output" to accommodate the new Step 4.5 and the upcoming Step 4.5b (Task 3).
+Step 5 (Emit Structured Output) stays as Step 5. Steps 4.5 and 4.5b are sub-steps of Step 4, not new top-level steps. This matches the spec and avoids unnecessary doc drift.
 
 - [ ] **Step 4: Commit**
 
@@ -222,7 +244,7 @@ git commit -m "feat(incident-analysis): add Step 4.5 cross-reference commits wit
 
 - [ ] **Step 1: Add Step 4.5b after Step 4.5**
 
-Insert between Step 4.5 (added in Task 2) and Step 6 (Emit Structured Output, renumbered in Task 2):
+Insert between Step 4.5 (added in Task 2) and Step 5 (Emit Structured Output):
 
 ```markdown
 ### Step 4.5b: Bounded Expansion (conditional)
@@ -254,9 +276,9 @@ If expansion still yields no candidate, status remains `reviewed_no_regression` 
 `analysis_basis: "bounded_expansion_same_package"` (indicating expansion was attempted).
 ```
 
-- [ ] **Step 2: Add `analysis_basis` to the Step 6 output examples**
+- [ ] **Step 2: Add `analysis_basis` to the Step 5 output examples**
 
-In the Step 6 (Emit Structured Output) examples, add `analysis_basis: "primary_frame"` to both the `candidate_found` and `reviewed_no_regression` examples.
+In the Step 5 (Emit Structured Output) examples, add `analysis_basis: "primary_frame"` to both the `candidate_found` and `reviewed_no_regression` examples.
 
 For the `candidate_found` example, add after `status:`:
 ```yaml
@@ -392,7 +414,7 @@ With:
 
 - [ ] **Step 4: Update SKILL.md Step 4b procedure line**
 
-In SKILL.md line 514, update the procedure summary to add cross-reference and expansion steps. Replace:
+In SKILL.md line 514, update the procedure summary to include the new sub-steps. Replace:
 
 ```
 5. Emit structured output: `source_analysis.status` (`reviewed_no_regression` | `candidate_found` | `skipped` | `unavailable`), `source_files[]`, `regression_candidates[]`
@@ -401,9 +423,9 @@ In SKILL.md line 514, update the procedure summary to add cross-reference and ex
 With:
 
 ```
-5. Cross-reference candidates with observed log patterns (`explains_patterns[]`, `cannot_explain_patterns[]`)
-6. If no candidate explains dominant error: bounded expansion (same-commit siblings, then same-package peers)
-7. Emit structured output: `source_analysis.status`, `source_files[]`, `regression_candidates[]`, `analysis_basis`
+4.5. Cross-reference candidates with observed log patterns (`explains_patterns[]`, `cannot_explain_patterns[]`)
+4.5b. If no candidate explains dominant error: bounded expansion (same-commit siblings, then same-package peers)
+5. Emit structured output: `source_analysis.status`, `source_files[]`, `regression_candidates[]`, `analysis_basis`
 ```
 
 - [ ] **Step 5: Commit**
@@ -494,11 +516,11 @@ Run: `grep -n 'source-analysis.md' skills/incident-analysis/SKILL.md`
 Expected: Reference to `references/source-analysis.md` is present and unchanged.
 
 Run: `grep -c '### Step' skills/incident-analysis/references/source-analysis.md`
-Expected: 8 steps total (1, 2, 3, 4, 4.5, 4.5b, 5 renumbered to 6, plus the header-level steps don't count — verify the numbering is sequential and consistent).
+Expected: 7 step headers (1, 2, 3, 4, 4.5, 4.5b, 5).
 
 - [ ] **Step 5: Verify step numbering consistency between SKILL.md and source-analysis.md**
 
-SKILL.md Step 4b procedure summary should reference steps 1-7 (matching the renumbered source-analysis.md). Verify with:
+SKILL.md Step 4b procedure summary should list steps 1-5 with sub-steps 4.5 and 4.5b matching source-analysis.md. Verify with:
 
-Run: `grep -A 10 'Procedure.*Follow' skills/incident-analysis/SKILL.md | head -12`
-Expected: Steps 1 through 7 listed, including cross-reference (5), bounded expansion (6), and emit output (7).
+Run: `grep -A 12 'Procedure.*Follow' skills/incident-analysis/SKILL.md | head -14`
+Expected: Steps 1 through 5 listed, with 4.5 (cross-reference) and 4.5b (bounded expansion) between 4 and 5.
