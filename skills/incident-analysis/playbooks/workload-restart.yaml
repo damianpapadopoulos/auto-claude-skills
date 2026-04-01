@@ -17,6 +17,49 @@ signals:
   veto_signals: []
   contradiction_penalty: 15
 
+investigation_steps: |
+  CrashLoopBackOff pre-mitigation triage. Complete this sequence BEFORE proposing
+  a workload restart — each step may redirect to a different root-cause playbook.
+
+  ## 1. Pod Status and Events
+  - Describe the crashing pod: status, restart count, termination reason, recent events
+  - Retrieve events for the pod sorted by timestamp — identify the failure sequence
+  - If events show ImagePullBackOff, ErrImagePull, or CreateContainerConfigError:
+    STOP — this is a pod-start failure, not a crashloop. Investigate config/image issues.
+
+  ## 2. Termination Reason and Exit Code
+  - Extract the container's last termination reason and exit code:
+    - Exit code 1: application error — check previous container logs for stack trace
+    - Exit code 137 (SIGKILL/OOMKilled): memory exhaustion — route to resource-overload
+      or node-resource-exhaustion, not restart
+    - Exit code 139 (SIGSEGV): segmentation fault — route to bad-release investigation
+    - Exit code 143 (SIGTERM): graceful shutdown exceeded — check terminationGracePeriodSeconds
+  - If OOMKilled: a restart will crash again. Investigate memory limits vs actual usage.
+
+  ## 3. Previous Container Logs
+  - Retrieve logs from the previous (crashed) container instance
+  - Look for: stack traces, dependency connection failures, configuration errors,
+    startup-time errors that indicate the application cannot initialize
+
+  ## 4. Deployment and Probe Configuration
+  - Check container image, resource limits, environment variables
+  - Check liveness/readiness probe configuration: if initialDelaySeconds is too short
+    for startup time, the probe is killing the container — fix probe config, not restart
+  - Check if startup probe is configured (absorbs slow startup without liveness kills)
+
+  ## 5. Rollout History Correlation
+  - Check if the crashloop started after a recent deployment
+  - Correlate crash onset timestamp with rollout history timestamps
+  - If correlated: route to bad-release-rollback investigation
+
+  ## 6. Restart Decision Gate
+  - Only proceed with workload-restart if:
+    a) Exit code is NOT 137 (OOMKilled) — restart will not help
+    b) No recent deployment correlates with crash onset — otherwise rollback is better
+    c) Probe configuration is appropriate — otherwise fix probes
+    d) No dependency failure is identified — otherwise fix dependency
+  - If all checks pass and cause is transient state corruption: restart is appropriate
+
 queries:
   kubectl_get_deployment:
     kind: kubectl
