@@ -1,5 +1,8 @@
 id: infra-failure
 title: Infrastructure Failure
+description: >
+  Errors localized to one or more nodes rather than application code. Investigates
+  node conditions, kubelet health, runtime status, connectivity, and certificates.
 category: infra-failure
 commandable: false
 

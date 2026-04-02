@@ -1,5 +1,8 @@
 id: traffic-scale-out
 title: Traffic Scale Out
+description: >
+  CPU/memory saturation or traffic spike detected without application errors. Scales
+  the deployment to handle increased load. Requires non-HPA-managed deployment.
 category: resource-overload
 commandable: true
 destructive_action: false

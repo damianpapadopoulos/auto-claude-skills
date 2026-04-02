@@ -1,5 +1,8 @@
 id: workload-restart
 title: Workload Restart
+description: >
+  Pods crash-looping or failing health checks without clear root cause. Restarts
+  the deployment to resolve transient state corruption. Gated by crashloop triage.
 category: workload-failure
 commandable: true
 destructive_action: true

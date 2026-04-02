@@ -1,5 +1,8 @@
 id: bad-release-rollback
 title: Bad Release Rollback
+description: >
+  Error rate spike correlates with a recent deployment. Rolls back to the previous
+  healthy revision. Requires deployment metadata and rollout history access.
 category: bad-release
 commandable: true
 destructive_action: false
