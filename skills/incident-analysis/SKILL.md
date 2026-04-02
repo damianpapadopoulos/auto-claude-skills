@@ -356,38 +356,13 @@ If evidence is ambiguous or borderline, do NOT hop — present trace timeline an
 
 ### Step 4b: Source Analysis (Conditional)
 
-Analyzes source code at the deployed version to identify regression candidates. Runs after Step 4 if trace correlation ran; if Step 4 was skipped, runs here on the currently scoped service.
+Analyzes source code at the deployed version to identify regression candidates. Full procedure in `references/source-analysis.md`.
 
-**Gate — all required (bad-release path):**
-1. Actionable stack frame from Step 2 (skip minified/compiled/generated frames)
-2. Resolvable deployed ref (image tag or SHA from Step 2b deployment metadata)
-3. Bad-release category: `recent_deploy_detected` signal detected, OR deploy within incident window, OR deploy within 4 hours before incident start.
+**Gate — either path required:** (1) Actionable stack frame from Step 2, (2) Resolvable deployed ref from Step 2b, (3a) Bad-release: deploy within incident window or 4h before, OR (3b) Config-change: `config_change_correlated_with_errors` detected AND repo-backed (has git ref). User override: bypasses gate 3 but not 1-2. If no gate met: `source_analysis.status: skipped`.
 
-**OR all required (config-change path):**
-1. Actionable stack frame from Step 2
-2. Resolvable deployed ref
-3. `config_change_correlated_with_errors` signal detected AND config change is repo-backed (has a git ref). ConfigMap-only or console-applied changes do not trigger this path.
+**Post-hop rule:** If Step 4 shifted to Service B, resolve its workload identity from trace/log labels (not deployment name). One bounded lookup. If ambiguous, skip.
 
-**User override:** If the user explicitly requests source analysis, bypass the category gate (condition 3) but NOT conditions 1-2 or the procedure bounds.
-
-**If no gate is met:** Set `source_analysis.status: skipped` with `skip_reason` and proceed to Step 5.
-
-**Post-hop rule:** If Step 4 shifted investigation to Service B, resolve Service B's workload identity from trace/log resource labels (not by assuming deployment name matches service name). Do one bounded deployment-metadata lookup for that workload. If workload identity is ambiguous, skip with reason.
-
-**Procedure:** Follow `references/source-analysis.md`:
-1. Resolve `deployed_ref` → `resolved_commit_sha` (read code at deployed ref, not HEAD)
-2. Map top 1-2 actionable stack frames to source files; verify at deployed ref
-3. Read error location +/- 15 lines context (bounded evidence — never full files or diffs)
-4. Check last 3 commits within 48h for regression candidates
-4.5. Cross-reference candidates with observed log patterns (`explains_patterns[]`, `cannot_explain_patterns[]`)
-4.5b. If no candidate explains dominant error: bounded expansion (same-commit siblings, then same-package peers)
-5. Emit structured output: `source_analysis.status`, `source_files[]`, `regression_candidates[]`, `analysis_basis`
-
-**Tool tiers:** GitHub API (Tier 1) → `git show` (Tier 2) → provide URL for manual inspection (Tier 3).
-
-**Fail-open:** If GitHub API is unavailable, set `source_analysis.status: unavailable` with error detail and proceed to Step 5. Never silently degrade.
-
-If `status: candidate_found`, the regression candidate becomes primary input to Step 5 hypothesis formation.
+**Output:** `source_analysis.status` = `reviewed_no_regression` | `candidate_found` | `skipped` | `unavailable`. If `candidate_found`, feeds into Step 5 hypothesis. Tool tiers: GitHub API → `git show` → manual URL. Fail-open on API unavailability. Full procedure including cross-reference and bounded expansion steps in `references/source-analysis.md`.
 
 ### Step 5: Formulate Root Cause Hypothesis
 
