@@ -31,7 +31,7 @@ The skill will ask for incident details interactively.
 1. Load the `incident-analysis` skill using the Skill tool.
 2. **Preflight:** Before entering Stage 1, run the observability preflight:
    ```bash
-   bash "$(dirname "$0")/../scripts/obs-preflight.sh"
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/obs-preflight.sh"
    ```
    Report any issues from the `summary` field. If `gcloud` is `unauthenticated`, resolve auth before proceeding.
 3. Begin at Stage 1 — MITIGATE. Pre-populate scope from `$ARGUMENTS`:
