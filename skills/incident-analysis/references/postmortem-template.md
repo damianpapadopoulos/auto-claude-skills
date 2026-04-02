@@ -32,6 +32,12 @@ Must include verified recovery timestamp.
 ## 6. Contributing Factors
 Ordered by impact (most impactful first, not discovery order).
 Each factor: what it is, why it made things worse.
+When resource exhaustion or capacity constraints contributed to the incident, include a **Capacity Context** entry:
+- Current utilization vs allocatable (node level, at incident time)
+- Resource request coverage: actual/requested ratio for key workloads
+- HPA scaling ceiling: current replicas vs max, and whether max was reached
+- Whether the condition is chronic (weeks of headroom drift) or acute (single event triggered exhaustion)
+This prevents "increase resource limits" action items without context on whether the headroom trend is systemic.
 
 ## 7. Lessons Learned
 What went well, what went wrong, where we got lucky.
