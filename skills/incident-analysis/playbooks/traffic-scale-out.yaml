@@ -13,6 +13,7 @@ signals:
     - cpu_saturation_detected
     - memory_pressure_detected
     - traffic_spike_detected
+    - slo_burn_rate_alert
   contradicting:
     - crash_loop_coexists_with_saturation
   veto_signals: []
