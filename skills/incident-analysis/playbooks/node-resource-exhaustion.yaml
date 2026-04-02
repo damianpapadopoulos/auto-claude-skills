@@ -73,9 +73,6 @@ investigation_steps: |
   - Record capacity headroom: (allocatable - sum_requests) / allocatable
     If headroom < 15%, flag as chronic risk in postmortem contributing factors
 
-compatible_with:
-  - infra-failure
-
 pre_conditions: []
 post_conditions: []
 hard_stop_conditions: []
