@@ -18,14 +18,18 @@ TREND_CONTENT="$(cat "${TREND_SKILL}")"
 # Test 1: Canonical 8-section schema — all headings present in template
 # ---------------------------------------------------------------------------
 
-# Extract the built-in default schema block from the incident-analysis skill.
-# The block starts after "Built-in default schema" and is inside a fenced code block.
-# We grab from that line through the second ``` (first opens, second closes).
-SCHEMA_START=$(grep -n "Built-in default schema" "${ANALYSIS_SKILL}" | head -1 | cut -d: -f1)
-if [ -n "${SCHEMA_START}" ]; then
-    SCHEMA_BLOCK="$(tail -n +"${SCHEMA_START}" "${ANALYSIS_SKILL}" | sed -n '/^```$/,/^```$/p')"
+# Extract the built-in default schema block. Prefer the reference file (post-extraction);
+# fall back to inline SKILL.md block (pre-extraction layout).
+TEMPLATE_REF="${PROJECT_ROOT}/skills/incident-analysis/references/postmortem-template.md"
+if [ -f "${TEMPLATE_REF}" ]; then
+    SCHEMA_BLOCK="$(cat "${TEMPLATE_REF}")"
 else
-    SCHEMA_BLOCK=""
+    SCHEMA_START=$(grep -n "Built-in default schema" "${ANALYSIS_SKILL}" | head -1 | cut -d: -f1)
+    if [ -n "${SCHEMA_START}" ]; then
+        SCHEMA_BLOCK="$(tail -n +"${SCHEMA_START}" "${ANALYSIS_SKILL}" | sed -n '/^```$/,/^```$/p')"
+    else
+        SCHEMA_BLOCK=""
+    fi
 fi
 
 assert_contains "canonical: Summary heading" "Summary" "${SCHEMA_BLOCK}"

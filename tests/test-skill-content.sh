@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # test-skill-content.sh — SKILL.md behavioral contract assertions
 # Validates that required concepts, safety invariants, and decision structures
-# are documented in the incident-analysis skill file.
+# are documented in the incident-analysis skill file or its reference files.
 set -u
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -13,29 +13,32 @@ SKILL_FILE="${PROJECT_ROOT}/skills/incident-analysis/SKILL.md"
 SKILL_CONTENT="$(cat "${SKILL_FILE}")"
 
 # ---------------------------------------------------------------------------
-# Confidence bands
+# CLASSIFY reference file (extracted from SKILL.md)
 # ---------------------------------------------------------------------------
-assert_contains "confidence band: 85 threshold" "85" "${SKILL_CONTENT}"
-assert_contains "confidence band: 60 threshold" "60" "${SKILL_CONTENT}"
-assert_contains "confidence band: < 60 path" "< 60" "${SKILL_CONTENT}"
+CLASSIFY_REF="${PROJECT_ROOT}/skills/incident-analysis/references/classify-scoring.md"
+CLASSIFY_REF_CONTENT="$(cat "${CLASSIFY_REF}")"
 
 # ---------------------------------------------------------------------------
-# Signal scoring fields
+# Confidence bands (now in reference file)
 # ---------------------------------------------------------------------------
-assert_contains "contradiction scoring documented" "contradiction_score" "${SKILL_CONTENT}"
-assert_contains "veto_signals documented" "veto_signals" "${SKILL_CONTENT}"
+assert_contains "confidence band: 85 threshold" "85" "${CLASSIFY_REF_CONTENT}"
+assert_contains "confidence band: 60 threshold" "60" "${CLASSIFY_REF_CONTENT}"
+assert_contains "confidence band: < 60 path" "< 60" "${CLASSIFY_REF_CONTENT}"
+
+# ---------------------------------------------------------------------------
+# Signal scoring fields (now in reference file)
+# ---------------------------------------------------------------------------
+assert_contains "contradiction scoring documented" "contradiction_score" "${CLASSIFY_REF_CONTENT}"
+assert_contains "veto_signals documented" "veto_signals" "${CLASSIFY_REF_CONTENT}"
 
 # ---------------------------------------------------------------------------
 # Decision records contain signal evaluation sections (both tiers)
 # ---------------------------------------------------------------------------
-assert_contains "SIGNALS EVALUATED in high-confidence record" "CLASSIFY DECISION" "${SKILL_CONTENT}"
-# Both decision record templates show signal states with contradiction weights
-assert_contains "contradiction in signal evaluation" "contradiction" "${SKILL_CONTENT}"
-# Both high and medium confidence decision records exist
-assert_contains "high confidence decision record" "HIGH CONFIDENCE" "${SKILL_CONTENT}"
-assert_contains "medium confidence decision record" "MEDIUM CONFIDENCE" "${SKILL_CONTENT}"
-# SIGNALS EVALUATED header present in decision record templates
-assert_contains "SIGNALS EVALUATED section in records" "SIGNALS EVALUATED" "${SKILL_CONTENT}"
+assert_contains "SIGNALS EVALUATED in decision record" "CLASSIFY DECISION" "${CLASSIFY_REF_CONTENT}"
+assert_contains "contradiction in signal evaluation" "contradiction" "${CLASSIFY_REF_CONTENT}"
+assert_contains "high confidence decision record" "HIGH CONFIDENCE" "${CLASSIFY_REF_CONTENT}"
+assert_contains "medium confidence decision record" "MEDIUM CONFIDENCE" "${CLASSIFY_REF_CONTENT}"
+assert_contains "SIGNALS EVALUATED section in records" "SIGNALS EVALUATED" "${CLASSIFY_REF_CONTENT}"
 
 # ---------------------------------------------------------------------------
 # VALIDATE stage references stabilization_delay_seconds
@@ -45,9 +48,7 @@ assert_contains "VALIDATE references stabilization_delay_seconds" "stabilization
 # ---------------------------------------------------------------------------
 # Fingerprint recheck documented between approval and execution
 # ---------------------------------------------------------------------------
-# The EXECUTE stage has a "Fingerprint Recheck" step
 assert_contains "fingerprint recheck documented" "Fingerprint Recheck" "${SKILL_CONTENT}"
-# Drift detection is part of the recheck
 assert_contains "fingerprint drift documented" "fingerprint has drifted" "${SKILL_CONTENT}"
 
 # ---------------------------------------------------------------------------
@@ -68,10 +69,10 @@ assert_contains "VALIDATE exit: unverified" "verification_status: unverified" "$
 assert_contains "CLASSIFY stage section" "## CLASSIFY" "${SKILL_CONTENT}"
 
 # ---------------------------------------------------------------------------
-# Loop termination — stall detection
+# Loop termination — stall detection (now in reference file)
 # ---------------------------------------------------------------------------
-assert_contains "loop termination: 3 iterations" "3 reclassification iterations" "${SKILL_CONTENT}"
-assert_contains "loop termination: improvement threshold" "improvement" "${SKILL_CONTENT}"
+assert_contains "loop termination: 3 iterations" "3 reclassification iterations" "${CLASSIFY_REF_CONTENT}"
+assert_contains "loop termination: improvement threshold" "improvement" "${CLASSIFY_REF_CONTENT}"
 
 # ---------------------------------------------------------------------------
 # Scope restriction has infrastructure escalation carve-out
@@ -80,14 +81,12 @@ CONSTRAINT_2_BLOCK=$(sed -n '/### 2\. Scope Restriction/,/### 3\./p' "${SKILL_FI
 assert_contains "scope restriction: infra escalation carve-out" "Infrastructure escalation" "${CONSTRAINT_2_BLOCK}"
 
 # ---------------------------------------------------------------------------
-# Decision record contains spec-required safety fields
+# Decision record contains spec-required safety fields (now in reference file)
 # ---------------------------------------------------------------------------
-# Extract the high-confidence decision record template block
-HC_RECORD=$(sed -n '/### Decision Record — High Confidence/,/### Decision Record — Medium Confidence/p' "${SKILL_FILE}")
-assert_contains "decision record: evidence age field" "Evidence Age" "${HC_RECORD}"
-assert_contains "decision record: state fingerprint field" "State Fingerprint" "${HC_RECORD}"
-assert_contains "decision record: explanation field" "Explanation" "${HC_RECORD}"
-assert_contains "decision record: veto signals field" "VETO" "${HC_RECORD}"
+assert_contains "decision record: evidence age field" "Evidence Age" "${CLASSIFY_REF_CONTENT}"
+assert_contains "decision record: state fingerprint field" "State Fingerprint" "${CLASSIFY_REF_CONTENT}"
+assert_contains "decision record: explanation field" "Explanation" "${CLASSIFY_REF_CONTENT}"
+assert_contains "decision record: veto signals field" "VETO" "${CLASSIFY_REF_CONTENT}"
 
 # ---------------------------------------------------------------------------
 # Step 7 synthesis preserves investigation path material
@@ -111,18 +110,17 @@ assert_contains "VALIDATE: write validate.json step" "validate.json" "${VALIDATE
 assert_contains "SKILL.md mentions SLO burn rate in MITIGATE" "SLO burn rate alert" "${SKILL_CONTENT}"
 
 # ---------------------------------------------------------------------------
-# Disambiguation probe behavioral contracts
-# (SKILL_CONTENT is already defined at the top of this test file)
+# Disambiguation probe behavioral contracts (now in reference file)
 # ---------------------------------------------------------------------------
-assert_contains "SKILL.md has SHORTLIST artifact" "SHORTLIST:" "${SKILL_CONTENT}"
-assert_contains "SKILL.md has classification_fingerprint" "classification_fingerprint" "${SKILL_CONTENT}"
-assert_contains "SKILL.md has disambiguation_round" "disambiguation_round" "${SKILL_CONTENT}"
-assert_contains "SKILL.md has pre_probe fingerprint" "pre_probe" "${SKILL_CONTENT}"
+assert_contains "SKILL.md has SHORTLIST artifact" "SHORTLIST:" "${CLASSIFY_REF_CONTENT}"
+assert_contains "SKILL.md has classification_fingerprint" "classification_fingerprint" "${CLASSIFY_REF_CONTENT}"
+assert_contains "SKILL.md has disambiguation_round" "disambiguation_round" "${CLASSIFY_REF_CONTENT}"
+assert_contains "SKILL.md has pre_probe fingerprint" "pre_probe" "${CLASSIFY_REF_CONTENT}"
 assert_contains "SKILL.md has MITIGATE Step 2b (inventory)" "Step 2b: Establish Inventory" "${SKILL_CONTENT}"
 assert_contains "SKILL.md has Targeted Disambiguation Probes" "Targeted Disambiguation Probes" "${SKILL_CONTENT}"
 assert_not_contains "SKILL.md has no duplicate Step 2b in INVESTIGATE" "### Step 2b: Targeted" "${SKILL_CONTENT}"
 assert_contains "SKILL.md has scope exception for dependency probes" "declared/known dependencies" "${SKILL_CONTENT}"
-assert_contains "SKILL.md has one probe round limit" "one probe round" "${SKILL_CONTENT}"
+assert_contains "SKILL.md has one probe round limit" "one probe round" "${CLASSIFY_REF_CONTENT}"
 
 # ---------------------------------------------------------------------------
 # Step 4b: Source Analysis — reference file
@@ -190,18 +188,22 @@ test_investigate_references_preflight
 
 # ---------------------------------------------------------------------------
 # Caller-layer investigation rules (shared-dependency incidents)
-# Scoped to specific SKILL.md sections to avoid false positives.
 # ---------------------------------------------------------------------------
 echo "-- test: caller investigation rules --"
 
-# Step 3: shared resource escalation must contain mandatory caller checks
+# Step 3: inline summary still references mandatory escalation and the reference file
 STEP3_BLOCK=$(sed -n '/### Step 3: Single-Service Deep Dive/,/### Step 4/p' "${SKILL_FILE}")
-assert_contains "step 3: escalation is mandatory" "mandatory when detected" "${STEP3_BLOCK}"
-assert_contains "step 3: identify dominant callers" "Identify dominant callers" "${STEP3_BLOCK}"
-assert_contains "step 3: check dominant caller ERROR logs" "Check each dominant caller" "${STEP3_BLOCK}"
-assert_contains "step 3: compare to different day baseline" "different day" "${STEP3_BLOCK}"
-assert_contains "step 3: deployment history scoped to dominant callers" "deployment history for all dominant callers" "${STEP3_BLOCK}"
-assert_contains "step 3: amplification loop inside caller check" "Check for amplification loops" "${STEP3_BLOCK}"
+assert_contains "step 3: escalation is mandatory" "mandatory" "${STEP3_BLOCK}"
+assert_contains "step 3: references caller-investigation.md" "caller-investigation.md" "${STEP3_BLOCK}"
+
+# Full procedure is now in the reference file
+CALLER_REF="${PROJECT_ROOT}/skills/incident-analysis/references/caller-investigation.md"
+CALLER_REF_CONTENT="$(cat "${CALLER_REF}")"
+assert_contains "caller ref: identify dominant callers" "Identify dominant callers" "${CALLER_REF_CONTENT}"
+assert_contains "caller ref: check dominant caller ERROR logs" "Check each dominant caller" "${CALLER_REF_CONTENT}"
+assert_contains "caller ref: compare to different day baseline" "different day" "${CALLER_REF_CONTENT}"
+assert_contains "caller ref: deployment history scoped to dominant callers" "deployment history" "${CALLER_REF_CONTENT}"
+assert_contains "caller ref: amplification loop inside caller check" "amplification" "${CALLER_REF_CONTENT}"
 
 # Step 5: chronic-vs-acute requires caller evidence for traffic hypotheses
 STEP5_BLOCK=$(sed -n '/### Step 5: Formulate Root Cause/,/### Step 6/p' "${SKILL_FILE}")
@@ -212,5 +214,36 @@ assert_contains "step 5: traffic baseline from different day" "different day at 
 GATE_BLOCK=$(sed -n '/### Step 8: Investigation Completeness Gate/,/### Step 9/p' "${SKILL_FILE}")
 assert_contains "gate: caller question exists" "dominant callers" "${GATE_BLOCK}"
 assert_contains "gate: rule covers Q9" "4-9" "${GATE_BLOCK}"
+
+# ---------------------------------------------------------------------------
+# Reference file extractions exist
+# ---------------------------------------------------------------------------
+assert_file_exists "references/classify-scoring.md exists" \
+    "${PROJECT_ROOT}/skills/incident-analysis/references/classify-scoring.md"
+assert_file_exists "references/postmortem-template.md exists" \
+    "${PROJECT_ROOT}/skills/incident-analysis/references/postmortem-template.md"
+assert_file_exists "references/query-patterns.md exists" \
+    "${PROJECT_ROOT}/skills/incident-analysis/references/query-patterns.md"
+assert_file_exists "references/caller-investigation.md exists" \
+    "${PROJECT_ROOT}/skills/incident-analysis/references/caller-investigation.md"
+
+# ---------------------------------------------------------------------------
+# Quick reference table and "When NOT to Use"
+# ---------------------------------------------------------------------------
+assert_contains "SKILL.md: has quick reference table" "Quick Reference" "${SKILL_CONTENT}"
+assert_contains "SKILL.md: has when not to use" "When NOT to use" "${SKILL_CONTENT}"
+
+# ---------------------------------------------------------------------------
+# Frontmatter starts with "Use when"
+# ---------------------------------------------------------------------------
+desc_line="$(sed -n '3p' "${SKILL_FILE}")"
+case "${desc_line}" in
+    *"Use when"*)
+        _record_pass "SKILL.md: description starts with 'Use when'"
+        ;;
+    *)
+        _record_fail "SKILL.md: description starts with 'Use when'" "got: ${desc_line}"
+        ;;
+esac
 
 print_summary

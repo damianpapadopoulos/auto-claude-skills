@@ -147,11 +147,16 @@ done
 IFS="${IFS_SAVE}"
 
 # ---------------------------------------------------------------------------
-# SKILL.md mentions contradiction collapse concept
+# Contradiction collapse concept documented (in SKILL.md or CLASSIFY reference)
 # ---------------------------------------------------------------------------
 skill_content="$(cat "${SKILL_FILE}")"
+classify_ref="${PROJECT_ROOT}/skills/incident-analysis/references/classify-scoring.md"
+combined_content="${skill_content}"
+if [ -f "${classify_ref}" ]; then
+    combined_content="${combined_content}$(cat "${classify_ref}")"
+fi
 # Check for "contradiction collapse" or "collapse" near "incompatible"
-if printf '%s' "${skill_content}" | grep -qi "contradiction.*collapse\|collapse.*incompatible\|incompatible.*collapse"; then
+if printf '%s' "${combined_content}" | grep -qi "contradiction.*collapse\|collapse.*incompatible\|incompatible.*collapse"; then
     _record_pass "SKILL.md references contradiction collapse"
 else
     _record_fail "SKILL.md references contradiction collapse" "neither 'contradiction collapse' nor 'collapse' near 'incompatible' found"
