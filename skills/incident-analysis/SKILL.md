@@ -7,6 +7,24 @@ description: Use when investigating production symptoms — connection failures,
 
 Tiered GCP log investigation with playbook-driven mitigation and structured validation. Stages: MITIGATE, CLASSIFY, INVESTIGATE, EXECUTE, VALIDATE, POSTMORTEM. Detects available tools at runtime and uses the best tier. Playbook YAML files define mitigation commands, safety invariants, and validation criteria.
 
+## Quick Reference — Symptom to Playbook
+
+| Symptom | Likely Playbook | Category |
+|---------|----------------|----------|
+| Error spike after deploy | bad-release-rollback | bad-release |
+| CrashLoopBackOff / pod restarts | workload-restart | workload-failure |
+| Multi-pod probe timeout on one node | node-resource-exhaustion | infra-failure |
+| Node NotReady / kubelet down | infra-failure | infra-failure |
+| CPU/memory saturation + traffic spike | traffic-scale-out | resource-overload |
+| Config change correlated with errors | config-regression | bad-config |
+| Upstream dependency errors | dependency-failure | dependency-failure |
+
+**When NOT to use this skill:**
+- Capacity planning or resource right-sizing without an active incident — use proactive monitoring tools instead
+- Alert tuning or alert hygiene — use the `alert-hygiene` skill
+- Non-production debugging (local dev, CI failures) — use `systematic-debugging`
+- Performance optimization without user-facing symptoms — not an incident
+
 ## Behavioral Constraints (Always Active)
 
 ### 1. HITL Gate — No Autonomous Mutations
