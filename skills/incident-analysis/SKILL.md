@@ -1,6 +1,6 @@
 ---
 name: incident-analysis
-description: Investigate production symptoms: connection failures, pod crashes/restarts, SIGTERM/OOM errors, latency spikes, Cloud SQL/proxy issues, deployment-correlated errors
+description: Use when investigating production symptoms — connection failures, pod crashes/restarts, SIGTERM/OOM errors, latency spikes, Cloud SQL/proxy issues, deployment-correlated errors, ImagePullBackOff, CreateContainerConfigError, or node NotReady events
 ---
 
 # Incident Analysis
