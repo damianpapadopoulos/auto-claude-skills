@@ -79,7 +79,7 @@ If the user has not approved a mitigation proposal within the playbook's `freshn
 Run the shared observability preflight to check environment readiness:
 
 ```bash
-bash "$(dirname "$0")/../scripts/obs-preflight.sh"
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/obs-preflight.sh"
 ```
 
 Parse the JSON output to select the execution tier:
