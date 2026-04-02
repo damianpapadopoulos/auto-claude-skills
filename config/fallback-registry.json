@@ -459,7 +459,7 @@
       "phase": "DEBUG",
       "triggers": [
         "(incident.*(investig|analys|review|report|timeline|summary|response|triage|debug|diagnos|resolv)|postmortem|outage|root.cause|error.spike|log.analysis|production.error|staging.error)",
-        "(connection.*(fail|refus|timeout|pool|exhaust|acquir)|oom.?kill|memory.pressure|cpu.*(throttl|saturat)|crash.?loop|liveness.probe|node.not.ready|upstream.*(fail|error|timeout))",
+        "(connection.*(fail|refus|timeout|pool|exhaust|acquir)|oom.?kill|memory.pressure|cpu.*(throttl|saturat)|crash.?loop|liveness.probe|node.not.ready|upstream.*(fail|error|timeout)|image.?pull.?(back.?off|fail|error)|err.?image.?pull|config.?(error|missing)|create.?container.?config|failed.?(mount|attach)|pvc.*(pending|fail))",
         "(sigterm|sigkill|shutdown.*(error|fail|grace)|active.connection|cloud.?sql|proxy.*(restart|error|fail|crash)|pod.*(restart|crash|evict)|latency.*(spike|p99)|p99.*(latency|spike|degrad)|request.timeout|circuit.break|deploy.*(fail|rollback))",
         "(slo.*(burn|alert|breach|budget)|burn.?rate|error.budget)"
       ],
@@ -476,6 +476,12 @@
         "graceful shutdown",
         "active connections",
         "health check",
+        "ImagePullBackOff",
+        "image pull error",
+        "CreateContainerConfigError",
+        "missing ConfigMap",
+        "missing Secret",
+        "FailedMount",
         "pod restart",
         "latency spike",
         "request timeout",
