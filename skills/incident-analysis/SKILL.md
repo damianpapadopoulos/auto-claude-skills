@@ -80,7 +80,7 @@ Maintain a mental ledger of evidence collected during the investigation, keyed b
 |-----------|----------------|
 | Log queries (LQL) | `(service, environment, severity, LQL_filter_hash, time_window)` |
 | Metric queries | `(service, environment, metric_type, aggregation, time_window)` |
-| kubectl queries | `(resource_kind, name, namespace, context)` |
+| kubectl queries | `(resource_kind, name, namespace, context, output_format)` — e.g. `get deployment/X -o json` vs `rollout history` vs `jsonpath={.status.readyReplicas}` are distinct entries |
 | Trace queries | `(trace_id, project_id)` |
 | Source analysis | `(repo, commit_ref, file_path)` |
 
@@ -585,6 +585,7 @@ investigation_summary:
       time_precision: "exact" | "minute" | "approximate"
       event_kind: "<kind>"
       description: "<what happened>"
+      evidence_source: "<where observed>"
   recovery_status:
     recovered: true | false | "unknown"
     recovery_time_utc: "<UTC or null>"

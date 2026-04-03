@@ -33,12 +33,16 @@ The skill will ask for incident details interactively.
    ```bash
    bash "${CLAUDE_PLUGIN_ROOT}/scripts/obs-preflight.sh"
    ```
-   Report any issues from the `summary` field. If `gcloud` is `unauthenticated`, resolve auth before proceeding.
-3. Begin at Stage 1 — MITIGATE. Pre-populate scope from `$ARGUMENTS`:
+   Report any issues from the `summary` field.
+3. **Determine mode:** If the prompt contains triage keywords ("quick triage", "live triage",
+   "what's happening right now"), use live-triage mode. Otherwise use full investigation.
+4. Begin at Stage 1 — MITIGATE. Pre-populate scope from `$ARGUMENTS`:
    - Extract service name, environment (hb-prod, dg-prod, etc.), and symptoms
    - Convert any local times to UTC
    - Pass extracted context as MITIGATE Step 2 (Establish Scope) inputs
-4. Follow the full investigation pipeline as defined in the skill.
+5. **Access gate (Step 1b):** In full mode, wait for fix-or-proceed on auth issues.
+   In live-triage mode, snapshot access state and proceed immediately — note gaps.
+6. Follow the investigation pipeline as defined in the skill for the selected mode.
 
 ## Investigation Modes
 
