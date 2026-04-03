@@ -6,7 +6,7 @@
   {"query": "there's a production outage affecting auth-service, need to investigate the root cause", "should_trigger": true},
   {"query": "pods stuck in ImagePullBackOff after the deploy, nothing is starting", "should_trigger": true},
   {"query": "connection pool exhausted on the database proxy, timeouts across multiple services", "should_trigger": true},
-  {"query": "checkout-service incident — error spike after config change, need to investigate", "should_trigger": true},
+  {"query": "SLO burn rate incident on checkout-service, error budget nearly exhausted", "should_trigger": true},
   {"query": "node gke-prod-pool-abc123 is node not ready, several pods crashing and rescheduling", "should_trigger": true},
   {"query": "auth-service outage right now, need quick incident investigation", "should_trigger": true},
   {"query": "how does alert routing work in our monitoring setup?", "should_trigger": false},

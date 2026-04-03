@@ -74,7 +74,7 @@ If the user has not approved a mitigation proposal within the playbook's `freshn
 
 ### 6. Evidence Ledger — Reuse Within Freshness Window
 
-Maintain a mental ledger of evidence collected during the investigation, keyed by query fingerprint. The fingerprint varies by query type to prevent false collisions:
+Maintain a mental ledger of evidence collected during the investigation, keyed by query fingerprint. The key must include enough dimensions to prevent collapsing different namespaces, trace-scoped vs service-scoped reads, or caller-vs-affected-service queries. The fingerprint varies by query type to prevent false collisions:
 
 | Query type | Fingerprint key |
 |-----------|----------------|
@@ -94,6 +94,8 @@ Before issuing a query that matches a prior ledger entry:
 - EXECUTE Stage fingerprint recheck (Step 1) — the safety contract requires live state
 - VALIDATE Stage sampling (Phase 2) — each sample must reflect current conditions
 - Any query where the user explicitly requests fresh data
+
+This reduces duplicate tool calls across MITIGATE → INVESTIGATE → CLASSIFY cycles while preserving the safety contract where live state matters.
 
 ## Investigation Modes
 

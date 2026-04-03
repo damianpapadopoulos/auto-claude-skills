@@ -202,6 +202,8 @@ assert_file_contains "SKILL.md: summary schema has open_questions" "open_questio
 # ---------------------------------------------------------------------------
 assert_file_contains "bad-release-rollback.yaml: has disambiguation probe" \
     "disambiguation_probe" "${PLAYBOOK_DIR}/bad-release-rollback.yaml"
+assert_file_contains "bad-release-rollback.yaml: probe resolves error_pattern_predates_deploy" \
+    "error_pattern_predates_deploy" "${PLAYBOOK_DIR}/bad-release-rollback.yaml"
 
 # ---------------------------------------------------------------------------
 # node-resource-exhaustion.yaml — Enhanced checks
