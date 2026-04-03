@@ -26,7 +26,21 @@ signals:
     - error_pattern_predates_deploy
   contradiction_penalty: 20
 
+disambiguation_probe:
+  query_ref: pre_deploy_error_scan
+  resolves_signals:
+    - error_pattern_predates_deploy
+
 queries:
+  pre_deploy_error_scan:
+    kind: log_query
+    description: "Check if dominant error signature exists in logs before the deploy timestamp"
+    params:
+      scope: affected_service
+      time_window: "pre_deploy_60m"
+      severity: ERROR
+      pattern_ref: dominant_error_signature
+      max_results: 10
   kubectl_get_deployment:
     kind: kubectl
     command_argv: ["kubectl", "get", "deployment/{{deployment_name}}", "-n", "{{namespace}}", "-o", "json"]

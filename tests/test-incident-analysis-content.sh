@@ -159,6 +159,51 @@ assert_file_contains "SKILL.md: confident yes impossible with missing domain" \
     "confident.*yes.*not possible.*relevant domain" "${SKILL_FILE}"
 
 # ---------------------------------------------------------------------------
+# SKILL.md — Aggregate-first error fingerprinting (Step 3b)
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: has aggregate fingerprint step" "Aggregate.*[Ff]ingerprint" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: aggregate mentions error distribution" "error distribution" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: aggregate mentions dominant bucket" "dominant.*bucket" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: aggregate mentions sample-biased warning" "sample.biased" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: aggregate mentions exemplar reads" "exemplar" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
+# SKILL.md — Evidence ledger (Constraint 6)
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: has evidence ledger constraint" "[Ee]vidence [Ll]edger" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: ledger has freshness semantics" "freshness" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: ledger excludes EXECUTE recheck" "always re-query" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: ledger labels reused evidence" "reused" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
+# SKILL.md — Live-triage mode
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: has live-triage mode" "[Ll]ive.triage" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: live-triage is opt-in" "opt.in\|explicit" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: live-triage has non-blocking access" "non.blocking\|[Nn]on-blocking" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: live-triage has light inventory" "[Ll]ight inventory" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: live-triage defers deep inventory" "[Dd]efer.*deep\|[Dd]eep.*defer" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: live-triage preserves safety" "fingerprint recheck\|completeness gate\|safety" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: full investigation is default" "[Dd]efault.*[Ff]ull\|[Ff]ull.*[Dd]efault" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
+# SKILL.md — Canonical summary schema (Step 7)
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: summary has structured block" "investigation_summary:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: summary schema has scope" "scope:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: summary schema has dominant_errors" "dominant_errors:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: summary schema has chosen_hypothesis" "chosen_hypothesis:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: summary schema has ruled_out" "ruled_out:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: summary schema has recovery_status" "recovery_status:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: summary schema has open_questions" "open_questions:" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
+# bad-release-rollback.yaml — Disambiguation probe
+# ---------------------------------------------------------------------------
+assert_file_contains "bad-release-rollback.yaml: has disambiguation probe" \
+    "disambiguation_probe" "${PLAYBOOK_DIR}/bad-release-rollback.yaml"
+
+# ---------------------------------------------------------------------------
 # node-resource-exhaustion.yaml — Enhanced checks
 # ---------------------------------------------------------------------------
 NRE_FILE="${PLAYBOOK_DIR}/node-resource-exhaustion.yaml"
