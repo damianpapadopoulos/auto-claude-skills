@@ -131,6 +131,34 @@ assert_file_contains "infra-failure.yaml: mentions connectivity" "[Cc]onnectivit
 assert_file_contains "infra-failure.yaml: mentions certificate" "[Cc]ertificate" "${IF_FILE}"
 
 # ---------------------------------------------------------------------------
+# SKILL.md — Access Gate (Step 1b)
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: has access gate step" "Access Gate" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: access gate checks gcloud auth" "gcloud auth" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: access gate checks kubectl context" "kubectl" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: access gate prompts user to fix" "Fix now.*proceed with degraded" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: access gate records state for synthesis" "evidence_coverage" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
+# SKILL.md — Evidence coverage and gaps (Step 7)
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: synthesis includes evidence coverage" "Evidence coverage and gaps" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: has evidence_coverage block" "evidence_coverage:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: has gaps block" "gaps:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: coverage levels defined" "complete.*partial.*unavailable" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: gap recording rules" "Record a gap for" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
+# SKILL.md — Completeness gate references evidence coverage
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: access gate does not block on unfixable gaps" \
+    "Do not block.*unfixable" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: gate references evidence coverage" "evidence_coverage.*block" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: gate requires gap-aware answers" "what could change the answer" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: confident yes impossible with missing domain" \
+    "confident.*yes.*not possible.*relevant domain" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
 # node-resource-exhaustion.yaml — Enhanced checks
 # ---------------------------------------------------------------------------
 NRE_FILE="${PLAYBOOK_DIR}/node-resource-exhaustion.yaml"

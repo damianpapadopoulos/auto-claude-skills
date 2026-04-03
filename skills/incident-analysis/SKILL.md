@@ -102,6 +102,31 @@ If neither MCP tools nor gcloud are available, provide manual Cloud Console inst
 
 Do not repeat this nudge after the first mention.
 
+### Step 1b: Access Gate — Fix Before Proceeding
+
+After detecting the execution tier, present a tool access summary and prompt the user to fix **fixable** gaps (expired auth, wrong context) before continuing. Do not block on unfixable gaps (tool not installed) during an active incident.
+
+```
+Tool access:
+  MCP observability: available | unavailable
+  gcloud auth:       active (project X) | expired | not configured
+  kubectl context:   available (context Y) | unavailable
+  GitHub CLI (gh):   authenticated | not authenticated | not installed
+
+Investigation domains:
+  Logs:              ✓ complete (Tier N) | ⚠ partial | ✗ unavailable
+  Metrics:           ✓ complete (Tier N) | ⚠ partial | ✗ unavailable
+  K8s state:         ✓ complete | ✗ unavailable
+  Source analysis:    ✓ complete | skipped | ✗ unavailable
+  Trace correlation: ✓ complete (Tier 1 only) | skipped | ✗ unavailable
+```
+
+**If any fixable gap is detected**, present the fix command and ask:
+
+> "⚠ [Domain] will be unavailable without [tool/auth]. Fix now, or proceed with degraded access?"
+
+Wait for the user to fix or explicitly proceed. Record the access state for the `evidence_coverage` block in Step 7.
+
 ### Step 2: Establish Scope
 
 Identify:
@@ -427,6 +452,34 @@ Write a synthesized summary as an explicit output block. The summary MUST includ
 4. **hypothesis revisions:** Where the investigation changed direction, what triggered the revision, and what the previous hypothesis was
 5. **Completeness gate answers:** Responses to Step 8 questions (captured here so they survive the context boundary)
 6. **Inventory and impact:** Pod/replica counts, distribution, user-facing error counts from Steps 2b/2c
+7. **Evidence coverage and gaps:** Per-domain coverage assessment and explicit gap list (see below)
+
+**Evidence coverage block (mandatory):**
+
+Use the access state from Step 1b as starting point, updated by what was actually queried during Steps 1-6b.
+
+```yaml
+evidence_coverage:
+  logs:              complete | partial | unavailable
+  k8s_state:         complete | partial | unavailable
+  metrics:           complete | partial | unavailable
+  source_analysis:   complete | partial | skipped | unavailable
+  trace_correlation: complete | partial | skipped | unavailable
+
+gaps:
+  - "<what could not be checked> (<reason>)"
+```
+
+| Level | Meaning |
+|-------|---------|
+| `complete` | Queried, results sufficient to support or rule out hypotheses |
+| `partial` | Queried but incomplete (e.g., logs capped at 50 entries with more existing) |
+| `skipped` | Not needed for this investigation (source_analysis and trace_correlation only) |
+| `unavailable` | Could not query (tool missing, auth expired, user chose to proceed without) |
+
+**Record a gap for:** every `partial`/`unavailable` domain with specific missing data and reason; queries returning empty when non-empty was expected; signals evaluated as `unknown_unavailable` during CLASSIFY. Do NOT record `skipped` domains as gaps.
+
+The completeness gate (Step 8) references this block — Q1-Q3 answers must account for gaps.
 
 From this point forward, reference ONLY this summary (not raw log JSON). See Constraint 4.
 
@@ -446,7 +499,9 @@ Before transitioning to POSTMORTEM, answer each question explicitly in the synth
 | 8 | When did humans learn about it and what did they do? | First human awareness (alert, report, support ticket), first action taken, resolution action. Use user-provided context if available; state "not captured" if not. |
 | 9 | For shared-dependency failures: was caller-side amplification investigated? | Describe how dominant callers were identified (logs, traces, metrics, broker stats), what evidence was checked, and whether any caller was amplifying the failure. If shared-dependency escalation was not triggered, state "N/A — not a shared-dependency failure". |
 
-**Gate rule:** If questions 1-3 have confident answers, proceed to POSTMORTEM. Questions 4-9 may be "not assessed" if investigation time is constrained, but must be flagged as open items. If question 1, 2, or 3 is "No" or "Unknown," return to INVESTIGATE Step 1 — for questions 1-2 with a revised hypothesis, for question 3 with targeted recovery-evidence queries.
+**Evidence coverage constraint:** If any domain in the `evidence_coverage` block (Step 7) is `partial` or `unavailable`, answers to Q1-Q3 must explicitly state what could change the answer given the gap. For example: "Root cause explains all observed symptoms, **but node-level metrics were unavailable — node-resource-exhaustion cannot be ruled out.**" A confident "yes" to Q1 is not possible when a relevant domain is missing.
+
+**Gate rule:** If questions 1-3 have confident answers (accounting for evidence gaps), proceed to POSTMORTEM. Questions 4-9 may be "not assessed" if investigation time is constrained, but must be flagged as open items. If question 1, 2, or 3 is "No" or "Unknown," return to INVESTIGATE Step 1 — for questions 1-2 with a revised hypothesis, for question 3 with targeted recovery-evidence queries.
 
 ### Step 9: Transition to POSTMORTEM
 
