@@ -33,15 +33,32 @@ The skill will ask for incident details interactively.
    ```bash
    bash "${CLAUDE_PLUGIN_ROOT}/scripts/obs-preflight.sh"
    ```
-   Report any issues from the `summary` field. If `gcloud` is `unauthenticated`, resolve auth before proceeding.
-3. Begin at Stage 1 — MITIGATE. Pre-populate scope from `$ARGUMENTS`:
+   Report any issues from the `summary` field.
+3. **Determine mode:** If the prompt contains triage keywords ("quick triage", "live triage",
+   "what's happening right now"), use live-triage mode. Otherwise use full investigation.
+4. Begin at Stage 1 — MITIGATE. Pre-populate scope from `$ARGUMENTS`:
    - Extract service name, environment (hb-prod, dg-prod, etc.), and symptoms
    - Convert any local times to UTC
    - Pass extracted context as MITIGATE Step 2 (Establish Scope) inputs
-4. Follow the full investigation pipeline as defined in the skill.
+5. **Access gate (Step 1b):** In full mode, wait for fix-or-proceed on auth issues.
+   In live-triage mode, snapshot access state and proceed immediately — note gaps.
+6. Follow the investigation pipeline as defined in the skill for the selected mode.
+
+## Investigation Modes
+
+**Full investigation (default):** All stages run in order with full inventory, impact
+quantification, and aggregate fingerprinting before classification.
+
+**Live triage (opt-in):** For active, ongoing incidents where time-to-first-hypothesis matters.
+Activated by including "quick triage", "live triage", or "what's happening right now" in
+the prompt. Uses non-blocking access check, light inventory (replica count only), and defers
+impact quantification until after the first hypothesis.
+
+All safety guarantees (HITL gate, fingerprint recheck, completeness gate) remain active
+in both modes.
 
 ## Important
 
 - All investigation is **read-only** by default
 - Remediation actions require **explicit user approval** (HITL gate)
-- Must not bypass MITIGATE steps (tool detection, inventory, impact quantification)
+- Must not bypass MITIGATE steps in full investigation; live-triage defers deep inventory and impact until after first hypothesis

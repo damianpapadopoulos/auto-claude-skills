@@ -1,0 +1,56 @@
+[
+  {
+    "id": "crashloop-exit-code-triage",
+    "prompt": "user-service pods in CrashLoopBackOff in prod, 12 restarts in the last 30 minutes",
+    "expected_behavior": "Must check exit code and termination reason before proposing workload-restart. Exit code 137 should redirect to resource investigation, not restart.",
+    "assertions": [
+      {"text": "exit.code|termination|exit code", "description": "Mentions exit code triage before restart proposal"},
+      {"text": "137|OOMKilled|memory", "description": "Checks for OOMKilled / exit code 137 as restart blocker"},
+      {"text": "previous.*log|container.*log", "description": "Checks previous container logs for crash cause"},
+      {"text": "rollout.*history|deploy", "description": "Checks rollout history for deploy correlation"}
+    ]
+  },
+  {
+    "id": "degraded-access-gap-reporting",
+    "prompt": "checkout-service returning 500s in prod. Note: gcloud auth is expired and kubectl is not configured.",
+    "expected_behavior": "Must record degraded access in evidence_coverage, list gaps explicitly, and qualify completeness gate answers.",
+    "assertions": [
+      {"text": "evidence_coverage|coverage", "description": "Emits evidence coverage assessment"},
+      {"text": "gap|unavailable|degraded", "description": "Lists explicit gaps from degraded tool access"},
+      {"text": "partial|unavailable", "description": "Marks affected domains as partial or unavailable"},
+      {"text": "could change|cannot rule out|not possible", "description": "Qualifies conclusions given gaps"}
+    ]
+  },
+  {
+    "id": "deploy-correlation-rollback-priority",
+    "prompt": "api-gateway v2.5.0 deployed to prod 20 minutes ago, error rate jumped from 0.5% to 12%. Users reporting failures.",
+    "expected_behavior": "Must investigate deploy correlation and prefer bad-release-rollback investigation over generic restart.",
+    "assertions": [
+      {"text": "deploy|deployment|rollback", "description": "Investigates deployment correlation"},
+      {"text": "bad.release|rollback|previous.*revision", "description": "Prefers rollback investigation over restart"},
+      {"text": "error.*spike.*deploy|deploy.*error", "description": "Correlates error spike with deployment timing"},
+      {"text": "HITL|approval|confirm", "description": "Requires user approval before executing rollback"}
+    ]
+  },
+  {
+    "id": "live-triage-mode-behavior",
+    "prompt": "quick triage — payment-service is down RIGHT NOW, what's happening?",
+    "expected_behavior": "Should suggest or enter live-triage mode with non-blocking access check and light inventory.",
+    "assertions": [
+      {"text": "triage|fast|quick", "description": "Acknowledges urgency or triage mode"},
+      {"text": "error|log|status", "description": "Gets to first evidence quickly"},
+      {"text": "replica|pod|instance", "description": "Does at least light inventory check"},
+      {"text": "hypothesis|cause|root cause", "description": "Produces initial hypothesis"}
+    ]
+  },
+  {
+    "id": "multi-service-shared-dependency",
+    "prompt": "Multiple services returning 502s and timeouts, all seem to depend on the auth-service which is showing high latency",
+    "expected_behavior": "Must identify shared dependency pattern and investigate caller-side amplification.",
+    "assertions": [
+      {"text": "shared|dependency|upstream", "description": "Identifies shared dependency pattern"},
+      {"text": "caller|consumer|dominant", "description": "Investigates caller-side behavior"},
+      {"text": "amplification|retry|loop", "description": "Checks for amplification loops"}
+    ]
+  }
+]

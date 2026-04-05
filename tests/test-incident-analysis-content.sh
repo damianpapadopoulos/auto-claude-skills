@@ -131,6 +131,81 @@ assert_file_contains "infra-failure.yaml: mentions connectivity" "[Cc]onnectivit
 assert_file_contains "infra-failure.yaml: mentions certificate" "[Cc]ertificate" "${IF_FILE}"
 
 # ---------------------------------------------------------------------------
+# SKILL.md — Access Gate (Step 1b)
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: has access gate step" "Access Gate" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: access gate checks gcloud auth" "gcloud auth" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: access gate checks kubectl context" "kubectl" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: access gate prompts user to fix" "Fix now.*proceed with degraded" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: access gate records state for synthesis" "evidence_coverage" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
+# SKILL.md — Evidence coverage and gaps (Step 7)
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: synthesis includes evidence coverage" "Evidence coverage and gaps" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: has evidence_coverage block" "evidence_coverage:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: has gaps block" "gaps:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: coverage levels defined" "complete.*partial.*unavailable" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: gap recording rules" "Record a gap for" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
+# SKILL.md — Completeness gate references evidence coverage
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: access gate does not block on unfixable gaps" \
+    "Do not block.*unfixable" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: gate references evidence coverage" "evidence_coverage.*block" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: gate requires gap-aware answers" "what could change the answer" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: confident yes impossible with missing domain" \
+    "confident.*yes.*not possible.*relevant domain" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
+# SKILL.md — Aggregate-first error fingerprinting (Step 3b)
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: has aggregate fingerprint step" "Aggregate.*[Ff]ingerprint" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: aggregate mentions error distribution" "error distribution" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: aggregate mentions dominant bucket" "dominant.*bucket" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: aggregate mentions sample-biased warning" "sample.biased" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: aggregate mentions exemplar reads" "exemplar" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
+# SKILL.md — Evidence ledger (Constraint 6)
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: has evidence ledger constraint" "[Ee]vidence [Ll]edger" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: ledger has freshness semantics" "freshness" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: ledger excludes EXECUTE recheck" "always re-query" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: ledger labels reused evidence" "reused" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
+# SKILL.md — Live-triage mode
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: has live-triage mode" "[Ll]ive.triage" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: live-triage is opt-in" "opt.in\|explicit" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: live-triage has non-blocking access" "non.blocking\|[Nn]on-blocking" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: live-triage has light inventory" "[Ll]ight inventory" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: live-triage defers deep inventory" "[Dd]efer.*deep\|[Dd]eep.*defer" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: live-triage preserves safety" "fingerprint recheck\|completeness gate\|safety" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: full investigation is default" "[Dd]efault.*[Ff]ull\|[Ff]ull.*[Dd]efault" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
+# SKILL.md — Canonical summary schema (Step 7)
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: summary has structured block" "investigation_summary:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: summary schema has scope" "scope:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: summary schema has dominant_errors" "dominant_errors:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: summary schema has chosen_hypothesis" "chosen_hypothesis:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: summary schema has ruled_out" "ruled_out:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: summary schema has recovery_status" "recovery_status:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: summary schema has open_questions" "open_questions:" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
+# bad-release-rollback.yaml — Disambiguation probe
+# ---------------------------------------------------------------------------
+assert_file_contains "bad-release-rollback.yaml: has disambiguation probe" \
+    "disambiguation_probe" "${PLAYBOOK_DIR}/bad-release-rollback.yaml"
+assert_file_contains "bad-release-rollback.yaml: probe resolves error_pattern_predates_deploy" \
+    "error_pattern_predates_deploy" "${PLAYBOOK_DIR}/bad-release-rollback.yaml"
+
+# ---------------------------------------------------------------------------
 # node-resource-exhaustion.yaml — Enhanced checks
 # ---------------------------------------------------------------------------
 NRE_FILE="${PLAYBOOK_DIR}/node-resource-exhaustion.yaml"

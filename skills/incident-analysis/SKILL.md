@@ -72,6 +72,62 @@ When transitioning from INVESTIGATE to POSTMORTEM:
 
 If the user has not approved a mitigation proposal within the playbook's `freshness_window_seconds` of evidence collection, the proposal is retracted. Return to CLASSIFY with fresh queries. Stale evidence cannot be acted upon.
 
+### 6. Evidence Ledger — Reuse Within Freshness Window
+
+Maintain a mental ledger of evidence collected during the investigation, keyed by query fingerprint. The key must include enough dimensions to prevent collapsing different namespaces, trace-scoped vs service-scoped reads, or caller-vs-affected-service queries. The fingerprint varies by query type to prevent false collisions:
+
+| Query type | Fingerprint key |
+|-----------|----------------|
+| Log queries (LQL) | `(service, environment, severity, LQL_filter_hash, time_window)` |
+| Metric queries | `(service, environment, metric_type, aggregation, time_window)` |
+| kubectl queries | `(resource_kind, name, namespace, context, output_format)` — e.g. `get deployment/X -o json` vs `rollout history` vs `jsonpath={.status.readyReplicas}` are distinct entries |
+| Trace queries | `(trace_id, project_id)` |
+| Source analysis | `(repo, commit_ref, file_path)` |
+
+Before issuing a query that matches a prior ledger entry:
+
+1. Check if the entry is within the active playbook's `freshness_window_seconds` (default: 300s if no playbook is active)
+2. If fresh: reuse the cached result. Label it as `reused (collected at <UTC>)` in any synthesis or decision record that references it
+3. If stale: re-query and update the ledger entry
+
+**Mandatory re-query exceptions — always re-query live state for:**
+- EXECUTE Stage fingerprint recheck (Step 1) — the safety contract requires live state
+- VALIDATE Stage sampling (Phase 2) — each sample must reflect current conditions
+- Any query where the user explicitly requests fresh data
+
+This reduces duplicate tool calls across MITIGATE → INVESTIGATE → CLASSIFY cycles while preserving the safety contract where live state matters.
+
+## Investigation Modes
+
+### Default: Full Investigation
+
+The complete 6-stage pipeline with all steps executed in order: access gate, full inventory, impact quantification, aggregate fingerprint, investigation, classification, and postmortem. This is the default for `/investigate` and all incident-analysis activations.
+
+### Opt-In: Live Triage
+
+An explicit fast path that prioritizes time-to-first-hypothesis for active, ongoing incidents. Activated only when the user explicitly requests it (e.g., "quick triage", "what's happening right now", "live triage"). The skill may suggest this mode when the prompt describes an active incident, but must not silently switch into it.
+
+**Live-triage behavior — what changes:**
+
+| Step | Full Investigation | Live Triage |
+|------|-------------------|-------------|
+| Step 1b (Access Gate) | Blocking — wait for fix or explicit proceed | Non-blocking — snapshot access state, proceed immediately, note gaps |
+| Step 2b (Inventory) | Full — replicas, distribution, resources, probes, scheduling | Light inventory only — replica count and current status (one query). Deep inventory deferred until after first hypothesis or when symptoms indicate node/distribution dependence |
+| Step 2c (Impact) | Before first log query | Deferred until after first hypothesis |
+| Steps 3-4 | Unchanged | Unchanged |
+| Steps 5-9 | Unchanged | Unchanged |
+| CLASSIFY/EXECUTE/VALIDATE | Unchanged | Unchanged — fingerprint recheck, completeness gate, and all safety rules apply |
+| POSTMORTEM | Unchanged | Unchanged |
+
+**What does NOT change in live-triage:**
+- Access state is still recorded for evidence_coverage
+- Light inventory still captures replica count (prevents gross mis-scoping)
+- The completeness gate still runs — deferred steps are flagged as gaps if never backfilled
+- EXECUTE fingerprint recheck is never skipped
+- HITL gate for mutations is never skipped
+
+**Mode recorded in synthesis:** The `investigation_summary.scope.mode` field captures which mode was used, so the postmortem and completeness gate know whether deferred steps were intentional.
+
 ## Stage 1 — MITIGATE
 
 ### Step 1: Detect Available Tools
@@ -101,6 +157,31 @@ If neither MCP tools nor gcloud are available, provide manual Cloud Console inst
 > "Using gcloud CLI (Tier 2). For faster queries with autonomous trace correlation, run `/setup` to configure GCP Observability MCP (Tier 1)."
 
 Do not repeat this nudge after the first mention.
+
+### Step 1b: Access Gate — Fix Before Proceeding
+
+After detecting the execution tier, present a tool access summary and prompt the user to fix **fixable** gaps (expired auth, wrong context) before continuing. Do not block on unfixable gaps (tool not installed) during an active incident.
+
+```
+Tool access:
+  MCP observability: available | unavailable
+  gcloud auth:       active (project X) | expired | not configured
+  kubectl context:   available (context Y) | unavailable
+  GitHub CLI (gh):   authenticated | not authenticated | not installed
+
+Investigation domains:
+  Logs:              ✓ complete (Tier N) | ⚠ partial | ✗ unavailable
+  Metrics:           ✓ complete (Tier N) | ⚠ partial | ✗ unavailable
+  K8s state:         ✓ complete | ✗ unavailable
+  Source analysis:    ✓ complete | skipped | ✗ unavailable
+  Trace correlation: ✓ complete (Tier 1 only) | skipped | ✗ unavailable
+```
+
+**If any fixable gap is detected**, present the fix command and ask:
+
+> "⚠ [Domain] will be unavailable without [tool/auth]. Fix now, or proceed with degraded access?"
+
+Wait for the user to fix or explicitly proceed. Record the access state for the `evidence_coverage` block in Step 7.
 
 ### Step 2: Establish Scope
 
@@ -144,9 +225,34 @@ Scoped to the identified service + narrow time window.
 
 **Tier 2:** Use the temp-file execution pattern (see Constraint 3) with `gcloud logging read` and `--limit=50`.
 
-### Step 4: Identify Failing Request Pattern
+### Step 3b: Aggregate Error Fingerprint
 
-Extract: endpoint, error code, frequency.
+Before reading raw log entries for pattern extraction, query the error distribution to identify the dominant error class. This prevents sample bias — 50 recent entries can overrepresent the latest error class instead of the most frequent one.
+
+**Preferred path — Error Reporting API (identifies error signatures):**
+
+**Tier 1:** If `list_group_stats` is available as an MCP tool, use it with the service's project_id and the investigation time range. This provides server-side grouping by recurring error signature with counts.
+
+**Tier 2:** If gcloud is available, try `gcloud beta error-reporting events list --service=<service> --format=json --limit=20`. Same backend, same output.
+
+**If Error Reporting is unavailable** (API not enabled, tool not present, or service doesn't emit structured errors):
+
+**Tier 1/2 fallback — severity counts:** Query `list_time_series` with `logging.googleapis.com/log_entry_count` to get error volume by severity and container. This answers "how many errors?" but not "which error classes?" — use it for magnitude only.
+
+**Tier 2 fallback — client-side bucketing:** Fetch up to 100 log entries (2× the normal Step 3 sample) and group by error message prefix (first 80 chars of `jsonPayload.message` or `textPayload`). **⚠ This is sample-biased** — label results as `aggregation_source: sample` in the synthesis.
+
+**If no aggregate source is available at all:** Proceed with Step 3's existing 50-entry sample. Note `aggregation_source: unavailable` in the synthesis and record as a gap.
+
+**Output:** Identify the top 3-5 error buckets by frequency. Record:
+- `aggregation_source`: `error_reporting` (signature-grouped), `metric` (severity counts only), `sample` (client-side bucketing), or `unavailable`
+- Dominant bucket with count/percentage
+- Whether dominance is clear (>50% of errors) or ambiguous (no bucket >30%)
+
+**Step 4 then becomes exemplar-driven:** Fetch 3-5 raw log entries per dominant bucket for detailed analysis (stack traces, request IDs, trace IDs). Raw logs are exemplars for known buckets, not the discovery mechanism.
+
+### Step 4: Identify Failing Request Pattern (Exemplar-Driven)
+
+Using the dominant error buckets from Step 3b, fetch 3-5 raw log entries per top bucket as exemplars. Extract: endpoint, error code, stack traces, request/trace IDs. If Step 3b was skipped (aggregate tools unavailable), fall back to the current behavior: extract patterns from the Step 3 sample, but note `aggregation_source: unavailable` in the synthesis.
 
 ### Step 5: Mitigation Routing
 
@@ -427,6 +533,69 @@ Write a synthesized summary as an explicit output block. The summary MUST includ
 4. **hypothesis revisions:** Where the investigation changed direction, what triggered the revision, and what the previous hypothesis was
 5. **Completeness gate answers:** Responses to Step 8 questions (captured here so they survive the context boundary)
 6. **Inventory and impact:** Pod/replica counts, distribution, user-facing error counts from Steps 2b/2c
+7. **Evidence coverage and gaps:** Per-domain coverage assessment and explicit gap list (included in the structured block below)
+
+**Evidence coverage levels** (used in the `evidence_coverage` fields below):
+
+| Level | Meaning |
+|-------|---------|
+| `complete` | Queried, results sufficient to support or rule out hypotheses |
+| `partial` | Queried but incomplete (e.g., logs capped at 50 entries with more existing) |
+| `skipped` | Not needed for this investigation (source_analysis and trace_correlation only) |
+| `unavailable` | Could not query (tool missing, auth expired, user chose to proceed without) |
+
+**Record a gap for:** every `partial`/`unavailable` domain with specific missing data and reason; queries returning empty when non-empty was expected; signals evaluated as `unknown_unavailable` during CLASSIFY. Do NOT record `skipped` domains as gaps.
+
+**Canonical investigation summary (mandatory structured block):**
+
+In addition to the prose synthesis above, emit a structured YAML block that the completeness gate, POSTMORTEM stage, and future evals reference.
+
+```yaml
+investigation_summary:
+  scope:
+    service: "<service name>"
+    environment: "<environment>"
+    time_window: "<ISO start>/<ISO end>"
+    mode: "full" | "live-triage"
+  dominant_errors:
+    - bucket: "<error signature or class>"
+      count: <N>
+      percentage: <N>%
+      aggregation_source: "error_reporting" | "metric" | "sample" | "unavailable"
+  chosen_hypothesis:
+    statement: "<one sentence>"
+    confidence: "high" | "medium" | "low"
+    supporting_evidence:
+      - "<evidence reference>"
+    contradicting_evidence_sought: "<what was looked for>"
+    contradicting_evidence_found: "<what was found, or 'none'>"
+  ruled_out:
+    - hypothesis: "<alternative>"
+      reason: "<disconfirming evidence>"
+  evidence_coverage:
+    logs: "complete" | "partial" | "unavailable"
+    k8s_state: "complete" | "partial" | "unavailable"
+    metrics: "complete" | "partial" | "unavailable"
+    source_analysis: "complete" | "partial" | "skipped" | "unavailable"
+    trace_correlation: "complete" | "partial" | "skipped" | "unavailable"
+  gaps:
+    - "<what could not be checked> (<reason>)"
+  timeline_entries:
+    - timestamp_utc: "<UTC>"
+      time_precision: "exact" | "minute" | "approximate"
+      event_kind: "<kind>"
+      description: "<what happened>"
+      evidence_source: "<where observed>"
+  recovery_status:
+    recovered: true | false | "unknown"
+    recovery_time_utc: "<UTC or null>"
+    recovery_evidence: "<source>"
+    verification: "verified" | "estimated" | "not_verified"
+  open_questions:
+    - "<question>"
+```
+
+The completeness gate (Step 8) references the `evidence_coverage` and `gaps` fields — Q1-Q3 answers must account for gaps.
 
 From this point forward, reference ONLY this summary (not raw log JSON). See Constraint 4.
 
@@ -446,7 +615,9 @@ Before transitioning to POSTMORTEM, answer each question explicitly in the synth
 | 8 | When did humans learn about it and what did they do? | First human awareness (alert, report, support ticket), first action taken, resolution action. Use user-provided context if available; state "not captured" if not. |
 | 9 | For shared-dependency failures: was caller-side amplification investigated? | Describe how dominant callers were identified (logs, traces, metrics, broker stats), what evidence was checked, and whether any caller was amplifying the failure. If shared-dependency escalation was not triggered, state "N/A — not a shared-dependency failure". |
 
-**Gate rule:** If questions 1-3 have confident answers, proceed to POSTMORTEM. Questions 4-9 may be "not assessed" if investigation time is constrained, but must be flagged as open items. If question 1, 2, or 3 is "No" or "Unknown," return to INVESTIGATE Step 1 — for questions 1-2 with a revised hypothesis, for question 3 with targeted recovery-evidence queries.
+**Evidence coverage constraint:** If any domain in the `evidence_coverage` block (Step 7) is `partial` or `unavailable`, answers to Q1-Q3 must explicitly state what could change the answer given the gap. For example: "Root cause explains all observed symptoms, **but node-level metrics were unavailable — node-resource-exhaustion cannot be ruled out.**" A confident "yes" to Q1 is not possible when a relevant domain is missing.
+
+**Gate rule:** If questions 1-3 have confident answers (accounting for evidence gaps), proceed to POSTMORTEM. Questions 4-9 may be "not assessed" if investigation time is constrained, but must be flagged as open items. If question 1, 2, or 3 is "No" or "Unknown," return to INVESTIGATE Step 1 — for questions 1-2 with a revised hypothesis, for question 3 with targeted recovery-evidence queries.
 
 ### Step 9: Transition to POSTMORTEM
 

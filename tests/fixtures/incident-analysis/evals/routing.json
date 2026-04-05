@@ -1,0 +1,18 @@
+[
+  {"query": "payment-service has a production error spike since 2pm, it was fine this morning", "should_trigger": true},
+  {"query": "pods for diet-service keep getting OOMKilled, 15 restarts in the last hour", "should_trigger": true},
+  {"query": "latency spike on the API gateway, p99 went from 200ms to 5s twenty minutes ago", "should_trigger": true},
+  {"query": "we deployed v3.2.1 thirty minutes ago and error rates jumped from 0.1% to 15%, should we rollback?", "should_trigger": true},
+  {"query": "there's a production outage affecting auth-service, need to investigate the root cause", "should_trigger": true},
+  {"query": "pods stuck in ImagePullBackOff after the deploy, nothing is starting", "should_trigger": true},
+  {"query": "connection pool exhausted on the database proxy, timeouts across multiple services", "should_trigger": true},
+  {"query": "SLO burn rate incident on checkout-service, error budget nearly exhausted", "should_trigger": true},
+  {"query": "node gke-prod-pool-abc123 is node not ready, several pods crashing and rescheduling", "should_trigger": true},
+  {"query": "auth-service outage right now, need quick incident investigation", "should_trigger": true},
+  {"query": "how does alert routing work in our monitoring setup?", "should_trigger": false},
+  {"query": "the helm values for staging aren't being applied correctly, replicas should be 3", "should_trigger": false},
+  {"query": "I want to add distributed tracing to my service, what's the right OpenTelemetry setup?", "should_trigger": false},
+  {"query": "what branch naming convention should I use for a hotfix?", "should_trigger": false},
+  {"query": "can you help me write unit tests for the payment controller?", "should_trigger": false},
+  {"query": "I need to create a new microservice for prescription management", "should_trigger": false}
+]

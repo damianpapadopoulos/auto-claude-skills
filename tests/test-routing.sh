@@ -4653,4 +4653,39 @@ test_incident_analysis_cofires_with_debugging
 test_investigate_command_routing
 test_slo_burn_rate_routes_to_incident_analysis
 
+# ---------------------------------------------------------------------------
+# Routing eval fixtures — incident-analysis trigger/no-trigger cases
+# ---------------------------------------------------------------------------
+ROUTING_EVALS="${PROJECT_ROOT}/tests/fixtures/incident-analysis/evals/routing.json"
+if [ -f "${ROUTING_EVALS}" ] && command -v jq >/dev/null 2>&1; then
+    setup_test_env
+    install_registry_with_incident_analysis
+
+    eval_count="$(jq 'length' "${ROUTING_EVALS}")"
+    for i in $(seq 0 $((eval_count - 1))); do
+        query="$(jq -r ".[$i].query" "${ROUTING_EVALS}")"
+        should_trigger="$(jq -r ".[$i].should_trigger" "${ROUTING_EVALS}")"
+        short_query="$(printf '%.60s' "${query}")"
+
+        output="$(run_hook "${query}")"
+        context="$(extract_context "${output}")"
+
+        if [ "${should_trigger}" = "true" ]; then
+            if printf '%s' "${context}" | grep -q "incident-analysis"; then
+                _record_pass "routing-eval: triggers on '${short_query}...'"
+            else
+                _record_fail "routing-eval: triggers on '${short_query}...'" "incident-analysis not in context"
+            fi
+        else
+            if printf '%s' "${context}" | grep -q "incident-analysis"; then
+                _record_fail "routing-eval: no trigger on '${short_query}...'" "incident-analysis unexpectedly triggered"
+            else
+                _record_pass "routing-eval: no trigger on '${short_query}...'"
+            fi
+        fi
+    done
+
+    teardown_test_env
+fi
+
 print_summary
