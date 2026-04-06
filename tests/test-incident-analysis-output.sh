@@ -190,6 +190,17 @@ for fixture_file in "${FIXTURE_DIR}"/*.json; do
         esac
     fi
 
+    # Co-occurrence: if attribution is present, statuses must exist
+    if [ "${sa_present}" = "true" ]; then
+        sa_count="$(jq -r '.expected.service_attribution_statuses | length' "${fixture_file}" 2>/dev/null)"
+        if [ "${sa_count}" -gt 0 ] 2>/dev/null; then
+            _record_pass "${fname}: service_attribution_present=true has statuses (${sa_count})"
+        else
+            _record_fail "${fname}: service_attribution_present=true requires service_attribution_statuses" \
+                "service_attribution_present is true but statuses array is missing or empty"
+        fi
+    fi
+
     sa_statuses_type="$(jq -r '.expected.service_attribution_statuses | type // empty' "${fixture_file}" 2>/dev/null)"
     if [ -n "${sa_statuses_type}" ] && [ "${sa_statuses_type}" != "null" ]; then
         if [ "${sa_statuses_type}" = "array" ]; then
