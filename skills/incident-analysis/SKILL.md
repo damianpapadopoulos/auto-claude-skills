@@ -642,6 +642,11 @@ investigation_summary:
     verification: "verified" | "estimated" | "not_verified"
   open_questions:
     - "<question>"
+  service_attribution:  # optional — required when 2+ services evaluated in one causal narrative
+    - service: "<service name>"
+      status: "confirmed-dependent" | "independent" | "inconclusive" | "not-investigated"
+      evidence: "<specific query result or 'not queried'>"
+      independent_root_cause: "<one sentence, only when status=independent and cause known>"
 ```
 
 The completeness gate (Step 8) references the `evidence_coverage` and `gaps` fields — Q1-Q3 answers must account for gaps.

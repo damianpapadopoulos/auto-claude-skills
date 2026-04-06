@@ -213,6 +213,12 @@ assert_file_contains "node-resource-exhaustion.yaml: mentions kubelet cert" "[Cc
 assert_file_contains "node-resource-exhaustion.yaml: mentions runtime health" "[Rr]untime" "${NRE_FILE}"
 
 # ---------------------------------------------------------------------------
+# SKILL.md — service_attribution in investigation_summary YAML
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: summary schema has service_attribution" \
+    "service_attribution:" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
 # SKILL.md — Per-Service Attribution Proof in Step 5
 # ---------------------------------------------------------------------------
 assert_file_contains "SKILL.md: has per-service attribution proof" \
