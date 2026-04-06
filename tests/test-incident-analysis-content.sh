@@ -213,6 +213,14 @@ assert_file_contains "node-resource-exhaustion.yaml: mentions kubelet cert" "[Cc
 assert_file_contains "node-resource-exhaustion.yaml: mentions runtime health" "[Rr]untime" "${NRE_FILE}"
 
 # ---------------------------------------------------------------------------
+# SKILL.md — Completeness gate Q10 (multi-service attribution)
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: completeness gate has Q10" \
+    "| 10 |" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: Q10 mentions attribution verification" \
+    "attribution\|independently\|error.*match" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
 # SKILL.md — service_attribution in investigation_summary YAML
 # ---------------------------------------------------------------------------
 assert_file_contains "SKILL.md: summary schema has service_attribution" \
