@@ -98,7 +98,7 @@ if [ "${all_valid}" = "true" ]; then
 fi
 
 # At least one scenario must test each key behavior
-for behavior in "exit.code.*triage\|crashloop.*exit" "evidence_coverage\|gaps" "rollback\|bad.release" "live.triage\|triage.*mode"; do
+for behavior in "exit.code.*triage\|crashloop.*exit" "evidence_coverage\|gaps" "rollback\|bad.release" "live.triage\|triage.*mode" "independent.*root.*cause\|attribution\|confirmed.dependent" "inconclusive\|not.investigated"; do
     if jq -r '.[].assertions[].description' "${ASSERTIONS_FILE}" 2>/dev/null | grep -qi "${behavior}"; then
         _record_pass "behavioral.json: covers ${behavior}"
     else

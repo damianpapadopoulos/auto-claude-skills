@@ -50,7 +50,30 @@
     "assertions": [
       {"text": "shared|dependency|upstream", "description": "Identifies shared dependency pattern"},
       {"text": "caller|consumer|dominant", "description": "Investigates caller-side behavior"},
-      {"text": "amplification|retry|loop", "description": "Checks for amplification loops"}
+      {"text": "amplification|retry|loop", "description": "Checks for amplification loops"},
+      {"text": "N.1|sequential|amplification|connection.*pin|fan.out", "description": "Checks for application-layer amplification patterns (N+1, retry loops, connection pinning)"}
+    ]
+  },
+  {
+    "id": "multi-service-independent-failures",
+    "prompt": "ocs-proxy shows timeouts to both diet-suggestions and calendar. diet-suggestions has DEADLINE_EXCEEDED from SpiceDB after 3s. Calendar has NoResultException from a database query on mustFindUserByLegacyId. Both started around 14:30 UTC. A FluxCD deployment of calendar v1.194.0-rc.0 happened at 14:12.",
+    "expected_behavior": "Must identify two independent root causes. Must prove calendar independence from SpiceDB by querying calendar's own error logs. Must check calendar deployment events. Must not use speculative language in attribution.",
+    "assertions": [
+      {"text": "independent|separate.*root.*cause|two.*root.*cause", "description": "Identifies two independent root causes, not one shared cause"},
+      {"text": "zero.*DEADLINE|no.*DEADLINE|calendar.*not.*SpiceDB", "description": "Proves calendar independence with zero-DEADLINE_EXCEEDED evidence"},
+      {"text": "deploy|Flux|rollout|calendar.*v1\\.194", "description": "Checks calendar deployment events independently"},
+      {"text": "confirmed.dependent|independent|attribution", "description": "Emits service_attribution with both confirmed-dependent and independent statuses"}
+    ]
+  },
+  {
+    "id": "incomplete-attribution-evidence",
+    "prompt": "Three services failing through a shared proxy. Service A has clear database timeout errors. Service B has ambiguous 500 errors with no stack trace. Service C was not queried due to tool unavailability.",
+    "expected_behavior": "Must not force all three into a shared hypothesis. Service A is confirmed-dependent, Service B is inconclusive, Service C is not-investigated. Open questions must capture the gaps.",
+    "assertions": [
+      {"text": "confirmed.dependent", "description": "Service A attributed as confirmed-dependent with evidence"},
+      {"text": "inconclusive", "description": "Service B marked as inconclusive, not forced into shared hypothesis"},
+      {"text": "not.investigated|gap|unavailable", "description": "Service C marked as not-investigated and recorded as a gap"},
+      {"text": "open.question|gap|insufficient", "description": "Does not claim all three share a root cause without per-service evidence"}
     ]
   }
 ]
