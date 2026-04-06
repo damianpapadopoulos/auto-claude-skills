@@ -264,4 +264,14 @@ assert_file_contains "SKILL.md: has evidence-only attribution constraint" \
 assert_file_contains "SKILL.md: forbids speculative language in synthesis" \
     "likely.*prohibited\|prohibited.*likely\|forbidden.*likely\|likely.*forbidden" "${SKILL_FILE}"
 
+# ---------------------------------------------------------------------------
+# SKILL.md — MCP Result Processing constraint (Constraint 8)
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: has MCP result processing constraint" \
+    "MCP Result Processing" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: forbids reading tool-results files" \
+    "Never read.*tool-results" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: disambiguates from Evidence Ledger" \
+    "Evidence Ledger.*Constraint 6" "${SKILL_FILE}"
+
 print_summary

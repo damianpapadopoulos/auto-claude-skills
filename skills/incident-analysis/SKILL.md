@@ -112,22 +112,26 @@ Every causal claim in the investigation synthesis, `investigation_summary` YAML,
 
 **Self-check:** Before emitting the Step 7 synthesis, scan for "likely", "probably", "possibly", "presumably", "may have", "might be" in causal sentences. Replace each with evidence-backed language or move to `open_questions`.
 
-### 8. MCP Result Processing — Extract Inline, Never Re-Parse Cached Files
+### 8. MCP Result Processing — Never Re-Parse Cached Files
 
-MCP tool results (especially `list_log_entries` and `list_time_series`) can return payloads that exceed Claude Code's result caching limit (~100K characters). When this happens, the `tool-results/` file on disk contains truncated JSON. Any attempt to read it back — via `cat ... | jq`, `python3 json.loads(open(...))`, or similar — will fail with a parse error.
+MCP tool results (especially `list_log_entries` and `list_time_series`) can exceed Claude Code's result caching limit (~100K characters). The `tool-results/` file on disk will contain truncated JSON — reading it via `cat ... | jq`, `python3 json.loads(open(...))`, or similar will fail with a parse error.
+
+Note: This constraint applies to on-disk `tool-results/` files written by the Claude Code harness, not to the Evidence Ledger (Constraint 6). Reusing results held in-context is still governed by Constraint 6's freshness rules.
 
 **Rules:**
 
 1. **Extract needed fields in the same turn the MCP tool returns.** Summarize timestamps, severity, error messages, trace IDs, and resource labels directly from the tool response. Do not defer processing to a later Bash command that reads the cached file.
 
-2. **Never read `tool-results/` files.** If you find yourself writing `cat tool-results/...`, `json.load(open('tool-results/...'))`, or piping a cached MCP result through jq — STOP. The file may be truncated. Re-invoke the MCP tool with a smaller `page_size` instead.
+2. **Never read `tool-results/` files.** If you find yourself writing `cat tool-results/...`, `json.load(open('tool-results/...'))`, or piping a cached MCP result through jq — STOP. Re-invoke the MCP tool with a smaller `page_size` instead.
 
 3. **If a single MCP response is too large to process inline** (context pressure from verbose entries with full stack traces or large JSON payloads):
    - Re-query with `page_size` halved (50 → 25 → 10) until the response fits
    - Request only the fields needed for the current step — error fingerprinting needs `timestamp`, `severity`, first 200 chars of message, and `resource.labels`; trace correlation needs `trace`, `spanId`, `timestamp`
-   - If Tier 1 results remain too large at `page_size=10`, fall back to Tier 2 (`gcloud logging read ... --limit=10 --format=json`) which gives you direct control over output size
+   - If Tier 1 results remain too large at `page_size=10`, fall back to Tier 2 using the Constraint 3 temp-file pattern (`gcloud logging read ... --limit=10 --format=json`)
 
 4. **For multi-step processing of the same result set** (e.g., fingerprint then exemplar extraction), summarize the result into a compact intermediate form (list of `{timestamp, severity, message_prefix, trace_id}` objects) in the same turn the MCP tool returns. Reference the summary in subsequent steps — not the raw result and not a cached file.
+
+**Self-check:** Before issuing any Bash command, check whether the command path contains `tool-results/`. If it does, stop and re-invoke the MCP tool with a smaller `page_size` instead.
 
 ## Investigation Modes
 
