@@ -512,8 +512,21 @@ State the hypothesis in one sentence. Then:
 
 1. **Contradiction test:** Identify the strongest piece of evidence that would DISPROVE this hypothesis. Query for it. If found, revise the hypothesis before proceeding.
 2. **Symptom coverage:** List every observed symptom. Mark each as "explained" or "unexplained" by the hypothesis. If any symptom is unexplained, either expand the hypothesis or note it as an open question.
-3. **Alternative hypotheses:** Name at least one alternative explanation. State why the primary hypothesis is preferred over it, citing specific evidence.
-4. **Chronic-vs-acute test:** If the hypothesized root cause is a condition that existed before the incident (a background job, a known workload pattern, a long-standing configuration), it is a **contributing factor**, not a trigger. Ask: "This condition has existed for days/weeks — what acute change in the preceding 72 hours made it fatal *now*?" Candidates include:
+3. **Per-service attribution proof (when 2+ services/components are implicated):** For every service or component named in the causal story beyond the primary, verify that its errors match the hypothesized mechanism:
+   - **Query the service's own error logs** for the specific error class of the hypothesis (e.g., `DEADLINE_EXCEEDED` for a SpiceDB timeout hypothesis, `ConnectionRefused` for a database outage hypothesis).
+   - **Classify attribution** as one of: `confirmed-dependent`, `independent`, `inconclusive`, or `not-investigated`:
+
+     | Status | Criteria |
+     |--------|----------|
+     | `confirmed-dependent` | Service's errors match the hypothesized error class (e.g., DEADLINE_EXCEEDED found) |
+     | `independent` | Service has errors but of a different class (e.g., NoResultException instead of DEADLINE_EXCEEDED). Investigate its own failure path: deployment events, application-layer bugs, config changes. |
+     | `inconclusive` | Evidence queried but insufficient to determine — e.g., service has errors but error class is ambiguous, or logs are incomplete |
+     | `not-investigated` | Service's own error logs were not queried. Must be recorded as a gap in `evidence_coverage`. |
+
+   - **When `independent` is found:** The service has a separate root cause. Check deployment events (FluxCD, ArgoCD, Helm rollout events in k8s_cluster audit logs), recent config changes, and application-layer errors for that service. Record the independent root cause in the synthesis.
+   - **When `inconclusive` or `not-investigated`:** Add to `open_questions` in the synthesis. Do NOT attribute the service to the shared root cause without evidence.
+4. **Alternative hypotheses:** Name at least one alternative explanation. State why the primary hypothesis is preferred over it, citing specific evidence.
+5. **Chronic-vs-acute test:** If the hypothesized root cause is a condition that existed before the incident (a background job, a known workload pattern, a long-standing configuration), it is a **contributing factor**, not a trigger. Ask: "This condition has existed for days/weeks — what acute change in the preceding 72 hours made it fatal *now*?" Candidates include:
    - A deployment to any service that interacts with the chronic stressor (not just the symptomatic service)
    - A traffic pattern change (weekday vs. weekend, batch job schedule, seasonal load)
    - A cache expiry, certificate rotation, or configuration reload with delayed effect
@@ -522,7 +535,7 @@ State the hypothesis in one sentence. Then:
 
    **Mandatory evidence for traffic-pattern hypotheses:** If the hypothesis attributes the trigger to a traffic pattern change (e.g., "afternoon peak traffic"), verify against a baseline from a **different day at the same time** (or the nearest comparable stable window if traffic patterns changed recently). Compare: caller distribution, call volume per caller, and method mix. If the pattern matches the baseline (same callers, same volume), the traffic hypothesis is supported. If one caller's volume is anomalously high, investigate that caller's health before accepting the hypothesis.
 
-5. **Capacity headroom check (when resource-related signals are present):** Compare current resource utilization against the nearest stable baseline (different day, same time window). Record:
+6. **Capacity headroom check (when resource-related signals are present):** Compare current resource utilization against the nearest stable baseline (different day, same time window). Record:
    - Current vs baseline: node CPU/memory allocatable utilization, pod count, sum of resource requests
    - Headroom drift: has available capacity been shrinking over days/weeks? (query 7-day trend if metrics available)
    - HPA/quota status: is HPA at maximum replicas? Are resource quotas near limits?

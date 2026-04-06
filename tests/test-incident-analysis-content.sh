@@ -213,6 +213,14 @@ assert_file_contains "node-resource-exhaustion.yaml: mentions kubelet cert" "[Cc
 assert_file_contains "node-resource-exhaustion.yaml: mentions runtime health" "[Rr]untime" "${NRE_FILE}"
 
 # ---------------------------------------------------------------------------
+# SKILL.md — Per-Service Attribution Proof in Step 5
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: has per-service attribution proof" \
+    "Per-Service Attribution Proof\|Per-service attribution" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: attribution has four-state model" \
+    "confirmed-dependent.*independent.*inconclusive.*not-investigated" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
 # SKILL.md — Application-logic analysis in Step 3
 # ---------------------------------------------------------------------------
 assert_file_contains "SKILL.md: Step 3 has call pattern analysis" \
