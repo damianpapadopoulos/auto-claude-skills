@@ -69,7 +69,7 @@ Extract the git reference from deployment evidence:
 ### Step 2: Map Stack Frames to Source Files
 
 For each actionable stack frame (max 1-2 top frames):
-- Java: `com.oviva.user.UserController` → `src/main/java/com/oviva/user/UserController.java`
+- Java: `com.example.user.UserController` → `src/main/java/com/example/user/UserController.java`
 - Python: `app/services/checkout.py` → direct path
 - Go: `github.com/org/repo/pkg/handler.go` → `pkg/handler.go`
 
@@ -116,7 +116,7 @@ For each regression candidate from Step 4:
    Be specific: "removed null check → could produce the NPE in UserController:142 seen in
    logs at 14:18."
 2. State which observed patterns it CANNOT explain. E.g., "this change only affects the
-   /users endpoint, but errors were also seen on /diet-suggestions."
+   /users endpoint, but errors were also seen on /recommendations."
 3. If no candidate explains the dominant error pattern, note: "no commit explains primary
    error pattern" — this weakens the bad-release hypothesis and should be reflected in
    Step 5 hypothesis formation.
@@ -158,7 +158,7 @@ source_analysis:
   deployed_ref: "v2.3.1"
   resolved_commit_sha: "abc123def456..."
   source_files:
-    - path: "src/main/java/com/oviva/user/UserController.java"
+    - path: "src/main/java/com/example/user/UserController.java"
       line: 142
       code_context: |
         User user = userRepository.findById(id);
@@ -182,7 +182,7 @@ source_analysis:
   deployed_ref: "v2.3.1"
   resolved_commit_sha: "abc123def456..."
   source_files:
-    - path: "src/main/java/com/oviva/user/UserController.java"
+    - path: "src/main/java/com/example/user/UserController.java"
       line: 142
       code_context: "user.toDto() — no obvious defect at deployed version"
       status: analyzed
@@ -204,7 +204,7 @@ source_analysis:
   deployed_ref: "v2.3.1"
   resolved_commit_sha: "abc123def456..."
   source_files:
-    - path: "src/main/java/com/oviva/user/UserController.java"
+    - path: "src/main/java/com/example/user/UserController.java"
       line: 142
       code_context: "user.toDto() — no obvious defect at deployed version"
       status: analyzed
