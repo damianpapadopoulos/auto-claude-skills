@@ -385,6 +385,10 @@ After all probes complete, feed results back to CLASSIFY for reclassification.
 - Error grouping (frequency, first/last occurrence)
 - Recent deployment correlation (deploy timestamp vs. error spike?)
 - Resource metrics (CPU, memory, latency) if available
+- **Application-logic analysis (for the dominant error path):**
+  - **Call pattern detection:** From stack traces in Step 2 exemplars, determine whether the failing code path makes sequential (N+1) calls to the degraded dependency. A loop calling `checkPermission()` per item is N+1; a single `batchCheck()` call is not. If N+1 is detected, note the amplification factor (items per request x latency per call = total request latency).
+  - **Retry/amplification analysis:** Check whether the calling code retries failed requests. If a 3-second timeout triggers a retry, each retry adds 3 more seconds of dependency pressure. Look for retry configuration in the stack trace's framework (e.g., Camel redelivery, Spring Retry, gRPC retry policy).
+  - **gRPC connection distribution (conditional — when dependency uses gRPC):** If server-side logs include `peer.address`, sample 1 minute of calls and group by caller IP. Compare the distribution against the expected even split (1/N where N = number of client pods). If one caller's share is disproportionately high relative to the expected baseline, flag as potential connection pinning (HTTP/2 over K8s Service ClusterIP load-balances at connection level, not request level). Note: there is no universal threshold — what matters is whether the skew is large enough to explain the observed latency. Report the actual distribution and let the investigator judge.
 
 **CrashLoopBackOff triage (conditional — when `crash_loop_detected` signal is present):**
 

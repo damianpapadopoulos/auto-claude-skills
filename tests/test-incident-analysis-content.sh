@@ -213,6 +213,16 @@ assert_file_contains "node-resource-exhaustion.yaml: mentions kubelet cert" "[Cc
 assert_file_contains "node-resource-exhaustion.yaml: mentions runtime health" "[Rr]untime" "${NRE_FILE}"
 
 # ---------------------------------------------------------------------------
+# SKILL.md — Application-logic analysis in Step 3
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: Step 3 has call pattern analysis" \
+    "[Cc]all pattern" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: Step 3 mentions N+1 or sequential fan-out" \
+    "N+1\|sequential fan.out\|sequential.*permission" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: Step 3 mentions gRPC connection analysis" \
+    "peer.address\|connection pinning\|gRPC.*caller.*skew" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
 # SKILL.md — No speculative language in routing heuristics
 # ---------------------------------------------------------------------------
 # The infrastructure escalation paragraph must not use "likely" as a conclusion
