@@ -31,6 +31,8 @@
     "timeline_precision_labels": true,
     "source_analysis_status": "skipped",
     "source_analysis_basis": null,
-    "cross_reference_patterns": false
+    "cross_reference_patterns": false,
+    "service_attribution_present": true,
+    "service_attribution_statuses": ["confirmed-dependent"]
   }
 }

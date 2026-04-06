@@ -178,6 +178,39 @@ for fixture_file in "${FIXTURE_DIR}"/*.json; do
                 _record_fail "${fname}: cross_reference_patterns is boolean" "got: ${xref}" ;;
         esac
     fi
+
+    # Service attribution (Attribution Rigor upgrade)
+    sa_present="$(jq -r '.expected.service_attribution_present // empty' "${fixture_file}")"
+    if [ -n "${sa_present}" ]; then
+        case "${sa_present}" in
+            true|false)
+                _record_pass "${fname}: service_attribution_present is boolean (${sa_present})" ;;
+            *)
+                _record_fail "${fname}: service_attribution_present is boolean" "got: ${sa_present}" ;;
+        esac
+    fi
+
+    sa_statuses_type="$(jq -r '.expected.service_attribution_statuses | type // empty' "${fixture_file}" 2>/dev/null)"
+    if [ -n "${sa_statuses_type}" ] && [ "${sa_statuses_type}" != "null" ]; then
+        if [ "${sa_statuses_type}" = "array" ]; then
+            # Each status must be one of the four valid values
+            all_valid_sa=true
+            for status_val in $(jq -r '.expected.service_attribution_statuses[]' "${fixture_file}" 2>/dev/null); do
+                case "${status_val}" in
+                    confirmed-dependent|independent|inconclusive|not-investigated) ;;
+                    *)
+                        _record_fail "${fname}: service_attribution_statuses contains valid value" \
+                            "got: ${status_val}"
+                        all_valid_sa=false ;;
+                esac
+            done
+            if [ "${all_valid_sa}" = "true" ]; then
+                _record_pass "${fname}: service_attribution_statuses all valid"
+            fi
+        else
+            _record_fail "${fname}: service_attribution_statuses is array" "got type: ${sa_statuses_type}"
+        fi
+    fi
 done
 
 print_summary
