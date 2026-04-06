@@ -672,7 +672,7 @@ Before transitioning to POSTMORTEM, answer each question explicitly in the synth
 
 **Evidence coverage constraint:** If any domain in the `evidence_coverage` block (Step 7) is `partial` or `unavailable`, answers to Q1-Q3 must explicitly state what could change the answer given the gap. For example: "Root cause explains all observed symptoms, **but node-level metrics were unavailable — node-resource-exhaustion cannot be ruled out.**" A confident "yes" to Q1 is not possible when a relevant domain is missing.
 
-**Gate rule:** If questions 1-3 have confident answers (accounting for evidence gaps), proceed to POSTMORTEM. Questions 4-9 may be "not assessed" if investigation time is constrained, but must be flagged as open items. If question 1, 2, or 3 is "No" or "Unknown," return to INVESTIGATE Step 1 — for questions 1-2 with a revised hypothesis, for question 3 with targeted recovery-evidence queries.
+**Gate rule:** If questions 1-3 have confident answers (accounting for evidence gaps), proceed to POSTMORTEM. Questions 4-10 may be "not assessed" if investigation time is constrained, but must be flagged as open items. If question 1, 2, or 3 is "No" or "Unknown," return to INVESTIGATE Step 1 — for questions 1-2 with a revised hypothesis, for question 3 with targeted recovery-evidence queries.
 
 ### Step 9: Transition to POSTMORTEM
 

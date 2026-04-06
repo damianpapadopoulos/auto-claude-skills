@@ -88,13 +88,25 @@ for i in $(jq -r 'keys[]' "${ASSERTIONS_FILE}"); do
     sid="$(jq -r ".[$i].id // empty" "${ASSERTIONS_FILE}")"
     prompt="$(jq -r ".[$i].prompt // empty" "${ASSERTIONS_FILE}")"
     assertions="$(jq -r ".[$i].assertions // empty" "${ASSERTIONS_FILE}")"
-    if [ -z "${sid}" ] || [ -z "${prompt}" ] || [ -z "${assertions}" ]; then
-        _record_fail "behavioral.json entry ${i}: has id, prompt, assertions" "missing field"
+    exp_behavior="$(jq -r ".[$i].expected_behavior // empty" "${ASSERTIONS_FILE}")"
+    if [ -z "${sid}" ] || [ -z "${prompt}" ] || [ -z "${assertions}" ] || [ -z "${exp_behavior}" ]; then
+        _record_fail "behavioral.json entry ${i}: has id, prompt, assertions, expected_behavior" "missing field"
         all_valid=false
     fi
+    # Each assertion must have both text (regex) and description fields
+    assertion_count="$(jq -r ".[$i].assertions | length" "${ASSERTIONS_FILE}")"
+    for j in $(seq 0 $((assertion_count - 1))); do
+        a_text="$(jq -r ".[$i].assertions[$j].text // empty" "${ASSERTIONS_FILE}")"
+        a_desc="$(jq -r ".[$i].assertions[$j].description // empty" "${ASSERTIONS_FILE}")"
+        if [ -z "${a_text}" ] || [ -z "${a_desc}" ]; then
+            _record_fail "behavioral.json ${sid} assertion ${j}: has text and description" "missing field"
+            all_valid=false
+        fi
+    done
 done
 if [ "${all_valid}" = "true" ]; then
-    _record_pass "behavioral.json: all entries have required fields"
+    _record_pass "behavioral.json: all entries have required fields (id, prompt, assertions, expected_behavior)"
+    _record_pass "behavioral.json: all assertions have text and description"
 fi
 
 # At least one scenario must test each key behavior
