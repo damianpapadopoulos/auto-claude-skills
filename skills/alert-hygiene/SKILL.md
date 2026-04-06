@@ -92,7 +92,7 @@ Before any analysis, discover and validate the monitoring project:
 3. If the user does not provide a project, check if recent incident context or prior conversation names it. If not, ask once with the guidance above.
 4. Verify incidents return non-empty: run pull-incidents.py with `--days 1` as a quick check. If zero incidents but policies exist, the window may be too narrow or incidents are in a different project — warn with specifics.
 5. If both return data: `"Monitoring project: {project}, {N} policies found, incidents available. Proceeding with {days}-day analysis."`
-6. **GitHub org and IaC repos for links:** Check if recent conversation or CLAUDE.md names a GitHub org and IaC repos. If not, ask once: *"Which GitHub org hosts your monitoring IaC, and which repo(s)? (e.g., `oviva-ag`, repos `monitoring` and `k8s`). Used for IaC links in the report — skip if not applicable."* Store as `{github_org}` and `{iac_repos}` (list). If the user skips, omit IaC links.
+6. **GitHub org and IaC repos for links:** Check if recent conversation or CLAUDE.md names a GitHub org and IaC repos. If not, ask once: *"Which GitHub org hosts your monitoring IaC, and which repo(s)? (e.g., `example-org`, repos `monitoring` and `k8s`). Used for IaC links in the report — skip if not applicable."* Store as `{github_org}` and `{iac_repos}` (list). If the user skips, omit IaC links.
 
 Fail early — do not proceed to Stage 1 with an empty or wrong project.
 
@@ -322,7 +322,7 @@ After IaC module discovery, resolve suggested owners for policies that lack a `s
 
 1. **CODEOWNERS match (mechanical):** For each IaC file path in `iac-modules.json`, find the matching CODEOWNERS rule (last match wins, per git spec). This resolves policies whose module definition or invocation file has a specific CODEOWNERS entry. Typically resolves high-volume infrastructure alerts (pod restarts, message broker, MySQL, ingress, WAF).
 
-2. **Squad-directory inference (structural):** For policies defined or invoked from `tf/squads/{squad}/*.tf`, the squad directory itself implies ownership — even if the CODEOWNERS rule for that path is generic. A module invocation in `tf/squads/cosmos/diet_suggestions.tf` means cosmos owns that alert regardless of whether CODEOWNERS maps `tf/squads/cosmos/*` to `@org/cosmos` or a generic owner. The squad directory name is the authoritative signal.
+2. **Squad-directory inference (structural):** For policies defined or invoked from `tf/squads/{squad}/*.tf`, the squad directory itself implies ownership — even if the CODEOWNERS rule for that path is generic. A module invocation in `tf/squads/cosmos/recommendation_alerts.tf` means cosmos owns that alert regardless of whether CODEOWNERS maps `tf/squads/cosmos/*` to `@org/cosmos` or a generic owner. The squad directory name is the authoritative signal.
 
 **Flow:**
 
@@ -447,8 +447,8 @@ WORK_DIR="${WORK_DIR:-$(mktemp -d /tmp/ah-XXXXXX)}"
 FILTER_FILE=$(mktemp "$WORK_DIR/ts-filter-XXXXXX.txt")
 cat > "$FILTER_FILE" << 'FILTER'
 metric.type = "prometheus.googleapis.com/jvm_threads_live_threads/gauge"
-AND metric.labels.container = "diet-suggestions"
-AND resource.labels.cluster = "oviva-dg-prod1"
+AND metric.labels.container = "recommendation-service"
+AND resource.labels.cluster = "example-cluster-prod"
 FILTER
 
 TOKEN=$(gcloud auth print-access-token)
