@@ -434,7 +434,7 @@ These symptoms indicate the pod cannot start at all — this is fundamentally di
 
 This branch is non-mutating — it gathers evidence that feeds back into CLASSIFY for root-cause playbook selection. Do not propose restart or rollback from this branch.
 
-**Infrastructure escalation (conditional):** If Step 3 reveals that multiple pods or services are failing simultaneously — especially with `context deadline exceeded`, widespread probe timeouts, or errors localized to a single node — the root cause is likely at the node or infrastructure level, not the application level. Shift investigation to:
+**Infrastructure escalation (conditional):** If Step 3 reveals that multiple pods or services are failing simultaneously — especially with `context deadline exceeded`, widespread probe timeouts, or errors localized to a single node — verify whether the root cause is at the node or infrastructure level by checking:
 - Node resource metrics (memory/CPU allocatable utilization)
 - kubelet logs (housekeeping delays, probe failures, eviction events)
 - GCE serial console (kernel OOM, balloon driver, memory pressure)

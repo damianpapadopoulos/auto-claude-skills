@@ -213,6 +213,18 @@ assert_file_contains "node-resource-exhaustion.yaml: mentions kubelet cert" "[Cc
 assert_file_contains "node-resource-exhaustion.yaml: mentions runtime health" "[Rr]untime" "${NRE_FILE}"
 
 # ---------------------------------------------------------------------------
+# SKILL.md — No speculative language in routing heuristics
+# ---------------------------------------------------------------------------
+# The infrastructure escalation paragraph must not use "likely" as a conclusion
+investigate_section="$(sed -n '/^## Stage 2 — INVESTIGATE/,/^## EXECUTE/p' "${SKILL_FILE}")"
+if echo "${investigate_section}" | grep -q "root cause is likely"; then
+    _record_fail "SKILL.md: no speculative 'likely' in infrastructure escalation" \
+        "found 'root cause is likely' in INVESTIGATE section"
+else
+    _record_pass "SKILL.md: no speculative 'likely' in infrastructure escalation"
+fi
+
+# ---------------------------------------------------------------------------
 # SKILL.md — Evidence-Only Attribution constraint (Constraint 7)
 # ---------------------------------------------------------------------------
 assert_file_contains "SKILL.md: has evidence-only attribution constraint" \
