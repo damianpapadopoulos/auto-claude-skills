@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Incident-analysis: Constraint 7 Evidence-Only Attribution — bans speculative language in synthesis/YAML, forces evidence-backed claims or 4-state classification
+- Incident-analysis: Step 3 application-logic analysis — N+1 call patterns, retry amplification, gRPC connection pinning checks for shared-dependency incidents
+- Incident-analysis: Step 5 per-service attribution proof — 4-state model (confirmed-dependent / independent / inconclusive / not-investigated) with cited evidence per service
+- Incident-analysis: Step 7 optional service_attribution YAML block for multi-service incidents
+- Incident-analysis: Step 8 Q10 completeness gate — multi-service attribution verification
+- Incident-analysis: 2 new behavioral eval scenarios (independent failures, incomplete evidence) with machine-verifiable regex assertions
+- Incident-analysis: service_attribution output fixture validation with co-occurrence check
+
+### Added
 - Incident-analysis: Step 6b Timeline Extraction — structured candidate extraction with time_precision labels and dedupe rules before synthesis
 - Incident-analysis: Step 4.5 Cross-Reference — regression candidates annotated with explains_patterns/cannot_explain_patterns linking commits to observed log errors
 - Incident-analysis: Step 4.5b Bounded Expansion — same-commit and same-package expansion when primary stack-frame analysis finds no regression candidate
