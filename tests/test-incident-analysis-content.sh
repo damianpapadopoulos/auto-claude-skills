@@ -212,4 +212,12 @@ NRE_FILE="${PLAYBOOK_DIR}/node-resource-exhaustion.yaml"
 assert_file_contains "node-resource-exhaustion.yaml: mentions kubelet cert" "[Cc]ertificate" "${NRE_FILE}"
 assert_file_contains "node-resource-exhaustion.yaml: mentions runtime health" "[Rr]untime" "${NRE_FILE}"
 
+# ---------------------------------------------------------------------------
+# SKILL.md — Evidence-Only Attribution constraint (Constraint 7)
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: has evidence-only attribution constraint" \
+    "Evidence-Only Attribution" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: forbids speculative language in synthesis" \
+    "likely.*prohibited\|prohibited.*likely\|forbidden.*likely\|likely.*forbidden" "${SKILL_FILE}"
+
 print_summary
