@@ -524,8 +524,8 @@ import sys; sys.path.insert(0, '${SCRIPTS_DIR}')
 from importlib import import_module
 cc = import_module('compute-clusters')
 cases = [
-    ('diet-suggestions-prod', 'diet-suggestions'),
-    ('Diet_Suggestions', 'diet-suggestions'),
+    ('recommendation-service-prod', 'recommendation-service'),
+    ('Recommendation_Service', 'recommendation-service'),
     ('hcs.gb.staging', 'hcs-gb'),
     ('user-service', 'user-service'),
     ('my-app-pta', 'my-app'),
@@ -545,7 +545,7 @@ from importlib import import_module
 cc = import_module('compute-clusters')
 cases = [
     # container_name in filter
-    ('metric.type=\"custom/m\" AND resource.labels.container_name=\"diet-suggestions-prod\"', '', 'diet-suggestions'),
+    ('metric.type=\"custom/m\" AND resource.labels.container_name=\"recommendation-service-prod\"', '', 'recommendation-service'),
     # short-form container in PromQL query
     ('', 'rate(http_requests{container=\"hcs-gb\"}[5m]) > 100', 'hcs-gb'),
     # application label in filter
@@ -603,14 +603,14 @@ cat > "${SKEY_FIXTURES}/policies.json" << 'FIXTURE'
 [
   {
     "name": "projects/test/alertPolicies/skey1",
-    "displayName": "Error rate for diet-suggestions-prod",
+    "displayName": "Error rate for recommendation-service-prod",
     "enabled": true,
-    "userLabels": {"squad": "cosmos_alerts"},
+    "userLabels": {"squad": "backend_alerts"},
     "conditions": [{
       "displayName": "error rate > 1%",
       "type": "conditionPrometheusQueryLanguage",
       "filter": "",
-      "query": "rate(http_server_requests_seconds_count{container=\"diet-suggestions-prod\", status=~\"5..\"}[5m]) / rate(http_server_requests_seconds_count{container=\"diet-suggestions-prod\"}[5m]) > 0.01",
+      "query": "rate(http_server_requests_seconds_count{container=\"recommendation-service-prod\", status=~\"5..\"}[5m]) / rate(http_server_requests_seconds_count{container=\"recommendation-service-prod\"}[5m]) > 0.01",
       "comparison": "",
       "thresholdValue": null,
       "evaluationInterval": "60s",
@@ -658,11 +658,11 @@ for i in range(25):
         'openTime': open_t.strftime('%Y-%m-%dT%H:%M:%SZ'),
         'closeTime': close_t.strftime('%Y-%m-%dT%H:%M:%SZ'),
         'policyName': 'projects/test/alertPolicies/skey1',
-        'policyDisplayName': 'Error rate for diet-suggestions-prod',
-        'policyLabels': {'squad': 'cosmos_alerts'},
+        'policyDisplayName': 'Error rate for recommendation-service-prod',
+        'policyLabels': {'squad': 'backend_alerts'},
         'resourceType': 'k8s_container',
-        'resourceProject': 'oviva-k8s-prod',
-        'resourceLabels': {'project_id': 'oviva-k8s-prod', 'pod_name': 'pod-1'},
+        'resourceProject': 'example-k8s-prod',
+        'resourceLabels': {'project_id': 'example-k8s-prod', 'pod_name': 'pod-1'},
         'metricType': 'prometheus.googleapis.com/http_server_requests_seconds_count/summary',
         'conditionName': 'projects/test/alertPolicies/skey1/conditions/A',
     })
@@ -678,8 +678,8 @@ for i in range(5):
         'policyDisplayName': 'Queue backlog alert',
         'policyLabels': {},
         'resourceType': 'pubsub_subscription',
-        'resourceProject': 'oviva-k8s-prod',
-        'resourceLabels': {'project_id': 'oviva-k8s-prod', 'subscription': 'my-sub'},
+        'resourceProject': 'example-k8s-prod',
+        'resourceLabels': {'project_id': 'example-k8s-prod', 'subscription': 'my-sub'},
         'metricType': 'pubsub.googleapis.com/subscription/num_undelivered_messages',
         'conditionName': 'projects/test/alertPolicies/skey2/conditions/A',
     })
@@ -693,21 +693,21 @@ python3 "${SCRIPTS_DIR}/compute-clusters.py" \
     --output "${SKEY_FIXTURES}/clusters.json" 2>&1
 assert_equals "skey compute-clusters runs" "0" "$?"
 
-SKEY_DIET=$(python3 -c "
+SKEY_RECO=$(python3 -c "
 import json
 data = json.load(open('${SKEY_FIXTURES}/clusters.json'))
-c = [c for c in data['clusters'] if 'diet' in c['policy_name'].lower()][0]
+c = [c for c in data['clusters'] if 'recommend' in c['policy_name'].lower()][0]
 print(c.get('service_key', 'MISSING'))
 " 2>/dev/null)
-assert_equals "diet-suggestions service_key extracted and normalized" "diet-suggestions" "${SKEY_DIET}"
+assert_equals "recommendation-service service_key extracted and normalized" "recommendation-service" "${SKEY_RECO}"
 
-SIGFAM_DIET=$(python3 -c "
+SIGFAM_RECO=$(python3 -c "
 import json
 data = json.load(open('${SKEY_FIXTURES}/clusters.json'))
-c = [c for c in data['clusters'] if 'diet' in c['policy_name'].lower()][0]
+c = [c for c in data['clusters'] if 'recommend' in c['policy_name'].lower()][0]
 print(c.get('signal_family', 'MISSING'))
 " 2>/dev/null)
-assert_equals "diet-suggestions classified as error_rate" "error_rate" "${SIGFAM_DIET}"
+assert_equals "recommendation-service classified as error_rate" "error_rate" "${SIGFAM_RECO}"
 
 SKEY_QUEUE=$(python3 -c "
 import json
@@ -760,8 +760,8 @@ from importlib import import_module
 cc = import_module('compute-clusters')
 
 cases = [
-    'diet-suggestions-prod',
-    'Diet_Suggestions',
+    'recommendation-service-prod',
+    'Recommendation_Service',
     'hcs.gb.staging',
     'user-service',
     'my-app-pta',
