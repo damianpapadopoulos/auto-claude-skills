@@ -474,6 +474,39 @@ If a `node-resource-exhaustion` playbook is available, transition to CLASSIFY fo
 
 **Shared resource escalation (mandatory when detected):** If the degraded service is used by multiple consumers (authorization service, database, message broker, cache cluster, shared API gateway), follow the caller investigation procedure in `references/caller-investigation.md`. This is mandatory, not optional. The procedure identifies dominant callers, checks their ERROR logs and deployment history, compares distribution to baseline, and checks for amplification loops. Bounded to the shared resource's known consumer set — no unbounded global searches.
 
+### Step 3c: Multi-Service Error Sweep
+
+**Gate:** This step is mandatory when the error chain involves 2 or more services — whether discovered through an intermediary layer (Constraint 9), trace correlation (Step 4), shared-resource escalation (Step 3), or proxy error logs. Skip only for confirmed single-service incidents with no cross-service error signals.
+
+**Procedure:** For each service in the error chain not yet deeply investigated:
+
+1. **Query the service's own ERROR logs** in the incident time window (not the calling service's logs or the intermediary's access logs — the service's own container stderr/stdout). Use page_size <= 10 initially. If results are too large, extract error message summaries via Tier 2 gcloud (`--format="csv[no-heading](jsonPayload.message)" | sort | uniq -c | sort -rn`).
+
+2. **Classify errors** using the Step 2 taxonomy. Prioritize:
+   - **Tier 1 anomalous errors in non-obvious services** — an application-specific exception (parsing, template, schema) in a small service is more diagnostic than a generic timeout in a large one
+   - **Message broker delivery failures** — trace to the consumer's own exception (see Step 2 message broker rule)
+   - **Connection pool exhaustion** (`JDBCConnectionException`, `Acquisition timeout`, `pool exhausted`) — indicates this service is an epicenter, not just a victim
+
+3. **Check the 72-hour deployment history** for each service. A deployment to **any** service in the error chain is a candidate trigger — not just the service initially suspected.
+
+4. **Rank services by diagnostic value:** The service with the highest-tier errors and the most anomalous rate change from baseline is the primary investigation target for Step 5. **If this differs from the service investigated in Step 3, revise your focus.** Do not anchor on the first service investigated simply because more evidence has been collected for it.
+
+**Output:** A `service_error_inventory` table in the Step 7 synthesis:
+
+```yaml
+service_error_inventory:
+  - service: "<name>"
+    error_class: "<dominant error>"
+    tier: 1|2|3
+    count_incident: <N>
+    count_baseline: <N>
+    deployment_in_72h: true|false
+    deployment_timestamp: "<UTC or null>"
+    investigated: true|false
+```
+
+Services with `investigated: false` must be flagged as gaps in `evidence_coverage`.
+
 ### Step 4: Autonomous Trace Correlation (Tier 1 Only)
 
 If Tier 1 MCP tools are NOT available, skip this step entirely. Proceed to Step 5.
@@ -673,6 +706,15 @@ investigation_summary:
       status: "confirmed-dependent" | "independent" | "inconclusive" | "not-investigated"
       evidence: "<specific query result or 'not queried'>"
       independent_root_cause: "<one sentence, only when status=independent and cause known>"
+  service_error_inventory:  # optional — required when Step 3c executes
+    - service: "<name>"
+      error_class: "<dominant error>"
+      tier: 1|2|3
+      count_incident: <N>
+      count_baseline: <N>
+      deployment_in_72h: true|false
+      deployment_timestamp: "<UTC or null>"
+      investigated: true|false
 ```
 
 The completeness gate (Step 8) references the `evidence_coverage` and `gaps` fields — Q1-Q3 answers must account for gaps.

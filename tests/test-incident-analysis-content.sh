@@ -275,6 +275,18 @@ assert_file_contains "SKILL.md: disambiguates from Evidence Ledger" \
     "Evidence Ledger.*Constraint 6" "${SKILL_FILE}"
 
 # ---------------------------------------------------------------------------
+# SKILL.md — Multi-Service Error Sweep (Step 3c)
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: has multi-service error sweep step" \
+    "Multi-Service Error Sweep" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: step 3c has service_error_inventory output" \
+    "service_error_inventory:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: step 3c requires 72-hour deployment history" \
+    "72-hour deployment history" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: step 3c warns against anchoring bias" \
+    "Do not anchor" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
 # SKILL.md — Message broker signals and baseline verification
 # ---------------------------------------------------------------------------
 assert_file_contains "SKILL.md: message broker signals are Tier 1" \
