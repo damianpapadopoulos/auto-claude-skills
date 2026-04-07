@@ -133,6 +133,24 @@ Note: This constraint applies to on-disk `tool-results/` files written by the Cl
 
 **Self-check:** Before issuing any Bash command, check whether the command path contains `tool-results/`. If it does, stop and re-invoke the MCP tool with a smaller `page_size` instead.
 
+### 9. Intermediary-Layer Investigation Discipline
+
+When the symptomatic entry point is an intermediary — reverse proxy, API gateway, service mesh sidecar, message broker, or load balancer — errors observed at that layer may originate from **any** downstream service it routes to. The intermediary's own errors (timeouts, connection resets, 5xx) describe **where** the system broke but not **why**.
+
+**Mandatory sweep:** Before forming a root cause hypothesis (Step 5), identify and query every distinct downstream service that appears in the intermediary's error logs. Discovery sources:
+- Intermediary stderr/error logs: upstream host names in timeout or connection errors
+- Intermediary access logs: distinct URL path prefixes returning 4xx/5xx that route to different backends
+- Intermediary configuration or routing rules (if accessible)
+
+For each downstream service discovered:
+1. Query its **own container logs** (severity>=ERROR) in the incident time window — the intermediary's view of the service is not sufficient
+2. Check its **deployment history** in the 72-hour window before the incident
+3. Classify its errors using the Step 2 taxonomy and record in the Step 7 synthesis
+
+**Scope boundary:** This sweep is bounded to services explicitly named in the intermediary's error output. It does not authorize cluster-wide searches.
+
+**Anti-pattern this prevents:** Anchoring on the most familiar or largest downstream service while the actual root cause is a smaller service whose failures were visible in the intermediary's logs but never independently queried.
+
 ## Investigation Modes
 
 ### Default: Full Investigation

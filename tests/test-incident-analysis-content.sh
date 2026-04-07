@@ -274,4 +274,14 @@ assert_file_contains "SKILL.md: forbids reading tool-results files" \
 assert_file_contains "SKILL.md: disambiguates from Evidence Ledger" \
     "Evidence Ledger.*Constraint 6" "${SKILL_FILE}"
 
+# ---------------------------------------------------------------------------
+# SKILL.md — Intermediary-Layer Investigation Discipline (Constraint 9)
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: has intermediary-layer constraint" \
+    "Intermediary-Layer Investigation" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: constraint 9 requires downstream sweep" \
+    "query every distinct downstream service" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: constraint 9 has scope boundary" \
+    "bounded to services explicitly named" "${SKILL_FILE}"
+
 print_summary
