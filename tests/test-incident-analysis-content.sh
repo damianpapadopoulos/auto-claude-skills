@@ -275,6 +275,18 @@ assert_file_contains "SKILL.md: disambiguates from Evidence Ledger" \
     "Evidence Ledger.*Constraint 6" "${SKILL_FILE}"
 
 # ---------------------------------------------------------------------------
+# SKILL.md — Message broker signals and baseline verification
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: message broker signals are Tier 1" \
+    "Message broker signals.*always Tier 1" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: message broker mentions poison-pill" \
+    "poison.pill" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: Tier 3 requires verified baseline" \
+    "verified baseline" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: Tier 3 forbids unverified dismissal" \
+    "not evidence.*query the baseline" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
 # SKILL.md — Intermediary-Layer Investigation Discipline (Constraint 9)
 # ---------------------------------------------------------------------------
 assert_file_contains "SKILL.md: has intermediary-layer constraint" \
