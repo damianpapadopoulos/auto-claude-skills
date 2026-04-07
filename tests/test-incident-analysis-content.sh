@@ -275,6 +275,14 @@ assert_file_contains "SKILL.md: disambiguates from Evidence Ledger" \
     "Evidence Ledger.*Constraint 6" "${SKILL_FILE}"
 
 # ---------------------------------------------------------------------------
+# SKILL.md — Completeness gate Q11 (multi-service sweep)
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: completeness gate has Q11" \
+    "| 11 |" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: Q11 references service_error_inventory" \
+    "service_error_inventory.*Step 3c" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
 # SKILL.md — Recurring-workload correlation trap (Step 5)
 # ---------------------------------------------------------------------------
 assert_file_contains "SKILL.md: has recurring-workload correlation trap" \
