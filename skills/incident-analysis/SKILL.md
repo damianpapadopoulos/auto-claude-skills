@@ -594,6 +594,14 @@ State the hypothesis in one sentence. Then:
 
    **Mandatory evidence for traffic-pattern hypotheses:** If the hypothesis attributes the trigger to a traffic pattern change (e.g., "afternoon peak traffic"), verify against a baseline from a **different day at the same time** (or the nearest comparable stable window if traffic patterns changed recently). Compare: caller distribution, call volume per caller, and method mix. If the pattern matches the baseline (same callers, same volume), the traffic hypothesis is supported. If one caller's volume is anomalously high, investigate that caller's health before accepting the hypothesis.
 
+   **Recurring-workload correlation trap:** When a recurring workload (batch job, cron task, scheduled report, periodic cache refresh) correlates temporally with the incident, ask: **"If this workload runs every [cycle], why didn't the incident happen last [cycle]?"** Query the workload's activity on the **previous cycle** (same time yesterday for daily, same day last week for weekly). If the workload ran without incident on the previous cycle, it cannot be the sole trigger — demote it to contributing factor and search for what changed between cycles:
+   - A deployment to any service the workload interacts with (check Step 3c inventory)
+   - A data or configuration change that the workload now processes differently (new records, modified templates, updated schemas)
+   - A cache state change from a prior failure persisting across restarts or TTL boundaries
+   - An environmental change (replica count, node placement, resource limits, dependency version)
+
+   **This is a hard gate:** A recurring workload that ran successfully on its previous cycle MUST NOT be recorded as the root cause trigger. It may be a contributing factor or amplifier but the trigger is the inter-cycle change.
+
 6. **Capacity headroom check (when resource-related signals are present):** Compare current resource utilization against the nearest stable baseline (different day, same time window). Record:
    - Current vs baseline: node CPU/memory allocatable utilization, pod count, sum of resource requests
    - Headroom drift: has available capacity been shrinking over days/weeks? (query 7-day trend if metrics available)

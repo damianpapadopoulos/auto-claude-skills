@@ -275,6 +275,16 @@ assert_file_contains "SKILL.md: disambiguates from Evidence Ledger" \
     "Evidence Ledger.*Constraint 6" "${SKILL_FILE}"
 
 # ---------------------------------------------------------------------------
+# SKILL.md — Recurring-workload correlation trap (Step 5)
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: has recurring-workload correlation trap" \
+    "Recurring-workload correlation trap" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: recurring trap requires previous-cycle check" \
+    "previous cycle" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: recurring trap is a hard gate" \
+    "hard gate.*MUST NOT.*root cause trigger" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
 # SKILL.md — Multi-Service Error Sweep (Step 3c)
 # ---------------------------------------------------------------------------
 assert_file_contains "SKILL.md: has multi-service error sweep step" \
