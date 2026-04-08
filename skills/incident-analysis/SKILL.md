@@ -521,7 +521,23 @@ service_error_inventory:
     deployment_in_72h: true|false
     deployment_timestamp: "<UTC or null>"
     investigated: true|false
+    infra_status: "assessed" | "not_applicable" | "unavailable" | "not_captured"
+    infra_evidence: "<what was checked>"
+    infra_reason: "<why not assessed, if status != assessed>"
+    app_status: "assessed" | "not_applicable" | "unavailable" | "not_captured"
+    app_evidence: "<what was checked>"
+    app_reason: "<why not assessed, if status != assessed>"
+    mechanism_status: "known" | "not_yet_traced" | "not_applicable"
 ```
+
+**Layer status semantics:**
+
+| Status | Meaning |
+|--------|---------|
+| `assessed` | Minimum required evidence for that layer is complete — infrastructure: deployment history (72h) + runtime signal; application: ERROR logs queried + dominant exception class identified |
+| `not_applicable` | Layer genuinely does not apply to this service in this incident |
+| `unavailable` | Could not query — tool missing, auth expired, logs not available (reason required) |
+| `not_captured` | Information not present in available evidence sources (reason required) |
 
 Services with `investigated: false` must be flagged as gaps in `evidence_coverage`.
 
@@ -743,6 +759,22 @@ investigation_summary:
       deployment_in_72h: true|false
       deployment_timestamp: "<UTC or null>"
       investigated: true|false
+      infra_status: "assessed" | "not_applicable" | "unavailable" | "not_captured"
+      infra_evidence: "<what was checked>"
+      infra_reason: "<why not assessed, if status != assessed>"
+      app_status: "assessed" | "not_applicable" | "unavailable" | "not_captured"
+      app_evidence: "<what was checked>"
+      app_reason: "<why not assessed, if status != assessed>"
+      mechanism_status: "known" | "not_yet_traced" | "not_applicable"
+  root_cause_layer_coverage:
+    infrastructure_status: "assessed" | "not_applicable" | "unavailable" | "not_captured"
+    infrastructure_evidence: "<summary of what was checked for the root-cause service>"
+    infrastructure_reason: "<why not assessed, if status != assessed>"
+    application_status: "assessed" | "not_applicable" | "unavailable" | "not_captured"
+    application_evidence: "<summary of what was checked for the root-cause service>"
+    application_reason: "<why not assessed, if status != assessed>"
+    mechanism_status: "known" | "not_yet_traced"
+    mechanism_evidence: "<code path, cache/config state, retry behavior, or consumer mechanism identified>"
 ```
 
 The completeness gate (Step 8) references the `evidence_coverage` and `gaps` fields — Q1-Q3 answers must account for gaps.

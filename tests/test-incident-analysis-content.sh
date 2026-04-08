@@ -338,4 +338,20 @@ assert_file_contains "SKILL.md: constraint 10 defines mechanism_status" \
 assert_file_contains "SKILL.md: constraint 10 requires mechanism for root cause" \
     "chosen root-cause service.*must trace\|mechanism.*mandatory.*root.cause" "${SKILL_FILE}"
 
+# ---------------------------------------------------------------------------
+# SKILL.md — Per-service and top-level layer coverage schema
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: service_error_inventory has infra_status" \
+    "infra_status:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: service_error_inventory has app_status" \
+    "app_status:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: service_error_inventory has mechanism_status" \
+    "mechanism_status:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: has root_cause_layer_coverage block" \
+    "root_cause_layer_coverage:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: layer status uses assessed enum" \
+    "assessed.*not_applicable.*unavailable.*not_captured" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: assessed means minimum evidence complete" \
+    "Minimum required evidence.*layer.*complete" "${SKILL_FILE}"
+
 print_summary
