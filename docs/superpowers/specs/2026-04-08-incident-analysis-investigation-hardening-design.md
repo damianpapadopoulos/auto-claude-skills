@@ -74,7 +74,7 @@ service_error_inventory:
 
 | Status | Meaning |
 |--------|---------|
-| `assessed` | Layer was queried and evidence was collected |
+| `assessed` | Minimum required evidence for that layer is complete — infrastructure: deployment history (72h) + runtime signal; application: ERROR logs queried + dominant exception class identified |
 | `not_applicable` | Layer genuinely does not apply to this service in this incident |
 | `unavailable` | Could not query — tool missing, auth expired, logs not available (reason required) |
 | `not_captured` | Information not present in available evidence sources (reason required) |
@@ -89,6 +89,8 @@ root_cause_layer_coverage:
   application_status: "assessed" | "not_applicable" | "unavailable" | "not_captured"
   application_evidence: "<summary of what was checked for the root-cause service>"
   application_reason: "<why not assessed, if status != assessed>"
+  mechanism_status: "known" | "not_yet_traced"
+  mechanism_evidence: "<code path, cache/config state, retry behavior, or consumer mechanism identified>"
 ```
 
 Named `root_cause_layer_coverage` (not `layer_coverage`) to distinguish from per-service entries in `service_error_inventory`.
@@ -113,7 +115,7 @@ Named `root_cause_layer_coverage` (not `layer_coverage`) to distinguish from per
 >
 > The full Step 3 dive includes: error grouping, deployment correlation, resource metrics, and application-logic analysis (call patterns, retry/amplification behavior, cache/config/template state). This is the same depth applied to the primary service — not the Step 3c surface sweep.
 >
-> **Step 4b applicability:** If the re-entered service has actionable stack frames (from its ERROR logs) and a resolvable deployed ref (from deployment history or pod spec), Step 4b source analysis runs for that service before closure.
+> **Step 4b applicability:** Step 4b's existing gate conditions apply to re-entered services: source analysis runs when the re-entered service has (1) actionable stack frames, (2) a resolvable deployed ref, AND (3) one of the existing category gates is met (bad-release: deploy within incident window or 4h before; config-change: `config_change_correlated_with_errors` detected with git ref). The re-entry does not broaden Step 4b's gate — it extends Step 4b's applicability to additional services that meet the same criteria.
 >
 > **Scope:** This re-entry is bounded to the specific service(s) meeting the trigger conditions. It does not cascade — re-entered services do not trigger further re-entries.
 
@@ -189,7 +191,7 @@ tested_intermediate_conclusions:
 > **Full investigation mode:**
 > - Q1-Q3 must have confident answers (accounting for evidence gaps). If any is "No" or "Unknown," return to INVESTIGATE Step 1.
 > - Q4-Q11 must each be explicitly resolved with one of: an evidence-backed answer, `not_applicable` (genuinely does not apply — with reason), `unavailable` (tool/data missing — with reason), or `not_captured` (information not in available evidence — with reason). Bare "not assessed" is not allowed.
-> - **Closure is blocked** when any unresolved item weakens the chosen root cause, the named causal chain, or the root-cause layer coverage. Specifically: for the chosen root-cause service, either layer in `root_cause_layer_coverage` being anything other than `assessed` or a narrow `not_applicable` blocks closure.
+> - **Closure is blocked** when any unresolved item weakens the chosen root cause, the named causal chain, or the root-cause layer coverage. Specifically: for the chosen root-cause service, either layer in `root_cause_layer_coverage` being anything other than `assessed` or a narrow `not_applicable` blocks closure. Additionally, the chosen root-cause service's `mechanism_status` must be `known` — `not_yet_traced` blocks closure for the root-cause service (though it is acceptable for non-root-cause services).
 > - Peripheral items may be `not_captured` or `unavailable` and remain as open questions without blocking closure, provided they do not affect the causal chain.
 >
 > **Live-triage mode:**
@@ -202,7 +204,7 @@ tested_intermediate_conclusions:
 
 **Location:** `tests/fixtures/incident-analysis/evals/behavioral.json`
 
-**Purpose:** Add adversarial scenarios that test the new rules.
+**Purpose:** Add adversarial scenarios that test the new rules via fixture structure and assertion coverage. These fixtures validate that the skill text contains the right behavioral anchors — they do not execute live investigations. Runtime end-to-end evals (executing prompts and asserting emitted YAML) are a separate follow-up project, explicitly out of scope for this change.
 
 **New fixtures:**
 
