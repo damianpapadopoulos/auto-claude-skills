@@ -354,4 +354,14 @@ assert_file_contains "SKILL.md: layer status uses assessed enum" \
 assert_file_contains "SKILL.md: assessed means minimum evidence complete" \
     "Minimum required evidence.*layer.*complete" "${SKILL_FILE}"
 
+# ---------------------------------------------------------------------------
+# SKILL.md — Step 3c Tier 1 escalation to full Step 3
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: step 3c has Tier 1 escalation rule" \
+    "Tier 1 escalation to full Step 3" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: step 3c escalation preserves Step 4b gates" \
+    "Step 4b.*existing.*gate\|existing.*category gate" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: step 3c escalation is bounded" \
+    "does not cascade" "${SKILL_FILE}"
+
 print_summary

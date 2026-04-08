@@ -543,6 +543,16 @@ Services with `investigated: false` must be flagged as gaps in `evidence_coverag
 
 **Re-entry from Step 4:** If trace correlation (Step 4) discovers additional services not covered in the initial sweep, return to Step 3c and execute the procedure for the newly discovered services before proceeding to Step 5.
 
+**Tier 1 escalation to full Step 3:** When a service meets either condition below, execute a full Step 3 deep dive for that service before proceeding to Step 5:
+- The service ranks highest in diagnostic value (highest tier + most anomalous baseline change) but was not the original Step 3 target
+- The service has errors of a different class than the hypothesized mechanism (suggesting independent failure, not dependent)
+
+The full Step 3 dive includes: error grouping, deployment correlation, resource metrics, and application-logic analysis (call patterns, retry/amplification behavior, cache/config/template state). This is the same depth applied to the primary service — not the Step 3c surface sweep.
+
+**Step 4b applicability:** Step 4b's existing gate conditions apply to re-entered services: source analysis runs when the re-entered service has (1) actionable stack frames, (2) a resolvable deployed ref, AND (3) one of the existing category gates is met (bad-release: deploy within incident window or 4h before; config-change: `config_change_correlated_with_errors` detected with git ref). The re-entry does not broaden Step 4b's gate — it extends Step 4b's applicability to additional services that meet the same criteria.
+
+**Scope:** This re-entry is bounded to the specific service(s) meeting the trigger conditions. It does not cascade — re-entered services do not trigger further re-entries.
+
 ### Step 4: Autonomous Trace Correlation (Tier 1 Only)
 
 If Tier 1 MCP tools are NOT available, skip this step entirely. Proceed to Step 5.
