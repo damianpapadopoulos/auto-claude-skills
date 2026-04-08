@@ -213,7 +213,7 @@ assert_contains "step 5: traffic baseline from different day" "different day at 
 # Step 8: completeness gate has caller-health question and updated rule
 GATE_BLOCK=$(sed -n '/### Step 8: Investigation Completeness Gate/,/### Step 9/p' "${SKILL_FILE}")
 assert_contains "gate: caller question exists" "dominant callers" "${GATE_BLOCK}"
-assert_contains "gate: rule covers Q11" "4-11" "${GATE_BLOCK}"
+assert_contains "gate: full mode requires explicit resolution" "is not allowed" "${GATE_BLOCK}"
 
 # ---------------------------------------------------------------------------
 # Reference file extractions exist

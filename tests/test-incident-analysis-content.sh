@@ -378,4 +378,18 @@ assert_file_contains "SKILL.md: step 5 has anti-anchoring check" \
 assert_file_contains "SKILL.md: has tested_intermediate_conclusions schema" \
     "tested_intermediate_conclusions:" "${SKILL_FILE}"
 
+# ---------------------------------------------------------------------------
+# SKILL.md — Tightened gate rule (full mode vs live-triage)
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: gate has full investigation mode section" \
+    "Full investigation mode:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: gate forbids bare not assessed" \
+    "Bare.*not assessed.*not allowed" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: gate requires mechanism_status known for root cause" \
+    "mechanism_status.*must be.*known\|mechanism_status.*known.*blocks" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: gate has live-triage mode section" \
+    "Live-triage mode:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: gate governs Q4-Q11 explicitly" \
+    "Q4-Q11 must each be explicitly resolved" "${SKILL_FILE}"
+
 print_summary
