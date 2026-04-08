@@ -326,4 +326,16 @@ assert_file_contains "SKILL.md: constraint 9 requires downstream sweep" \
 assert_file_contains "SKILL.md: constraint 9 has scope boundary" \
     "bounded to services explicitly named" "${SKILL_FILE}"
 
+# ---------------------------------------------------------------------------
+# SKILL.md — Dual-Layer Investigation (Constraint 10)
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: has dual-layer investigation constraint" \
+    "Dual-Layer Investigation" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: constraint 10 requires both layers" \
+    "infrastructure layer.*application layer\|application layer.*infrastructure layer" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: constraint 10 defines mechanism_status" \
+    "mechanism.status.*known.*not_yet_traced" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: constraint 10 requires mechanism for root cause" \
+    "chosen root-cause service.*must trace\|mechanism.*mandatory.*root.cause" "${SKILL_FILE}"
+
 print_summary

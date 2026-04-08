@@ -153,6 +153,22 @@ For each downstream service discovered:
 
 Step 3c codifies this sweep as a structured procedure with inventory output.
 
+### 10. Dual-Layer Investigation
+
+For every service in the error chain, the investigation must assess both the infrastructure layer (deployment history, pod state, resource pressure) and the application layer (exception class, error mechanism). Neither layer alone is sufficient to close an investigation.
+
+**Minimum per-service evidence (enforced via Step 3c):**
+- **Infrastructure:** 72-hour deployment history + at least one runtime signal (pod state/events, resource metrics, or error rate trend)
+- **Application:** the service's own ERROR logs queried, dominant exception/error class identified, mechanism status recorded as `known` (traced to code path, cache state, or consumer behavior) or `not_yet_traced` (error class known, mechanism not investigated)
+
+**Full mechanism-level depth** is mandatory for:
+- The chosen root-cause service (must trace to specific code path, cache/config state, retry/amplification behavior, or consumer mechanism)
+- Any service that triggers Step 3c → Step 3 re-entry (see Step 3c escalation rule)
+
+For all other services, mechanism status `not_yet_traced` is acceptable — it records that the error class is known but the application-layer mechanism was not deeply investigated. This prevents over-investigation of obvious victims while ensuring the root-cause service is traced to mechanism.
+
+**Anti-pattern this prevents:** Building a complete, internally-consistent infrastructure narrative (timeouts, resource pressure, GC pauses) while the actual root cause is an application-layer bug (stale cache, template error, retry storm) in a service whose ERROR logs were never queried.
+
 ## Investigation Modes
 
 ### Default: Full Investigation
