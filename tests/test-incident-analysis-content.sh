@@ -392,4 +392,26 @@ assert_file_contains "SKILL.md: gate has live-triage mode section" \
 assert_file_contains "SKILL.md: gate governs Q4-Q11 explicitly" \
     "Q4-Q11 must each be explicitly resolved" "${SKILL_FILE}"
 
+# ---------------------------------------------------------------------------
+# P1 fix: root_cause_layer_coverage.mechanism_status allows not_applicable
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: gate accepts mechanism not_applicable for infra-only" \
+    "not_applicable.*no application-layer mechanism" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
+# P2a fix: Q6 and capacity headroom use new status vocabulary
+# ---------------------------------------------------------------------------
+GATE_TABLE=$(sed -n '/^| # | Question/,/^\*\*Evidence coverage/p' "${SKILL_FILE}")
+assert_contains "SKILL.md: Q6 no longer says bare not assessed" \
+    "not_captured" "${GATE_TABLE}"
+
+# ---------------------------------------------------------------------------
+# P2b fix: Step 3c procedure operationalizes dual-layer fields
+# ---------------------------------------------------------------------------
+STEP3C_PROCEDURE=$(sed -n '/^1\. \*\*Query the service.*own ERROR/,/^\*\*Output:\*\*/p' "${SKILL_FILE}")
+assert_contains "SKILL.md: step 3c procedure gathers runtime signal" \
+    "runtime signal" "${STEP3C_PROCEDURE}"
+assert_contains "SKILL.md: step 3c procedure populates layer status" \
+    "infra_status" "${STEP3C_PROCEDURE}"
+
 print_summary

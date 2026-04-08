@@ -520,7 +520,9 @@ If a `node-resource-exhaustion` playbook is available, transition to CLASSIFY fo
 
 3. **Check the 72-hour deployment history** for each service. A deployment to **any** service in the error chain is a candidate trigger — not just the service initially suspected.
 
-4. **Rank services by diagnostic value:** The service with the highest-tier errors and the most anomalous rate change from baseline is the primary investigation target for Step 5. **If this differs from the service investigated in Step 3, revise your focus.** Do not anchor on the first service investigated simply because more evidence has been collected for it.
+4. **Gather per-service runtime signal (Constraint 10):** For each service, collect at least one runtime signal beyond deployment history — pod state/events, resource metrics (CPU, memory), or error rate trend. This satisfies the infrastructure layer minimum. Record `infra_status` as `assessed` when deployment history + runtime signal are both collected, or `unavailable`/`not_captured` with reason if not. Record `app_status` as `assessed` when ERROR logs were queried and dominant exception class identified (items 1-2 above), or the appropriate status with reason. Record `mechanism_status` as `not_yet_traced` (default for non-root-cause services) or `known` if the error mechanism was traced during this sweep.
+
+5. **Rank services by diagnostic value:** The service with the highest-tier errors and the most anomalous rate change from baseline is the primary investigation target for Step 5. **If this differs from the service investigated in Step 3, revise your focus.** Do not anchor on the first service investigated simply because more evidence has been collected for it.
 
 **Output:** A `service_error_inventory` table in the Step 7 synthesis:
 
@@ -665,7 +667,7 @@ State the hypothesis in one sentence. Then:
    - Current vs baseline: node CPU/memory allocatable utilization, pod count, sum of resource requests
    - Headroom drift: has available capacity been shrinking over days/weeks? (query 7-day trend if metrics available)
    - HPA/quota status: is HPA at maximum replicas? Are resource quotas near limits?
-   If headroom has been chronically shrinking, note as a contributing factor even if an acute trigger is identified. The acute trigger may recur at lower thresholds — the chronic drift makes the system fragile. If headroom data is unavailable, state "capacity headroom not assessed" and flag as an open question.
+   If headroom has been chronically shrinking, note as a contributing factor even if an acute trigger is identified. The acute trigger may recur at lower thresholds — the chronic drift makes the system fragile. If headroom data is unavailable, state `not_captured` with reason (e.g., "capacity metrics not available for this environment") and flag as an open question.
 
    If no acute change is found after active search, the hypothesis is weaker — note it as "chronic contributing factor without identified trigger" rather than confirmed root cause.
 
@@ -805,7 +807,7 @@ investigation_summary:
     application_status: "assessed" | "not_applicable" | "unavailable" | "not_captured"
     application_evidence: "<summary of what was checked for the root-cause service>"
     application_reason: "<why not assessed, if status != assessed>"
-    mechanism_status: "known" | "not_yet_traced"
+    mechanism_status: "known" | "not_yet_traced" | "not_applicable"
     mechanism_evidence: "<code path, cache/config state, retry behavior, or consumer mechanism identified>"
   tested_intermediate_conclusions:
     - conclusion: "<explicit statement>"
@@ -830,7 +832,7 @@ Before transitioning to POSTMORTEM, answer each question explicitly in the synth
 | 3 | When did the incident start AND end? | Both timestamps in UTC from log/metric evidence, not estimation. If kernel timestamps (seconds since boot) were used, note the conversion. For end time: search for recovery signals (pod restarts, deployment events, manual scaling, error rate returning to baseline) at least 60 minutes past the last observed error — recovery often comes from human intervention, not self-healing. |
 | 4 | How many instances/replicas/pods exist? How many were affected? | Verified from metrics or deployment spec, not inferred from log observation |
 | 5 | Were other services or components affected? | Checked — list affected or state "checked, none found" |
-| 6 | Is this condition systemic (other nodes/instances at similar risk)? | Checked or state "not assessed" |
+| 6 | Is this condition systemic (other nodes/instances at similar risk)? | Checked or state `not_captured` with reason (e.g., "node metrics unavailable") |
 | 7 | Did the alerting system detect this? How quickly? | Which alerts fired, time from incident start to first alert, which alerts should have fired but didn't |
 | 8 | When did humans learn about it and what did they do? | First human awareness (alert, report, support ticket), first action taken, resolution action. Use user-provided context if available; state "not captured" if not. |
 | 9 | For shared-dependency failures: was caller-side amplification investigated? | Describe how dominant callers were identified (logs, traces, metrics, broker stats), what evidence was checked, and whether any caller was amplifying the failure. If shared-dependency escalation was not triggered, state "N/A — not a shared-dependency failure". |
@@ -844,7 +846,7 @@ Before transitioning to POSTMORTEM, answer each question explicitly in the synth
 **Full investigation mode:**
 - Q1-Q3 must have confident answers (accounting for evidence gaps). If any is "No" or "Unknown," return to INVESTIGATE Step 1 — for questions 1-2 with a revised hypothesis, for question 3 with targeted recovery-evidence queries.
 - Q4-Q11 must each be explicitly resolved with one of: an evidence-backed answer, `not_applicable` (genuinely does not apply — with reason), `unavailable` (tool/data missing — with reason), or `not_captured` (information not in available evidence — with reason). Bare "not assessed" is not allowed.
-- **Closure is blocked** when any unresolved item weakens the chosen root cause, the named causal chain, or the root-cause layer coverage. Specifically: for the chosen root-cause service, either layer in `root_cause_layer_coverage` being anything other than `assessed` or a narrow `not_applicable` blocks closure. Additionally, the chosen root-cause service's `mechanism_status` must be `known` — `not_yet_traced` blocks closure for the root-cause service (though it is acceptable for non-root-cause services).
+- **Closure is blocked** when any unresolved item weakens the chosen root cause, the named causal chain, or the root-cause layer coverage. Specifically: for the chosen root-cause service, either layer in `root_cause_layer_coverage` being anything other than `assessed` or a narrow `not_applicable` blocks closure. Additionally, the chosen root-cause service's `mechanism_status` must be `known` or `not_applicable` (when there is no application-layer mechanism to trace, e.g., pure infrastructure failures like node crashes, disk full, or network partitions) — `not_yet_traced` blocks closure for the root-cause service (though it is acceptable for non-root-cause services).
 - Peripheral items may be `not_captured` or `unavailable` and remain as open questions without blocking closure, provided they do not affect the causal chain.
 
 **Live-triage mode:**
