@@ -151,6 +151,8 @@ For each downstream service discovered:
 
 **Anti-pattern this prevents:** Anchoring on the most familiar or largest downstream service while the actual root cause is a smaller service whose failures were visible in the intermediary's logs but never independently queried.
 
+Step 3c codifies this sweep as a structured procedure with inventory output.
+
 ## Investigation Modes
 
 ### Default: Full Investigation
@@ -507,6 +509,8 @@ service_error_inventory:
 
 Services with `investigated: false` must be flagged as gaps in `evidence_coverage`.
 
+**Re-entry from Step 4:** If trace correlation (Step 4) discovers additional services not covered in the initial sweep, return to Step 3c and execute the procedure for the newly discovered services before proceeding to Step 5.
+
 ### Step 4: Autonomous Trace Correlation (Tier 1 Only)
 
 If Tier 1 MCP tools are NOT available, skip this step entirely. Proceed to Step 5.
@@ -600,7 +604,7 @@ State the hypothesis in one sentence. Then:
    - A cache state change from a prior failure persisting across restarts or TTL boundaries
    - An environmental change (replica count, node placement, resource limits, dependency version)
 
-   **This is a hard gate:** A recurring workload that ran successfully on its previous cycle MUST NOT be recorded as the root cause trigger. It may be a contributing factor or amplifier but the trigger is the inter-cycle change.
+   **This is a hard gate:** A recurring workload that ran successfully on its previous cycle MUST NOT be recorded as the root cause trigger. It may be a contributing factor or amplifier but the trigger is the inter-cycle change. Exception: if no previous cycle exists (first-ever execution), this gate does not apply — the workload itself is the change.
 
 6. **Capacity headroom check (when resource-related signals are present):** Compare current resource utilization against the nearest stable baseline (different day, same time window). Record:
    - Current vs baseline: node CPU/memory allocatable utilization, pod count, sum of resource requests
