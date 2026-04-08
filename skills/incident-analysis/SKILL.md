@@ -169,6 +169,19 @@ For all other services, mechanism status `not_yet_traced` is acceptable — it r
 
 **Anti-pattern this prevents:** Building a complete, internally-consistent infrastructure narrative (timeouts, resource pressure, GC pauses) while the actual root cause is an application-layer bug (stale cache, template error, retry storm) in a service whose ERROR logs were never queried.
 
+### 11. Intermediate Conclusion Verification
+
+Any intermediate conclusion that will be used in the causal narrative must be explicitly stated and tested with at least one disconfirming query before building on it. This applies to conclusions formed during any investigation step, not just the final hypothesis.
+
+**Common intermediate conclusions that require verification:**
+- "This error is baseline noise" → query the baseline rate and compare numerically (see Tier 3 verification rule)
+- "This service is healthy / not involved" → query its own ERROR logs in the incident window
+- "This failure is dependent on the primary root cause" → verify the service's error class matches the hypothesized mechanism
+- "This workload is the trigger" → check whether it ran without incident on the previous cycle (see recurring-workload trap)
+- "This service's 403/500 responses are expected" → verify the response rate against a non-incident baseline
+
+**Self-check:** Do not build the next investigation step on a conclusion that was inferred but not queried. If you catch yourself thinking "this is probably X" without having queried for confirmation, stop and query.
+
 ## Investigation Modes
 
 ### Default: Full Investigation
@@ -656,6 +669,15 @@ State the hypothesis in one sentence. Then:
 
    If no acute change is found after active search, the hypothesis is weaker — note it as "chronic contributing factor without identified trigger" rather than confirmed root cause.
 
+7. **Intermediate conclusion audit:** Before finalizing the hypothesis, list every intermediate conclusion in the causal chain (e.g., "Service X errors are dependent", "This error is baseline", "The batch job is the trigger"). For each, verify it was tested with a disconfirming query per Constraint 11. Any untested conclusion must either be tested now or moved to `open_questions`. Untested conclusions MUST NOT appear in the causal narrative as established facts.
+
+8. **Anti-anchoring check (when `service_error_inventory` exists):** Compare the chosen root-cause service against the `service_error_inventory` rankings. If the chosen service is NOT the highest diagnostic-value entry, the hypothesis must include explicit evidence for why the lower-ranked service was selected instead. Valid reasons include:
+   - The higher-ranked service's errors were confirmed as dependent on the chosen service (per-service attribution)
+   - The higher-ranked service's errors have a known independent root cause
+   - The higher-ranked service's error count is inflated by retry amplification from the actual root cause
+
+   Without explicit justification, the gate should reject the hypothesis and redirect investigation to the highest-ranked service.
+
 ### Step 6: Flight Plan
 
 Before touching any code, output a bulleted list of:
@@ -785,6 +807,12 @@ investigation_summary:
     application_reason: "<why not assessed, if status != assessed>"
     mechanism_status: "known" | "not_yet_traced"
     mechanism_evidence: "<code path, cache/config state, retry behavior, or consumer mechanism identified>"
+  tested_intermediate_conclusions:
+    - conclusion: "<explicit statement>"
+      used_in_causal_chain: true|false
+      disconfirming_evidence_sought: "<query or check performed>"
+      result: "supported" | "disproved" | "inconclusive"
+      evidence: "<specific result>"
 ```
 
 The completeness gate (Step 8) references the `evidence_coverage` and `gaps` fields — Q1-Q3 answers must account for gaps.

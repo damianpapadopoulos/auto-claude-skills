@@ -364,4 +364,18 @@ assert_file_contains "SKILL.md: step 3c escalation preserves Step 4b gates" \
 assert_file_contains "SKILL.md: step 3c escalation is bounded" \
     "does not cascade" "${SKILL_FILE}"
 
+# ---------------------------------------------------------------------------
+# SKILL.md — Intermediate Conclusion Verification (Constraint 11) + Step 5 items 7-8
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: has intermediate conclusion constraint" \
+    "Intermediate Conclusion Verification" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: constraint 11 requires disconfirming query" \
+    "tested with at least one disconfirming query" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: step 5 has intermediate conclusion audit" \
+    "Intermediate conclusion audit" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: step 5 has anti-anchoring check" \
+    "Anti-anchoring check" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: has tested_intermediate_conclusions schema" \
+    "tested_intermediate_conclusions:" "${SKILL_FILE}"
+
 print_summary
