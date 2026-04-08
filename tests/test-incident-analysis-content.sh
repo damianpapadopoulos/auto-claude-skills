@@ -404,6 +404,9 @@ assert_file_contains "SKILL.md: gate accepts mechanism not_applicable for infra-
 GATE_TABLE=$(sed -n '/^| # | Question/,/^\*\*Evidence coverage/p' "${SKILL_FILE}")
 assert_contains "SKILL.md: Q6 no longer says bare not assessed" \
     "not_captured" "${GATE_TABLE}"
+Q8_LINE=$(sed -n '/^| 8 |/p' "${SKILL_FILE}")
+assert_contains "SKILL.md: Q8 uses backticked not_captured token" \
+    '`not_captured`' "${Q8_LINE}"
 
 # ---------------------------------------------------------------------------
 # P2b fix: Step 3c procedure operationalizes dual-layer fields
