@@ -75,5 +75,38 @@
       {"text": "not.investigated|gap|unavailable", "description": "Service C marked as not-investigated and recorded as a gap"},
       {"text": "open.question|gap|insufficient", "description": "Does not claim all three share a root cause without per-service evidence"}
     ]
+  },
+  {
+    "id": "infra-narrative-hides-app-trigger",
+    "prompt": "Coaches report being logged out from OCS around 14:30 UTC. The ocs-proxy (Apache HTTPD) shows AH01102 timeout errors against backend-core:8080. Backend-core has 7 pods with CPU at 1.0-1.3 cores, memory sawtooth 6.5-11.7 GiB, and Hibernate HHH000104 warnings. A weekday batch job correlates temporally. A smaller service (chat-message-suggestion) also returns 403/500 through the proxy but has not been queried directly.",
+    "expected_behavior": "Must query chat-message-suggestion's own container logs (not just the proxy view). Must check both infrastructure layer (deployment, pod state) and application layer (exception class, mechanism) for every service. Must not accept the infrastructure narrative for backend-core as sufficient without checking app-layer triggers in all proxy backends. The dual-layer constraint and intermediary sweep should force investigation of the smaller service.",
+    "assertions": [
+      {"text": "chat.message.suggestion|smaller.*service|downstream.*service", "description": "Queries the smaller service's own logs, not just proxy access logs"},
+      {"text": "dual.layer|infra.*layer.*app.*layer|both.*layer", "description": "Explicitly checks both infrastructure and application layers"},
+      {"text": "mechanism|exception.*class|parsing|template|cache", "description": "Traces application-layer mechanism, not just infrastructure symptoms"},
+      {"text": "service_error_inventory|rank|diagnostic.value", "description": "Ranks services by diagnostic value and checks for anchoring"}
+    ]
+  },
+  {
+    "id": "smaller-service-outranks-familiar-large",
+    "prompt": "Two services behind an nginx reverse proxy both returning errors. backend-monolith (8 pods) shows Tier 2 TimeoutException errors at 3x baseline. helper-service (1 pod) shows Tier 1 HandlebarsException at 50x baseline with JMS delivery failures. backend-monolith was investigated first in the single-service deep dive.",
+    "expected_behavior": "Must rank helper-service higher due to Tier 1 errors with greater baseline deviation. Must trigger full Step 3 re-entry for helper-service. Anti-anchoring check must fire because the chosen investigation focus (backend-monolith) is not the highest-ranked service. Must trace helper-service mechanism to application level.",
+    "assertions": [
+      {"text": "helper.service.*rank|higher.*diagnostic|tier.1.*outrank", "description": "Ranks the smaller service higher than the familiar monolith"},
+      {"text": "re.entry|full.*step.3|deep.dive.*helper", "description": "Triggers full Step 3 deep dive for the higher-ranked service"},
+      {"text": "anchoring|not.*highest.*diagnostic|justify.*lower.ranked", "description": "Anti-anchoring guard fires when focus differs from highest-ranked"},
+      {"text": "mechanism.*known|HandlebarsException|template.*error", "description": "Traces the application-layer mechanism of the root cause service"}
+    ]
+  },
+  {
+    "id": "intermediate-conclusion-challenged",
+    "prompt": "A proxy shows 403 errors on /chat-suggestion endpoint. Initial observation: 403s on this endpoint appear in logs from the previous day too, suggesting baseline noise. The proxy also shows timeouts to a large backend service. Investigation focuses on the backend timeout pattern.",
+    "expected_behavior": "Must not dismiss the 403s as baseline without querying the quantitative rate. Must compare incident-day count vs baseline-day count. If the rate is significantly elevated (e.g., 10x), must reclassify from Tier 3 to Tier 1. The intermediate conclusion 'this is baseline noise' must appear in tested_intermediate_conclusions with the disconfirming evidence.",
+    "assertions": [
+      {"text": "baseline.*rate|quantitative|compare.*count", "description": "Queries baseline rate quantitatively before dismissing as noise"},
+      {"text": "reclassif|tier.1|elevated|order.of.magnitude", "description": "Reclassifies error when baseline comparison shows significant increase"},
+      {"text": "tested_intermediate_conclusions|intermediate.*conclusion.*tested", "description": "Records the baseline verification as a tested intermediate conclusion"},
+      {"text": "not.*dismiss|cannot.*assume|verify.*before", "description": "Does not accept baseline classification without evidence"}
+    ]
   }
 ]
