@@ -481,6 +481,6 @@ assert_contains "SKILL.md: step 7 has evidence links item" \
 assert_contains "SKILL.md: step 7 evidence links mentions Links line" \
     "Links:" "${STEP7_BLOCK}"
 assert_contains "SKILL.md: step 7 evidence links has omission behavior" \
-    "Omit the" "${STEP7_BLOCK}"
+    'Omit the `**Links:**` line entirely' "${STEP7_BLOCK}"
 
 print_summary
