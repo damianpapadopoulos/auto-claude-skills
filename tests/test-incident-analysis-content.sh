@@ -472,4 +472,15 @@ SEI_BLOCK=$(sed -n '/^  service_error_inventory:/,/^  root_cause_layer_coverage:
 assert_contains "SKILL.md: evidence_links in service_error_inventory block" \
     "evidence_links:" "${SEI_BLOCK}"
 
+# ---------------------------------------------------------------------------
+# SKILL.md — Step 7 evidence links prose placement
+# ---------------------------------------------------------------------------
+STEP7_BLOCK=$(sed -n '/### Step 7: Context Discipline/,/### Step 8/p' "${SKILL_FILE}")
+assert_contains "SKILL.md: step 7 has evidence links item" \
+    "Evidence links (Constraint 12)" "${STEP7_BLOCK}"
+assert_contains "SKILL.md: step 7 evidence links mentions Links line" \
+    "Links:" "${STEP7_BLOCK}"
+assert_contains "SKILL.md: step 7 evidence links has omission behavior" \
+    "Omit the" "${STEP7_BLOCK}"
+
 print_summary

@@ -765,6 +765,8 @@ Write a synthesized summary as an explicit output block. The summary MUST includ
 6. **Inventory and impact:** Pod/replica counts, distribution, user-facing error counts from Steps 2b/2c
 7. **Evidence coverage and gaps:** Per-domain coverage assessment and explicit gap list (included in the structured block below)
 
+8. **Evidence links (Constraint 12):** After the root cause statement in the prose synthesis, include a `**Links:**` line with up to 3 verification links. After each ruled-out hypothesis, include a `**Links:**` line with up to 2 verification links. Use markdown link syntax with ` · ` separator. Omit the `**Links:**` line entirely when no valid URLs are available for that block.
+
 **Evidence coverage levels** (used in the `evidence_coverage` fields below):
 
 | Level | Meaning |
