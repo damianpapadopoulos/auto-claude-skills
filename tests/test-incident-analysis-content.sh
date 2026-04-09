@@ -417,4 +417,22 @@ assert_contains "SKILL.md: step 3c procedure gathers runtime signal" \
 assert_contains "SKILL.md: step 3c procedure populates layer status" \
     "infra_status" "${STEP3C_PROCEDURE}"
 
+# ---------------------------------------------------------------------------
+# SKILL.md — Evidence Links (Constraint 12)
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: has evidence links constraint" \
+    "Evidence Links" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: constraint 12 defines allowed link types" \
+    "logs.*baseline_logs.*metrics.*trace.*deployment.*source" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: constraint 12 has omission rule for empty arrays" \
+    "Omit the.*evidence_links.*field entirely" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: constraint 12 enforces max links" \
+    "max 3 links" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: constraint 12 excludes timeline and gate" \
+    "timeline entries.*completeness gate" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: constraint 12 has deterministic priority rule" \
+    "logs.*baseline_logs.*trace.*deployment.*metrics.*source" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: constraint 12 forbids placeholder URLs" \
+    "Never emit placeholder.*reconstructed.*guessed" "${SKILL_FILE}"
+
 print_summary

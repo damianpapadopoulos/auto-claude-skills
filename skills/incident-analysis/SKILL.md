@@ -182,6 +182,50 @@ Any intermediate conclusion that will be used in the causal narrative must be ex
 
 **Self-check:** Do not build the next investigation step on a conclusion that was inferred but not queried. If you catch yourself thinking "this is probably X" without having queried for confirmation, stop and query.
 
+### 12. Evidence Links
+
+For each of the three claim surfaces in the Step 7 synthesis — the chosen root-cause statement, each ruled-out hypothesis, and each `service_error_inventory` entry — include clickable verification links when the required URL parameters were captured at query time. This constraint is active across Steps 2-7.
+
+**Allowed link types:**
+
+| Type | Label pattern | When |
+|------|--------------|------|
+| `logs` | "{Service} incident logs" | LQL query during Steps 2, 3, 3c |
+| `baseline_logs` | "{Service} baseline logs" | Baseline comparison supporting a claim (Step 3c tier classification, Step 5 recurring-workload check) |
+| `metrics` | "{Service} {metric_name}" | `list_time_series` or Metrics Explorer data supporting a claim (Steps 2c, 3, 5) |
+| `trace` | "Trace {first_8_chars}" | Step 4 trace correlation in the evidence chain |
+| `deployment` | "{Service} deploy history" | Deployment correlation (Steps 3, 3c) |
+| `source` | "Commit {first_7_chars}" or "{file_name}" | Step 4b source analysis candidate |
+
+**Where links appear:**
+- **Prose synthesis (Step 7):** One `**Links:** [label](url) · [label](url)` line after each root cause statement (max 3 links) and each ruled-out hypothesis (max 2 links). Separator ` · `.
+- **YAML schema:** `evidence_links` arrays on `chosen_hypothesis` (max 3 links), each `ruled_out` entry (max 2 links), and each `service_error_inventory` entry (max 3 links).
+
+**YAML item shape:**
+```yaml
+evidence_links:
+  - type: "logs" | "baseline_logs" | "metrics" | "trace" | "deployment" | "source"
+    label: "<display text>"
+    url: "<https://...>"
+```
+
+**Priority rule (when valid candidates exceed the cap):** Select links in this order: `logs` > `baseline_logs` > `trace` > `deployment` > `metrics` > `source`. Within the same type, prefer the root-cause service. This order is deterministic.
+
+**Omission rules:**
+- If the required parameters to build a trustworthy URL are missing, omit the link and describe the evidence source in prose. Never emit placeholder, reconstructed, or guessed URLs.
+- If a constructed URL would open a generic landing page (losing its filter or time range), omit it.
+- Omit the `evidence_links` field entirely when no valid URL was captured for that block. Do not emit empty arrays.
+
+**Where links do NOT appear:** timeline entries, completeness gate answers, `tested_intermediate_conclusions`, `root_cause_layer_coverage`, `service_attribution`.
+
+**Capture rule:** Record link inputs (project_id, LQL filter, time window, trace_id, commit SHA, metric_type, metric filter) at query time. Do not reconstruct URLs retroactively from prose summaries — parameters may be lost.
+
+**Exclusion:** kubectl commands and MCP tool invocations are not evidence links. Only clickable URLs that open a verification view in a browser.
+
+**Label normalization:** Use stable, human-readable labels: `{Service} incident logs`, `{Service} baseline logs`, `{Service} {metric_name}`, `Trace {first_8_chars}`, `{Service} deploy history`, `Commit {first_7_chars}`. Labels must not contain raw LQL, full SHAs, or URL fragments.
+
+URL construction templates and encoding rules: `references/evidence-links.md`.
+
 ## Investigation Modes
 
 ### Default: Full Investigation
