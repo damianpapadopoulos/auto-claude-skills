@@ -23,11 +23,14 @@ Include: priority, action, current state, owner, due date, status.
 ## 4. Root Cause & Trigger
 Concise explanation of why the incident happened.
 Include causal chain diagram if the mechanism has multiple steps.
+**Links:** Include verification links after the root cause statement (max 3).
+Format: `**Links:** [label](url) · [label](url)` — see references/evidence-links.md.
 
 ## 5. Timeline (all timestamps UTC)
 Markdown table: timestamp | event | evidence source.
 Interleave infrastructure events AND human actions (alerts, notifications, manual interventions).
 Must include verified recovery timestamp.
+Evidence column should contain clickable links to Logs Explorer, audit logs, or commit URLs where query parameters were captured during investigation.
 
 ## 6. Contributing Factors
 Ordered by impact (most impactful first, not discovery order).
@@ -43,7 +46,9 @@ This prevents "increase resource limits" action items without context on whether
 What went well, what went wrong, where we got lucky.
 
 ## 8. Investigation Notes
-Hypotheses investigated and ruled out.
+Hypotheses investigated and ruled out. Each ruled-out hypothesis should include
+a `**Links:**` line (max 2) with verification URLs when available.
+Confirmed findings should include inline links to source code, config files, or log queries.
 Confidence notes (what is confirmed vs inferred).
 Open questions remaining.
 

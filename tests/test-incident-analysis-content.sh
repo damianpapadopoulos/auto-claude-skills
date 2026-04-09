@@ -483,4 +483,34 @@ assert_contains "SKILL.md: step 7 evidence links mentions Links line" \
 assert_contains "SKILL.md: step 7 evidence links has omission behavior" \
     'Omit the `**Links:**` line entirely' "${STEP7_BLOCK}"
 
+# ---------------------------------------------------------------------------
+# SKILL.md — POSTMORTEM Step 3 evidence links carry-forward
+# ---------------------------------------------------------------------------
+POSTMORTEM_STEP3=$(sed -n '/### Step 3: Generate Postmortem/,/### Step 4: Write to Disk/p' "${SKILL_FILE}")
+assert_contains "SKILL.md: postmortem step 3 mandates evidence link carry-forward" \
+    "Constraint 12 carry-forward" "${POSTMORTEM_STEP3}"
+assert_contains "SKILL.md: postmortem step 3 maps sections to evidence_links sources" \
+    "chosen_hypothesis.evidence_links" "${POSTMORTEM_STEP3}"
+assert_contains "SKILL.md: postmortem step 3 maps ruled_out to evidence_links" \
+    "Investigation Notes" "${POSTMORTEM_STEP3}"
+# Verify with grep for the exact bracket pattern (case glob can't match [])
+assert_file_contains "SKILL.md: postmortem step 3 has ruled_out evidence_links mapping" \
+    'ruled_out\[\].evidence_links' "${SKILL_FILE}"
+assert_contains "SKILL.md: postmortem step 3 addresses skip rationalization" \
+    "Do not skip links" "${POSTMORTEM_STEP3}"
+assert_contains "SKILL.md: postmortem step 3 has retroactive construction fallback" \
+    "construct retroactively" "${POSTMORTEM_STEP3}"
+
+# ---------------------------------------------------------------------------
+# postmortem-template.md — evidence links in template sections
+# ---------------------------------------------------------------------------
+TEMPLATE_FILE="${PROJECT_ROOT}/skills/incident-analysis/references/postmortem-template.md"
+TEMPLATE_CONTENT="$(cat "${TEMPLATE_FILE}")"
+assert_contains "postmortem template: root cause section mentions Links" \
+    "verification links after the root cause statement" "${TEMPLATE_CONTENT}"
+assert_contains "postmortem template: timeline mentions clickable links" \
+    "clickable links" "${TEMPLATE_CONTENT}"
+assert_contains "postmortem template: investigation notes mentions ruled-out with links" \
+    "ruled-out hypothesis should include" "${TEMPLATE_CONTENT}"
+
 print_summary

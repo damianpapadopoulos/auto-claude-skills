@@ -1063,9 +1063,26 @@ If a playbook-driven mitigation was executed during this incident, include the f
 
 Keep the 8 section headers (Summary, Impact, Action Items, Root Cause & Trigger, Timeline, Contributing Factors, Lessons Learned, Investigation Notes) intact. The mitigation details are a subsection within Root Cause & Trigger, not a new top-level section. If a project template overrides this structure (Step 1), follow the project template instead.
 
+**Evidence links in the postmortem (mandatory — Constraint 12 carry-forward):**
+
+Carry `evidence_links` from the Step 7 synthesis into every postmortem section. A postmortem without evidence links is just prose assertions.
+
+| Postmortem section | Source | Link placement |
+|-------------------|--------|---------------|
+| Root Cause & Trigger | `chosen_hypothesis.evidence_links` | `**Links:** [label](url) · ...` after root cause statement |
+| Investigation Notes — Ruled out | `ruled_out[].evidence_links` | `**Links:** [label](url)` after each hypothesis |
+| Impact — Infrastructure | `service_error_inventory[].evidence_links` | Inline links on each infrastructure bullet |
+| Timeline | Query URLs from Steps 2-7 | Evidence column: `[label](url)` replacing plain-text descriptions |
+| Investigation Notes — Confirmed | Source code / config URLs | Inline links on file/config references |
+
+Build URLs from the evidence ledger (Constraint 6) using `references/evidence-links.md` templates. If links were not captured in the synthesis, construct retroactively from query parameters visible in the conversation. If parameters are unrecoverable, describe the evidence source in prose.
+
+**Do not skip links because "the postmortem is generated from the synthesis."** The synthesis contains the link data — use it.
+
 **Permalink formatting (apply to all references in the generated postmortem):**
-- **Trace IDs:** Format as `[Trace TRACE_ID](https://console.cloud.google.com/traces/list?project=PROJECT_ID&tid=TRACE_ID)` using the project_id and trace_id from Stage 2. If cross-project trace correlation was used (Step 4), use the relevant project for each reference — Service A traces use Service A's project_id, Service B traces use Service B's project_id.
-- **Git commits:** If a commit hash is referenced (e.g., a deployment trigger), derive the repo URL via `git remote get-url origin`. If GitHub-hosted, format as `[Commit SHORT_HASH](https://github.com/ORG/REPO/commit/FULL_HASH)`. If not GitHub-hosted or the command fails, use the raw commit hash without a link.
+- **Trace IDs:** `[Trace TRACE_ID](https://console.cloud.google.com/traces/list?project=PROJECT_ID&tid=TRACE_ID)`. For cross-project traces (Step 4), use each service's own project_id.
+- **Git commits:** `[Commit SHORT_HASH](https://github.com/ORG/REPO/commit/FULL_HASH)`. Derive org/repo from `git remote get-url origin`. If not GitHub-hosted, use raw hash.
+- **Log queries, metrics, deployments:** See `references/evidence-links.md` for URL templates and encoding rules.
 
 ### Step 4: Write to Disk
 
