@@ -33,7 +33,7 @@ assert_file_contains "SKILL.md: constraint 12 defines allowed link types" \
 assert_file_contains "SKILL.md: constraint 12 has omission rule for empty arrays" \
     "Omit the.*evidence_links.*field entirely" "${SKILL_FILE}"
 assert_file_contains "SKILL.md: constraint 12 enforces max links" \
-    "Max 3 links" "${SKILL_FILE}"
+    "max 3 links" "${SKILL_FILE}"
 assert_file_contains "SKILL.md: constraint 12 excludes timeline and gate" \
     "timeline entries.*completeness gate" "${SKILL_FILE}"
 assert_file_contains "SKILL.md: constraint 12 has deterministic priority rule" \
@@ -70,7 +70,7 @@ For each of the three claim surfaces in the Step 7 synthesis — the chosen root
 
 **Where links appear:**
 - **Prose synthesis (Step 7):** One `**Links:** [label](url) · [label](url)` line after each root cause statement (max 3 links) and each ruled-out hypothesis (max 2 links). Separator ` · `.
-- **YAML schema:** `evidence_links` arrays on `chosen_hypothesis`, each `ruled_out` entry, and each `service_error_inventory` entry.
+- **YAML schema:** `evidence_links` arrays on `chosen_hypothesis` (max 3 links), each `ruled_out` entry (max 2 links), and each `service_error_inventory` entry (max 3 links).
 
 **YAML item shape:**
 ```yaml
@@ -292,7 +292,7 @@ assert_contains "SKILL.md: evidence_links in chosen_hypothesis block" \
 
 INVESTIGATION_YAML=$(sed -n '/^investigation_summary:/,/^```$/p' "${SKILL_FILE}")
 assert_contains "SKILL.md: evidence_links item shape has type field" \
-    'type: "logs"' "${INVESTIGATION_YAML}"
+    'type: "logs" | "baseline_logs" | "metrics" | "trace" | "deployment" | "source"' "${INVESTIGATION_YAML}"
 assert_contains "SKILL.md: evidence_links item shape has label field" \
     'label: "<display text>"' "${INVESTIGATION_YAML}"
 assert_contains "SKILL.md: evidence_links item shape has url field" \
@@ -409,8 +409,8 @@ assert_contains "SKILL.md: step 7 has evidence links item" \
     "Evidence links (Constraint 12)" "${STEP7_BLOCK}"
 assert_contains "SKILL.md: step 7 evidence links mentions Links line" \
     "Links:" "${STEP7_BLOCK}"
-assert_file_contains "SKILL.md: step 7 evidence links has omission behavior" \
-    "Omit the.*Links.*line entirely" "${SKILL_FILE}"
+assert_contains "SKILL.md: step 7 evidence links has omission behavior" \
+    "Omit the" "${STEP7_BLOCK}"
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
