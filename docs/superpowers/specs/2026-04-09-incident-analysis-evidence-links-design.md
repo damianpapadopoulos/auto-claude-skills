@@ -56,6 +56,8 @@
 >     url: "<https://...>"
 > ```
 >
+> **Priority rule (when valid candidates exceed the cap):** Select links in this order: `logs` > `baseline_logs` > `trace` > `deployment` > `metrics` > `source`. Within the same type, prefer the root-cause service. This order is deterministic.
+>
 > **Omission rules:**
 > - If the required parameters to build a trustworthy URL are missing, omit the link and describe the evidence source in prose. Never emit placeholder, reconstructed, or guessed URLs.
 > - If a constructed URL would open a generic landing page (losing its filter or time range), omit it.
@@ -165,6 +167,16 @@ service_error_inventory:
 
 **Max links per block:** 3 per `chosen_hypothesis`, 2 per `ruled_out` entry, 3 per `service_error_inventory` entry.
 
+**Priority rule (when valid candidates exceed the cap):** Select links in this order until the cap is reached:
+1. `logs` (incident-window query for the service — the primary "show me the evidence" link)
+2. `baseline_logs` (when baseline comparison is part of the reasoning)
+3. `trace` (when trace correlation is in the evidence chain)
+4. `deployment` (when deployment correlation matters)
+5. `metrics` (supporting signal, less commonly the primary evidence)
+6. `source` (most specific, least commonly needed for verification)
+
+Within the same type, prefer the link for the root-cause service over other services. This order is deterministic — it does not vary between runs for the same evidence set.
+
 **Field presence rule:** `evidence_links` is present only when at least one valid URL was captured. Do not emit empty arrays.
 
 ---
@@ -188,12 +200,20 @@ service_error_inventory:
 3. Constraint 12 has omission rule: `"Omit the.*evidence_links.*field entirely"` in SKILL.md
 4. Constraint 12 enforces max links: `"Max 3 links"` in SKILL.md
 5. Constraint 12 excludes timeline/gate: `"timeline entries.*completeness gate"` in SKILL.md
-6. `evidence_links` in `chosen_hypothesis` YAML: `"evidence_links:"` appears in the investigation_summary YAML block
-7. Reference file exists: `references/evidence-links.md`
-8. Reference file has Logs Explorer pattern: `"console.cloud.google.com/logs/query"` in reference file
-9. Reference file reuses postmortem rules: `"postmortem permalink"` in reference file
-10. Reference file has label normalization: `"stable.*human-readable"` in reference file
-11. Omission rule for missing parameters: `"Never emit placeholder.*reconstructed.*guessed"` in SKILL.md
+6. Constraint 12 has priority rule: `"logs.*baseline_logs.*trace.*deployment.*metrics.*source"` in SKILL.md
+7. `evidence_links` in `chosen_hypothesis` YAML block: extract the `chosen_hypothesis` block from SKILL.md and assert `"evidence_links:"` appears within it
+8. `evidence_links` item shape has `type` field: `"type:.*logs.*baseline_logs"` in the investigation_summary YAML block
+9. `evidence_links` item shape has `label` field: `'label: "<display text>"'` in the investigation_summary YAML block
+10. `evidence_links` item shape has `url` field: `'url: "<https://...">'` in the investigation_summary YAML block
+11. `evidence_links` in `service_error_inventory` YAML block: extract the `service_error_inventory` block from SKILL.md and assert `"evidence_links:"` appears within it
+12. Reference file exists: `references/evidence-links.md`
+13. Reference file has Logs Explorer pattern: `"console.cloud.google.com/logs/query"` in reference file
+14. Reference file reuses postmortem rules: `"postmortem permalink"` in reference file
+15. Reference file has label normalization: `"stable.*human-readable"` in reference file
+16. Omission rule for missing parameters: `"Never emit placeholder.*reconstructed.*guessed"` in SKILL.md
+17. Step 7 has evidence links item: extract Step 7 block and assert `"Evidence links (Constraint 12)"` appears
+18. Step 7 evidence links mentions Links line: assert `"Links:"` appears in Step 7 block
+19. Step 7 evidence links has omission behavior: assert `"Omit the.*Links.*line entirely"` appears in Step 7 block
 
 **Eval coverage** (`tests/test-incident-analysis-evals.sh`):
 
