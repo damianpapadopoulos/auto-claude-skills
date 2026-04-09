@@ -799,9 +799,17 @@ investigation_summary:
       - "<evidence reference>"
     contradicting_evidence_sought: "<what was looked for>"
     contradicting_evidence_found: "<what was found, or 'none'>"
+    evidence_links:  # optional — present only when valid URLs were captured
+      - type: "logs" | "baseline_logs" | "metrics" | "trace" | "deployment" | "source"
+        label: "<display text>"
+        url: "<https://...>"
   ruled_out:
     - hypothesis: "<alternative>"
       reason: "<disconfirming evidence>"
+      evidence_links:  # optional — present only when valid URLs were captured
+        - type: "..."
+          label: "..."
+          url: "..."
   evidence_coverage:
     logs: "complete" | "partial" | "unavailable"
     k8s_state: "complete" | "partial" | "unavailable"
@@ -844,6 +852,10 @@ investigation_summary:
       app_evidence: "<what was checked>"
       app_reason: "<why not assessed, if status != assessed>"
       mechanism_status: "known" | "not_yet_traced" | "not_applicable"
+      evidence_links:  # optional — present only when valid URLs were captured
+        - type: "..."
+          label: "..."
+          url: "..."
   root_cause_layer_coverage:
     infrastructure_status: "assessed" | "not_applicable" | "unavailable" | "not_captured"
     infrastructure_evidence: "<summary of what was checked for the root-cause service>"

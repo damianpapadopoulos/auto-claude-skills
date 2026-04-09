@@ -449,4 +449,27 @@ assert_contains "evidence-links ref: reuses postmortem permalink rules" \
 assert_contains "evidence-links ref: has label normalization rule" \
     "stable, human-readable" "${EVIDENCE_LINKS_REF_CONTENT}"
 
+# ---------------------------------------------------------------------------
+# SKILL.md — evidence_links YAML schema in investigation_summary
+# ---------------------------------------------------------------------------
+HYPOTHESIS_BLOCK=$(sed -n '/^  chosen_hypothesis:/,/^  ruled_out:/p' "${SKILL_FILE}")
+assert_contains "SKILL.md: evidence_links in chosen_hypothesis block" \
+    "evidence_links:" "${HYPOTHESIS_BLOCK}"
+
+INVESTIGATION_YAML=$(sed -n '/^investigation_summary:/,/^```$/p' "${SKILL_FILE}")
+assert_contains "SKILL.md: evidence_links item shape has type field" \
+    'type: "logs" | "baseline_logs" | "metrics" | "trace" | "deployment" | "source"' "${INVESTIGATION_YAML}"
+assert_contains "SKILL.md: evidence_links item shape has label field" \
+    'label: "<display text>"' "${INVESTIGATION_YAML}"
+assert_contains "SKILL.md: evidence_links item shape has url field" \
+    'url: "<https://...>"' "${INVESTIGATION_YAML}"
+
+RULED_OUT_BLOCK=$(sed -n '/^  ruled_out:/,/^  evidence_coverage:/p' "${SKILL_FILE}")
+assert_contains "SKILL.md: evidence_links in ruled_out block" \
+    "evidence_links:" "${RULED_OUT_BLOCK}"
+
+SEI_BLOCK=$(sed -n '/^  service_error_inventory:/,/^  root_cause_layer_coverage:/p' "${SKILL_FILE}")
+assert_contains "SKILL.md: evidence_links in service_error_inventory block" \
+    "evidence_links:" "${SEI_BLOCK}"
+
 print_summary
