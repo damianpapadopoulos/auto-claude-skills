@@ -435,4 +435,18 @@ assert_file_contains "SKILL.md: constraint 12 has deterministic priority rule" \
 assert_file_contains "SKILL.md: constraint 12 forbids placeholder URLs" \
     "Never emit placeholder.*reconstructed.*guessed" "${SKILL_FILE}"
 
+# ---------------------------------------------------------------------------
+# Reference file: evidence-links.md
+# ---------------------------------------------------------------------------
+EVIDENCE_LINKS_REF="${PROJECT_ROOT}/skills/incident-analysis/references/evidence-links.md"
+assert_file_exists "references/evidence-links.md exists" "${EVIDENCE_LINKS_REF}"
+
+EVIDENCE_LINKS_REF_CONTENT="$(cat "${EVIDENCE_LINKS_REF}")"
+assert_contains "evidence-links ref: has Logs Explorer URL pattern" \
+    "console.cloud.google.com/logs/query" "${EVIDENCE_LINKS_REF_CONTENT}"
+assert_contains "evidence-links ref: reuses postmortem permalink rules" \
+    "postmortem permalink" "${EVIDENCE_LINKS_REF_CONTENT}"
+assert_contains "evidence-links ref: has label normalization rule" \
+    "stable, human-readable" "${EVIDENCE_LINKS_REF_CONTENT}"
+
 print_summary
