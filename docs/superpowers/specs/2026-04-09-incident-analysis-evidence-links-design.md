@@ -205,15 +205,16 @@ Within the same type, prefer the link for the root-cause service over other serv
 8. `evidence_links` item shape has `type` field: `"type:.*logs.*baseline_logs"` in the investigation_summary YAML block
 9. `evidence_links` item shape has `label` field: `'label: "<display text>"'` in the investigation_summary YAML block
 10. `evidence_links` item shape has `url` field: `'url: "<https://...">'` in the investigation_summary YAML block
-11. `evidence_links` in `service_error_inventory` YAML block: extract the `service_error_inventory` block from SKILL.md and assert `"evidence_links:"` appears within it
-12. Reference file exists: `references/evidence-links.md`
-13. Reference file has Logs Explorer pattern: `"console.cloud.google.com/logs/query"` in reference file
-14. Reference file reuses postmortem rules: `"postmortem permalink"` in reference file
-15. Reference file has label normalization: `"stable.*human-readable"` in reference file
-16. Omission rule for missing parameters: `"Never emit placeholder.*reconstructed.*guessed"` in SKILL.md
-17. Step 7 has evidence links item: extract Step 7 block and assert `"Evidence links (Constraint 12)"` appears
-18. Step 7 evidence links mentions Links line: assert `"Links:"` appears in Step 7 block
-19. Step 7 evidence links has omission behavior: assert `"Omit the.*Links.*line entirely"` appears in Step 7 block
+11. `evidence_links` in `ruled_out` YAML block: extract the `ruled_out` block from SKILL.md and assert `"evidence_links:"` appears within it
+12. `evidence_links` in `service_error_inventory` YAML block: extract the `service_error_inventory` block from SKILL.md and assert `"evidence_links:"` appears within it
+13. Reference file exists: `references/evidence-links.md`
+14. Reference file has Logs Explorer pattern: `"console.cloud.google.com/logs/query"` in reference file
+15. Reference file reuses postmortem rules: `"postmortem permalink"` in reference file
+16. Reference file has label normalization: `"stable.*human-readable"` in reference file
+17. Omission rule for missing parameters: `"Never emit placeholder.*reconstructed.*guessed"` in SKILL.md
+18. Step 7 has evidence links item: extract Step 7 block and assert `"Evidence links (Constraint 12)"` appears
+19. Step 7 evidence links mentions Links line: assert `"Links:"` appears in Step 7 block
+20. Step 7 evidence links has omission behavior: assert `"Omit the.*Links.*line entirely"` appears in Step 7 block
 
 **Eval coverage** (`tests/test-incident-analysis-evals.sh`):
 
