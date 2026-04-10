@@ -226,6 +226,28 @@ evidence_links:
 
 URL construction templates and encoding rules: `references/evidence-links.md`.
 
+### 13. Parallel Execution Strategy — Batch Independent Queries
+
+When multiple independent queries are needed at the same investigation step, dispatch them in parallel rather than sequentially. Independence means the queries do not depend on each other's results to formulate the filter.
+
+**Mandatory parallel batches:**
+
+| Phase | What to batch | Why |
+|-------|---------------|-----|
+| Step 1 + Step 2 | Preflight + timezone detection + scope queries | No dependencies between them |
+| Step 2b + 2c | Inventory queries + impact quantification | Independent data sources |
+| Step 2d | Incident count + baseline count (per error signal) | Same query, different time window |
+| Step 3 (intermediary found) | All-container ERROR inventory + deployment history + auth layer errors + HTTP status distribution | Architecture discovery — each query is independent |
+| Step 3c (2+ services) | Per-service ERROR log queries (all services in one batch) | Same query template, different service filter |
+| Step 3c item 3+4 | Deployment history + runtime signal (per service, all in one batch) | Independent per-service queries |
+| Step 5 | Disconfirming query + per-service attribution queries | Independent verification checks |
+
+**Always pair incident + baseline:** Every count or rate query should have a parallel twin for the baseline period (same service, same error class, same time-of-day on a prior day). This adds zero wall-clock time (parallel) and prevents deep-diving into baseline signals (Step 2d gate).
+
+**When NOT to parallelize:** Queries that depend on a prior result to formulate the filter. For example, Step 4 (trace correlation) requires a trace_id from Step 3 exemplars — these must be sequential.
+
+**Anti-pattern this prevents:** Sequential single-service discovery through an intermediary, where each service is found and queried one at a time. In one investigation, 5 services were discovered over ~5 minutes of sequential queries that could have been a single parallel batch.
+
 ## Investigation Modes
 
 ### Default: Full Investigation
@@ -270,7 +292,22 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/obs-preflight.sh"
 Parse the JSON output to select the execution tier:
 
 **Tier 1 — MCP (`@google-cloud/observability-mcp`):**
-If you have access to `list_log_entries`, `search_traces`, `get_trace`, `list_time_series`, or `list_alert_policies` as MCP tools in this session, use Tier 1.
+If you have access to `list_log_entries`, `search_traces`, `get_trace`, `list_time_series`, or `list_alert_policies` as MCP tools in this session, **verify auth before classifying as Tier 1**. Make a lightweight probe call (e.g., `list_log_entries` with `pageSize=1` and a narrow 1-minute window) to confirm the tools return data rather than auth errors.
+
+**If the probe fails with an auth error** (`invalid_grant`, `invalid_rapt`, `UNAUTHENTICATED`, `token expired`):
+1. Report the specific error to the user
+2. **Immediately offer the fix** — do NOT silently fall back to Tier 2:
+
+   > "MCP Observability auth expired (`<error>`). Tier 1 provides metrics, traces, and error reporting that gcloud CLI cannot. Fix now with:
+   > ```
+   > ! gcloud auth application-default login
+   > ```
+   > This opens a browser for re-authentication. Proceed?"
+
+3. If the user re-authenticates, re-probe to confirm, then classify as Tier 1
+4. **Only fall back to Tier 2 if the user explicitly declines** (e.g., "skip it", "proceed without", "no time"). Record the declined fix in the access gate for `evidence_coverage`.
+
+**Why this matters:** Tier 2 (gcloud CLI) cannot do `list_time_series` (metrics), `get_trace` (trace correlation), or `list_group_stats` (error reporting). Silently falling back to Tier 2 creates investigation gaps that are expensive to discover later — especially for database metrics, which are often the missing piece in shared-resource incidents. The few seconds to re-authenticate are far cheaper than the gaps.
 
 **Tier 2 — gcloud CLI via Bash:**
 ```bash
@@ -293,24 +330,28 @@ After detecting the execution tier, present a tool access summary and prompt the
 
 ```
 Tool access:
-  MCP observability: available | unavailable
+  MCP observability: available | auth expired (fixable) | unavailable
   gcloud auth:       active (project X) | expired | not configured
   kubectl context:   available (context Y) | unavailable
   GitHub CLI (gh):   authenticated | not authenticated | not installed
 
 Investigation domains:
   Logs:              ✓ complete (Tier N) | ⚠ partial | ✗ unavailable
-  Metrics:           ✓ complete (Tier N) | ⚠ partial | ✗ unavailable
+  Metrics:           ✓ complete (Tier N) | ⚠ partial (Tier 2 — no list_time_series) | ✗ unavailable
   K8s state:         ✓ complete | ✗ unavailable
   Source analysis:    ✓ complete | skipped | ✗ unavailable
   Trace correlation: ✓ complete (Tier 1 only) | skipped | ✗ unavailable
 ```
 
-**If any fixable gap is detected**, present the fix command and ask:
+**MCP auth expired is always a fixable gap.** When the access gate shows `auth expired (fixable)`, the Metrics and Trace correlation domains will show degraded or unavailable. Present this prominently:
+
+> "⚠ MCP auth expired — Metrics (`list_time_series`), Traces (`get_trace`), and Error Reporting (`list_group_stats`) will be unavailable. Fix with `! gcloud auth application-default login`?"
+
+**If any other fixable gap is detected**, present the fix command and ask:
 
 > "⚠ [Domain] will be unavailable without [tool/auth]. Fix now, or proceed with degraded access?"
 
-Wait for the user to fix or explicitly proceed. Record the access state for the `evidence_coverage` block in Step 7.
+Wait for the user to fix or explicitly proceed. Record the access state — including whether a fix was offered and declined — for the `evidence_coverage` block in Step 7.
 
 ### Step 2: Establish Scope
 
@@ -345,6 +386,24 @@ Before diving into root cause, establish the impact magnitude from available sou
 - **If neither is available:** state "user-facing impact not quantified" and proceed. Do not estimate.
 
 This frames severity before the deep dive — a 1,100-error incident gets different treatment than a 5-error incident.
+
+### Step 2d: Baseline-First Gate — Skip Baseline Signals Early
+
+Before deep-diving into any error signal, compare its count against a baseline from a non-incident period (same service, same error class, same time-of-day window on a prior day — preferably the same weekday).
+
+**Decision rule:**
+- **count_incident < 1.5 × count_baseline** → Classify as Tier 3 (baseline). Do NOT deep-dive. Record in the synthesis as `"baseline — skipped (N incident vs M baseline)"` and move on.
+- **1.5× ≤ count_incident < 10× count_baseline** → Elevated. Proceed with investigation but note the baseline for context.
+- **count_incident ≥ 10× count_baseline** → Anomalous spike. Prioritize for immediate deep-dive.
+- **count_baseline = 0 and count_incident > 0** → New error class. Always investigate.
+
+**When to apply:** This gate applies at two points:
+1. **Step 3 (initial error query)** — before selecting which error signals to pursue in Steps 3b/4
+2. **Step 3c (multi-service sweep)** — before deep-diving into any service's errors (item 2 in the procedure)
+
+**Why this matters:** Without this gate, the investigation will deep-dive into every error signal regardless of whether it's normal. In one investigation, ~4 query round-trips were spent investigating 403 errors that turned out to be at baseline rate (4,948 vs 5,000) — time wasted that could have been spent on the actual anomaly (JDBC errors: 500 vs 0 baseline).
+
+**Implementation:** Query the incident count and baseline count **in parallel** (two queries in the same batch). Compute the ratio before proceeding. This adds one query round-trip but saves many by eliminating baseline signals early.
 
 ### Step 3: Query Error Rate / Recent Errors
 
@@ -486,6 +545,30 @@ After all probes complete, feed results back to CLASSIFY for reclassification.
 - Error grouping (frequency, first/last occurrence)
 - Recent deployment correlation (deploy timestamp vs. error spike?)
 - Resource metrics (CPU, memory, latency) if available
+- **Database/connection-pool metrics (conditional — when JDBC or connection errors are present):**
+
+  When the service shows `JDBCConnectionException`, `acquisition timeout`, `pool exhausted`, `ConnectionRefused` to a database, or Cloud SQL proxy errors, **query the database's own metrics before attributing the issue to database capacity**. This is mandatory — do not conclude "database under pressure" or "connection starvation" from application-side errors alone.
+
+  **Required queries (incident window + baseline, in parallel per Constraint 13):**
+
+  | Metric | Tier 1 (`list_time_series`) | Tier 2 (REST API via `curl` + `gcloud auth print-access-token`) |
+  |--------|----------------------------|----------------------------------------------------------------|
+  | Connection count | `cloudsql.googleapis.com/database/network/connections` | Same metric via Monitoring REST API |
+  | CPU utilization | `cloudsql.googleapis.com/database/cpu/utilization` | Same metric via Monitoring REST API |
+  | Query rate | `cloudsql.googleapis.com/database/mysql/questions` (MySQL) or `cloudsql.googleapis.com/database/postgresql/transaction_count` (PostgreSQL) | Same metric via Monitoring REST API |
+
+  **Decision branch:**
+
+  | DB metrics vs baseline | Diagnosis | Investigation route |
+  |------------------------|-----------|-------------------|
+  | Connections, CPU, query rate all **normal** (within 1.5x baseline) | **App-side pool exhaustion** — connections held too long, not too many | Investigate application: slow queries holding connections, transaction scope changes, connection leak, pool sizing (max size, timeout, leak detection). Check deployment history for code changes affecting connection lifecycle. |
+  | Connections **elevated** (approaching or at `max_connections`) | **Database-level exhaustion** — too many consumers | Investigate database: `max_connections` setting, per-service pool sizing, total connection demand across all consumers. Consider connection isolation (dedicated instances for critical services like auth). |
+  | CPU **elevated** (>80%) or query rate **spiked** | **Database under load** — slow queries or query volume | Investigate database: slow query log, query plan regressions, lock contention. Check for new query patterns from recent deployments. |
+
+  Rows are not mutually exclusive. When multiple conditions are present (e.g., connections elevated AND CPU spiked), combine diagnoses: the database is both oversubscribed and overloaded.
+
+  **Anti-pattern this prevents:** Concluding "shared database starvation" from application-side JDBC errors when the database itself is healthy. In one investigation, this led to incorrect action items ("isolate Keycloak DB") that were revised after Cloud SQL metrics showed normal connection count, CPU, and query rate — the issue was app-side pool exhaustion (connections held too long under normal DB load).
+
 - **Application-logic analysis (for the dominant error path):**
   - **Call pattern detection:** From stack traces in Step 2 exemplars, determine whether the failing code path makes sequential (N+1) calls to the degraded dependency. A loop calling `checkPermission()` per item is N+1; a single `batchCheck()` call is not. If N+1 is detected, note the amplification factor (items per request x latency per call = total request latency).
   - **Retry/amplification analysis:** Check whether the calling code retries failed requests. If a 3-second timeout triggers a retry, each retry adds 3 more seconds of dependency pressure. Look for retry configuration in the stack trace's framework (e.g., Camel redelivery, Spring Retry, gRPC retry policy).
@@ -553,6 +636,16 @@ If a `node-resource-exhaustion` playbook is available, transition to CLASSIFY fo
 
 **Gate:** This step is mandatory when the error chain involves 2 or more services — whether discovered through an intermediary layer (Constraint 9), trace correlation (Step 4), shared-resource escalation (Step 3), or proxy error logs. Skip only for confirmed single-service incidents with no cross-service error signals.
 
+**Parallel sweep pattern (Constraint 13):** When the error chain involves 3+ services (typically discovered through an intermediary layer), dispatch the per-service queries in parallel rather than sequentially (for 2 services, sequential execution is acceptable). Specifically:
+
+1. **Architecture discovery batch (one parallel round):** Query all containers in the namespace with ERROR logs grouped by container name + deployment history for the 72h window + auth/identity service errors. This reveals the full service landscape and recent changes in a single round-trip instead of discovering services one at a time.
+
+2. **Per-service sweep batch (one parallel round):** For each service identified in the architecture discovery, dispatch items 1-3 of the procedure below (ERROR logs + error classification + deployment history) as parallel queries. Each query is independent — they target different services with the same query template.
+
+3. **Baseline comparison batch (one parallel round):** For each service's error count from the sweep, query the baseline count from a prior day in parallel. Feed results into the Step 2d baseline-first gate to skip baseline signals before deep-diving.
+
+This pattern collapses an N-service sequential sweep (N round-trips) into 3 parallel rounds regardless of N. The procedure below describes what to query per service; this pattern describes how to batch the execution.
+
 **Procedure:** For each service in the error chain not yet deeply investigated:
 
 1. **Query the service's own ERROR logs** in the incident time window (not the calling service's logs or the intermediary's access logs — the service's own container stderr/stdout). Use page_size <= 10 initially. If results are too large, extract error message summaries via Tier 2 gcloud (`--format="csv[no-heading](jsonPayload.message)" | sort | uniq -c | sort -rn`).
@@ -560,7 +653,7 @@ If a `node-resource-exhaustion` playbook is available, transition to CLASSIFY fo
 2. **Classify errors** using the Step 2 taxonomy. Prioritize:
    - **Tier 1 anomalous errors in non-obvious services** — an application-specific exception (parsing, template, schema) in a small service is more diagnostic than a generic timeout in a large one
    - **Message broker delivery failures** — trace to the consumer's own exception (see Step 2 message broker rule)
-   - **Connection pool exhaustion** (`JDBCConnectionException`, `Acquisition timeout`, `pool exhausted`) — indicates this service is an epicenter, not just a victim
+   - **Connection pool exhaustion** (`JDBCConnectionException`, `Acquisition timeout`, `pool exhausted`) — indicates this service is an epicenter, not just a victim. **When found, trigger the database metrics gate (Step 3) for this service's backing database before proceeding.** The gate determines whether the exhaustion is app-side (connections held too long — normal DB metrics) or database-level (DB at capacity — elevated DB metrics). Record `pool_exhaustion_type: "app-side" | "database-level" | "not_determined"` in the service inventory. Different types require different action items: app-side → investigate application connection lifecycle; database-level → investigate DB capacity and connection isolation.
 
 3. **Check the 72-hour deployment history** for each service. A deployment to **any** service in the error chain is a candidate trigger — not just the service initially suspected.
 
@@ -854,6 +947,7 @@ investigation_summary:
       app_evidence: "<what was checked>"
       app_reason: "<why not assessed, if status != assessed>"
       mechanism_status: "known" | "not_yet_traced" | "not_applicable"
+      pool_exhaustion_type: "app-side" | "database-level" | "not_determined"  # conditional — when connection pool exhaustion detected
       evidence_links:  # optional — present only when valid URLs were captured
         - type: "..."
           label: "..."
