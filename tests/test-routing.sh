@@ -467,6 +467,68 @@ install_registry_with_incident_trend() {
     }]' "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
 }
 
+# Helper: install registry extended with Wave 1 skills
+install_registry_with_wave1() {
+    install_registry
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    local tmp_file
+    tmp_file="$(mktemp)"
+    jq '.skills += [
+      {
+        "name": "writing-skills",
+        "role": "domain",
+        "phase": "DESIGN",
+        "triggers": ["(skill|write.*skill|create.*skill|edit.*skill|new.*skill|skill.*(file|md|template|format))"],
+        "trigger_mode": "regex",
+        "priority": 15,
+        "precedes": [],
+        "requires": [],
+        "invoke": "Skill(superpowers:writing-skills)",
+        "available": true,
+        "enabled": true
+      },
+      {
+        "name": "starter-template",
+        "role": "domain",
+        "phase": "DESIGN",
+        "triggers": ["(new.?skill|new.?plugin|new.?command|scaffold|skeleton|template|boilerplate)"],
+        "trigger_mode": "regex",
+        "priority": 16,
+        "precedes": [],
+        "requires": [],
+        "invoke": "Skill(auto-claude-skills:starter-template)",
+        "available": true,
+        "enabled": true
+      },
+      {
+        "name": "prototype-lab",
+        "role": "domain",
+        "phase": "DESIGN",
+        "triggers": ["(prototype|compare.?options|build.?variants|which.?approach|try.?both|try.?all|side.by.side)"],
+        "trigger_mode": "regex",
+        "priority": 15,
+        "precedes": [],
+        "requires": [],
+        "invoke": "Skill(auto-claude-skills:prototype-lab)",
+        "available": true,
+        "enabled": true
+      },
+      {
+        "name": "agent-safety-review",
+        "role": "domain",
+        "phase": "DESIGN",
+        "triggers": ["(autonomous.?loop|ralph.?loop|overnight|unattended|background.?agent|browser.?agent|email.?agent|inbox.?agent|yolo|skip.?permission|dangerously|permissionless|auto.?reply|auto.?respond|send.on.behalf)"],
+        "trigger_mode": "regex",
+        "priority": 17,
+        "precedes": [],
+        "requires": [],
+        "invoke": "Skill(auto-claude-skills:agent-safety-review)",
+        "available": true,
+        "enabled": true
+      }
+    ]' "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
+}
+
 # Helper: install a v4 skill registry cache with plugins and phase_compositions
 install_registry_v4() {
     local cache_file="${HOME}/.claude/.skill-registry-cache.json"
@@ -4652,6 +4714,88 @@ test_incident_analysis_triggers_on_volume_mount_failure
 test_incident_analysis_cofires_with_debugging
 test_investigate_command_routing
 test_slo_burn_rate_routes_to_incident_analysis
+
+# ---------------------------------------------------------------------------
+# Wave 1: starter-template triggers on "new skill" prompt
+# ---------------------------------------------------------------------------
+test_starter_template_triggers() {
+    echo "-- test: starter-template triggers on new skill prompt --"
+    setup_test_env
+    install_registry_with_wave1
+
+    local output
+    output="$(run_hook "create a new skill for database migrations")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "starter-template fires on new skill" "starter-template" "${context}"
+    assert_contains "brainstorming is still process skill" "brainstorming" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# Wave 1: prototype-lab triggers on "compare options" prompt
+# ---------------------------------------------------------------------------
+test_prototype_lab_triggers() {
+    echo "-- test: prototype-lab triggers on compare options prompt --"
+    setup_test_env
+    install_registry_with_wave1
+
+    local output
+    output="$(run_hook "let's prototype and compare options for the caching layer")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "prototype-lab fires on compare options" "prototype-lab" "${context}"
+    assert_contains "brainstorming is still process skill" "brainstorming" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# Wave 1: agent-safety-review triggers on autonomous loop prompt
+# ---------------------------------------------------------------------------
+test_agent_safety_review_triggers() {
+    echo "-- test: agent-safety-review triggers on autonomous loop prompt --"
+    setup_test_env
+    install_registry_with_wave1
+
+    local output
+    output="$(run_hook "set up an autonomous loop to process incoming emails overnight")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "agent-safety-review fires on autonomous loop" "agent-safety-review" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# Wave 1: driver invariants — new skills do not displace process drivers
+# ---------------------------------------------------------------------------
+test_wave1_driver_invariants() {
+    echo "-- test: Wave 1 skills do not displace process drivers --"
+    setup_test_env
+    install_registry_with_wave1
+
+    # DESIGN driver must remain brainstorming, not prototype-lab or agent-safety-review
+    local output
+    output="$(run_hook "build a new autonomous email agent skill")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "brainstorming remains DESIGN process" "Process: brainstorming" "${context}"
+    assert_not_contains "prototype-lab is not process" "Process: prototype-lab" "${context}"
+    assert_not_contains "agent-safety-review is not process" "Process: agent-safety-review" "${context}"
+
+    teardown_test_env
+}
+
+test_starter_template_triggers
+test_prototype_lab_triggers
+test_agent_safety_review_triggers
+test_wave1_driver_invariants
 
 # ---------------------------------------------------------------------------
 # Routing eval fixtures — incident-analysis trigger/no-trigger cases
