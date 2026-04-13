@@ -22,7 +22,7 @@
       "requires": [],
       "description": "Structured debugging: reproduce, hypothesise, isolate, fix, verify. Returns to the current phase after resolution.",
       "invoke": "Skill(superpowers:systematic-debugging)",
-      "available": false,
+      "available": true,
       "enabled": true
     },
     {
@@ -48,7 +48,7 @@
       "requires": [],
       "description": "Ask clarifying questions, explore options, and get user approval before planning. Activated for Build intents.",
       "invoke": "Skill(superpowers:brainstorming)",
-      "available": false,
+      "available": true,
       "enabled": true
     },
     {
@@ -94,7 +94,7 @@
       ],
       "description": "Break work into discrete tasks and confirm the plan with the user before execution begins.",
       "invoke": "Skill(superpowers:writing-plans)",
-      "available": false,
+      "available": true,
       "enabled": true
     },
     {
@@ -115,7 +115,7 @@
       ],
       "description": "Step-by-step execution of an approved plan. REQUIRED: set up git worktree first. If subagents available, use subagent-driven-development instead. Invoke finishing-a-development-branch after all tasks complete.",
       "invoke": "Skill(superpowers:executing-plans)",
-      "available": false,
+      "available": true,
       "enabled": true
     },
     {
@@ -130,7 +130,7 @@
       "requires": [],
       "description": "Fresh subagent per task with two-stage review (spec compliance then code quality). Preferred over executing-plans when subagents are available.",
       "invoke": "Skill(superpowers:subagent-driven-development)",
-      "available": false,
+      "available": true,
       "enabled": true
     },
     {
@@ -151,7 +151,7 @@
       ],
       "description": "Dispatch superpowers:code-reviewer subagent with git diff range and plan reference. Fix critical/important issues before proceeding.",
       "invoke": "Skill(superpowers:requesting-code-review)",
-      "available": false,
+      "available": true,
       "enabled": true
     },
     {
@@ -168,7 +168,7 @@
       "requires": [],
       "description": "Process review feedback with technical rigor: verify claims against codebase, push back if wrong, implement fixes one at a time.",
       "invoke": "Skill(superpowers:receiving-code-review)",
-      "available": false,
+      "available": true,
       "enabled": true
     },
     {
@@ -189,7 +189,7 @@
       ],
       "description": "Final verification checklist before shipping: tests pass, lint clean, no TODOs, docs updated.",
       "invoke": "Skill(superpowers:verification-before-completion)",
-      "available": false,
+      "available": true,
       "enabled": true
     },
     {
@@ -206,7 +206,7 @@
       ],
       "description": "Verify tests pass, present 4 options (merge local, create PR, keep branch, discard), execute chosen workflow, clean up worktree.",
       "invoke": "Skill(superpowers:finishing-a-development-branch)",
-      "available": false,
+      "available": true,
       "enabled": true
     },
     {
@@ -244,7 +244,7 @@
       "requires": [],
       "description": "Fan out independent tasks to parallel sub-agents and collect results.",
       "invoke": "Skill(superpowers:dispatching-parallel-agents)",
-      "available": false,
+      "available": true,
       "enabled": true
     },
     {
@@ -261,7 +261,7 @@
       "requires": [],
       "description": "Use git worktrees for parallel branch work. Trigger-gated required: activates when parallel/isolation keywords match.",
       "invoke": "Skill(superpowers:using-git-worktrees)",
-      "available": false,
+      "available": true,
       "enabled": true
     },
     {
@@ -278,7 +278,7 @@
       "requires": [],
       "description": "Author and maintain Claude Code skill files (SKILL.md). Meta-overlay for Claude tooling prompts.",
       "invoke": "Skill(superpowers:writing-skills)",
-      "available": false,
+      "available": true,
       "enabled": true
     },
     {
@@ -312,7 +312,7 @@
       "requires": [],
       "description": "Web application testing: browser automation, accessibility checks, visual regression, and E2E flows.",
       "invoke": "Skill(webapp-testing)",
-      "available": false,
+      "available": true,
       "enabled": true
     },
     {
@@ -329,7 +329,7 @@
       "requires": [],
       "description": "Co-author technical documents: proposals, specs, RFCs, and architecture docs.",
       "invoke": "Skill(doc-coauthoring)",
-      "available": false,
+      "available": true,
       "enabled": true
     },
     {
@@ -346,7 +346,7 @@
       "requires": [],
       "description": "Recommend Claude Code automation setups: hooks, MCP servers, plugins, and workflow optimisations.",
       "invoke": "Skill(claude-code-setup:claude-automation-recommender)",
-      "available": false,
+      "available": true,
       "enabled": true
     },
     {
@@ -363,7 +363,7 @@
       "requires": [],
       "description": "Improve CLAUDE.md project files: structure, clarity, and completeness of project instructions.",
       "invoke": "Skill(claude-md-management:claude-md-improver)",
-      "available": false,
+      "available": true,
       "enabled": true
     },
     {
@@ -603,7 +603,7 @@
       "requires": [],
       "description": "Emit repo-native seed files (SKILL.md skeleton, routing entry, test snippets) when creating new skills, commands, or plugins.",
       "invoke": "Skill(auto-claude-skills:starter-template)",
-      "available": false,
+      "available": true,
       "enabled": true
     },
     {
@@ -627,7 +627,7 @@
       "requires": [],
       "description": "Produce 3 thin comparable variants of a proposed design with a comparison artifact and mandatory Human Validation Plan.",
       "invoke": "Skill(auto-claude-skills:prototype-lab)",
-      "available": false,
+      "available": true,
       "enabled": true
     },
     {
@@ -653,7 +653,35 @@
       "requires": [],
       "description": "Evaluate designs involving autonomous agents for the lethal trifecta: private data + untrusted input + outbound action. Requires blast-radius mitigation, not better filtering.",
       "invoke": "Skill(auto-claude-skills:agent-safety-review)",
-      "available": false,
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "test-driven-development",
+      "role": "domain",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 200,
+      "phase": "",
+      "precedes": [],
+      "requires": [],
+      "description": "Discovered skill",
+      "invoke": "Skill(superpowers:test-driven-development)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "using-superpowers",
+      "role": "domain",
+      "triggers": [],
+      "trigger_mode": "regex",
+      "priority": 200,
+      "phase": "",
+      "precedes": [],
+      "requires": [],
+      "description": "Discovered skill",
+      "invoke": "Skill(superpowers:using-superpowers)",
+      "available": true,
       "enabled": true
     }
   ],
@@ -675,7 +703,7 @@
         "SHIP"
       ],
       "description": "Structured commit workflows and branch-to-PR automation",
-      "available": false
+      "available": true
     },
     {
       "name": "security-guidance",
@@ -692,7 +720,7 @@
         "*"
       ],
       "description": "Write-time security blocker for XSS, injection, unsafe deserialization",
-      "available": false
+      "available": true
     },
     {
       "name": "hookify",
@@ -715,7 +743,7 @@
         "DESIGN"
       ],
       "description": "Custom rule authoring for Claude behavior guards",
-      "available": false
+      "available": true
     },
     {
       "name": "feature-dev",
@@ -738,7 +766,7 @@
         "REVIEW"
       ],
       "description": "Full feature pipeline with parallel exploration and architecture agents",
-      "available": false
+      "available": true
     },
     {
       "name": "skill-creator",
@@ -760,7 +788,7 @@
         "DESIGN"
       ],
       "description": "Skill eval/improvement loop with benchmarking",
-      "available": false
+      "available": true
     },
     {
       "name": "context7",
@@ -781,7 +809,7 @@
         "DEBUG"
       ],
       "description": "Up-to-date library documentation via Context7 MCP. Resolves library IDs and fetches current docs, API references, and examples.",
-      "available": false
+      "available": true
     },
     {
       "name": "github",
@@ -808,7 +836,7 @@
         "SHIP"
       ],
       "description": "GitHub MCP for repository management. Create/review PRs, manage issues, search repos, and interact with GitHub APIs programmatically.",
-      "available": false
+      "available": true
     },
     {
       "name": "atlassian",
@@ -859,7 +887,7 @@
         "REVIEW",
         "SHIP"
       ],
-      "description": "Persistent cross-session memory via Forgetful Memory MCP — stores and retrieves architectural decisions, conventions, and workarounds",
+      "description": "Persistent cross-session memory via Forgetful Memory MCP \u2014 stores and retrieves architectural decisions, conventions, and workarounds",
       "available": false
     },
     {
@@ -880,7 +908,7 @@
         "REVIEW",
         "SHIP"
       ],
-      "description": "Tiered context retrieval — curated docs (Context Hub via Context7), blast-radius mapping (Serena), institutional memory (Forgetful) with graceful degradation.",
+      "description": "Tiered context retrieval \u2014 curated docs (Context Hub via Context7), blast-radius mapping (Serena), institutional memory (Forgetful) with graceful degradation.",
       "available": true
     },
     {
@@ -907,14 +935,161 @@
       ],
       "description": "PostHog analytics, experiments, and feature flags via MCP. Query adoption metrics, experiment results, and error rates.",
       "available": false
+    },
+    {
+      "name": "claude-code-setup",
+      "source": "auto-discovered",
+      "provides": {
+        "commands": [],
+        "skills": [
+          "claude-automation-recommender"
+        ],
+        "agents": [],
+        "hooks": []
+      },
+      "phase_fit": [
+        "*"
+      ],
+      "description": "Auto-discovered plugin",
+      "available": true
+    },
+    {
+      "name": "claude-md-management",
+      "source": "auto-discovered",
+      "provides": {
+        "commands": [
+          "/revise-claude-md"
+        ],
+        "skills": [
+          "claude-md-improver"
+        ],
+        "agents": [],
+        "hooks": []
+      },
+      "phase_fit": [
+        "*"
+      ],
+      "description": "Auto-discovered plugin",
+      "available": true
+    },
+    {
+      "name": "frontend-design",
+      "source": "auto-discovered",
+      "provides": {
+        "commands": [],
+        "skills": [
+          "frontend-design"
+        ],
+        "agents": [],
+        "hooks": []
+      },
+      "phase_fit": [
+        "*"
+      ],
+      "description": "Auto-discovered plugin",
+      "available": true
+    },
+    {
+      "name": "pr-review-toolkit",
+      "source": "auto-discovered",
+      "provides": {
+        "commands": [
+          "/review-pr"
+        ],
+        "skills": [],
+        "agents": [
+          "code-reviewer",
+          "code-simplifier",
+          "comment-analyzer",
+          "pr-test-analyzer",
+          "silent-failure-hunter",
+          "type-design-analyzer"
+        ],
+        "hooks": []
+      },
+      "phase_fit": [
+        "*"
+      ],
+      "description": "Auto-discovered plugin",
+      "available": true
+    },
+    {
+      "name": "ralph-loop",
+      "source": "auto-discovered",
+      "provides": {
+        "commands": [
+          "/cancel-ralph",
+          "/help",
+          "/ralph-loop"
+        ],
+        "skills": [],
+        "agents": [],
+        "hooks": []
+      },
+      "phase_fit": [
+        "*"
+      ],
+      "description": "Auto-discovered plugin",
+      "available": true
+    },
+    {
+      "name": "superpowers",
+      "source": "auto-discovered",
+      "provides": {
+        "commands": [
+          "/brainstorm",
+          "/execute-plan",
+          "/write-plan"
+        ],
+        "skills": [
+          "brainstorming",
+          "dispatching-parallel-agents",
+          "executing-plans",
+          "finishing-a-development-branch",
+          "receiving-code-review",
+          "requesting-code-review",
+          "subagent-driven-development",
+          "systematic-debugging",
+          "test-driven-development",
+          "using-git-worktrees",
+          "using-superpowers",
+          "verification-before-completion",
+          "writing-plans",
+          "writing-skills"
+        ],
+        "agents": [
+          "code-reviewer"
+        ],
+        "hooks": []
+      },
+      "phase_fit": [
+        "*"
+      ],
+      "description": "Auto-discovered plugin",
+      "available": true
+    },
+    {
+      "name": "typescript-lsp",
+      "source": "auto-discovered",
+      "provides": {
+        "commands": [],
+        "skills": [],
+        "agents": [],
+        "hooks": []
+      },
+      "phase_fit": [
+        "*"
+      ],
+      "description": "Auto-discovered plugin",
+      "available": true
     }
   ],
   "context_capabilities": {
-    "context7": false,
+    "context7": true,
     "context_hub_cli": true,
-    "context_hub_available": false,
-    "serena": false,
-    "forgetful_memory": false,
+    "context_hub_available": true,
+    "serena": true,
+    "forgetful_memory": true,
     "openspec": true,
     "posthog": false
   },
@@ -1141,7 +1316,7 @@
       ],
       "hints": [
         {
-          "text": "DEBUG ESCALATION: If the fix touches multiple files, changes behavior, or affects a public API, enter REVIEW → SHIP after debugging. Use Skill(superpowers:requesting-code-review) to transition."
+          "text": "DEBUG ESCALATION: If the fix touches multiple files, changes behavior, or affects a public API, enter REVIEW \u2192 SHIP after debugging. Use Skill(superpowers:requesting-code-review) to transition."
         }
       ]
     },
@@ -1362,7 +1537,7 @@
         "(fix|change|update|rename|move|add a|modify|edit|refactor|implement|write the|create the)"
       ],
       "trigger_mode": "regex",
-      "hint": "PHASE ENFORCEMENT: You are in DESIGN/PLAN phase. Complete the current phase skill before editing implementation files. Small changes still require the full flow — scaled down, not skipped.",
+      "hint": "PHASE ENFORCEMENT: You are in DESIGN/PLAN phase. Complete the current phase skill before editing implementation files. Small changes still require the full flow \u2014 scaled down, not skipped.",
       "phases": [
         "DESIGN",
         "PLAN"
