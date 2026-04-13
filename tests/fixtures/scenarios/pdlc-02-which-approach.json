@@ -1,0 +1,7 @@
+{
+  "name": "pdlc-02-which-approach",
+  "prompt": "which approach should we try for the rate limiting middleware - lets build variants",
+  "expected_skills": ["prototype-lab"],
+  "expected_phase": "DESIGN",
+  "must_not_match": []
+}

@@ -1,0 +1,7 @@
+{
+  "name": "invariant-10-design-driver",
+  "prompt": "design a new notification system with prototypes",
+  "expected_skills": ["prototype-lab"],
+  "expected_phase": "DESIGN",
+  "must_not_match": ["Process: prototype-lab", "Process: starter-template", "Process: agent-safety-review"]
+}

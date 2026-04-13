@@ -1,0 +1,7 @@
+{
+  "name": "guardrail-07-ship-phase",
+  "prompt": "document what we built and archive the openspec before shipping",
+  "expected_skills": ["openspec-ship"],
+  "expected_phase": "SHIP",
+  "must_not_match": []
+}

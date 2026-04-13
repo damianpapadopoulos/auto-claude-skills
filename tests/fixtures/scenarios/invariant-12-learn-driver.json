@@ -1,0 +1,7 @@
+{
+  "name": "invariant-12-learn-driver",
+  "prompt": "review the alert hygiene report and tune thresholds",
+  "expected_skills": ["alert-hygiene"],
+  "expected_phase": "LEARN",
+  "must_not_match": ["Process: prototype-lab", "Process: starter-template", "Process: agent-safety-review"]
+}

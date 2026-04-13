@@ -1,0 +1,8 @@
+{
+  "name": "guardrail-08-composition-chain",
+  "prompt": "finalize and ship the openspec documentation",
+  "expected_skills": ["openspec-ship"],
+  "expected_phase": "SHIP",
+  "expected_in_composition": ["requesting-code-review"],
+  "must_not_match": []
+}
