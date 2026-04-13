@@ -4772,6 +4772,24 @@ test_agent_safety_review_triggers() {
 }
 
 # ---------------------------------------------------------------------------
+# Wave 1: agent-safety-review fires on YOLO prompt
+# ---------------------------------------------------------------------------
+test_agent_safety_review_yolo() {
+    echo "-- test: agent-safety-review fires on YOLO prompt --"
+    setup_test_env
+    install_registry_with_wave1
+
+    local output
+    output="$(run_hook "run this in YOLO mode with skip permissions")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "agent-safety-review fires on YOLO" "agent-safety-review" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # Wave 1: driver invariants — new skills do not displace process drivers
 # ---------------------------------------------------------------------------
 test_wave1_driver_invariants() {
@@ -4835,6 +4853,7 @@ test_starter_template_content_contract() {
 test_starter_template_triggers
 test_prototype_lab_triggers
 test_agent_safety_review_triggers
+test_agent_safety_review_yolo
 test_wave1_driver_invariants
 test_prototype_lab_does_not_displace_brainstorming
 test_starter_template_content_contract
