@@ -135,21 +135,9 @@ Note: This constraint applies to on-disk `tool-results/` files written by the Cl
 
 ### 9. Intermediary-Layer Investigation Discipline
 
-When the symptomatic entry point is an intermediary — reverse proxy, API gateway, service mesh sidecar, message broker, or load balancer — errors observed at that layer may originate from **any** downstream service it routes to. The intermediary's own errors (timeouts, connection resets, 5xx) describe **where** the system broke but not **why**.
-
-**Mandatory sweep:** Before forming a root cause hypothesis (Step 5), identify and query every distinct downstream service that appears in the intermediary's error logs. Discovery sources:
-- Intermediary stderr/error logs: upstream host names in timeout or connection errors
-- Intermediary access logs: distinct URL path prefixes returning 4xx/5xx that route to different backends
-- Intermediary configuration or routing rules (if accessible)
-
-For each downstream service discovered:
-1. Query its **own container logs** (severity>=ERROR) in the incident time window — the intermediary's view of the service is not sufficient
-2. Check its **deployment history** in the 72-hour window before the incident
-3. Classify its errors using the Step 2 taxonomy and record in the Step 7 synthesis
+When the symptomatic entry point is an intermediary — reverse proxy, API gateway, service mesh sidecar, message broker, or load balancer — errors observed at that layer describe **where** the system broke but not **why**. Before forming a root cause hypothesis (Step 5), identify and query every distinct downstream service that appears in the intermediary's error logs.
 
 **Scope boundary:** This sweep is bounded to services explicitly named in the intermediary's error output. It does not authorize cluster-wide searches.
-
-**Anti-pattern this prevents:** Anchoring on the most familiar or largest downstream service while the actual root cause is a smaller service whose failures were visible in the intermediary's logs but never independently queried.
 
 Step 3c codifies this sweep as a structured procedure with inventory output.
 
@@ -184,47 +172,13 @@ Any intermediate conclusion that will be used in the causal narrative must be ex
 
 ### 12. Evidence Links
 
-For each of the three claim surfaces in the Step 7 synthesis — the chosen root-cause statement, each ruled-out hypothesis, and each `service_error_inventory` entry — include clickable verification links when the required URL parameters were captured at query time. This constraint is active across Steps 2-7.
+For each claim surface in the Step 7 synthesis — chosen root-cause statement, each ruled-out hypothesis, and each `service_error_inventory` entry — include clickable verification links when URL parameters were captured at query time. This constraint is active across Steps 2-7.
 
-**Allowed link types:**
+**Caps:** max 3 links per root cause, max 2 per ruled-out, max 3 per inventory entry. Omit when URL parameters are unrecoverable. Never emit placeholder, reconstructed, or guessed URLs.
 
-| Type | Label pattern | When |
-|------|--------------|------|
-| `logs` | "{Service} incident logs" | LQL query during Steps 2, 3, 3c |
-| `baseline_logs` | "{Service} baseline logs" | Baseline comparison supporting a claim (Step 3c tier classification, Step 5 recurring-workload check) |
-| `metrics` | "{Service} {metric_name}" | `list_time_series` or Metrics Explorer data supporting a claim (Steps 2c, 3, 5) |
-| `trace` | "Trace {first_8_chars}" | Step 4 trace correlation in the evidence chain |
-| `deployment` | "{Service} deploy history" | Deployment correlation (Steps 3, 3c) |
-| `source` | "Commit {first_7_chars}" or "{file_name}" | Step 4b source analysis candidate |
+**Capture rule:** Record link inputs (project_id, LQL filter, time window, trace_id, commit SHA, metric_type) at query time. Retroactive construction is permitted only when exact original query parameters are visible verbatim in the conversation — never from prose summaries or inferred values.
 
-**Where links appear:**
-- **Prose synthesis (Step 7):** One `**Links:** [label](url) · [label](url)` line after each root cause statement (max 3 links) and each ruled-out hypothesis (max 2 links). Separator ` · `.
-- **YAML schema:** `evidence_links` arrays on `chosen_hypothesis` (max 3 links), each `ruled_out` entry (max 2 links), and each `service_error_inventory` entry (max 3 links).
-
-**YAML item shape:**
-```yaml
-evidence_links:
-  - type: "logs" | "baseline_logs" | "metrics" | "trace" | "deployment" | "source"
-    label: "<display text>"
-    url: "<https://...>"
-```
-
-**Priority rule (when valid candidates exceed the cap):** Select links in this order: `logs` > `baseline_logs` > `trace` > `deployment` > `metrics` > `source`. Within the same type, prefer the root-cause service. This order is deterministic.
-
-**Omission rules:**
-- If the required parameters to build a trustworthy URL are missing, omit the link and describe the evidence source in prose. Never emit placeholder, reconstructed, or guessed URLs.
-- If a constructed URL would open a generic landing page (losing its filter or time range), omit it.
-- Omit the `evidence_links` field entirely when no valid URL was captured for that block. Do not emit empty arrays.
-
-**Where links do NOT appear:** timeline entries, completeness gate answers, `tested_intermediate_conclusions`, `root_cause_layer_coverage`, `service_attribution`.
-
-**Capture rule:** Record link inputs (project_id, LQL filter, time window, trace_id, commit SHA, metric_type, metric filter) at query time. Do not reconstruct URLs retroactively from prose summaries — parameters may be lost.
-
-**Exclusion:** kubectl commands and MCP tool invocations are not evidence links. Only clickable URLs that open a verification view in a browser.
-
-**Label normalization:** Use stable, human-readable labels: `{Service} incident logs`, `{Service} baseline logs`, `{Service} {metric_name}`, `Trace {first_8_chars}`, `{Service} deploy history`, `Commit {first_7_chars}`. Labels must not contain raw LQL, full SHAs, or URL fragments.
-
-URL construction templates and encoding rules: `references/evidence-links.md`.
+Full specification — link types, YAML shape, priority rule, omission rules, label normalization, URL templates: `references/evidence-links.md`.
 
 ### 13. Parallel Execution Strategy — Batch Independent Queries
 
@@ -392,10 +346,12 @@ This frames severity before the deep dive — a 1,100-error incident gets differ
 Before deep-diving into any error signal, compare its count against a baseline from a non-incident period (same service, same error class, same time-of-day window on a prior day — preferably the same weekday).
 
 **Decision rule:**
-- **count_incident < 1.5 × count_baseline** → Classify as Tier 3 (baseline). Do NOT deep-dive. Record in the synthesis as `"baseline — skipped (N incident vs M baseline)"` and move on.
-- **1.5× ≤ count_incident < 10× count_baseline** → Elevated. Proceed with investigation but note the baseline for context.
-- **count_incident ≥ 10× count_baseline** → Anomalous spike. Prioritize for immediate deep-dive.
-- **count_baseline = 0 and count_incident > 0** → New error class. Always investigate.
+- **count_incident < 1.5 × count_baseline** → **baseline** — skip. Do NOT deep-dive. Record in the synthesis as `"baseline — skipped (N incident vs M baseline)"` and move on.
+- **1.5× ≤ count_incident < 10× count_baseline** → **elevated** — proceed with investigation but note the baseline for context.
+- **count_incident ≥ 10× count_baseline** → **anomalous** — prioritize for immediate deep-dive.
+- **count_baseline = 0 and count_incident > 0** → **new** — always investigate.
+
+These are rate-based classifications independent of the Step 2 error taxonomy. A Tier 2 infrastructure error at baseline rate is still classified as **baseline** and skipped.
 
 **When to apply:** This gate applies at two points:
 1. **Step 3 (initial error query)** — before selecting which error signals to pursue in Steps 3b/4
@@ -873,101 +829,9 @@ Write a synthesized summary as an explicit output block. The summary MUST includ
 
 **Canonical investigation summary (mandatory structured block):**
 
-In addition to the prose synthesis above, emit a structured YAML block that the completeness gate, POSTMORTEM stage, and future evals reference.
+In addition to the prose synthesis above, emit a structured YAML block that the completeness gate, POSTMORTEM stage, and future evals reference. The schema is defined in `references/investigation-schema.md`.
 
-```yaml
-investigation_summary:
-  scope:
-    service: "<service name>"
-    environment: "<environment>"
-    time_window: "<ISO start>/<ISO end>"
-    mode: "full" | "live-triage"
-  dominant_errors:
-    - bucket: "<error signature or class>"
-      count: <N>
-      percentage: <N>%
-      aggregation_source: "error_reporting" | "metric" | "sample" | "unavailable"
-  chosen_hypothesis:
-    statement: "<one sentence>"
-    confidence: "high" | "medium" | "low"
-    supporting_evidence:
-      - "<evidence reference>"
-    contradicting_evidence_sought: "<what was looked for>"
-    contradicting_evidence_found: "<what was found, or 'none'>"
-    evidence_links:  # optional — present only when valid URLs were captured
-      - type: "logs" | "baseline_logs" | "metrics" | "trace" | "deployment" | "source"
-        label: "<display text>"
-        url: "<https://...>"
-  ruled_out:
-    - hypothesis: "<alternative>"
-      reason: "<disconfirming evidence>"
-      evidence_links:  # optional — present only when valid URLs were captured
-        - type: "..."
-          label: "..."
-          url: "..."
-  evidence_coverage:
-    logs: "complete" | "partial" | "unavailable"
-    k8s_state: "complete" | "partial" | "unavailable"
-    metrics: "complete" | "partial" | "unavailable"
-    source_analysis: "complete" | "partial" | "skipped" | "unavailable"
-    trace_correlation: "complete" | "partial" | "skipped" | "unavailable"
-  gaps:
-    - "<what could not be checked> (<reason>)"
-  timeline_entries:
-    - timestamp_utc: "<UTC>"
-      time_precision: "exact" | "minute" | "approximate"
-      event_kind: "<kind>"
-      description: "<what happened>"
-      evidence_source: "<where observed>"
-  recovery_status:
-    recovered: true | false | "unknown"
-    recovery_time_utc: "<UTC or null>"
-    recovery_evidence: "<source>"
-    verification: "verified" | "estimated" | "not_verified"
-  open_questions:
-    - "<question>"
-  service_attribution:  # optional — required when 2+ services evaluated in one causal narrative
-    - service: "<service name>"
-      status: "confirmed-dependent" | "independent" | "inconclusive" | "not-investigated"
-      evidence: "<specific query result or 'not queried'>"
-      independent_root_cause: "<one sentence, only when status=independent and cause known>"
-  service_error_inventory:  # optional — required when Step 3c executes
-    - service: "<name>"
-      error_class: "<dominant error>"
-      tier: 1|2|3
-      count_incident: <N>
-      count_baseline: <N>
-      deployment_in_72h: true|false
-      deployment_timestamp: "<UTC or null>"
-      investigated: true|false
-      infra_status: "assessed" | "not_applicable" | "unavailable" | "not_captured"
-      infra_evidence: "<what was checked>"
-      infra_reason: "<why not assessed, if status != assessed>"
-      app_status: "assessed" | "not_applicable" | "unavailable" | "not_captured"
-      app_evidence: "<what was checked>"
-      app_reason: "<why not assessed, if status != assessed>"
-      mechanism_status: "known" | "not_yet_traced" | "not_applicable"
-      pool_exhaustion_type: "app-side" | "database-level" | "not_determined"  # conditional — when connection pool exhaustion detected
-      evidence_links:  # optional — present only when valid URLs were captured
-        - type: "..."
-          label: "..."
-          url: "..."
-  root_cause_layer_coverage:
-    infrastructure_status: "assessed" | "not_applicable" | "unavailable" | "not_captured"
-    infrastructure_evidence: "<summary of what was checked for the root-cause service>"
-    infrastructure_reason: "<why not assessed, if status != assessed>"
-    application_status: "assessed" | "not_applicable" | "unavailable" | "not_captured"
-    application_evidence: "<summary of what was checked for the root-cause service>"
-    application_reason: "<why not assessed, if status != assessed>"
-    mechanism_status: "known" | "not_yet_traced" | "not_applicable"
-    mechanism_evidence: "<code path, cache/config state, retry behavior, or consumer mechanism identified>"
-  tested_intermediate_conclusions:
-    - conclusion: "<explicit statement>"
-      used_in_causal_chain: true|false
-      disconfirming_evidence_sought: "<query or check performed>"
-      result: "supported" | "disproved" | "inconclusive"
-      evidence: "<specific result>"
-```
+**Top-level sections:** `scope`, `dominant_errors`, `chosen_hypothesis`, `ruled_out`, `evidence_coverage`, `gaps`, `timeline_entries`, `recovery_status`, `open_questions`, `service_attribution` (when 2+ services), `service_error_inventory` (when Step 3c executes), `root_cause_layer_coverage`, `tested_intermediate_conclusions`.
 
 The completeness gate (Step 8) references the `evidence_coverage` and `gaps` fields — Q1-Q3 answers must account for gaps.
 
@@ -1169,7 +1033,7 @@ Carry `evidence_links` from the Step 7 synthesis into every postmortem section. 
 | Timeline | Query URLs from Steps 2-7 | Evidence column: `[label](url)` replacing plain-text descriptions |
 | Investigation Notes — Confirmed | Source code / config URLs | Inline links on file/config references |
 
-Build URLs from the evidence ledger (Constraint 6) using `references/evidence-links.md` templates. If links were not captured in the synthesis, construct retroactively from query parameters visible in the conversation. If parameters are unrecoverable, describe the evidence source in prose.
+Build URLs from the evidence ledger (Constraint 6) using `references/evidence-links.md` templates. Retroactive construction is permitted only when exact original query parameters are visible verbatim in the conversation — never from prose summaries or inferred values. If parameters are unrecoverable, describe the evidence source in prose.
 
 **Do not skip links because "the postmortem is generated from the synthesis."** The synthesis contains the link data — use it.
 

@@ -36,3 +36,4 @@ Claude Code plugin for automatic skill routing based on prompt intent and SDLC p
 - `CLAUDE_PLUGIN_ROOT` from env; fallback: `$(cd "$(dirname "$0")/.." && pwd)`.
 - `docs/plans/` is gitignored — use `git add -f` for design docs.
 - When user says "proceed", continue with the next logical step. Do not ask "what would you like to proceed with?" — infer from context.
+- `skills/incident-analysis/SKILL.md` has a 13,000-word test guard. Extract tables, YAML schemas (>15 lines), and URL templates to `references/` instead of inlining.

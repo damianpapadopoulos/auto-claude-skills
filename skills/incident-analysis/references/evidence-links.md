@@ -106,3 +106,14 @@ Use stable, human-readable labels. Labels must not contain raw LQL, full SHAs, o
 **URL:** `https://github.com/my-org/checkout-service/commit/f4e8a12b9c3d5e6f7a8b9c0d1e2f3a4b5c6d7e8f`
 
 **Formatted:** `[Commit f4e8a12](https://github.com/my-org/checkout-service/commit/f4e8a12b9c3d5e6f7a8b9c0d1e2f3a4b5c6d7e8f)`
+
+## Behavioral Rules
+
+**Link type set:** The 6 allowed types are `logs`, `baseline_logs`, `metrics`, `trace`, `deployment`, `source`. Priority when candidates exceed caps: `logs` > `baseline_logs` > `trace` > `deployment` > `metrics` > `source`. Within the same type, prefer the root-cause service.
+
+**Omission rules:**
+- If the required parameters to build a trustworthy URL are missing, omit the link and describe the evidence source in prose. Never emit placeholder, reconstructed, or guessed URLs.
+- If a constructed URL would open a generic landing page (losing its filter or time range), omit it.
+- Omit the `evidence_links` field entirely when no valid URL was captured for that block. Do not emit empty arrays.
+
+**Where links do NOT appear:** timeline entries, completeness gate answers, `tested_intermediate_conclusions`, `root_cause_layer_coverage`, `service_attribution`.

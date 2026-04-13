@@ -9,6 +9,8 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 echo "=== test-incident-analysis-content.sh ==="
 
 SKILL_FILE="${PROJECT_ROOT}/skills/incident-analysis/SKILL.md"
+SCHEMA_FILE="${PROJECT_ROOT}/skills/incident-analysis/references/investigation-schema.md"
+EVIDENCE_LINKS_REF="${PROJECT_ROOT}/skills/incident-analysis/references/evidence-links.md"
 SIGNALS_FILE="${PROJECT_ROOT}/skills/incident-analysis/signals.yaml"
 PLAYBOOK_DIR="${PROJECT_ROOT}/skills/incident-analysis/playbooks"
 
@@ -143,7 +145,7 @@ assert_file_contains "SKILL.md: access gate records state for synthesis" "eviden
 # SKILL.md — Evidence coverage and gaps (Step 7)
 # ---------------------------------------------------------------------------
 assert_file_contains "SKILL.md: synthesis includes evidence coverage" "Evidence coverage and gaps" "${SKILL_FILE}"
-assert_file_contains "SKILL.md: has evidence_coverage block" "evidence_coverage:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: has evidence_coverage block" "evidence_coverage:" "${SCHEMA_FILE}"
 assert_file_contains "SKILL.md: has gaps block" "gaps:" "${SKILL_FILE}"
 assert_file_contains "SKILL.md: coverage levels defined" "complete.*partial.*unavailable" "${SKILL_FILE}"
 assert_file_contains "SKILL.md: gap recording rules" "Record a gap for" "${SKILL_FILE}"
@@ -189,13 +191,13 @@ assert_file_contains "SKILL.md: full investigation is default" "[Dd]efault.*[Ff]
 # ---------------------------------------------------------------------------
 # SKILL.md — Canonical summary schema (Step 7)
 # ---------------------------------------------------------------------------
-assert_file_contains "SKILL.md: summary has structured block" "investigation_summary:" "${SKILL_FILE}"
-assert_file_contains "SKILL.md: summary schema has scope" "scope:" "${SKILL_FILE}"
-assert_file_contains "SKILL.md: summary schema has dominant_errors" "dominant_errors:" "${SKILL_FILE}"
-assert_file_contains "SKILL.md: summary schema has chosen_hypothesis" "chosen_hypothesis:" "${SKILL_FILE}"
-assert_file_contains "SKILL.md: summary schema has ruled_out" "ruled_out:" "${SKILL_FILE}"
-assert_file_contains "SKILL.md: summary schema has recovery_status" "recovery_status:" "${SKILL_FILE}"
-assert_file_contains "SKILL.md: summary schema has open_questions" "open_questions:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: summary has structured block" "investigation_summary:" "${SCHEMA_FILE}"
+assert_file_contains "SKILL.md: summary schema has scope" "scope:" "${SCHEMA_FILE}"
+assert_file_contains "SKILL.md: summary schema has dominant_errors" "dominant_errors:" "${SCHEMA_FILE}"
+assert_file_contains "SKILL.md: summary schema has chosen_hypothesis" "chosen_hypothesis:" "${SCHEMA_FILE}"
+assert_file_contains "SKILL.md: summary schema has ruled_out" "ruled_out:" "${SCHEMA_FILE}"
+assert_file_contains "SKILL.md: summary schema has recovery_status" "recovery_status:" "${SCHEMA_FILE}"
+assert_file_contains "SKILL.md: summary schema has open_questions" "open_questions:" "${SCHEMA_FILE}"
 
 # ---------------------------------------------------------------------------
 # bad-release-rollback.yaml — Disambiguation probe
@@ -224,7 +226,7 @@ assert_file_contains "SKILL.md: Q10 mentions attribution verification" \
 # SKILL.md — service_attribution in investigation_summary YAML
 # ---------------------------------------------------------------------------
 assert_file_contains "SKILL.md: summary schema has service_attribution" \
-    "service_attribution:" "${SKILL_FILE}"
+    "service_attribution:" "${SCHEMA_FILE}"
 
 # ---------------------------------------------------------------------------
 # SKILL.md — Per-Service Attribution Proof in Step 5
@@ -342,13 +344,13 @@ assert_file_contains "SKILL.md: constraint 10 requires mechanism for root cause"
 # SKILL.md — Per-service and top-level layer coverage schema
 # ---------------------------------------------------------------------------
 assert_file_contains "SKILL.md: service_error_inventory has infra_status" \
-    "infra_status:" "${SKILL_FILE}"
+    "infra_status:" "${SCHEMA_FILE}"
 assert_file_contains "SKILL.md: service_error_inventory has app_status" \
-    "app_status:" "${SKILL_FILE}"
+    "app_status:" "${SCHEMA_FILE}"
 assert_file_contains "SKILL.md: service_error_inventory has mechanism_status" \
-    "mechanism_status:" "${SKILL_FILE}"
+    "mechanism_status:" "${SCHEMA_FILE}"
 assert_file_contains "SKILL.md: has root_cause_layer_coverage block" \
-    "root_cause_layer_coverage:" "${SKILL_FILE}"
+    "root_cause_layer_coverage:" "${SCHEMA_FILE}"
 assert_file_contains "SKILL.md: layer status uses assessed enum" \
     "assessed.*not_applicable.*unavailable.*not_captured" "${SKILL_FILE}"
 assert_file_contains "SKILL.md: assessed means minimum evidence complete" \
@@ -376,7 +378,7 @@ assert_file_contains "SKILL.md: step 5 has intermediate conclusion audit" \
 assert_file_contains "SKILL.md: step 5 has anti-anchoring check" \
     "Anti-anchoring check" "${SKILL_FILE}"
 assert_file_contains "SKILL.md: has tested_intermediate_conclusions schema" \
-    "tested_intermediate_conclusions:" "${SKILL_FILE}"
+    "tested_intermediate_conclusions:" "${SCHEMA_FILE}"
 
 # ---------------------------------------------------------------------------
 # SKILL.md — Tightened gate rule (full mode vs live-triage)
@@ -423,15 +425,15 @@ assert_contains "SKILL.md: step 3c procedure populates layer status" \
 assert_file_contains "SKILL.md: has evidence links constraint" \
     "Evidence Links" "${SKILL_FILE}"
 assert_file_contains "SKILL.md: constraint 12 defines allowed link types" \
-    "logs.*baseline_logs.*metrics.*trace.*deployment.*source" "${SKILL_FILE}"
+    "logs.*baseline_logs.*metrics.*trace.*deployment.*source" "${EVIDENCE_LINKS_REF}"
 assert_file_contains "SKILL.md: constraint 12 has omission rule for empty arrays" \
-    "Omit the.*evidence_links.*field entirely" "${SKILL_FILE}"
+    "Omit the.*evidence_links.*field entirely" "${EVIDENCE_LINKS_REF}"
 assert_file_contains "SKILL.md: constraint 12 enforces max links" \
     "max 3 links" "${SKILL_FILE}"
 assert_file_contains "SKILL.md: constraint 12 excludes timeline and gate" \
-    "timeline entries.*completeness gate" "${SKILL_FILE}"
+    "timeline entries.*completeness gate\|timeline.*tested_intermediate" "${EVIDENCE_LINKS_REF}"
 assert_file_contains "SKILL.md: constraint 12 has deterministic priority rule" \
-    "logs.*baseline_logs.*trace.*deployment.*metrics.*source" "${SKILL_FILE}"
+    "logs.*baseline_logs.*trace.*deployment.*metrics.*source" "${EVIDENCE_LINKS_REF}"
 assert_file_contains "SKILL.md: constraint 12 forbids placeholder URLs" \
     "Never emit placeholder.*reconstructed.*guessed" "${SKILL_FILE}"
 
@@ -450,13 +452,24 @@ assert_contains "evidence-links ref: has label normalization rule" \
     "stable, human-readable" "${EVIDENCE_LINKS_REF_CONTENT}"
 
 # ---------------------------------------------------------------------------
+# references/investigation-schema.md — existence and key fields
+# ---------------------------------------------------------------------------
+assert_file_exists "references/investigation-schema.md exists" "${SCHEMA_FILE}"
+assert_file_contains "schema ref: has investigation_summary root key" \
+    "investigation_summary:" "${SCHEMA_FILE}"
+assert_file_contains "schema ref: has pool_exhaustion_type field" \
+    "pool_exhaustion_type:" "${SCHEMA_FILE}"
+assert_file_contains "SKILL.md: references investigation-schema.md" \
+    "references/investigation-schema.md" "${SKILL_FILE}"
+
+# ---------------------------------------------------------------------------
 # SKILL.md — evidence_links YAML schema in investigation_summary
 # ---------------------------------------------------------------------------
-HYPOTHESIS_BLOCK=$(sed -n '/^  chosen_hypothesis:/,/^  ruled_out:/p' "${SKILL_FILE}")
+HYPOTHESIS_BLOCK=$(sed -n '/^  chosen_hypothesis:/,/^  ruled_out:/p' "${SCHEMA_FILE}")
 assert_contains "SKILL.md: evidence_links in chosen_hypothesis block" \
     "evidence_links:" "${HYPOTHESIS_BLOCK}"
 
-INVESTIGATION_YAML=$(sed -n '/^investigation_summary:/,/^```$/p' "${SKILL_FILE}")
+INVESTIGATION_YAML=$(sed -n '/^investigation_summary:/,/^```$/p' "${SCHEMA_FILE}")
 assert_contains "SKILL.md: evidence_links item shape has type field" \
     'type: "logs" | "baseline_logs" | "metrics" | "trace" | "deployment" | "source"' "${INVESTIGATION_YAML}"
 assert_contains "SKILL.md: evidence_links item shape has label field" \
@@ -464,11 +477,11 @@ assert_contains "SKILL.md: evidence_links item shape has label field" \
 assert_contains "SKILL.md: evidence_links item shape has url field" \
     'url: "<https://...>"' "${INVESTIGATION_YAML}"
 
-RULED_OUT_BLOCK=$(sed -n '/^  ruled_out:/,/^  evidence_coverage:/p' "${SKILL_FILE}")
+RULED_OUT_BLOCK=$(sed -n '/^  ruled_out:/,/^  evidence_coverage:/p' "${SCHEMA_FILE}")
 assert_contains "SKILL.md: evidence_links in ruled_out block" \
     "evidence_links:" "${RULED_OUT_BLOCK}"
 
-SEI_BLOCK=$(sed -n '/^  service_error_inventory:/,/^  root_cause_layer_coverage:/p' "${SKILL_FILE}")
+SEI_BLOCK=$(sed -n '/^  service_error_inventory:/,/^  root_cause_layer_coverage:/p' "${SCHEMA_FILE}")
 assert_contains "SKILL.md: evidence_links in service_error_inventory block" \
     "evidence_links:" "${SEI_BLOCK}"
 
@@ -498,8 +511,8 @@ assert_file_contains "SKILL.md: postmortem step 3 has ruled_out evidence_links m
     'ruled_out\[\].evidence_links' "${SKILL_FILE}"
 assert_contains "SKILL.md: postmortem step 3 addresses skip rationalization" \
     "Do not skip links" "${POSTMORTEM_STEP3}"
-assert_contains "SKILL.md: postmortem step 3 has retroactive construction fallback" \
-    "construct retroactively" "${POSTMORTEM_STEP3}"
+assert_contains "SKILL.md: postmortem step 3 has constrained retroactive construction rule" \
+    "Retroactive construction is permitted only when exact original query parameters are visible verbatim" "${POSTMORTEM_STEP3}"
 
 # ---------------------------------------------------------------------------
 # postmortem-template.md — evidence links in template sections
@@ -512,5 +525,17 @@ assert_contains "postmortem template: timeline mentions clickable links" \
     "clickable links" "${TEMPLATE_CONTENT}"
 assert_contains "postmortem template: investigation notes mentions ruled-out with links" \
     "ruled-out hypothesis should include" "${TEMPLATE_CONTENT}"
+
+# ---------------------------------------------------------------------------
+# Structural guard — SKILL.md word count
+# Pre-cleanup baseline was 13,649 words. Guard prevents regression.
+# ---------------------------------------------------------------------------
+word_count=$(wc -w < "${SKILL_FILE}" | tr -d ' ')
+if [ "$word_count" -le 13000 ]; then
+    _record_pass "SKILL.md: word count under 13,000 (${word_count})"
+else
+    _record_fail "SKILL.md: word count exceeds 13,000 (${word_count})" \
+        "Extract heavy content to references/ or deduplicate"
+fi
 
 print_summary
