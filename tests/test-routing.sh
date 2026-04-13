@@ -4793,6 +4793,26 @@ test_wave1_driver_invariants() {
 }
 
 # ---------------------------------------------------------------------------
+# Wave 1: prototype-lab does not displace brainstorming as DESIGN driver
+# ---------------------------------------------------------------------------
+test_prototype_lab_does_not_displace_brainstorming() {
+    echo "-- test: prototype-lab does not displace brainstorming --"
+    setup_test_env
+    install_registry_with_wave1
+
+    local output
+    output="$(run_hook "prototype three different approaches for the caching system")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "prototype-lab is domain" "prototype-lab" "${context}"
+    assert_contains "brainstorming remains process" "Process: brainstorming" "${context}"
+    assert_not_contains "prototype-lab is not process" "Process: prototype-lab" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # Wave 1: starter-template SKILL.md content contract
 # ---------------------------------------------------------------------------
 test_starter_template_content_contract() {
@@ -4816,6 +4836,7 @@ test_starter_template_triggers
 test_prototype_lab_triggers
 test_agent_safety_review_triggers
 test_wave1_driver_invariants
+test_prototype_lab_does_not_displace_brainstorming
 test_starter_template_content_contract
 
 # ---------------------------------------------------------------------------
