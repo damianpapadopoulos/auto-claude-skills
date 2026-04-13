@@ -4792,10 +4792,31 @@ test_wave1_driver_invariants() {
     teardown_test_env
 }
 
+# ---------------------------------------------------------------------------
+# Wave 1: starter-template SKILL.md content contract
+# ---------------------------------------------------------------------------
+test_starter_template_content_contract() {
+    echo "-- test: starter-template SKILL.md has required sections --"
+    local skill_file="${PROJECT_ROOT}/skills/starter-template/SKILL.md"
+
+    local content
+    content="$(cat "${skill_file}" 2>/dev/null || echo "")"
+
+    assert_not_empty "starter-template SKILL.md exists and is non-empty" "${content}"
+    assert_contains "starter-template has frontmatter name" "name: starter-template" "${content}"
+    assert_contains "starter-template has When to Use section" "When to Use" "${content}"
+    assert_contains "starter-template has Constraints section" "Constraints" "${content}"
+    assert_contains "starter-template has SKILL.md skeleton" "SKILL.md skeleton" "${content}"
+    assert_contains "starter-template has routing entry snippet" "default-triggers.json" "${content}"
+    assert_contains "starter-template has test snippet" "test-routing.sh" "${content}"
+    assert_contains "starter-template warns about process skill restriction" "superpowers-owned phase" "${content}"
+}
+
 test_starter_template_triggers
 test_prototype_lab_triggers
 test_agent_safety_review_triggers
 test_wave1_driver_invariants
+test_starter_template_content_contract
 
 # ---------------------------------------------------------------------------
 # Routing eval fixtures — incident-analysis trigger/no-trigger cases
