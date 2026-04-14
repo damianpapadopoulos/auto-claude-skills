@@ -48,7 +48,7 @@ Run capability detection via Bash to determine project type and available tools:
 - `command -v npx && npx playwright --version` (preferred)
 - Check `package.json` for `cypress` dependency (fallback)
 - `command -v axe` or check `@axe-core/cli` in dependencies (a11y overlay)
-- Check session-start capability flags for `webapp-testing` companion plugin
+- Check cached skill registry (`~/.claude/.skill-registry-cache.json`) for `webapp-testing` skill entry with `available: true`. The session-start capability line is for context-stack tools, not skill/plugin availability — use the registry as the source of truth for companion skill presence.
 
 **API/Server path:**
 - Probe common dev server ports (3000, 5173, 8000, 8080) via `curl -s -o /dev/null -w "%{http_code}" http://localhost:{port}/`
@@ -74,7 +74,7 @@ Three-tier scenario sourcing (highest fidelity first):
 
 **Browser path** (when Playwright/Cypress detected):
 - If `webapp-testing` companion available: delegate via `Skill(webapp-testing)` with derived scenarios
-- If Playwright available directly: run `npx playwright test` on existing test files, or generate and run ad-hoc test scripts for derived scenarios
+- If Playwright available directly: run `npx playwright test` on existing test files, or generate ad-hoc test scripts under a session-scoped temp directory (`mktemp -d`), run them, then clean up. Ad-hoc scripts are never written to the repo working tree — they are ephemeral validation artifacts, not committed tests.
 - If axe-core available: run Playwright axe integration or `npx axe` for a11y baseline (AA contrast, ARIA landmarks, keyboard navigation)
 - Capture screenshots to `tests/artifacts/validation/` (gitignored)
 
@@ -168,7 +168,20 @@ Only auto-fires in REVIEW/SHIP when at least one comparison source exists:
 
 If none exist → does not auto-fire. Can still be explicitly invoked (e.g., "check drift", "am I still on plan") but degrades to assumptions-only mode.
 
-This guard is LLM-evaluated (documented in the SKILL.md instructions), not hook-enforced. The LLM reliably follows these conditions.
+**Enforcement model — two layers:**
+
+1. **Hook-enforced artifact-presence gate:** The phase composition entry for `implementation-drift-check` uses a new `gate` type: `"artifact-presence"`. The hook checks whether any of the following paths exist before emitting the entry:
+   - `openspec/changes/*/` (any active OpenSpec change)
+   - `openspec/specs/*/spec.md` (any canonical spec)
+   - `docs/superpowers/specs/*-design.md` (any design spec)
+   - `docs/superpowers/plans/*.md` (any plan)
+   - `tests/fixtures/evals/*.json` (any eval pack)
+
+   This is a cheap filesystem glob check (~5ms) added to the post-jq Bash filter alongside the session-marker gate. If no artifacts match, the composition entry is suppressed mechanically — the LLM never sees it.
+
+2. **LLM-evaluated mode selection:** When the hook does emit the entry (artifacts exist), the SKILL.md instructions guide mode selection (full drift mode vs. assumptions-only) based on which specific artifacts are available. This is judgment the LLM handles well.
+
+The SHIP fallback uses the session-marker gate (section 4.3) for dedup. The artifact-presence gate is only for the REVIEW parallel entry.
 
 ### 2.3 Gather Comparison Material (Step 1)
 
@@ -324,7 +337,15 @@ Add two new parallel entries to `phase_compositions.REVIEW.parallel` in `config/
 {
   "use": "implementation-drift-check -> Skill(auto-claude-skills:implementation-drift-check)",
   "when": "comparison material exists (specs, plans, or active chain with code changes)",
-  "purpose": "Spec drift detection, assumption surfacing, coverage gap identification"
+  "purpose": "Spec drift detection, assumption surfacing, coverage gap identification",
+  "gate": "artifact-presence",
+  "artifacts": [
+    "openspec/changes/*/",
+    "openspec/specs/*/spec.md",
+    "docs/superpowers/specs/*-design.md",
+    "docs/superpowers/plans/*.md",
+    "tests/fixtures/evals/*.json"
+  ]
 }
 ```
 
@@ -349,22 +370,39 @@ Add two conditional fallback entries to `phase_compositions.SHIP.sequence`, afte
 }
 ```
 
-### 4.3 Session-Marker Gate Mechanism
+### 4.3 Composition Gate Mechanisms
 
-**New hook predicate** added to `skill-activation-hook.sh` (line ~1182) in the jq composition block:
+Two new gate types added to the post-jq Bash filter in `skill-activation-hook.sh`. Both are evaluated after the jq composition block emits lines (line ~1208), in the existing `while IFS= read -r _cline` loop (line ~1211). The jq block passes gate metadata through its output (e.g., `GATED:type:key:original_line`); the Bash loop evaluates and suppresses.
 
-When processing phase composition entries, if a `gate` field is present with value `"session-marker"`, check:
+#### Gate type: `session-marker`
+
+Used for SHIP fallback dedup. Checks whether a session-scoped marker file exists:
 ```bash
-[[ -f "${HOME}/.claude/.skill-${marker}-${TOKEN}" ]]
+[[ -f "${HOME}/.claude/.skill-${marker}-${_SESSION_TOKEN}" ]]
 ```
 If file exists → suppress the entry. If not → emit normally.
-
-**Implementation scope:** The session-marker gate cannot be evaluated inside the existing jq composition block (jq has no filesystem access). Instead, add a post-jq Bash filter: after the jq block emits composition lines (line ~1208), iterate emitted SEQUENCE lines and suppress any whose `marker` value corresponds to an existing session-marker file. This requires the hook to pass marker metadata through the jq output (e.g., `GATED:marker_name:original_line`) and filter in the existing `while IFS= read -r _cline` loop (line ~1211). Approximately 15 lines of Bash added to the existing loop. No new jq logic. No arbitrary expression evaluation. No new external dependencies.
 
 **Marker lifecycle:**
 - Written by the skill SKILL.md instruction: "After completing, write marker via Bash"
 - Scoped to session token (no cross-session leakage)
 - Cleaned up at session end (existing cleanup in session-start-hook.sh)
+
+#### Gate type: `artifact-presence`
+
+Used for conditional auto-co-selection. Checks whether any of the listed glob patterns match at least one file in the project root:
+```bash
+_has_artifact=0
+for _pat in ${artifact_patterns}; do
+  # compgen -G is Bash 3.2 compatible glob check (no subshell, no ls)
+  compgen -G "${PROJECT_ROOT}/${_pat}" >/dev/null 2>&1 && { _has_artifact=1; break; }
+done
+[[ $_has_artifact -eq 0 ]] && continue  # suppress entry
+```
+If no artifacts match → suppress the entry mechanically. The LLM never sees it.
+
+**Performance:** ~5ms for 5 glob patterns. Well within the 50ms hook budget.
+
+**Implementation scope:** ~20 lines of Bash total for both gate types. No new jq logic. No arbitrary expression evaluation. No new external dependencies.
 
 ### 4.4 SHIP Sequence After Changes
 
@@ -396,7 +434,7 @@ Update existing hints in `config/default-triggers.json`:
 
 ### 5.3 Webapp-testing Interop
 
-`webapp-testing` (external plugin, IMPLEMENT phase, priority 12) remains unchanged. `runtime-validation` composes with it when available (checks session-start capability flags), delegates browser-path execution to it, but does not depend on it.
+`webapp-testing` (external plugin, IMPLEMENT phase, priority 12) remains unchanged. `runtime-validation` composes with it when available — detected by checking the cached skill registry (`~/.claude/.skill-registry-cache.json`) for a `webapp-testing` entry with `available: true`. Delegates browser-path execution to it when present, but does not depend on it.
 
 ---
 
@@ -424,9 +462,8 @@ Update existing hints in `config/default-triggers.json`:
 |---|---|
 | `config/default-triggers.json` | Add 2 skill entries, 2 REVIEW parallel entries, 2 SHIP sequence entries with gate, update 2 hints |
 | `config/fallback-registry.json` | Add 2 skill entries matching default-triggers |
-| `hooks/skill-activation-hook.sh` | Add session-marker gate predicate (~10 lines in jq composition block) |
+| `hooks/skill-activation-hook.sh` | Add session-marker gate and artifact-presence gate predicates in post-jq composition filter |
 | `.gitignore` | Add `tests/artifacts/` |
-| `tests/run-tests.sh` | Include new test suites |
 
 ---
 
