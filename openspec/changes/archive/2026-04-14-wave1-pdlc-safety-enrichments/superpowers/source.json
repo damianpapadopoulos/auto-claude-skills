@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "sp_plan_path": null,
+  "sp_spec_path": null,
+  "change_slug": "wave1-pdlc-safety-enrichments",
+  "capability_slug": null,
+  "source_branch": "worktree-wave1-pdlc-safety",
+  "base_commit": "953726de5098978571e961f1c4325a69296cf24e",
+  "openspec_surface": "none",
+  "archived_at": "2026-04-14T07:12:23Z"
+}
