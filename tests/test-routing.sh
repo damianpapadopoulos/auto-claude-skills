@@ -488,15 +488,15 @@ install_registry_with_wave1() {
         "enabled": true
       },
       {
-        "name": "starter-template",
+        "name": "skill-scaffold",
         "role": "domain",
         "phase": "DESIGN",
-        "triggers": ["(new.?skill|new.?plugin|new.?command|new.?hook|scaffold|skeleton|skill.?template|skill.?skeleton|starter.?template)"],
+        "triggers": ["(new.?skill|new.?plugin|new.?command|new.?hook|scaffold|skeleton|skill.?template|skill.?skeleton)"],
         "trigger_mode": "regex",
         "priority": 16,
         "precedes": [],
         "requires": [],
-        "invoke": "Skill(auto-claude-skills:starter-template)",
+        "invoke": "Skill(auto-claude-skills:skill-scaffold)",
         "available": true,
         "enabled": true
       },
@@ -4716,10 +4716,10 @@ test_investigate_command_routing
 test_slo_burn_rate_routes_to_incident_analysis
 
 # ---------------------------------------------------------------------------
-# Wave 1: starter-template triggers on "new skill" prompt
+# Wave 1: skill-scaffold triggers on "new skill" prompt
 # ---------------------------------------------------------------------------
 test_starter_template_triggers() {
-    echo "-- test: starter-template triggers on new skill prompt --"
+    echo "-- test: skill-scaffold triggers on new skill prompt --"
     setup_test_env
     install_registry_with_wave1
 
@@ -4728,7 +4728,7 @@ test_starter_template_triggers() {
     local context
     context="$(extract_context "${output}")"
 
-    assert_contains "starter-template fires on new skill" "starter-template" "${context}"
+    assert_contains "skill-scaffold fires on new skill" "skill-scaffold" "${context}"
     assert_contains "brainstorming is still process skill" "brainstorming" "${context}"
 
     teardown_test_env
@@ -4831,23 +4831,23 @@ test_prototype_lab_does_not_displace_brainstorming() {
 }
 
 # ---------------------------------------------------------------------------
-# Wave 1: starter-template SKILL.md content contract
+# Wave 1: skill-scaffold SKILL.md content contract
 # ---------------------------------------------------------------------------
 test_starter_template_content_contract() {
-    echo "-- test: starter-template SKILL.md has required sections --"
-    local skill_file="${PROJECT_ROOT}/skills/starter-template/SKILL.md"
+    echo "-- test: skill-scaffold SKILL.md has required sections --"
+    local skill_file="${PROJECT_ROOT}/skills/skill-scaffold/SKILL.md"
 
     local content
     content="$(cat "${skill_file}" 2>/dev/null || echo "")"
 
-    assert_not_empty "starter-template SKILL.md exists and is non-empty" "${content}"
-    assert_contains "starter-template has frontmatter name" "name: starter-template" "${content}"
-    assert_contains "starter-template has When to Use section" "When to Use" "${content}"
-    assert_contains "starter-template has Constraints section" "Constraints" "${content}"
-    assert_contains "starter-template has SKILL.md skeleton" "SKILL.md skeleton" "${content}"
-    assert_contains "starter-template has routing entry snippet" "default-triggers.json" "${content}"
-    assert_contains "starter-template has test snippet" "test-routing.sh" "${content}"
-    assert_contains "starter-template warns about process skill restriction" "superpowers-owned phase" "${content}"
+    assert_not_empty "skill-scaffold SKILL.md exists and is non-empty" "${content}"
+    assert_contains "skill-scaffold has frontmatter name" "name: skill-scaffold" "${content}"
+    assert_contains "skill-scaffold has When to Use section" "When to Use" "${content}"
+    assert_contains "skill-scaffold has Constraints section" "Constraints" "${content}"
+    assert_contains "skill-scaffold has SKILL.md skeleton" "SKILL.md skeleton" "${content}"
+    assert_contains "skill-scaffold has routing entry snippet" "default-triggers.json" "${content}"
+    assert_contains "skill-scaffold has test snippet" "test-routing.sh" "${content}"
+    assert_contains "skill-scaffold warns about process skill restriction" "superpowers-owned phase" "${content}"
 }
 
 test_starter_template_triggers

@@ -1,9 +1,9 @@
 ---
-name: starter-template
+name: skill-scaffold
 description: Emit repo-native seed files (SKILL.md skeleton, routing entry, test snippets) when creating new skills, commands, or plugins
 ---
 
-# Starter Template
+# Skill Scaffold
 
 Emit seed files for new additions to auto-claude-skills. Ensures agents follow existing patterns from the first file.
 

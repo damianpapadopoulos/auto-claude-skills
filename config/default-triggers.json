@@ -526,26 +526,24 @@
       "invoke": "Skill(auto-claude-skills:alert-hygiene)"
     },
     {
-      "name": "starter-template",
+      "name": "skill-scaffold",
       "role": "domain",
       "phase": "DESIGN",
       "triggers": [
-        "(new.?skill|new.?plugin|new.?command|new.?hook|scaffold|skeleton|skill.?template|skill.?skeleton|starter.?template)"
+        "(new.?skill|new.?plugin|new.?command|new.?hook|scaffold|skeleton|skill.?template|skill.?skeleton)"
       ],
       "keywords": [
         "new skill",
         "create skill",
         "skill skeleton",
-        "scaffold",
-        "boilerplate",
-        "starter template"
+        "scaffold"
       ],
       "trigger_mode": "regex",
       "priority": 16,
       "precedes": [],
       "requires": [],
       "description": "Emit repo-native seed files (SKILL.md skeleton, routing entry, test snippets) when creating new skills, commands, or plugins.",
-      "invoke": "Skill(auto-claude-skills:starter-template)"
+      "invoke": "Skill(auto-claude-skills:skill-scaffold)"
     },
     {
       "name": "prototype-lab",

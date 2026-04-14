@@ -3,5 +3,5 @@
   "prompt": "execute the plan and implement the next task",
   "expected_skills": ["executing-plans"],
   "expected_phase": "IMPLEMENT",
-  "must_not_match": ["Process: prototype-lab", "Process: starter-template", "Process: agent-safety-review"]
+  "must_not_match": ["Process: prototype-lab", "Process: skill-scaffold", "Process: agent-safety-review"]
 }

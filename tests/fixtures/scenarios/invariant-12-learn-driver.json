@@ -3,5 +3,5 @@
   "prompt": "review the code changes in this pull request",
   "expected_skills": ["requesting-code-review"],
   "expected_phase": "REVIEW",
-  "must_not_match": ["Process: prototype-lab", "Process: starter-template", "Process: agent-safety-review"]
+  "must_not_match": ["Process: prototype-lab", "Process: skill-scaffold", "Process: agent-safety-review"]
 }
