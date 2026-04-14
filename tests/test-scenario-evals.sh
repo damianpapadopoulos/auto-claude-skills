@@ -40,6 +40,12 @@ install_scenario_registry() {
     mkdir -p "$(dirname "${cache_file}")"
     # Build from fallback-registry.json to get the real production registry
     cp "${PROJECT_ROOT}/config/fallback-registry.json" "${cache_file}"
+    # Clear any skill state files from prior test runs to ensure clean routing
+    rm -f "${HOME}/.claude/.skill-last-invoked-"* 2>/dev/null
+    rm -f "${HOME}/.claude/.skill-composition-state-"* 2>/dev/null
+    rm -f "${HOME}/.claude/.skill-prompt-count-"* 2>/dev/null
+    rm -f "${HOME}/.claude/.skill-session-token" 2>/dev/null
+    rm -f "${HOME}/.claude/.skill-zero-match-count" 2>/dev/null
 }
 
 # ---------------------------------------------------------------------------

@@ -887,7 +887,7 @@
         "REVIEW",
         "SHIP"
       ],
-      "description": "Persistent cross-session memory via Forgetful Memory MCP \u2014 stores and retrieves architectural decisions, conventions, and workarounds",
+      "description": "Persistent cross-session memory via Forgetful Memory MCP — stores and retrieves architectural decisions, conventions, and workarounds",
       "available": false
     },
     {
@@ -908,7 +908,7 @@
         "REVIEW",
         "SHIP"
       ],
-      "description": "Tiered context retrieval \u2014 curated docs (Context Hub via Context7), blast-radius mapping (Serena), institutional memory (Forgetful) with graceful degradation.",
+      "description": "Tiered context retrieval — curated docs (Context Hub via Context7), blast-radius mapping (Serena), institutional memory (Forgetful) with graceful degradation.",
       "available": true
     },
     {
@@ -1088,7 +1088,7 @@
     "context7": true,
     "context_hub_cli": true,
     "context_hub_available": true,
-    "serena": true,
+    "serena": false,
     "forgetful_memory": true,
     "openspec": true,
     "posthog": false
@@ -1316,7 +1316,7 @@
       ],
       "hints": [
         {
-          "text": "DEBUG ESCALATION: If the fix touches multiple files, changes behavior, or affects a public API, enter REVIEW \u2192 SHIP after debugging. Use Skill(superpowers:requesting-code-review) to transition."
+          "text": "DEBUG ESCALATION: If the fix touches multiple files, changes behavior, or affects a public API, enter REVIEW → SHIP after debugging. Use Skill(superpowers:requesting-code-review) to transition."
         }
       ]
     },
@@ -1537,7 +1537,7 @@
         "(fix|change|update|rename|move|add a|modify|edit|refactor|implement|write the|create the)"
       ],
       "trigger_mode": "regex",
-      "hint": "PHASE ENFORCEMENT: You are in DESIGN/PLAN phase. Complete the current phase skill before editing implementation files. Small changes still require the full flow \u2014 scaled down, not skipped.",
+      "hint": "PHASE ENFORCEMENT: You are in DESIGN/PLAN phase. Complete the current phase skill before editing implementation files. Small changes still require the full flow — scaled down, not skipped.",
       "phases": [
         "DESIGN",
         "PLAN"
