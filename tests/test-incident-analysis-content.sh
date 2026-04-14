@@ -440,7 +440,6 @@ assert_file_contains "SKILL.md: constraint 12 forbids placeholder URLs" \
 # ---------------------------------------------------------------------------
 # Reference file: evidence-links.md
 # ---------------------------------------------------------------------------
-EVIDENCE_LINKS_REF="${PROJECT_ROOT}/skills/incident-analysis/references/evidence-links.md"
 assert_file_exists "references/evidence-links.md exists" "${EVIDENCE_LINKS_REF}"
 
 EVIDENCE_LINKS_REF_CONTENT="$(cat "${EVIDENCE_LINKS_REF}")"
