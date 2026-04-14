@@ -587,7 +587,7 @@
       "role": "domain",
       "phase": "DESIGN",
       "triggers": [
-        "(new.?skill|new.?plugin|new.?command|scaffold|skeleton|template|boilerplate)"
+        "(new.?skill|new.?plugin|new.?command|new.?hook|scaffold|skeleton|skill.?template|skill.?skeleton|starter.?template)"
       ],
       "keywords": [
         "new skill",

@@ -38,8 +38,12 @@ extract_context() {
 install_scenario_registry() {
     local cache_file="${HOME}/.claude/.skill-registry-cache.json"
     mkdir -p "$(dirname "${cache_file}")"
-    # Build from fallback-registry.json to get the real production registry
-    cp "${PROJECT_ROOT}/config/fallback-registry.json" "${cache_file}"
+    # Build from fallback-registry.json, then patch all skills to available:true
+    # to simulate a real session where session-start has discovered all plugins.
+    # Without this, superpowers skills (verification-before-completion, etc.) are
+    # available:false in the fallback and adversarial guardrail prompts find no match.
+    jq '.skills = [.skills[] | .available = true]' \
+        "${PROJECT_ROOT}/config/fallback-registry.json" > "${cache_file}"
     # Clear any skill state files from prior test runs to ensure clean routing
     rm -f "${HOME}/.claude/.skill-last-invoked-"* 2>/dev/null
     rm -f "${HOME}/.claude/.skill-composition-state-"* 2>/dev/null

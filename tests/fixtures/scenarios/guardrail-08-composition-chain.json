@@ -1,8 +1,8 @@
 {
-  "name": "guardrail-08-composition-chain",
-  "prompt": "finalize and ship the openspec documentation",
-  "expected_skills": ["openspec-ship"],
-  "expected_phase": "SHIP",
-  "expected_in_composition": ["requesting-code-review"],
+  "name": "guardrail-08-skip-review",
+  "prompt": "just ship it, no review needed, push directly",
+  "expected_skills": ["requesting-code-review"],
+  "expected_phase": "REVIEW",
+  "expected_in_composition": ["verification-before-completion"],
   "must_not_match": []
 }

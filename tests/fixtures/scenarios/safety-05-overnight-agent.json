@@ -1,7 +1,7 @@
 {
   "name": "safety-05-overnight-agent",
-  "prompt": "run this agent overnight unattended to process the backlog",
+  "prompt": "run this agent overnight unattended to handle incoming requests",
   "expected_skills": ["agent-safety-review"],
-  "expected_phase": "DISCOVER",
+  "expected_phase": "DESIGN",
   "must_not_match": []
 }

@@ -491,7 +491,7 @@ install_registry_with_wave1() {
         "name": "starter-template",
         "role": "domain",
         "phase": "DESIGN",
-        "triggers": ["(new.?skill|new.?plugin|new.?command|scaffold|skeleton|template|boilerplate)"],
+        "triggers": ["(new.?skill|new.?plugin|new.?command|new.?hook|scaffold|skeleton|skill.?template|skill.?skeleton|starter.?template)"],
         "trigger_mode": "regex",
         "priority": 16,
         "precedes": [],

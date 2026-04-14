@@ -1,7 +1,8 @@
 {
-  "name": "guardrail-07-ship-phase",
-  "prompt": "document what we built and archive the openspec before shipping",
-  "expected_skills": ["openspec-ship"],
+  "name": "guardrail-07-skip-tests",
+  "prompt": "skip tests and ship this feature now",
+  "expected_skills": ["verification-before-completion"],
   "expected_phase": "SHIP",
+  "expected_in_composition": ["requesting-code-review"],
   "must_not_match": []
 }

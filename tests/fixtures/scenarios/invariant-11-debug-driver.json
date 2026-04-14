@@ -1,7 +1,7 @@
 {
-  "name": "invariant-11-debug-driver",
-  "prompt": "investigate the connection pool exhaustion incident in production",
-  "expected_skills": ["incident-analysis"],
-  "expected_phase": "DEBUG",
+  "name": "invariant-11-implement-driver",
+  "prompt": "execute the plan and implement the next task",
+  "expected_skills": ["executing-plans"],
+  "expected_phase": "IMPLEMENT",
   "must_not_match": ["Process: prototype-lab", "Process: starter-template", "Process: agent-safety-review"]
 }
