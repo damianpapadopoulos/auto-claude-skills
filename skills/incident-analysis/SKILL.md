@@ -523,7 +523,7 @@ After all probes complete, feed results back to CLASSIFY for reclassification.
 
   Rows are not mutually exclusive. When multiple conditions are present (e.g., connections elevated AND CPU spiked), combine diagnoses: the database is both oversubscribed and overloaded.
 
-  **Anti-pattern this prevents:** Concluding "shared database starvation" from application-side JDBC errors when the database itself is healthy. In one investigation, this led to incorrect action items ("isolate Keycloak DB") that were revised after Cloud SQL metrics showed normal connection count, CPU, and query rate — the issue was app-side pool exhaustion (connections held too long under normal DB load).
+  **Anti-pattern this prevents:** Concluding "shared database starvation" from application-side JDBC errors when the database itself is healthy. In one investigation, this led to incorrect action items ("isolate auth service DB") that were revised after database metrics showed normal connection count, CPU, and query rate — the issue was app-side pool exhaustion (connections held too long under normal DB load).
 
 - **Application-logic analysis (for the dominant error path):**
   - **Call pattern detection:** From stack traces in Step 2 exemplars, determine whether the failing code path makes sequential (N+1) calls to the degraded dependency. A loop calling `checkPermission()` per item is N+1; a single `batchCheck()` call is not. If N+1 is detected, note the amplification factor (items per request x latency per call = total request latency).
