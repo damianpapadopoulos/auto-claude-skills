@@ -467,6 +467,68 @@ install_registry_with_incident_trend() {
     }]' "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
 }
 
+# Helper: install registry extended with Wave 1 skills
+install_registry_with_wave1() {
+    install_registry
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    local tmp_file
+    tmp_file="$(mktemp)"
+    jq '.skills += [
+      {
+        "name": "writing-skills",
+        "role": "domain",
+        "phase": "DESIGN",
+        "triggers": ["(skill|write.*skill|create.*skill|edit.*skill|new.*skill|skill.*(file|md|template|format))"],
+        "trigger_mode": "regex",
+        "priority": 15,
+        "precedes": [],
+        "requires": [],
+        "invoke": "Skill(superpowers:writing-skills)",
+        "available": true,
+        "enabled": true
+      },
+      {
+        "name": "skill-scaffold",
+        "role": "domain",
+        "phase": "DESIGN",
+        "triggers": ["(new.?skill|new.?plugin|new.?command|new.?hook|scaffold|skeleton|skill.?template|skill.?skeleton)"],
+        "trigger_mode": "regex",
+        "priority": 16,
+        "precedes": [],
+        "requires": [],
+        "invoke": "Skill(auto-claude-skills:skill-scaffold)",
+        "available": true,
+        "enabled": true
+      },
+      {
+        "name": "prototype-lab",
+        "role": "domain",
+        "phase": "DESIGN",
+        "triggers": ["(prototype|compare.?options|build.?variants|which.?approach|try.?both|try.?all|side.by.side)"],
+        "trigger_mode": "regex",
+        "priority": 15,
+        "precedes": [],
+        "requires": [],
+        "invoke": "Skill(auto-claude-skills:prototype-lab)",
+        "available": true,
+        "enabled": true
+      },
+      {
+        "name": "agent-safety-review",
+        "role": "domain",
+        "phase": "DESIGN",
+        "triggers": ["(autonomous.?loop|ralph.?loop|overnight|unattended|background.?agent|browser.?agent|email.?agent|inbox.?agent|yolo|skip.?permission|dangerously|permissionless|auto.?reply|auto.?respond|send.on.behalf)"],
+        "trigger_mode": "regex",
+        "priority": 17,
+        "precedes": [],
+        "requires": [],
+        "invoke": "Skill(auto-claude-skills:agent-safety-review)",
+        "available": true,
+        "enabled": true
+      }
+    ]' "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
+}
+
 # Helper: install a v4 skill registry cache with plugins and phase_compositions
 install_registry_v4() {
     local cache_file="${HOME}/.claude/.skill-registry-cache.json"
@@ -4652,6 +4714,149 @@ test_incident_analysis_triggers_on_volume_mount_failure
 test_incident_analysis_cofires_with_debugging
 test_investigate_command_routing
 test_slo_burn_rate_routes_to_incident_analysis
+
+# ---------------------------------------------------------------------------
+# Wave 1: skill-scaffold triggers on "new skill" prompt
+# ---------------------------------------------------------------------------
+test_starter_template_triggers() {
+    echo "-- test: skill-scaffold triggers on new skill prompt --"
+    setup_test_env
+    install_registry_with_wave1
+
+    local output
+    output="$(run_hook "create a new skill for database migrations")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "skill-scaffold fires on new skill" "skill-scaffold" "${context}"
+    assert_contains "brainstorming is still process skill" "brainstorming" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# Wave 1: prototype-lab triggers on "compare options" prompt
+# ---------------------------------------------------------------------------
+test_prototype_lab_triggers() {
+    echo "-- test: prototype-lab triggers on compare options prompt --"
+    setup_test_env
+    install_registry_with_wave1
+
+    local output
+    output="$(run_hook "let's prototype and compare options for the caching layer")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "prototype-lab fires on compare options" "prototype-lab" "${context}"
+    assert_contains "brainstorming is still process skill" "brainstorming" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# Wave 1: agent-safety-review triggers on autonomous loop prompt
+# ---------------------------------------------------------------------------
+test_agent_safety_review_triggers() {
+    echo "-- test: agent-safety-review triggers on autonomous loop prompt --"
+    setup_test_env
+    install_registry_with_wave1
+
+    local output
+    output="$(run_hook "set up an autonomous loop to process incoming emails overnight")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "agent-safety-review fires on autonomous loop" "agent-safety-review" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# Wave 1: agent-safety-review fires on YOLO prompt
+# ---------------------------------------------------------------------------
+test_agent_safety_review_yolo() {
+    echo "-- test: agent-safety-review fires on YOLO prompt --"
+    setup_test_env
+    install_registry_with_wave1
+
+    local output
+    output="$(run_hook "run this in YOLO mode with skip permissions")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "agent-safety-review fires on YOLO" "agent-safety-review" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# Wave 1: driver invariants — new skills do not displace process drivers
+# ---------------------------------------------------------------------------
+test_wave1_driver_invariants() {
+    echo "-- test: Wave 1 skills do not displace process drivers --"
+    setup_test_env
+    install_registry_with_wave1
+
+    # DESIGN driver must remain brainstorming, not prototype-lab or agent-safety-review
+    local output
+    output="$(run_hook "build a new autonomous email agent skill")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "brainstorming remains DESIGN process" "Process: brainstorming" "${context}"
+    assert_not_contains "prototype-lab is not process" "Process: prototype-lab" "${context}"
+    assert_not_contains "agent-safety-review is not process" "Process: agent-safety-review" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# Wave 1: prototype-lab does not displace brainstorming as DESIGN driver
+# ---------------------------------------------------------------------------
+test_prototype_lab_does_not_displace_brainstorming() {
+    echo "-- test: prototype-lab does not displace brainstorming --"
+    setup_test_env
+    install_registry_with_wave1
+
+    local output
+    output="$(run_hook "prototype three different approaches for the caching system")"
+    local context
+    context="$(extract_context "${output}")"
+
+    assert_contains "prototype-lab is domain" "prototype-lab" "${context}"
+    assert_contains "brainstorming remains process" "Process: brainstorming" "${context}"
+    assert_not_contains "prototype-lab is not process" "Process: prototype-lab" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
+# Wave 1: skill-scaffold SKILL.md content contract
+# ---------------------------------------------------------------------------
+test_starter_template_content_contract() {
+    echo "-- test: skill-scaffold SKILL.md has required sections --"
+    local skill_file="${PROJECT_ROOT}/skills/skill-scaffold/SKILL.md"
+
+    local content
+    content="$(cat "${skill_file}" 2>/dev/null || echo "")"
+
+    assert_not_empty "skill-scaffold SKILL.md exists and is non-empty" "${content}"
+    assert_contains "skill-scaffold has frontmatter name" "name: skill-scaffold" "${content}"
+    assert_contains "skill-scaffold has When to Use section" "When to Use" "${content}"
+    assert_contains "skill-scaffold has Constraints section" "Constraints" "${content}"
+    assert_contains "skill-scaffold has SKILL.md skeleton" "SKILL.md skeleton" "${content}"
+    assert_contains "skill-scaffold has routing entry snippet" "default-triggers.json" "${content}"
+    assert_contains "skill-scaffold has test snippet" "test-routing.sh" "${content}"
+    assert_contains "skill-scaffold warns about process skill restriction" "superpowers-owned phase" "${content}"
+}
+
+test_starter_template_triggers
+test_prototype_lab_triggers
+test_agent_safety_review_triggers
+test_agent_safety_review_yolo
+test_wave1_driver_invariants
+test_prototype_lab_does_not_displace_brainstorming
+test_starter_template_content_contract
 
 # ---------------------------------------------------------------------------
 # Routing eval fixtures — incident-analysis trigger/no-trigger cases

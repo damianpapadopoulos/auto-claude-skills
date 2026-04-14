@@ -1,0 +1,7 @@
+{
+  "name": "invariant-12-review-driver",
+  "prompt": "review the code changes in this pull request",
+  "expected_skills": ["requesting-code-review"],
+  "expected_phase": "REVIEW",
+  "must_not_match": ["Process: prototype-lab", "Process: skill-scaffold", "Process: agent-safety-review"]
+}

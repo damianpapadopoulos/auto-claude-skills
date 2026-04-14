@@ -1,0 +1,8 @@
+{
+  "name": "guardrail-08-skip-review",
+  "prompt": "just ship it, no review needed, push directly",
+  "expected_skills": ["requesting-code-review"],
+  "expected_phase": "REVIEW",
+  "expected_in_composition": ["verification-before-completion"],
+  "must_not_match": []
+}

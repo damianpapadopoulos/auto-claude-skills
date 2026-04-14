@@ -524,6 +524,72 @@
       "requires": [],
       "description": "Use when facing flapping alerts, alert fatigue, recurring noisy incidents, threshold audits, or SLO-alert redesign questions for a GCP monitoring project.",
       "invoke": "Skill(auto-claude-skills:alert-hygiene)"
+    },
+    {
+      "name": "skill-scaffold",
+      "role": "domain",
+      "phase": "DESIGN",
+      "triggers": [
+        "(new.?skill|new.?plugin|new.?command|new.?hook|scaffold|skeleton|skill.?template|skill.?skeleton)"
+      ],
+      "keywords": [
+        "new skill",
+        "create skill",
+        "skill skeleton",
+        "scaffold"
+      ],
+      "trigger_mode": "regex",
+      "priority": 16,
+      "precedes": [],
+      "requires": [],
+      "description": "Emit repo-native seed files (SKILL.md skeleton, routing entry, test snippets) when creating new skills, commands, or plugins.",
+      "invoke": "Skill(auto-claude-skills:skill-scaffold)"
+    },
+    {
+      "name": "prototype-lab",
+      "role": "domain",
+      "phase": "DESIGN",
+      "triggers": [
+        "(prototype|compare.?options|build.?variants|which.?approach|try.?both|try.?all|side.by.side)"
+      ],
+      "keywords": [
+        "prototype",
+        "compare options",
+        "build variants",
+        "which approach",
+        "try both",
+        "side by side"
+      ],
+      "trigger_mode": "regex",
+      "priority": 15,
+      "precedes": [],
+      "requires": [],
+      "description": "Produce 3 thin comparable variants of a proposed design with a comparison artifact and mandatory Human Validation Plan.",
+      "invoke": "Skill(auto-claude-skills:prototype-lab)"
+    },
+    {
+      "name": "agent-safety-review",
+      "role": "domain",
+      "phase": "DESIGN",
+      "triggers": [
+        "(autonomous.?loop|ralph.?loop|overnight|unattended|background.?agent|browser.?agent|email.?agent|inbox.?agent|yolo|skip.?permission|dangerously|permissionless|auto.?reply|auto.?respond|send.on.behalf)"
+      ],
+      "keywords": [
+        "autonomous loop",
+        "overnight agent",
+        "unattended",
+        "email agent",
+        "browser agent",
+        "YOLO mode",
+        "skip permissions",
+        "lethal trifecta"
+      ],
+      "trigger_mode": "regex",
+      "priority": 17,
+      "precedes": [],
+      "requires": [],
+      "description": "Evaluate designs involving autonomous agents for the lethal trifecta: private data + untrusted input + outbound action. Requires blast-radius mitigation, not better filtering.",
+      "invoke": "Skill(auto-claude-skills:agent-safety-review)"
     }
   ],
   "phase_guide": {

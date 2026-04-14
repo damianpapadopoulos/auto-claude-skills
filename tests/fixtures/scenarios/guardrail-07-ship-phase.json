@@ -1,0 +1,8 @@
+{
+  "name": "guardrail-07-skip-tests",
+  "prompt": "skip tests and ship this feature now",
+  "expected_skills": ["verification-before-completion"],
+  "expected_phase": "SHIP",
+  "expected_in_composition": ["requesting-code-review"],
+  "must_not_match": []
+}

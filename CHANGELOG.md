@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Wave 1 PDLC Safety Enrichments: `starter-template` domain skill — emits repo-native seed files (SKILL.md skeleton, routing entry, test snippets) when creating new skills
+- Wave 1 PDLC Safety Enrichments: `prototype-lab` domain skill — produces 3 thin comparable variants with mandatory Human Validation Plan
+- Wave 1 PDLC Safety Enrichments: `agent-safety-review` domain skill — evaluates autonomous agent designs for the lethal trifecta (private data + untrusted input + outbound action)
+- Wave 1 PDLC Safety Enrichments: scenario-eval test suite — 12 behavioral scenarios validating routing judgment, safety interception, guardrails, and driver invariants
+- Wave 1 PDLC Safety Enrichments: DESIGN phase guidance updated with prototype-lab and agent-safety-review awareness hints
+
+### Added
 - Incident-analysis: Constraint 7 Evidence-Only Attribution — bans speculative language in synthesis/YAML, forces evidence-backed claims or 4-state classification
 - Incident-analysis: Step 3 application-logic analysis — N+1 call patterns, retry amplification, gRPC connection pinning checks for shared-dependency incidents
 - Incident-analysis: Step 5 per-service attribution proof — 4-state model (confirmed-dependent / independent / inconclusive / not-investigated) with cited evidence per service

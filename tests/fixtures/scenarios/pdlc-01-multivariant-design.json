@@ -1,0 +1,7 @@
+{
+  "name": "pdlc-01-multivariant-design",
+  "prompt": "I want to prototype and compare three different approaches for the new caching layer",
+  "expected_skills": ["prototype-lab"],
+  "expected_phase": "DESIGN",
+  "must_not_match": ["Process: prototype-lab"]
+}

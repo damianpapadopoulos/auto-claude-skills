@@ -1,0 +1,7 @@
+{
+  "name": "invariant-11-implement-driver",
+  "prompt": "execute the plan and implement the next task",
+  "expected_skills": ["executing-plans"],
+  "expected_phase": "IMPLEMENT",
+  "must_not_match": ["Process: prototype-lab", "Process: skill-scaffold", "Process: agent-safety-review"]
+}

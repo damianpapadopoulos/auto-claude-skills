@@ -1,0 +1,7 @@
+{
+  "name": "pdlc-03-new-skill",
+  "prompt": "create a new skill for automated database migration management",
+  "expected_skills": ["skill-scaffold"],
+  "expected_phase": "DESIGN",
+  "must_not_match": []
+}
