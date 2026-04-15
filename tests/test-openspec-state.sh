@@ -290,6 +290,117 @@ test_non_ship_phase_skips_guard() {
 test_non_ship_phase_skips_guard
 
 # ---------------------------------------------------------------------------
+# Push review gate tests (state-aware push blocking)
+# ---------------------------------------------------------------------------
+
+# Helper: run the guard hook with a git push command and given state files
+run_push_guard() {
+    local session_token="$1"
+    local phase="$2"
+    local comp_state="$3"  # JSON string for composition state, or empty
+
+    # Create session token
+    printf '%s' "${session_token}" > "${HOME}/.claude/.skill-session-token"
+
+    # Create signal file with phase
+    jq -n --arg p "${phase}" '{skill:"test",phase:$p}' \
+        > "${HOME}/.claude/.skill-last-invoked-${session_token}"
+
+    # Create composition state if provided
+    if [ -n "${comp_state}" ]; then
+        printf '%s' "${comp_state}" > "${HOME}/.claude/.skill-composition-state-${session_token}"
+    fi
+
+    # Feed a git push command to the hook
+    printf '{"tool_input":{"command":"git push"}}' | \
+        bash "${GUARD_HOOK}" 2>/dev/null
+}
+
+test_push_gate_blocks_unverified() {
+    echo "-- test: push gate blocks when verification not completed --"
+    setup_test_env
+    mkdir -p "${HOME}/.claude"
+
+    mkdir -p "${TEST_TMPDIR}/repo/.git"
+    cd "${TEST_TMPDIR}/repo"
+    git init -q
+
+    # verification-before-completion in chain but NOT in completed
+    local comp='{"chain":["brainstorming","writing-plans","executing-plans","requesting-code-review","verification-before-completion"],"current_index":3,"completed":["brainstorming","writing-plans","executing-plans"],"updated_at":"2026-04-16T10:00:00Z"}'
+
+    local output
+    output="$(run_push_guard "test-push-block-$$" "IMPLEMENT" "${comp}")"
+
+    assert_contains "push gate blocks" "PUSH GATE" "${output}"
+    assert_contains "push gate denies" "deny" "${output}"
+
+    teardown_test_env
+}
+test_push_gate_blocks_unverified
+
+test_push_gate_allows_verified() {
+    echo "-- test: push gate allows when verification completed --"
+    setup_test_env
+    mkdir -p "${HOME}/.claude"
+
+    mkdir -p "${TEST_TMPDIR}/repo/.git"
+    cd "${TEST_TMPDIR}/repo"
+    git init -q
+
+    # verification-before-completion IS in completed
+    local comp='{"chain":["brainstorming","writing-plans","executing-plans","requesting-code-review","verification-before-completion","openspec-ship"],"current_index":5,"completed":["brainstorming","writing-plans","executing-plans","requesting-code-review","verification-before-completion"],"updated_at":"2026-04-16T10:00:00Z"}'
+
+    local output
+    output="$(run_push_guard "test-push-allow-$$" "SHIP" "${comp}")"
+
+    assert_not_contains "push gate allows" "PUSH GATE" "${output}"
+    assert_not_contains "push gate no deny" "deny" "${output}"
+
+    teardown_test_env
+}
+test_push_gate_allows_verified
+
+test_push_gate_allows_no_composition() {
+    echo "-- test: push gate allows ad-hoc push (no composition) --"
+    setup_test_env
+    mkdir -p "${HOME}/.claude"
+
+    mkdir -p "${TEST_TMPDIR}/repo/.git"
+    cd "${TEST_TMPDIR}/repo"
+    git init -q
+
+    local output
+    output="$(run_push_guard "test-push-adhoc-$$" "IMPLEMENT" "")"
+
+    assert_not_contains "push gate allows ad-hoc" "PUSH GATE" "${output}"
+    assert_not_contains "push gate no deny for ad-hoc" "deny" "${output}"
+
+    teardown_test_env
+}
+test_push_gate_allows_no_composition
+
+test_push_gate_allows_no_verification_in_chain() {
+    echo "-- test: push gate allows when verification not in chain --"
+    setup_test_env
+    mkdir -p "${HOME}/.claude"
+
+    mkdir -p "${TEST_TMPDIR}/repo/.git"
+    cd "${TEST_TMPDIR}/repo"
+    git init -q
+
+    # chain without verification-before-completion
+    local comp='{"chain":["brainstorming","writing-plans"],"current_index":1,"completed":["brainstorming"],"updated_at":"2026-04-16T10:00:00Z"}'
+
+    local output
+    output="$(run_push_guard "test-push-nochain-$$" "PLAN" "${comp}")"
+
+    assert_not_contains "push gate allows no-verification chain" "PUSH GATE" "${output}"
+
+    teardown_test_env
+}
+test_push_gate_allows_no_verification_in_chain
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

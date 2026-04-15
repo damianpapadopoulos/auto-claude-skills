@@ -1,6 +1,6 @@
 ---
 name: require-review-before-push
-enabled: true
+enabled: false
 event: bash
 pattern: ^git\s+push\s|^git\s+push$|&&\s*git\s+push|;\s*git\s+push
 action: block
