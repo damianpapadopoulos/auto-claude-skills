@@ -87,8 +87,8 @@ setup_test_env
 # ---------------------------------------------------------------------------
 # Check that evals directory has at least one file
 # ---------------------------------------------------------------------------
-eval_count="$(find "${EVALS_DIR}" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l | tr -d ' ')"
-assert_not_empty "evals directory has at least one JSON file" "${eval_count}"
+# At least one eval pack must exist (Task 1 creates the dog-food fixture)
+assert_file_exists "dog-food eval pack exists" "${EVALS_DIR}/routing-validation.json"
 
 # ---------------------------------------------------------------------------
 # Validate each eval pack
@@ -314,14 +314,16 @@ git commit -m "feat: register runtime-validation and implementation-drift-check 
 
 ---
 
-### Task 5: Register both skills in fallback-registry.json
+### Task 5: Register both skills, compositions, and hints in fallback-registry.json
 
 **Files:**
-- Modify: `config/fallback-registry.json` (skills array, after security-scanner entry)
+- Modify: `config/fallback-registry.json` (skills array, phase_compositions, methodology_hints)
+
+The fallback registry must stay in sync with default-triggers.json. The scenario eval suite (`tests/test-scenario-evals.sh`) installs from `fallback-registry.json`, so the new compositions and hints must be present here too.
 
 - [ ] **Step 1: Add both skill entries to fallback registry**
 
-Insert after the `security-scanner` entry in `config/fallback-registry.json`. Use the same field values as default-triggers.json, plus add `"available": true, "enabled": true` fields (matching the fallback registry format):
+Insert after the `security-scanner` entry in `config/fallback-registry.json` (skills array, after line ~456). Use the same field values as default-triggers.json, plus add `"available": true, "enabled": true` fields:
 
 ```json
     {
@@ -356,16 +358,74 @@ Insert after the `security-scanner` entry in `config/fallback-registry.json`. Us
     },
 ```
 
-- [ ] **Step 2: Verify JSON is valid**
+- [ ] **Step 2: Add REVIEW parallel entries to fallback registry**
+
+In `config/fallback-registry.json`, find `phase_compositions.REVIEW.parallel` (line ~1206). After the existing `security-scanner` entry (line ~1229), add the same two entries as Task 6 Step 1:
+
+```json
+        {
+          "use": "runtime-validation -> Skill(auto-claude-skills:runtime-validation)",
+          "when": "validation tools detected (Playwright, dev server, or CLI binary)",
+          "purpose": "Realistic-context validation: derive scenarios from specs/evals, execute browser/API/CLI paths, report with evidence"
+        },
+        {
+          "use": "implementation-drift-check -> Skill(auto-claude-skills:implementation-drift-check)",
+          "when": "comparison material exists (specs, plans, or active chain with code changes)",
+          "purpose": "Spec drift detection, assumption surfacing, coverage gap identification",
+          "gate": "artifact-presence",
+          "artifacts": [
+            "openspec/changes/*/",
+            "openspec/specs/*/spec.md",
+            "docs/superpowers/specs/*-design.md",
+            "docs/superpowers/plans/*.md",
+            "tests/fixtures/evals/*.json"
+          ]
+        }
+```
+
+- [ ] **Step 3: Add SHIP fallback entries to fallback registry**
+
+In `config/fallback-registry.json`, find `phase_compositions.SHIP.sequence` (line ~1255). Insert after the first entry (driver) and before `openspec-ship`:
+
+```json
+        {
+          "step": "runtime-validation",
+          "purpose": "FALLBACK: Run realistic-context validation only if not already run in REVIEW",
+          "gate": "session-marker",
+          "marker": "validation-ran"
+        },
+        {
+          "step": "implementation-drift-check",
+          "purpose": "FALLBACK: Run drift check only if not already run in REVIEW",
+          "gate": "session-marker",
+          "marker": "drift-check-ran"
+        },
+```
+
+- [ ] **Step 4: Update Playwright hints in fallback registry**
+
+In `config/fallback-registry.json`, update the `playwright-mcp` hint (line ~1488) and `frontend-playwright` hint (line ~1502) to match the updates in Task 7:
+
+`playwright-mcp` hint:
+```json
+"hint": "PLAYWRIGHT: If Playwright MCP tools are available, use them for visual verification. During REVIEW, use Skill(auto-claude-skills:runtime-validation) as the orchestration entry point for E2E validation."
+```
+
+`frontend-playwright` hint:
+```json
+"hint": "PLAYWRIGHT TESTING: Frontend changes detected. Include Playwright E2E tests covering the changed UI behavior. During REVIEW, use Skill(auto-claude-skills:runtime-validation) for orchestrated E2E and a11y validation."
+```
+
+- [ ] **Step 5: Verify JSON is valid**
 
 Run: `jq empty config/fallback-registry.json && echo "valid" || echo "BROKEN"`
 Expected: `valid`
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add config/fallback-registry.json
-git commit -m "feat: register runtime-validation and implementation-drift-check in fallback-registry"
+git commit -m "feat: register skills, compositions, and hints in fallback-registry"
 ```
 
 ---
@@ -726,16 +786,71 @@ test_drift_check_routing() {
 test_drift_check_routing
 ```
 
-- [ ] **Step 4: Run routing tests**
+- [ ] **Step 4: Add isolated artifact-presence gate test**
+
+Add a test that verifies the gate suppresses composition entries when no artifacts exist. Uses a v4 registry with phase_compositions and a temp project root with no spec/plan files:
+
+```bash
+# ---------------------------------------------------------------------------
+# artifact-presence gate suppression (isolated)
+# ---------------------------------------------------------------------------
+test_artifact_presence_gate() {
+    echo "-- artifact-presence gate --"
+
+    setup_test_env
+    # Install a v4 registry that includes the drift-check composition entry
+    # with gate:artifact-presence. The test HOME has no spec/plan/eval artifacts,
+    # so the gate should suppress the composition entry.
+    install_registry_with_validation
+
+    # Patch registry to add phase_compositions.REVIEW with the gated entry
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    local tmp_file
+    tmp_file="$(mktemp)"
+    jq '.phase_compositions.REVIEW = {
+      "driver": "requesting-code-review",
+      "parallel": [
+        {
+          "use": "implementation-drift-check -> Skill(auto-claude-skills:implementation-drift-check)",
+          "when": "comparison material exists",
+          "purpose": "Spec drift detection",
+          "gate": "artifact-presence",
+          "artifacts": [
+            "openspec/changes/*/",
+            "openspec/specs/*/spec.md",
+            "docs/superpowers/specs/*-design.md",
+            "docs/superpowers/plans/*.md",
+            "tests/fixtures/evals/*.json"
+          ]
+        }
+      ]
+    }' "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
+
+    echo "  gate should suppress drift-check in artifact-free project"
+    local output context
+    output="$(run_hook "review my code changes")"
+    context="$(extract_context "$output")"
+    # In a clean test HOME with no spec/plan/eval files, the artifact-presence
+    # gate should suppress the drift-check composition entry entirely
+    assert_not_contains "drift-check suppressed by gate" "implementation-drift-check" "$context"
+
+    teardown_test_env
+}
+test_artifact_presence_gate
+```
+
+This test works because `setup_test_env` creates a clean temp HOME with no `openspec/`, `docs/superpowers/`, or `tests/fixtures/evals/` directories. The gate's `compgen -G` checks fail, suppressing the entry.
+
+- [ ] **Step 5: Run routing tests**
 
 Run: `bash tests/test-routing.sh`
 Expected: All tests pass including new ones. Zero failures.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add tests/test-routing.sh
-git commit -m "test: add isolated routing tests for runtime-validation and implementation-drift-check"
+git commit -m "test: add isolated routing and gate tests for validation wave skills"
 ```
 
 ---
@@ -808,7 +923,7 @@ Create `tests/fixtures/scenarios/drift-16-review-with-spec.json`:
 
 - [ ] **Step 5: Create drift-17 fixture**
 
-**Design note:** The artifact-presence gate is a coarse repo-level filter (suppresses drift-check in repos with NO design artifacts). In repos like auto-claude-skills that always have specs/plans, drift-check WILL appear in composition lines when the REVIEW phase is active. This fixture tests that drift-check does NOT appear as a *selected skill* when the prompt contains no drift-related trigger words — trigger exclusion, not artifact-presence gating. The artifact-presence gate is tested in isolation in Task 10's dedicated gate test.
+**Design note:** The artifact-presence gate is a coarse repo-level filter (suppresses drift-check in repos with NO design artifacts). In repos like auto-claude-skills that always have specs/plans, drift-check WILL appear in composition lines when the REVIEW phase is active. This fixture tests that drift-check does NOT appear as a *selected skill* when the prompt contains no drift-related trigger words — trigger exclusion, not artifact-presence gating. The artifact-presence gate is tested in isolation in Task 10's dedicated gate test (see `test_artifact_presence_gate`).
 
 Create `tests/fixtures/scenarios/drift-17-trigger-exclusion.json`:
 
