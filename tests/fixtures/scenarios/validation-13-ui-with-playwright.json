@@ -1,0 +1,7 @@
+{
+  "name": "validation-13-ui-with-playwright",
+  "prompt": "I need to validate the login page works with playwright e2e tests",
+  "expected_skills": ["runtime-validation"],
+  "expected_phase": "REVIEW",
+  "must_not_match": ["Process: runtime-validation"]
+}

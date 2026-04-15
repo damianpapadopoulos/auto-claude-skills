@@ -1,0 +1,7 @@
+{
+  "name": "drift-17-trigger-exclusion",
+  "prompt": "review my code changes and check for bugs",
+  "expected_skills": ["requesting-code-review"],
+  "expected_phase": "REVIEW",
+  "must_not_match": ["Domain: implementation-drift-check"]
+}

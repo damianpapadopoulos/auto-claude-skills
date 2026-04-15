@@ -457,7 +457,9 @@
       "name": "runtime-validation",
       "role": "domain",
       "phase": "REVIEW",
-      "triggers": ["(validate|validation|e2e|end.to.end|smoke.test|a11y|accessibility|exercise|try.it|does.it.work|interactive.test)"],
+      "triggers": [
+        "(validate|validation|e2e|end.to.end|smoke.test|a11y|accessibility|exercise|try.it|does.it.work|interactive.test)"
+      ],
       "keywords": [],
       "trigger_mode": "regex",
       "priority": 15,
@@ -472,7 +474,9 @@
       "name": "implementation-drift-check",
       "role": "domain",
       "phase": "REVIEW",
-      "triggers": ["(drift|reflect|assumption|gap|deviat|on.track|off.track|spec.check|still.on.plan)"],
+      "triggers": [
+        "(drift|reflect|assumption|gap|deviat|on.track|off.track|spec.check|still.on.plan)"
+      ],
       "keywords": [],
       "trigger_mode": "regex",
       "priority": 12,
@@ -480,6 +484,36 @@
       "requires": [],
       "description": "Spec drift detection, assumption surfacing, and coverage gap identification against Intent Truth.",
       "invoke": "Skill(auto-claude-skills:implementation-drift-check)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "test-driven-development",
+      "role": "domain",
+      "phase": "IMPLEMENT",
+      "triggers": [],
+      "keywords": [],
+      "trigger_mode": "regex",
+      "priority": 200,
+      "precedes": [],
+      "requires": [],
+      "description": "Composition-activated: TDD parallel hint in IMPLEMENT/DEBUG phases.",
+      "invoke": "Skill(superpowers:test-driven-development)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "using-superpowers",
+      "role": "domain",
+      "phase": "DESIGN",
+      "triggers": [],
+      "keywords": [],
+      "trigger_mode": "regex",
+      "priority": 200,
+      "precedes": [],
+      "requires": [],
+      "description": "Composition-activated: superpowers skill system introduction.",
+      "invoke": "Skill(superpowers:using-superpowers)",
       "available": true,
       "enabled": true
     },
@@ -681,34 +715,6 @@
       "requires": [],
       "description": "Evaluate designs involving autonomous agents for the lethal trifecta: private data + untrusted input + outbound action. Requires blast-radius mitigation, not better filtering.",
       "invoke": "Skill(auto-claude-skills:agent-safety-review)",
-      "available": true,
-      "enabled": true
-    },
-    {
-      "name": "test-driven-development",
-      "role": "domain",
-      "triggers": [],
-      "trigger_mode": "regex",
-      "priority": 200,
-      "phase": "",
-      "precedes": [],
-      "requires": [],
-      "description": "Discovered skill",
-      "invoke": "Skill(superpowers:test-driven-development)",
-      "available": true,
-      "enabled": true
-    },
-    {
-      "name": "using-superpowers",
-      "role": "domain",
-      "triggers": [],
-      "trigger_mode": "regex",
-      "priority": 200,
-      "phase": "",
-      "precedes": [],
-      "requires": [],
-      "description": "Discovered skill",
-      "invoke": "Skill(superpowers:using-superpowers)",
       "available": true,
       "enabled": true
     }

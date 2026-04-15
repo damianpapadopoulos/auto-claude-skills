@@ -1,0 +1,7 @@
+{
+  "name": "validation-15-cli-smoke",
+  "prompt": "does the CLI tool work? try it with a smoke test",
+  "expected_skills": ["runtime-validation"],
+  "expected_phase": "REVIEW",
+  "must_not_match": ["Process: runtime-validation"]
+}

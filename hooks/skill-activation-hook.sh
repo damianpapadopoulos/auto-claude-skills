@@ -1232,14 +1232,18 @@ if [[ -n "$CURRENT_PHASE" ]]; then
           artifact-presence)
             _gate_pass=0
             _saved_IFS="$IFS"; IFS=','
+            set -f  # disable globbing during IFS split
             for _gpat in $_gate_artifacts; do
               IFS="$_saved_IFS"
+              set +f
               [[ -z "$_gpat" ]] && continue
-              compgen -G "${_PROJECT_ROOT}/${_gpat}" >/dev/null 2>&1 && { _gate_pass=1; break; }
+              [[ -n "$(compgen -G "${_PROJECT_ROOT}/${_gpat}" 2>/dev/null)" ]] && { _gate_pass=1; break; }
             done
+            set +f
             IFS="$_saved_IFS"
             ;;
         esac
+        [[ -n "${SKILL_EXPLAIN:-}" ]] && echo "[skill-hook]   [gate] ${_gate_type}: pass=${_gate_pass} root=${_PROJECT_ROOT}" >&2
 
         if [[ "$_gate_pass" -eq 1 ]]; then
           COMPOSITION_LINES="${COMPOSITION_LINES}

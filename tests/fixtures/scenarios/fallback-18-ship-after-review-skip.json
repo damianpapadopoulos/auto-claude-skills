@@ -1,0 +1,8 @@
+{
+  "name": "fallback-18-ship-after-review-skip",
+  "prompt": "ship it, merge to main and push",
+  "expected_skills": ["verification-before-completion"],
+  "expected_phase": "SHIP",
+  "expected_in_composition": ["runtime-validation", "implementation-drift-check"],
+  "must_not_match": []
+}

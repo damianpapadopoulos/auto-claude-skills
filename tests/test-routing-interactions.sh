@@ -435,6 +435,42 @@ install_registry() {
 REGISTRY
 }
 
+# Helper: install registry extended with validation wave skills
+install_registry_with_validation() {
+    install_registry
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    local tmp_file
+    tmp_file="$(mktemp)"
+    jq '.skills += [
+      {
+        "name": "runtime-validation",
+        "role": "domain",
+        "phase": "REVIEW",
+        "triggers": ["(validate|validation|e2e|end.to.end|smoke.test|a11y|accessibility|exercise|try.it|does.it.work|interactive.test)"],
+        "trigger_mode": "regex",
+        "priority": 15,
+        "precedes": [],
+        "requires": [],
+        "invoke": "Skill(auto-claude-skills:runtime-validation)",
+        "available": true,
+        "enabled": true
+      },
+      {
+        "name": "implementation-drift-check",
+        "role": "domain",
+        "phase": "REVIEW",
+        "triggers": ["(drift|reflect|assumption|gap|deviat|on.track|off.track|spec.check|still.on.plan)"],
+        "trigger_mode": "regex",
+        "priority": 12,
+        "precedes": [],
+        "requires": [],
+        "invoke": "Skill(auto-claude-skills:implementation-drift-check)",
+        "available": true,
+        "enabled": true
+      }
+    ]' "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
+}
+
 # ============================================================
 # GROUP 1: requesting-code-review vs agent-team-review
 # Both share: review|pull.?request|code.?review|check.*(code|changes|diff)
@@ -628,6 +664,107 @@ assert_does_not_activate "simple code question does not trigger design-debate" \
 assert_does_not_activate "'deploy' alone does not trigger incident-analysis" \
   "deploy this to staging" \
   "incident-analysis"
+
+# ---------------------------------------------------------------------------
+# runtime-validation routing (isolated)
+# ---------------------------------------------------------------------------
+test_runtime_validation_routing() {
+    echo "-- runtime-validation routing --"
+
+    setup_test_env
+    install_registry_with_validation
+
+    echo "  trigger: 'validate the feature end to end'"
+    local output context
+    output="$(run_hook "I want to validate the feature works end to end")"
+    context="$(extract_context "$output")"
+    assert_contains "runtime-validation surfaces on validate prompt" "runtime-validation" "$context"
+    assert_not_contains "runtime-validation is not process driver" "Process: runtime-validation" "$context"
+
+    echo "  negative: 'fix this crash'"
+    output="$(run_hook "fix this crash in the auth module")"
+    context="$(extract_context "$output")"
+    assert_not_contains "runtime-validation not in debug" "runtime-validation" "$context"
+
+    teardown_test_env
+}
+test_runtime_validation_routing
+
+# ---------------------------------------------------------------------------
+# implementation-drift-check routing (isolated)
+# ---------------------------------------------------------------------------
+test_drift_check_routing() {
+    echo "-- implementation-drift-check routing --"
+
+    setup_test_env
+    install_registry_with_validation
+
+    echo "  trigger: 'check drift against the spec'"
+    local output context
+    output="$(run_hook "check drift against the spec")"
+    context="$(extract_context "$output")"
+    assert_contains "drift-check surfaces on explicit" "implementation-drift-check" "$context"
+    assert_not_contains "drift-check is not process driver" "Process: implementation-drift-check" "$context"
+
+    echo "  trigger: 'am I still on plan'"
+    output="$(run_hook "am I still on plan")"
+    context="$(extract_context "$output")"
+    assert_contains "drift-check surfaces on plan check" "implementation-drift-check" "$context"
+
+    teardown_test_env
+}
+test_drift_check_routing
+
+# ---------------------------------------------------------------------------
+# artifact-presence gate suppression (isolated)
+# ---------------------------------------------------------------------------
+test_artifact_presence_gate() {
+    echo "-- artifact-presence gate --"
+
+    setup_test_env
+    install_registry_with_validation
+
+    # Patch registry to add phase_compositions.REVIEW with the gated entry
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    local tmp_file
+    tmp_file="$(mktemp)"
+    jq '.phase_compositions.REVIEW = {
+      "driver": "requesting-code-review",
+      "parallel": [
+        {
+          "use": "implementation-drift-check -> Skill(auto-claude-skills:implementation-drift-check)",
+          "when": "comparison material exists",
+          "purpose": "Spec drift detection",
+          "gate": "artifact-presence",
+          "artifacts": [
+            "openspec/changes/*/",
+            "docs/plans/*-design.md",
+            "docs/plans/*-plan.md",
+            "docs/plans/*-spec.md",
+            "openspec/specs/*/spec.md",
+            "docs/superpowers/specs/*-design.md",
+            "docs/superpowers/plans/*.md",
+            "tests/fixtures/evals/*.json"
+          ]
+        }
+      ]
+    }' "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
+
+    local artifact_free_root
+    artifact_free_root="$(mktemp -d "${TMPDIR:-/tmp}/acs-gate-test.XXXXXXXX")"
+
+    echo "  gate should suppress drift-check in artifact-free project"
+    local output context
+    export SKILL_PROJECT_ROOT="${artifact_free_root}"
+    output="$(run_hook "review my code changes")"
+    unset SKILL_PROJECT_ROOT
+    context="$(extract_context "$output")"
+    assert_not_contains "drift-check suppressed by gate" "implementation-drift-check" "$context"
+
+    rm -rf "${artifact_free_root}"
+    teardown_test_env
+}
+test_artifact_presence_gate
 
 # ============================================================
 # Summary

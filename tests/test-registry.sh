@@ -337,12 +337,12 @@ test_default_triggers_has_phase_compositions() {
     # REVIEW should have parallel entries
     local review_parallel
     review_parallel="$(jq '.phase_compositions.REVIEW.parallel | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "REVIEW has 4 parallel entries" "4" "${review_parallel}"
+    assert_equals "REVIEW has 6 parallel entries" "6" "${review_parallel}"
 
     # SHIP should have sequence entries
     local ship_sequence
     ship_sequence="$(jq '.phase_compositions.SHIP.sequence | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "SHIP has 5 sequence entries" "5" "${ship_sequence}"
+    assert_equals "SHIP has 7 sequence entries" "7" "${ship_sequence}"
 
     teardown_test_env
 }

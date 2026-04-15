@@ -1,0 +1,7 @@
+{
+  "name": "drift-16-review-with-spec",
+  "prompt": "check drift against the spec for this feature",
+  "expected_skills": ["implementation-drift-check"],
+  "expected_phase": "REVIEW",
+  "must_not_match": ["Process: implementation-drift-check"]
+}
