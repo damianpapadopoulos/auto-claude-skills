@@ -38,6 +38,16 @@ assert_file_contains "SKILL.md: exit code 139 SIGSEGV" "139" "${SKILL_FILE}"
 assert_file_contains "SKILL.md: exit code 143 SIGTERM" "143" "${SKILL_FILE}"
 
 # ---------------------------------------------------------------------------
+# references/error-taxonomy.md — Extracted taxonomy and exit codes
+# ---------------------------------------------------------------------------
+ERROR_TAXONOMY_REF="${PROJECT_ROOT}/skills/incident-analysis/references/error-taxonomy.md"
+assert_file_exists "references/error-taxonomy.md exists" "${ERROR_TAXONOMY_REF}"
+assert_file_contains "error-taxonomy ref: has tier table" "Tier.*Type.*Diagnostic value" "${ERROR_TAXONOMY_REF}"
+assert_file_contains "error-taxonomy ref: has exit code table" "Exit Code.*Signal.*Meaning" "${ERROR_TAXONOMY_REF}"
+assert_file_contains "error-taxonomy ref: mentions poison-pill" "poison.pill" "${ERROR_TAXONOMY_REF}"
+assert_file_contains "error-taxonomy ref: baseline verification rule" "not evidence.*query the baseline" "${ERROR_TAXONOMY_REF}"
+
+# ---------------------------------------------------------------------------
 # SKILL.md — CrashLoopBackOff triage branch
 # ---------------------------------------------------------------------------
 assert_file_contains "SKILL.md: has crashloop triage branch" "CrashLoopBackOff triage" "${SKILL_FILE}"
@@ -311,12 +321,12 @@ assert_file_contains "SKILL.md: step 3c warns against anchoring bias" \
 # ---------------------------------------------------------------------------
 assert_file_contains "SKILL.md: message broker signals are Tier 1" \
     "Message broker signals.*always Tier 1" "${SKILL_FILE}"
-assert_file_contains "SKILL.md: message broker mentions poison-pill" \
-    "poison.pill" "${SKILL_FILE}"
+assert_file_contains "error-taxonomy ref: message broker mentions poison-pill" \
+    "poison.pill" "${ERROR_TAXONOMY_REF}"
 assert_file_contains "SKILL.md: Tier 3 requires verified baseline" \
     "verified baseline" "${SKILL_FILE}"
-assert_file_contains "SKILL.md: Tier 3 forbids unverified dismissal" \
-    "not evidence.*query the baseline" "${SKILL_FILE}"
+assert_file_contains "error-taxonomy ref: Tier 3 forbids unverified dismissal" \
+    "not evidence.*query the baseline" "${ERROR_TAXONOMY_REF}"
 
 # ---------------------------------------------------------------------------
 # SKILL.md — Intermediary-Layer Investigation Discipline (Constraint 9)
