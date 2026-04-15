@@ -405,6 +405,36 @@
       "invoke": "Skill(auto-claude-skills:security-scanner)"
     },
     {
+      "name": "runtime-validation",
+      "role": "domain",
+      "phase": "REVIEW",
+      "triggers": [
+        "(validate|validation|e2e|end.to.end|smoke.test|a11y|accessibility|exercise|try.it|does.it.work|interactive.test)"
+      ],
+      "keywords": [],
+      "trigger_mode": "regex",
+      "priority": 15,
+      "precedes": [],
+      "requires": [],
+      "description": "Realistic-context validation: browser E2E, API smoke, CLI checks, a11y audits with unified report.",
+      "invoke": "Skill(auto-claude-skills:runtime-validation)"
+    },
+    {
+      "name": "implementation-drift-check",
+      "role": "domain",
+      "phase": "REVIEW",
+      "triggers": [
+        "(drift|reflect|assumption|gap|deviat|on.track|off.track|spec.check|still.on.plan)"
+      ],
+      "keywords": [],
+      "trigger_mode": "regex",
+      "priority": 12,
+      "precedes": [],
+      "requires": [],
+      "description": "Spec drift detection, assumption surfacing, and coverage gap identification against Intent Truth.",
+      "invoke": "Skill(auto-claude-skills:implementation-drift-check)"
+    },
+    {
       "name": "incident-analysis",
       "role": "domain",
       "phase": "DEBUG",
@@ -740,7 +770,7 @@
         "(screenshot|visual.test|browser.test|layout.regress|lighthouse|a11y|smoke.test|e2e|playwright)"
       ],
       "trigger_mode": "regex",
-      "hint": "PLAYWRIGHT: If Playwright MCP tools are available, use them for visual verification and interactive debugging.",
+      "hint": "PLAYWRIGHT: If Playwright MCP tools are available, use them for visual verification. During REVIEW, use Skill(auto-claude-skills:runtime-validation) as the orchestration entry point for E2E validation.",
       "phases": [
         "IMPLEMENT",
         "REVIEW",
@@ -754,7 +784,7 @@
         "(component|page|form|modal|dialog|sidebar|navbar|header|footer|button|dropdown|tooltip|tab|card|widget|dashboard|landing.?page|login.?page|signup|onboard|checkout|ui|frontend|layout|style|css|tailwind|responsive)"
       ],
       "trigger_mode": "regex",
-      "hint": "PLAYWRIGHT TESTING: Frontend changes detected. Include Playwright E2E tests covering the changed UI behavior. Use the webapp-testing skill.",
+      "hint": "PLAYWRIGHT TESTING: Frontend changes detected. Include Playwright E2E tests covering the changed UI behavior. During REVIEW, use Skill(auto-claude-skills:runtime-validation) for orchestrated E2E and a11y validation.",
       "phases": [
         "DESIGN",
         "IMPLEMENT"
@@ -1180,6 +1210,27 @@
           "use": "security-scanner -> Skill(auto-claude-skills:security-scanner)",
           "when": "always",
           "purpose": "Run semgrep/trivy deterministic scans first, then LLM triage. Self-healing loop: scan -> fix -> re-scan -> clean"
+        },
+        {
+          "use": "runtime-validation -> Skill(auto-claude-skills:runtime-validation)",
+          "when": "validation tools detected (Playwright, dev server, or CLI binary)",
+          "purpose": "Realistic-context validation: derive scenarios from specs/evals, execute browser/API/CLI paths, report with evidence"
+        },
+        {
+          "use": "implementation-drift-check -> Skill(auto-claude-skills:implementation-drift-check)",
+          "when": "comparison material exists (specs, plans, or active chain with code changes)",
+          "purpose": "Spec drift detection, assumption surfacing, coverage gap identification",
+          "gate": "artifact-presence",
+          "artifacts": [
+            "openspec/changes/*/",
+            "docs/plans/*-design.md",
+            "docs/plans/*-plan.md",
+            "docs/plans/*-spec.md",
+            "openspec/specs/*/spec.md",
+            "docs/superpowers/specs/*-design.md",
+            "docs/superpowers/plans/*.md",
+            "tests/fixtures/evals/*.json"
+          ]
         }
       ],
       "hints": [
@@ -1207,6 +1258,18 @@
     "SHIP": {
       "driver": "verification-before-completion",
       "sequence": [
+        {
+          "step": "runtime-validation",
+          "purpose": "FALLBACK: Run realistic-context validation only if not already run in REVIEW",
+          "gate": "session-marker",
+          "marker": "validation-ran"
+        },
+        {
+          "step": "implementation-drift-check",
+          "purpose": "FALLBACK: Run drift check only if not already run in REVIEW",
+          "gate": "session-marker",
+          "marker": "drift-check-ran"
+        },
         {
           "step": "openspec-ship",
           "purpose": "Create retrospective OpenSpec change, validate, archive, update changelog"

@@ -58,6 +58,7 @@ fi
 REGISTRY_CACHE="${HOME}/.claude/.skill-registry-cache.json"
 FALLBACK_REGISTRY="${PLUGIN_ROOT}/config/fallback-registry.json"
 REGISTRY=""
+_PROJECT_ROOT="${SKILL_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 
 if [[ -f "$REGISTRY_CACHE" ]] && jq empty "$REGISTRY_CACHE" >/dev/null 2>&1; then
   REGISTRY="$(cat "$REGISTRY_CACHE")"
@@ -1187,6 +1188,8 @@ if [[ -n "$CURRENT_PHASE" ]]; then
         if .plugin then
           select(.plugin as $p | $avail | any(. == $p)) |
           "LINE:  PARALLEL: \(.use) -> \(.purpose) [\(.plugin)]"
+        elif .gate then
+          "GATED:\(.gate):\(.marker // ""):\(.artifacts // [] | join(",")):\("  PARALLEL: \(.use) \u2014 \(.purpose)")"
         else
           "LINE:  PARALLEL: \(.use) \u2014 \(.purpose)"
         end),
@@ -1194,6 +1197,8 @@ if [[ -n "$CURRENT_PHASE" ]]; then
         if .plugin then
           select(.plugin as $p | $avail | any(. == $p)) |
           "LINE:  SEQUENCE: \(.use // .step) -> \(.purpose) [\(.plugin)]"
+        elif .gate then
+          "GATED:\(.gate):\(.marker // ""):\(.artifacts // [] | join(",")):\("  SEQUENCE: \(.step) -> \(.purpose)")"
         else
           "LINE:  SEQUENCE: \(.step) -> \(.purpose)"
         end),
@@ -1211,6 +1216,36 @@ if [[ -n "$CURRENT_PHASE" ]]; then
   while IFS= read -r _cline; do
     [[ -z "$_cline" ]] && continue
     case "$_cline" in
+      GATED:*)
+        # Parse gate metadata: GATED:type:marker:artifacts:line
+        _gate_rest="${_cline#GATED:}"
+        _gate_type="${_gate_rest%%:*}"; _gate_rest="${_gate_rest#*:}"
+        _gate_marker="${_gate_rest%%:*}"; _gate_rest="${_gate_rest#*:}"
+        _gate_artifacts="${_gate_rest%%:*}"; _gate_rest="${_gate_rest#*:}"
+        _gate_line="${_gate_rest}"
+
+        _gate_pass=1
+        case "$_gate_type" in
+          session-marker)
+            [[ -f "${HOME}/.claude/.skill-${_gate_marker}-${_SESSION_TOKEN:-default}" ]] && _gate_pass=0
+            ;;
+          artifact-presence)
+            _gate_pass=0
+            _saved_IFS="$IFS"; IFS=','
+            for _gpat in $_gate_artifacts; do
+              IFS="$_saved_IFS"
+              [[ -z "$_gpat" ]] && continue
+              compgen -G "${_PROJECT_ROOT}/${_gpat}" >/dev/null 2>&1 && { _gate_pass=1; break; }
+            done
+            IFS="$_saved_IFS"
+            ;;
+        esac
+
+        if [[ "$_gate_pass" -eq 1 ]]; then
+          COMPOSITION_LINES="${COMPOSITION_LINES}
+${_gate_line}"
+        fi
+        ;;
       LINE:*)
         COMPOSITION_LINES="${COMPOSITION_LINES}
 ${_cline#LINE:}"
