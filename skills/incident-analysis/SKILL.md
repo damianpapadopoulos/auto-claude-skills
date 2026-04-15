@@ -35,9 +35,7 @@ If a mutating action is identified (restart service, rollback deployment, scale 
 
 During active investigation, all application-level file reads, log queries, and code searches MUST be constrained to the specific service or trace ID identified in Stage 1 (MITIGATE). Global codebase searches (unbounded grep, recursive find) are forbidden. This prevents context window exhaustion and irrelevant noise during time-sensitive debugging.
 
-**Infrastructure escalation exception:** When Step 3 (Single-Service Deep Dive) identifies multi-pod or multi-service failures that indicate a node-level or infrastructure-level root cause, the scope expands to the affected node(s) and their infrastructure signals (kubelet logs, serial console, audit logs, node-level metrics). This escalation is bounded — queries target the specific node(s) implicated by the application-level evidence, not the entire cluster. The completeness gate (Step 8, Q6) may require checking peer nodes for systemic risk; this is also permitted under this exception.
-
-**Shared resource and error taxonomy exception:** When Step 2 identifies Tier 1 (anomalous) errors in services adjacent to the symptomatic one, or when Step 3 identifies a shared resource under pressure with evidence of multi-consumer impact, the scope expands to the shared resource's known consumer set (deployment history, connection metrics, error logs). This escalation is bounded to declared consumers of the identified resource, not the entire organization or cluster.
+**Bounded exceptions:** (a) Infrastructure escalation — when Step 3 identifies multi-pod failures indicating a node-level root cause, scope expands to the affected node(s) and their infrastructure signals. The completeness gate (Step 8, Q6) may require checking peer nodes. (b) Shared resource — when Step 2 identifies Tier 1 errors in adjacent services, or Step 3 identifies a shared resource under pressure, scope expands to the shared resource's known consumer set. Both escalations are bounded to specific implicated targets, not the entire cluster or organization.
 
 ### 3. Temp-File Execution Pattern (Tier 2 Only)
 
@@ -84,33 +82,15 @@ Maintain a mental ledger of evidence collected during the investigation, keyed b
 | Trace queries | `(trace_id, project_id)` |
 | Source analysis | `(repo, commit_ref, file_path)` |
 
-Before issuing a query that matches a prior ledger entry:
+Before issuing a query matching a prior entry: reuse if within `freshness_window_seconds` (default 300s), labeling output as `reused (collected at <UTC>)`. If stale, re-query and update.
 
-1. Check if the entry is within the active playbook's `freshness_window_seconds` (default: 300s if no playbook is active)
-2. If fresh: reuse the cached result. Label it as `reused (collected at <UTC>)` in any synthesis or decision record that references it
-3. If stale: re-query and update the ledger entry
-
-**Mandatory re-query exceptions — always re-query live state for:**
-- EXECUTE Stage fingerprint recheck (Step 1) — the safety contract requires live state
-- VALIDATE Stage sampling (Phase 2) — each sample must reflect current conditions
-- Any query where the user explicitly requests fresh data
-
-This reduces duplicate tool calls across MITIGATE → INVESTIGATE → CLASSIFY cycles while preserving the safety contract where live state matters.
+**Mandatory re-query exceptions:** EXECUTE fingerprint recheck, VALIDATE sampling, and user-requested fresh data — always re-query live state.
 
 ### 7. Evidence-Only Attribution — No Speculative Causal Claims
 
-Every causal claim in the investigation synthesis, `investigation_summary` YAML, and postmortem draft must reference a specific query result. Words like "likely", "probably", and "possibly" are prohibited in final causal attribution — they launder uncertainty into conclusions:
+Every causal claim in synthesis, YAML, and postmortem must reference a specific query result. Words like "likely", "probably", "possibly" are prohibited in final attribution — replace with evidence-backed language (`"caused by X (evidence: [result])"`) or move to `open_questions`. Speculative language IS permitted in intermediate notes where it drives the next query.
 
-| Prohibited in synthesis/YAML | Required replacement |
-|------------------------------|---------------------|
-| "likely caused by X" | "caused by X (evidence: [query result])" or "not investigated" |
-| "probably due to X" | "due to X (evidence: [query result])" or "inconclusive — [what's missing]" |
-| "possibly related to X" | Add to `open_questions` with the missing evidence described |
-| "may have contributed" | "contributed (evidence: [query result])" or "not investigated" |
-
-**Speculative language IS permitted** in intermediate investigation notes (e.g., "this might indicate X — querying to confirm") where it drives the next query. It is prohibited only in synthesis output, YAML blocks, and postmortem prose where it would be consumed as a conclusion.
-
-**Self-check:** Before emitting the Step 7 synthesis, scan for "likely", "probably", "possibly", "presumably", "may have", "might be" in causal sentences. Replace each with evidence-backed language or move to `open_questions`.
+**Self-check:** Before emitting the Step 7 synthesis, scan for "likely", "probably", "possibly", "presumably", "may have", "might be" in causal sentences.
 
 ### 8. MCP Result Processing — Never Re-Parse Cached Files
 
@@ -124,10 +104,7 @@ Note: This constraint applies to on-disk `tool-results/` files written by the Cl
 
 2. **Never read `tool-results/` files.** If you find yourself writing `cat tool-results/...`, `json.load(open('tool-results/...'))`, or piping a cached MCP result through jq — STOP. Re-invoke the MCP tool with a smaller `page_size` instead.
 
-3. **If a single MCP response is too large to process inline** (context pressure from verbose entries with full stack traces or large JSON payloads):
-   - Re-query with `page_size` halved (50 → 25 → 10) until the response fits
-   - Request only the fields needed for the current step — error fingerprinting needs `timestamp`, `severity`, first 200 chars of message, and `resource.labels`; trace correlation needs `trace`, `spanId`, `timestamp`
-   - If Tier 1 results remain too large at `page_size=10`, fall back to Tier 2 using the Constraint 3 temp-file pattern (`gcloud logging read ... --limit=10 --format=json`)
+3. **If a single MCP response is too large to process inline**, re-query with `page_size` halved (50 → 25 → 10) requesting only needed fields. At `page_size=10`, fall back to Tier 2 using Constraint 3's temp-file pattern.
 
 4. **For multi-step processing of the same result set** (e.g., fingerprint then exemplar extraction), summarize the result into a compact intermediate form (list of `{timestamp, severity, message_prefix, trace_id}` objects) in the same turn the MCP tool returns. Reference the summary in subsequent steps — not the raw result and not a cached file.
 
@@ -200,7 +177,7 @@ When multiple independent queries are needed at the same investigation step, dis
 
 **When NOT to parallelize:** Queries that depend on a prior result to formulate the filter. For example, Step 4 (trace correlation) requires a trace_id from Step 3 exemplars — these must be sequential.
 
-**Anti-pattern this prevents:** Sequential single-service discovery through an intermediary, where each service is found and queried one at a time. In one investigation, 5 services were discovered over ~5 minutes of sequential queries that could have been a single parallel batch.
+**Anti-pattern:** Sequential single-service discovery through an intermediary (N round-trips) when all services could be discovered in one parallel batch.
 
 ## Investigation Modes
 
