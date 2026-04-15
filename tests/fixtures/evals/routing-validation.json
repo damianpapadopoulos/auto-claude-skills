@@ -1,0 +1,27 @@
+{
+  "id": "routing-skill-activation",
+  "capability": "skill-routing",
+  "source": {
+    "spec": null,
+    "plan": null,
+    "prototype": null
+  },
+  "scenarios": [
+    {
+      "name": "hook-activates-on-prompt",
+      "description": "Skill activation hook produces valid JSON with additionalContext",
+      "path": "cli",
+      "inputs": {"prompt": "validate the login feature"},
+      "expected": {"exit_code": 0, "output_contains": "hookSpecificOutput"},
+      "tags": ["smoke", "routing"]
+    },
+    {
+      "name": "review-phase-surfaces-security-scanner",
+      "description": "REVIEW phase prompts co-select security-scanner",
+      "path": "cli",
+      "inputs": {"prompt": "review my code changes"},
+      "expected": {"output_contains": "security-scanner"},
+      "tags": ["routing", "review"]
+    }
+  ]
+}

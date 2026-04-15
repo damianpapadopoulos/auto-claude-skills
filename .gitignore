@@ -12,3 +12,4 @@ docs/superpowers-analysis.md
 .worktrees/
 __pycache__/
 *.pyc
+tests/artifacts/
