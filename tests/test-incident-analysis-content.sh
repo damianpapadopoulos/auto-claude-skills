@@ -551,10 +551,10 @@ assert_contains "postmortem template: investigation notes mentions ruled-out wit
 # Pre-cleanup baseline was 13,649 words. Guard prevents regression.
 # ---------------------------------------------------------------------------
 word_count=$(wc -w < "${SKILL_FILE}" | tr -d ' ')
-if [ "$word_count" -le 13000 ]; then
-    _record_pass "SKILL.md: word count under 13,000 (${word_count})"
+if [ "$word_count" -le 11500 ]; then
+    _record_pass "SKILL.md: word count under 11,500 (${word_count})"
 else
-    _record_fail "SKILL.md: word count exceeds 13,000 (${word_count})" \
+    _record_fail "SKILL.md: word count exceeds 11,500 (${word_count})" \
         "Extract heavy content to references/ or deduplicate"
 fi
 
