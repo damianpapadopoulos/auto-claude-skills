@@ -38,7 +38,19 @@ assert_file_contains "SKILL.md: exit code 139 SIGSEGV" "139" "${SKILL_FILE}"
 assert_file_contains "SKILL.md: exit code 143 SIGTERM" "143" "${SKILL_FILE}"
 
 # ---------------------------------------------------------------------------
-# SKILL.md — CrashLoopBackOff triage branch
+# references/error-taxonomy.md — Extracted taxonomy and exit codes
+# ---------------------------------------------------------------------------
+ERROR_TAXONOMY_REF="${PROJECT_ROOT}/skills/incident-analysis/references/error-taxonomy.md"
+assert_file_exists "references/error-taxonomy.md exists" "${ERROR_TAXONOMY_REF}"
+assert_file_contains "error-taxonomy ref: has tier table" "Tier.*Type.*Diagnostic value" "${ERROR_TAXONOMY_REF}"
+assert_file_contains "error-taxonomy ref: has exit code table" "Exit Code.*Signal.*Meaning" "${ERROR_TAXONOMY_REF}"
+assert_file_contains "error-taxonomy ref: mentions poison-pill" "poison.pill" "${ERROR_TAXONOMY_REF}"
+assert_file_contains "error-taxonomy ref: baseline verification rule" "not evidence.*query the baseline" "${ERROR_TAXONOMY_REF}"
+
+DEEP_DIVE_REF="${PROJECT_ROOT}/skills/incident-analysis/references/deep-dive-branches.md"
+
+# ---------------------------------------------------------------------------
+# SKILL.md — CrashLoopBackOff triage branch (pointer in SKILL.md, detail in ref)
 # ---------------------------------------------------------------------------
 assert_file_contains "SKILL.md: has crashloop triage branch" "CrashLoopBackOff triage" "${SKILL_FILE}"
 assert_file_contains "SKILL.md: crashloop checks previous container logs" "previous" "${SKILL_FILE}"
@@ -46,20 +58,29 @@ assert_file_contains "SKILL.md: crashloop checks termination reason" "[Tt]ermina
 assert_file_contains "SKILL.md: crashloop checks rollout history" "rollout history" "${SKILL_FILE}"
 
 # ---------------------------------------------------------------------------
-# SKILL.md — Probe/startup-envelope checks
+# SKILL.md — Probe/startup-envelope checks (pointer in SKILL.md, detail in ref)
 # ---------------------------------------------------------------------------
 assert_file_contains "SKILL.md: has probe checks branch" "startup-envelope" "${SKILL_FILE}"
-assert_file_contains "SKILL.md: probe checks initialDelaySeconds" "initialDelaySeconds" "${SKILL_FILE}"
-assert_file_contains "SKILL.md: probe checks timeoutSeconds" "timeoutSeconds" "${SKILL_FILE}"
-assert_file_contains "SKILL.md: probe checks dependency reachability" "[Dd]ependency reachability" "${SKILL_FILE}"
+assert_file_contains "deep-dive ref: probe checks initialDelaySeconds" "initialDelaySeconds" "${DEEP_DIVE_REF}"
+assert_file_contains "deep-dive ref: probe checks timeoutSeconds" "timeoutSeconds" "${DEEP_DIVE_REF}"
+assert_file_contains "deep-dive ref: probe checks dependency reachability" "[Dd]ependency reachability" "${DEEP_DIVE_REF}"
 
 # ---------------------------------------------------------------------------
-# SKILL.md — Pod-start failure branch
+# SKILL.md — Pod-start failure branch (pointer in SKILL.md, detail in ref)
 # ---------------------------------------------------------------------------
 assert_file_contains "SKILL.md: has pod-start failure branch" "Pod-start failure" "${SKILL_FILE}"
 assert_file_contains "SKILL.md: pod-start mentions ImagePullBackOff" "ImagePullBackOff" "${SKILL_FILE}"
 assert_file_contains "SKILL.md: pod-start mentions CreateContainerConfigError" "CreateContainerConfigError" "${SKILL_FILE}"
-assert_file_contains "SKILL.md: pod-start mentions imagePullSecrets" "imagePullSecrets" "${SKILL_FILE}"
+assert_file_contains "deep-dive ref: pod-start mentions imagePullSecrets" "imagePullSecrets" "${DEEP_DIVE_REF}"
+
+# ---------------------------------------------------------------------------
+# references/deep-dive-branches.md — Extracted conditional branches
+# ---------------------------------------------------------------------------
+assert_file_exists "references/deep-dive-branches.md exists" "${DEEP_DIVE_REF}"
+assert_file_contains "deep-dive ref: has crashloop triage" "CrashLoopBackOff" "${DEEP_DIVE_REF}"
+assert_file_contains "deep-dive ref: has probe checks" "initialDelaySeconds" "${DEEP_DIVE_REF}"
+assert_file_contains "deep-dive ref: has pod-start failure" "ImagePullBackOff" "${DEEP_DIVE_REF}"
+assert_file_contains "deep-dive ref: has imagePullSecrets check" "imagePullSecrets" "${DEEP_DIVE_REF}"
 
 # ---------------------------------------------------------------------------
 # SKILL.md — Capacity/baseline overlay
@@ -311,12 +332,12 @@ assert_file_contains "SKILL.md: step 3c warns against anchoring bias" \
 # ---------------------------------------------------------------------------
 assert_file_contains "SKILL.md: message broker signals are Tier 1" \
     "Message broker signals.*always Tier 1" "${SKILL_FILE}"
-assert_file_contains "SKILL.md: message broker mentions poison-pill" \
-    "poison.pill" "${SKILL_FILE}"
+assert_file_contains "error-taxonomy ref: message broker mentions poison-pill" \
+    "poison.pill" "${ERROR_TAXONOMY_REF}"
 assert_file_contains "SKILL.md: Tier 3 requires verified baseline" \
     "verified baseline" "${SKILL_FILE}"
-assert_file_contains "SKILL.md: Tier 3 forbids unverified dismissal" \
-    "not evidence.*query the baseline" "${SKILL_FILE}"
+assert_file_contains "error-taxonomy ref: Tier 3 forbids unverified dismissal" \
+    "not evidence.*query the baseline" "${ERROR_TAXONOMY_REF}"
 
 # ---------------------------------------------------------------------------
 # SKILL.md — Intermediary-Layer Investigation Discipline (Constraint 9)
@@ -526,14 +547,45 @@ assert_contains "postmortem template: investigation notes mentions ruled-out wit
     "ruled-out hypothesis should include" "${TEMPLATE_CONTENT}"
 
 # ---------------------------------------------------------------------------
+# Behavioral verification — extracted content reachable from SKILL.md pointers
+# ---------------------------------------------------------------------------
+# For each behavioral eval fixture that tests extracted content, verify:
+# 1. SKILL.md pointer text contains the routing summary (agent sees it)
+# 2. Reference file contains the detailed procedure (agent can follow pointer)
+# 3. Eval fixture assertion patterns are satisfied by either pointer or reference
+
+# crashloop-exit-code-triage: tests CrashLoopBackOff branch (Task 2 extraction)
+CRASHLOOP_POINTER=$(sed -n '/CrashLoopBackOff triage (conditional/,/references\/deep-dive-branches.md/p' "${SKILL_FILE}")
+assert_contains "behavioral: SKILL.md pointer routes to deep-dive-branches" \
+    "references/deep-dive-branches.md" "${CRASHLOOP_POINTER}"
+assert_file_contains "behavioral: deep-dive ref has exit code triage procedure" \
+    "exit code.*termination\|termination.*exit code" "${DEEP_DIVE_REF}"
+assert_file_contains "behavioral: deep-dive ref has OOMKilled redirect" \
+    "137.*OOMKilled\|OOMKilled.*137" "${DEEP_DIVE_REF}"
+assert_file_contains "behavioral: deep-dive ref has previous container logs step" \
+    "previous.*container.*log\|previous.*log" "${DEEP_DIVE_REF}"
+
+# multi-service-shared-dependency: tests investigation spine (stays in SKILL.md)
+assert_file_contains "behavioral: SKILL.md has shared resource escalation" \
+    "Shared resource escalation" "${SKILL_FILE}"
+assert_file_contains "behavioral: SKILL.md references caller-investigation.md" \
+    "references/caller-investigation.md" "${SKILL_FILE}"
+
+# error taxonomy used in investigation: verify pointer + reference chain
+assert_file_contains "behavioral: SKILL.md pointer references error-taxonomy.md" \
+    "references/error-taxonomy.md" "${SKILL_FILE}"
+assert_file_contains "behavioral: error-taxonomy ref has tier routing rules" \
+    "Investigate Tier 1.*first" "${ERROR_TAXONOMY_REF}"
+
+# ---------------------------------------------------------------------------
 # Structural guard — SKILL.md word count
-# Pre-cleanup baseline was 13,649 words. Guard prevents regression.
+# Post-refactor baseline is ~11,400 words (down from 12,806). Guard prevents regression.
 # ---------------------------------------------------------------------------
 word_count=$(wc -w < "${SKILL_FILE}" | tr -d ' ')
-if [ "$word_count" -le 13000 ]; then
-    _record_pass "SKILL.md: word count under 13,000 (${word_count})"
+if [ "$word_count" -le 11500 ]; then
+    _record_pass "SKILL.md: word count under 11,500 (${word_count})"
 else
-    _record_fail "SKILL.md: word count exceeds 13,000 (${word_count})" \
+    _record_fail "SKILL.md: word count exceeds 11,500 (${word_count})" \
         "Extract heavy content to references/ or deduplicate"
 fi
 

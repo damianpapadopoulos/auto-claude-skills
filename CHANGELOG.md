@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Incident-analysis: Refactored SKILL.md from 12,806 to 11,408 words (~11% reduction) — extracted error taxonomy and deep-dive branches to reference files, compressed behavioral constraints, added stage-transition flowchart
+- Incident-analysis: Lowered word count guard from 13,000 to 11,500 with 18 new tests (behavioral navigation-chain verification)
+
 ### Added
 - SDLC Coverage: 39 routing interaction regression tests across 5 collision groups (code-review, parallel/worktree, debug/incident, cross-phase, negatives)
 - SDLC Coverage: `design_path` session state field for tracking design artifacts through the SDLC pipeline

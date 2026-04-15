@@ -7,6 +7,28 @@ description: Use when investigating production symptoms — connection failures,
 
 Tiered GCP log investigation with playbook-driven mitigation and structured validation. Stages: MITIGATE, CLASSIFY, INVESTIGATE, EXECUTE, VALIDATE, POSTMORTEM. Detects available tools at runtime and uses the best tier. Playbook YAML files define mitigation commands, safety invariants, and validation criteria.
 
+## Stage Flow
+
+```dot
+digraph stages {
+    rankdir=LR;
+    node [shape=box];
+    MITIGATE -> CLASSIFY [label="mitigation\nneeded\n(Step 5)"];
+    MITIGATE -> INVESTIGATE [label="no mitigation\n(Step 6)"];
+    CLASSIFY -> EXECUTE [label="high\nconfidence"];
+    CLASSIFY -> INVESTIGATE [label="low\nconfidence\n(Steps 1-5 only)"];
+    INVESTIGATE -> CLASSIFY [label="re-classify\nafter probes"];
+    INVESTIGATE -> POSTMORTEM [label="completeness\ngate passed"];
+    EXECUTE -> VALIDATE;
+    VALIDATE -> POSTMORTEM [label="success"];
+    VALIDATE -> INVESTIGATE [label="failed"];
+}
+```
+
+Key re-entry paths:
+- **CLASSIFY < 60 → INVESTIGATE:** Only Steps 1–5 run. Steps 6–9 skipped. Findings feed back to CLASSIFY.
+- **VALIDATE failed → INVESTIGATE:** Full Stage 2. The mitigation didn't work.
+
 ## Quick Reference — Symptom to Playbook
 
 | Symptom | Likely Playbook | Category |
@@ -35,9 +57,7 @@ If a mutating action is identified (restart service, rollback deployment, scale 
 
 During active investigation, all application-level file reads, log queries, and code searches MUST be constrained to the specific service or trace ID identified in Stage 1 (MITIGATE). Global codebase searches (unbounded grep, recursive find) are forbidden. This prevents context window exhaustion and irrelevant noise during time-sensitive debugging.
 
-**Infrastructure escalation exception:** When Step 3 (Single-Service Deep Dive) identifies multi-pod or multi-service failures that indicate a node-level or infrastructure-level root cause, the scope expands to the affected node(s) and their infrastructure signals (kubelet logs, serial console, audit logs, node-level metrics). This escalation is bounded — queries target the specific node(s) implicated by the application-level evidence, not the entire cluster. The completeness gate (Step 8, Q6) may require checking peer nodes for systemic risk; this is also permitted under this exception.
-
-**Shared resource and error taxonomy exception:** When Step 2 identifies Tier 1 (anomalous) errors in services adjacent to the symptomatic one, or when Step 3 identifies a shared resource under pressure with evidence of multi-consumer impact, the scope expands to the shared resource's known consumer set (deployment history, connection metrics, error logs). This escalation is bounded to declared consumers of the identified resource, not the entire organization or cluster.
+**Bounded exceptions:** (a) Infrastructure escalation — when Step 3 identifies multi-pod failures indicating a node-level root cause, scope expands to the affected node(s) and their infrastructure signals. The completeness gate (Step 8, Q6) may require checking peer nodes. (b) Shared resource — when Step 2 identifies Tier 1 errors in adjacent services, or Step 3 identifies a shared resource under pressure, scope expands to the shared resource's known consumer set. Both escalations are bounded to specific implicated targets, not the entire cluster or organization.
 
 ### 3. Temp-File Execution Pattern (Tier 2 Only)
 
@@ -84,31 +104,13 @@ Maintain a mental ledger of evidence collected during the investigation, keyed b
 | Trace queries | `(trace_id, project_id)` |
 | Source analysis | `(repo, commit_ref, file_path)` |
 
-Before issuing a query that matches a prior ledger entry:
+Before issuing a query matching a prior entry: reuse if within `freshness_window_seconds` (default 300s), labeling output as `reused (collected at <UTC>)`. If stale, re-query and update.
 
-1. Check if the entry is within the active playbook's `freshness_window_seconds` (default: 300s if no playbook is active)
-2. If fresh: reuse the cached result. Label it as `reused (collected at <UTC>)` in any synthesis or decision record that references it
-3. If stale: re-query and update the ledger entry
-
-**Mandatory re-query exceptions — always re-query live state for:**
-- EXECUTE Stage fingerprint recheck (Step 1) — the safety contract requires live state
-- VALIDATE Stage sampling (Phase 2) — each sample must reflect current conditions
-- Any query where the user explicitly requests fresh data
-
-This reduces duplicate tool calls across MITIGATE → INVESTIGATE → CLASSIFY cycles while preserving the safety contract where live state matters.
+**Mandatory re-query exceptions:** EXECUTE fingerprint recheck, VALIDATE sampling, and user-requested fresh data — always re-query live state.
 
 ### 7. Evidence-Only Attribution — No Speculative Causal Claims
 
-Every causal claim in the investigation synthesis, `investigation_summary` YAML, and postmortem draft must reference a specific query result. Words like "likely", "probably", and "possibly" are prohibited in final causal attribution — they launder uncertainty into conclusions:
-
-| Prohibited in synthesis/YAML | Required replacement |
-|------------------------------|---------------------|
-| "likely caused by X" | "caused by X (evidence: [query result])" or "not investigated" |
-| "probably due to X" | "due to X (evidence: [query result])" or "inconclusive — [what's missing]" |
-| "possibly related to X" | Add to `open_questions` with the missing evidence described |
-| "may have contributed" | "contributed (evidence: [query result])" or "not investigated" |
-
-**Speculative language IS permitted** in intermediate investigation notes (e.g., "this might indicate X — querying to confirm") where it drives the next query. It is prohibited only in synthesis output, YAML blocks, and postmortem prose where it would be consumed as a conclusion.
+Every causal claim in synthesis, YAML, and postmortem must reference a specific query result. Words like "likely", "probably", "possibly" are prohibited in final attribution — replace with evidence-backed language (`"caused by X (evidence: [result])"`) or move to `open_questions`. Speculative language IS permitted in intermediate notes where it drives the next query.
 
 **Self-check:** Before emitting the Step 7 synthesis, scan for "likely", "probably", "possibly", "presumably", "may have", "might be" in causal sentences. Replace each with evidence-backed language or move to `open_questions`.
 
@@ -124,10 +126,7 @@ Note: This constraint applies to on-disk `tool-results/` files written by the Cl
 
 2. **Never read `tool-results/` files.** If you find yourself writing `cat tool-results/...`, `json.load(open('tool-results/...'))`, or piping a cached MCP result through jq — STOP. Re-invoke the MCP tool with a smaller `page_size` instead.
 
-3. **If a single MCP response is too large to process inline** (context pressure from verbose entries with full stack traces or large JSON payloads):
-   - Re-query with `page_size` halved (50 → 25 → 10) until the response fits
-   - Request only the fields needed for the current step — error fingerprinting needs `timestamp`, `severity`, first 200 chars of message, and `resource.labels`; trace correlation needs `trace`, `spanId`, `timestamp`
-   - If Tier 1 results remain too large at `page_size=10`, fall back to Tier 2 using the Constraint 3 temp-file pattern (`gcloud logging read ... --limit=10 --format=json`)
+3. **If a single MCP response is too large to process inline**, re-query with `page_size` halved (50 → 25 → 10) requesting only needed fields. At `page_size=10`, fall back to Tier 2 using Constraint 3's temp-file pattern.
 
 4. **For multi-step processing of the same result set** (e.g., fingerprint then exemplar extraction), summarize the result into a compact intermediate form (list of `{timestamp, severity, message_prefix, trace_id}` objects) in the same turn the MCP tool returns. Reference the summary in subsequent steps — not the raw result and not a cached file.
 
@@ -200,7 +199,7 @@ When multiple independent queries are needed at the same investigation step, dis
 
 **When NOT to parallelize:** Queries that depend on a prior result to formulate the filter. For example, Step 4 (trace correlation) requires a trace_id from Step 3 exemplars — these must be sequential.
 
-**Anti-pattern this prevents:** Sequential single-service discovery through an intermediary, where each service is found and queried one at a time. In one investigation, 5 services were discovered over ~5 minutes of sequential queries that could have been a single parallel batch.
+**Anti-pattern:** Sequential single-service discovery through an intermediary (N round-trips) when all services could be discovered in one parallel batch.
 
 ## Investigation Modes
 
@@ -453,32 +452,7 @@ Use LQL scoped to service + severity + time window identified in Stage 1.
 
 Stack traces, error messages, request IDs, trace IDs.
 
-**Error taxonomy — prioritize by diagnostic value:**
-Not all errors are equally informative. Classify extracted signals into three tiers:
-
-| Tier | Type | Diagnostic value | Examples |
-|------|------|-----------------|----------|
-| 1 | **Anomalous** — unexpected exception types, application errors in unexpected services | Highest — often points to the **trigger** (why) | Template/parsing exceptions in message consumers, schema errors during read paths, application exceptions in services adjacent to the symptomatic one, message broker delivery failures (AMQ/Artemis/Kafka/JMS delivery errors) |
-| 2 | **Infrastructure** — standard platform/network/resource errors | Medium — tells you **where** the system is breaking | `TimeoutException`, `ConnectionRefused`, `DeadlineExceeded`, `OOMKilled`, deadlocks |
-| 3 | **Expected application** — known error types **at verified baseline rates** | Low — tells you **what** is normal | Authentication failures at typical rates, validation errors, 4xx responses |
-
-**Investigate Tier 1 errors first**, even if they appear in services outside your current scope. A single anomalous error in an adjacent service is often more diagnostic than dozens of infrastructure errors in the symptomatic service. When Tier 1 errors are found in adjacent services, they are candidates for scope expansion — note them for Step 3.
-
-**Message broker signals — always Tier 1:** When message delivery failures are found (e.g., `AMQ154004: Failed to deliver message`, Kafka consumer lag spikes, JMS `TransactionRolledbackException`), **immediately query the failing consumer service's own container logs** for the exception that caused the delivery failure. The consumer's error (e.g., a parsing exception, a constraint violation, a template compilation error) is the root cause; the broker's delivery failure is the amplification mechanism. A poison-pill message causes an infinite retry loop that exhausts connection pools and threads, producing infrastructure-level symptoms (connection pool exhaustion, timeouts, cascading failures) that mask the application-layer trigger. Do not investigate the downstream infrastructure symptoms until the consumer-side exception is identified.
-
-**Quantitative baseline verification (mandatory before Tier 3 classification):** An error may only be classified as Tier 3 if its rate during the incident matches a verified baseline from a non-incident period (same endpoint, same error class, comparable time window). "This looks like it always happens" is not evidence — query the baseline rate and compare numerically. If the baseline cannot be verified (e.g., logs expired, no comparable window), classify as Tier 2 until proven otherwise. An order-of-magnitude increase from baseline reclassifies any error to Tier 1 regardless of how "expected" the error type appears.
-
-**Container exit code guide** (when container termination status is available from pod describe or events):
-
-| Exit Code | Signal | Meaning | Investigation Route |
-|-----------|--------|---------|-------------------|
-| 0 | Normal exit | Container completed successfully | Check if this is a long-running service that should not exit — possible entrypoint/command misconfiguration |
-| 1 | Application error | Uncaught exception or assertion failure | Check previous container logs for stack trace → route to bad-release or config-regression |
-| 137 | SIGKILL (OOMKilled) | Kernel OOM killer terminated the process | Check memory limits vs actual usage → route to resource-overload or node-resource-exhaustion. A restart will not help if limits are too low. |
-| 139 | SIGSEGV | Segmentation fault in native code | Check recent deployment for native dependency changes → route to bad-release |
-| 143 | SIGTERM | Graceful termination timeout exceeded | Check `terminationGracePeriodSeconds`, shutdown hooks, long-running connections. Not necessarily a failure — may indicate slow shutdown. |
-
-Use exit codes to route investigation before proposing mitigation. Exit code 137 (OOMKilled) means restart is pointless — the pod will OOM again. Exit code 1 after a deploy points to bad-release, not workload-restart.
+**Error taxonomy — prioritize by diagnostic value:** Classify signals into Tier 1 (anomalous — trigger indicators), Tier 2 (infrastructure — where it's breaking), Tier 3 (expected — at verified baseline rates). Investigate Tier 1 first. Message broker signals are always Tier 1 — trace to consumer's exception before investigating downstream infrastructure symptoms. Tier 3 requires a verified baseline rate comparison; "this looks like it always happens" is not evidence — query the baseline rate. Container exit codes (0, 1, 137/OOMKilled, 139/SIGSEGV, 143/SIGTERM) guide investigation routing. Full taxonomy, exit code guide, and routing rules: `references/error-taxonomy.md`.
 
 ### Targeted Disambiguation Probes (Conditional — CLASSIFY Handoff)
 
@@ -530,53 +504,7 @@ After all probes complete, feed results back to CLASSIFY for reclassification.
   - **Retry/amplification analysis:** Check whether the calling code retries failed requests. If a 3-second timeout triggers a retry, each retry adds 3 more seconds of dependency pressure. Look for retry configuration in the stack trace's framework (e.g., Camel redelivery, Spring Retry, gRPC retry policy).
   - **gRPC connection distribution (conditional — when dependency uses gRPC):** If server-side logs include `peer.address`, sample 1 minute of calls and group by caller IP. Compare the distribution against the expected even split (1/N where N = number of client pods). If one caller's share is disproportionately high relative to the expected baseline, flag as potential connection pinning (HTTP/2 over K8s Service ClusterIP load-balances at connection level, not request level). Note: there is no universal threshold — what matters is whether the skew is large enough to explain the observed latency. Report the actual distribution and let the investigator judge.
 
-**CrashLoopBackOff triage (conditional — when `crash_loop_detected` signal is present):**
-
-Before proposing workload-restart, complete the diagnostic sequence defined in the `workload-restart` playbook's `investigation_steps`. The sequence requires: pod describe → scoped events → termination reason and exit code (see exit code guide in Step 2) → previous container logs → deployment/probe configuration → rollout history correlation. Each step may redirect to a different root-cause playbook:
-- Exit code 137 (OOMKilled) → resource-overload or node-resource-exhaustion, not restart
-- Exit code 1 with stack trace after recent deploy → bad-release investigation
-- Events show ImagePullBackOff or CreateContainerConfigError → pod-start failure branch below
-- Crash onset correlates with rollout timestamp → bad-release-rollback investigation
-- Only if triage is inconclusive and no other playbook has higher confidence does workload-restart remain a candidate.
-
-**Probe and startup-envelope checks (conditional — when `liveness_probe_failures` signal is present or pod restart count is high without clear application errors):**
-
-Before attributing failures to application state, verify whether probe configuration is appropriate:
-1. **Probe configuration review:** Extract `initialDelaySeconds`, `timeoutSeconds`, `periodSeconds`, `failureThreshold`, and `startupProbe` (if any) from the pod spec
-2. **Startup time analysis:** Compare `initialDelaySeconds` to actual container startup time. If startup takes longer than the initial delay and no startupProbe is configured, liveness probes will kill the container before it is ready — this is a probe misconfiguration, not an application failure
-3. **Timeout budget:** Is `timeoutSeconds` realistic for what the probe endpoint does? If the probe hits a database or external service, network latency may exceed the timeout under load
-4. **Restart cadence:** Calculate time between restarts. If it matches `initialDelaySeconds + (failureThreshold x periodSeconds)`, the probe is killing the container during startup — fix probe config, not restart
-5. **Dependency reachability:** Does the probe endpoint depend on services that are currently unavailable? (database, cache, upstream API). If so, the probe failure is a symptom of dependency failure — route to dependency-failure investigation
-
-Routing from probe findings — **this branch is guidance-only (no autonomous mutations)**:
-- Probe timing causes restarts during startup → record "probe misconfiguration" as root cause in the investigation synthesis and recommend a config fix (increase `initialDelaySeconds`, add `startupProbe`) as a **postmortem action item**. Do NOT propose workload-restart — a restart will hit the same probe wall. There is no commandable playbook for probe config changes; the fix is a code/manifest change tracked through the normal development workflow.
-- Probe endpoint depends on unavailable dependency → route to dependency-failure investigation
-- Probe config is reasonable and application genuinely fails health checks → continue with workload-failure classification
-
-**Pod-start failure branch (conditional — when events show `ImagePullBackOff`, `ErrImagePull`, or `CreateContainerConfigError`):**
-
-These symptoms indicate the pod cannot start at all — this is fundamentally different from a running application crashing. Investigate before classifying:
-
-1. **ImagePullBackOff / ErrImagePull:**
-   - Extract the exact error message from pod events: "unauthorized" (credential issue), "not found" or "manifest unknown" (wrong image/tag), "timeout" or "connection refused" (registry unreachable)
-   - Verify the image reference (registry, repository, tag) in the deployment spec
-   - Check `imagePullSecrets` configuration: does the Secret exist, is it type `kubernetes.io/dockerconfigjson`, are credentials valid and not expired?
-   - If image tag was recently changed → route to bad-release (wrong tag pushed)
-   - If `imagePullSecrets` were changed or Secret is missing → route to config-regression
-   - If registry is unreachable and no config changed → route to dependency-failure (registry as external dependency)
-
-2. **CreateContainerConfigError:**
-   - Check for missing ConfigMap or Secret references in the pod spec
-   - Check if a referenced ConfigMap or Secret was recently deleted or renamed
-   - Check environment variable references that point to non-existent keys
-   - Route to config-regression for further investigation
-
-3. **Volume mount failures** (`FailedMount`, `FailedAttachVolume`):
-   - Check PVC status (Pending, Lost, Bound) and StorageClass availability
-   - Check if the volume or StorageClass was recently modified
-   - Route to infra-failure if the storage backend is unhealthy
-
-This branch is non-mutating — it gathers evidence that feeds back into CLASSIFY for root-cause playbook selection. Do not propose restart or rollback from this branch.
+**CrashLoopBackOff triage (conditional — when `crash_loop_detected` signal is present):** Complete the diagnostic sequence in `workload-restart` playbook's `investigation_steps` before proposing restart: pod describe → events → termination reason and exit code → previous container logs → deployment/probe config → rollout history correlation. Redirect to other playbooks when evidence warrants (OOMKilled → resource, stack trace after deploy → bad-release, ImagePullBackOff/CreateContainerConfigError → pod-start failure). Full CrashLoopBackOff triage, probe/startup-envelope checks, and Pod-start failure branch: `references/deep-dive-branches.md`.
 
 **Infrastructure escalation (conditional):** If Step 3 reveals that multiple pods or services are failing simultaneously — especially with `context deadline exceeded`, widespread probe timeouts, or errors localized to a single node — verify whether the root cause is at the node or infrastructure level by checking:
 - Node resource metrics (memory/CPU allocatable utilization)
@@ -638,16 +566,7 @@ service_error_inventory:
     mechanism_status: "known" | "not_yet_traced" | "not_applicable"
 ```
 
-**Layer status semantics:**
-
-| Status | Meaning |
-|--------|---------|
-| `assessed` | Minimum required evidence for that layer is complete — infrastructure: deployment history (72h) + runtime signal; application: ERROR logs queried + dominant exception class identified |
-| `not_applicable` | Layer genuinely does not apply to this service in this incident |
-| `unavailable` | Could not query — tool missing, auth expired, logs not available (reason required) |
-| `not_captured` | Information not present in available evidence sources (reason required) |
-
-Services with `investigated: false` must be flagged as gaps in `evidence_coverage`.
+**Layer status semantics:** `assessed` = Minimum required evidence for that layer is complete (infrastructure: deployment history + runtime signal; application: ERROR logs queried + dominant exception class identified). Other statuses: `not_applicable`, `unavailable` (reason required), `not_captured` (reason required). Full definitions in `references/investigation-schema.md`. Services with `investigated: false` must be flagged as gaps in `evidence_coverage`.
 
 **Re-entry from Step 4:** If trace correlation (Step 4) discovers additional services not covered in the initial sweep, return to Step 3c and execute the procedure for the newly discovered services before proceeding to Step 5.
 
@@ -1037,10 +956,7 @@ Build URLs from the evidence ledger (Constraint 6) using `references/evidence-li
 
 **Do not skip links because "the postmortem is generated from the synthesis."** The synthesis contains the link data — use it.
 
-**Permalink formatting (apply to all references in the generated postmortem):**
-- **Trace IDs:** `[Trace TRACE_ID](https://console.cloud.google.com/traces/list?project=PROJECT_ID&tid=TRACE_ID)`. For cross-project traces (Step 4), use each service's own project_id.
-- **Git commits:** `[Commit SHORT_HASH](https://github.com/ORG/REPO/commit/FULL_HASH)`. Derive org/repo from `git remote get-url origin`. If not GitHub-hosted, use raw hash.
-- **Log queries, metrics, deployments:** See `references/evidence-links.md` for URL templates and encoding rules.
+**Permalink formatting:** Use URL templates from `references/evidence-links.md` for all link types (logs, metrics, traces, deployments, source). For cross-project traces (Step 4), use each service's own project_id. Derive org/repo from `git remote get-url origin`.
 
 ### Step 4: Write to Disk
 

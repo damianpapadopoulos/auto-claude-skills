@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "sp_plan_path": "docs/superpowers/plans/2026-04-15-incident-analysis-skill-refactor.md",
+  "sp_spec_path": "",
+  "change_slug": "incident-analysis-skill-refactor",
+  "capability_slug": "incident-analysis",
+  "source_branch": "refactor/incident-analysis-skill-cleanup",
+  "base_commit": "5030b6304b1f16ab7eefb2688e960bf624596bff",
+  "openspec_surface": "none",
+  "archived_at": "2026-04-15T11:44:24Z"
+}
