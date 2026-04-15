@@ -544,16 +544,7 @@ service_error_inventory:
     mechanism_status: "known" | "not_yet_traced" | "not_applicable"
 ```
 
-**Layer status semantics:**
-
-| Status | Meaning |
-|--------|---------|
-| `assessed` | Minimum required evidence for that layer is complete — infrastructure: deployment history (72h) + runtime signal; application: ERROR logs queried + dominant exception class identified |
-| `not_applicable` | Layer genuinely does not apply to this service in this incident |
-| `unavailable` | Could not query — tool missing, auth expired, logs not available (reason required) |
-| `not_captured` | Information not present in available evidence sources (reason required) |
-
-Services with `investigated: false` must be flagged as gaps in `evidence_coverage`.
+**Layer status semantics:** `assessed` = Minimum required evidence for that layer is complete (infrastructure: deployment history + runtime signal; application: ERROR logs queried + dominant exception class identified). Other statuses: `not_applicable`, `unavailable` (reason required), `not_captured` (reason required). Full definitions in `references/investigation-schema.md`. Services with `investigated: false` must be flagged as gaps in `evidence_coverage`.
 
 **Re-entry from Step 4:** If trace correlation (Step 4) discovers additional services not covered in the initial sweep, return to Step 3c and execute the procedure for the newly discovered services before proceeding to Step 5.
 
