@@ -7,6 +7,28 @@ description: Use when investigating production symptoms — connection failures,
 
 Tiered GCP log investigation with playbook-driven mitigation and structured validation. Stages: MITIGATE, CLASSIFY, INVESTIGATE, EXECUTE, VALIDATE, POSTMORTEM. Detects available tools at runtime and uses the best tier. Playbook YAML files define mitigation commands, safety invariants, and validation criteria.
 
+## Stage Flow
+
+```dot
+digraph stages {
+    rankdir=LR;
+    node [shape=box];
+    MITIGATE -> CLASSIFY [label="mitigation\nneeded"];
+    MITIGATE -> INVESTIGATE [label="code fix\nneeded"];
+    CLASSIFY -> EXECUTE [label="high\nconfidence"];
+    CLASSIFY -> INVESTIGATE [label="low\nconfidence\n(Steps 1-5 only)"];
+    INVESTIGATE -> CLASSIFY [label="re-classify\nafter probes"];
+    INVESTIGATE -> POSTMORTEM [label="completeness\ngate passed"];
+    EXECUTE -> VALIDATE;
+    VALIDATE -> POSTMORTEM [label="success"];
+    VALIDATE -> INVESTIGATE [label="failed"];
+}
+```
+
+Key re-entry paths:
+- **CLASSIFY < 60 → INVESTIGATE:** Only Steps 1–5 run. Steps 6–9 skipped. Findings feed back to CLASSIFY.
+- **VALIDATE failed → INVESTIGATE:** Full Stage 2. The mitigation didn't work.
+
 ## Quick Reference — Symptom to Playbook
 
 | Symptom | Likely Playbook | Category |
