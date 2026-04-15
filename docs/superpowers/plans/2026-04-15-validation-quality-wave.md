@@ -10,6 +10,21 @@
 
 **Tech Stack:** Bash 3.2 (hooks), Markdown (SKILL.md), JSON (config/fixtures), jq (registry)
 
+**Dependencies:**
+- **SDLC Task 0** (shared routing harness at `tests/test-routing-interactions.sh`): Validation routing and gate tests merge into this harness instead of `test-routing.sh`.
+- **SDLC Task 1** (canonical `docs/plans/` artifact contract): Required before drift-check implementation. Drift-check reads `docs/plans/` as primary, `docs/superpowers/` as legacy fallback. Runtime-validation is independent of this.
+
+**Execution lanes:**
+- **Runtime lane** (Tasks 1-2, 4-9): Eval packs, runtime-validation skill, session-marker gate, REVIEW/SHIP composition. Ships after shared harness (SDLC Task 0). No artifact-namespace dependency.
+- **Drift lane** (Tasks 3, 10-13): implementation-drift-check skill, artifact-presence gate, routing/content tests. Ships after SDLC Task 1 (canonical contract).
+
+**Artifact path convention (post-SDLC-Task-1):**
+- Primary: `docs/plans/*-design.md`, `docs/plans/*-plan.md`, `docs/plans/*-spec.md`
+- Live changes: `openspec/changes/<feature>/`
+- Post-ship canonical: `openspec/specs/<capability>/spec.md`
+- Archive (optional, not required): `docs/plans/archive/`
+- Legacy fallback: `docs/superpowers/specs/`, `docs/superpowers/plans/`
+
 ---
 
 ### Task 1: Scaffold eval pack infrastructure
@@ -208,6 +223,8 @@ git commit -m "feat: add runtime-validation skill definition"
 
 ### Task 3: Write implementation-drift-check SKILL.md
 
+**Dependency:** SDLC Task 1 (canonical `docs/plans/` contract) must be complete before implementing this task. The comparison material paths below use the canonical layout.
+
 **Files:**
 - Create: `skills/implementation-drift-check/SKILL.md`
 
@@ -224,19 +241,25 @@ description: Spec drift detection, assumption surfacing, and coverage gap identi
 ```
 
 **Body sections (all required):**
-1. **When to Use** — REVIEW + SHIP auto-co-selection (when comparison material exists), explicit IMPLEMENT invocation. Include the exact list of comparison sources from spec section 2.2.
-2. **Auto-Co-Selection Guard** — Document that the hook enforces artifact-presence gating mechanically. List the 5 glob patterns. Explain that mode selection (full vs. assumptions-only) is LLM-evaluated.
-3. **Step 1: Gather Comparison Material** — Read in priority order (5 sources from spec section 2.3). Include exact file paths and Glob patterns.
+1. **When to Use** — REVIEW + SHIP auto-co-selection (when comparison material exists), explicit IMPLEMENT invocation. Include the exact list of comparison sources.
+2. **Auto-Co-Selection Guard** — Document that the hook enforces artifact-presence gating mechanically. List the glob patterns (canonical first, legacy fallback). Explain that mode selection (full vs. assumptions-only) is LLM-evaluated.
+3. **Step 1: Gather Comparison Material** — Read in priority order using the canonical retrieval precedence:
+   1. `openspec/changes/<feature>/specs/` (active OpenSpec changes — highest authority)
+   2. `docs/plans/*-design.md`, `docs/plans/*-plan.md`, `docs/plans/*-spec.md` (canonical live intent)
+   3. `openspec/specs/<capability>/spec.md` (post-ship canonical)
+   4. `docs/plans/archive/` (optional — shipped intent history, not required)
+   5. `docs/superpowers/specs/*-design.md`, `docs/superpowers/plans/*.md` (legacy fallback — deprecated)
+   6. `tests/fixtures/evals/*.json` (eval pack scenarios)
 4. **Step 2: Analyze Drift (Full Mode)** — Three drift dimensions: spec drift (with 4 flags), plan drift (with 4 flags), review-induced drift. Reference `git diff` cross-referencing.
 5. **Step 3: Surface Assumptions and Gaps (Always Runs)** — Assumptions, untested paths, edge cases, eval pack gaps. This step runs in both modes.
 6. **Step 4: Report** — Two report shapes: full drift mode (6 sections) and assumptions-only mode (3 sections). Include exact table contracts from spec section 2.6.
-7. **Step 5: Persistence** — Terminal always. Append "Post-Implementation Notes" to relevant spec when drift found. Write session marker: `touch ~/.claude/.skill-drift-check-ran-$(cat ~/.claude/.skill-session-token 2>/dev/null || echo default)`
+7. **Step 5: Persistence** — Terminal always. Append "Post-Implementation Notes" to relevant spec/design doc when drift found. Write session marker: `touch ~/.claude/.skill-drift-check-ran-$(cat ~/.claude/.skill-session-token 2>/dev/null || echo default)`
 
 - [ ] **Step 2: Verify the SKILL.md has the required content**
 
 Read back and confirm:
 - Both report modes (full drift + assumptions-only)
-- All 5 comparison material sources
+- Canonical `docs/plans/` paths appear before `docs/superpowers/` legacy fallback
 - All 3 drift dimensions with their flag sets
 - Session marker write command
 - The auto-co-selection guard explanation
@@ -246,7 +269,7 @@ Read back and confirm:
 
 ```bash
 git add skills/implementation-drift-check/SKILL.md
-git commit -m "feat: add implementation-drift-check skill definition"
+git commit -m "feat: add implementation-drift-check skill definition (canonical docs/plans/ paths)"
 ```
 
 ---
@@ -375,6 +398,9 @@ In `config/fallback-registry.json`, find `phase_compositions.REVIEW.parallel` (l
           "gate": "artifact-presence",
           "artifacts": [
             "openspec/changes/*/",
+            "docs/plans/*-design.md",
+            "docs/plans/*-plan.md",
+            "docs/plans/*-spec.md",
             "openspec/specs/*/spec.md",
             "docs/superpowers/specs/*-design.md",
             "docs/superpowers/plans/*.md",
@@ -452,6 +478,9 @@ In `config/default-triggers.json`, find the `"REVIEW"` key in `phase_composition
           "gate": "artifact-presence",
           "artifacts": [
             "openspec/changes/*/",
+            "docs/plans/*-design.md",
+            "docs/plans/*-plan.md",
+            "docs/plans/*-spec.md",
             "openspec/specs/*/spec.md",
             "docs/superpowers/specs/*-design.md",
             "docs/superpowers/plans/*.md",
@@ -679,14 +708,16 @@ Run: `echo "no code changes needed — this task is verification only"`
 
 ---
 
-### Task 10: Write routing tests for both new skills
+### Task 10: Write routing and gate tests in shared harness
+
+**Dependency:** SDLC Task 0 must have created `tests/test-routing-interactions.sh`. Validation routing and gate tests are added to that shared harness, not to `tests/test-routing.sh`.
 
 **Files:**
-- Modify: `tests/test-routing.sh` (add new test cases at the end, before the summary section)
+- Modify: `tests/test-routing-interactions.sh` (add validation routing group and gate test)
 
 - [ ] **Step 1: Add install_registry_with_validation() helper**
 
-Add a new registry helper function to `tests/test-routing.sh`, after the existing `install_registry_with_wave1()` function (line ~530). Follow the established pattern — extend the base registry with the new skills via `jq .skills +=`:
+Add a new registry helper function to `tests/test-routing-interactions.sh`, after the existing `install_registry()` function. Follow the established pattern — extend the base registry with the new skills via `jq .skills +=`:
 
 ```bash
 # Helper: install registry extended with validation wave skills
@@ -728,7 +759,7 @@ install_registry_with_validation() {
 
 - [ ] **Step 2: Add isolated runtime-validation routing test**
 
-Add a new test function to `tests/test-routing.sh` before the summary section. Follow the established pattern (`setup_test_env` → `install_registry_with_validation` → run → `teardown_test_env`):
+Add a new test function to `tests/test-routing-interactions.sh`. Follow the established pattern (`setup_test_env` → `install_registry_with_validation` → run → `teardown_test_env`):
 
 ```bash
 # ---------------------------------------------------------------------------
@@ -816,6 +847,9 @@ test_artifact_presence_gate() {
           "gate": "artifact-presence",
           "artifacts": [
             "openspec/changes/*/",
+            "docs/plans/*-design.md",
+            "docs/plans/*-plan.md",
+            "docs/plans/*-spec.md",
             "openspec/specs/*/spec.md",
             "docs/superpowers/specs/*-design.md",
             "docs/superpowers/plans/*.md",
@@ -850,14 +884,14 @@ This test works because `SKILL_PROJECT_ROOT` overrides `_PROJECT_ROOT` in the ho
 
 - [ ] **Step 5: Run routing tests**
 
-Run: `bash tests/test-routing.sh`
-Expected: All tests pass including new ones. Zero failures.
+Run: `bash tests/test-routing-interactions.sh`
+Expected: All tests pass including new validation routing and gate tests. Zero failures.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add tests/test-routing.sh
-git commit -m "test: add isolated routing and gate tests for validation wave skills"
+git add tests/test-routing-interactions.sh
+git commit -m "test: add validation routing and gate tests to shared interaction harness"
 ```
 
 ---
@@ -1064,11 +1098,11 @@ assert_contains "dc: has name frontmatter" "name: implementation-drift-check" "$
 assert_contains "dc: full drift mode" "Implementation Drift Check" "$DC_CONTENT"
 assert_contains "dc: assumptions-only mode" "Assumptions & Gaps" "$DC_CONTENT"
 
-# Comparison sources
+# Comparison sources — canonical paths first
 assert_contains "dc: openspec changes source" "openspec/changes" "$DC_CONTENT"
+assert_contains "dc: canonical plans source" "docs/plans/" "$DC_CONTENT"
 assert_contains "dc: canonical spec source" "openspec/specs" "$DC_CONTENT"
-assert_contains "dc: design spec source" "superpowers/specs" "$DC_CONTENT"
-assert_contains "dc: plan source" "superpowers/plans" "$DC_CONTENT"
+assert_contains "dc: legacy superpowers fallback" "docs/superpowers/" "$DC_CONTENT"
 assert_contains "dc: eval pack source" "fixtures/evals" "$DC_CONTENT"
 
 # Drift dimensions

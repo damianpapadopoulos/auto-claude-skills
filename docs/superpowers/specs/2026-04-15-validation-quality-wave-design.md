@@ -162,19 +162,22 @@ invoke: Skill(auto-claude-skills:implementation-drift-check)
 ### 2.2 Auto-Co-Selection Guard
 
 Only auto-fires in REVIEW/SHIP when at least one comparison source exists:
-- Intent Truth: `openspec/changes/<feature>/` or `openspec/specs/<capability>/spec.md` or `docs/superpowers/specs/*-design.md`
-- Plan: `docs/superpowers/plans/*.md` with task list
+- Intent Truth: `openspec/changes/<feature>/` or `docs/plans/*-design.md` or `docs/plans/*-spec.md` or `openspec/specs/<capability>/spec.md` or `docs/superpowers/specs/*-design.md` (legacy)
+- Plan: `docs/plans/*-plan.md` or `docs/superpowers/plans/*.md` (legacy)
 - Active composition chain with code changes (`git diff` non-empty)
 
 If none exist → does not auto-fire. Can still be explicitly invoked (e.g., "check drift", "am I still on plan") but degrades to assumptions-only mode.
 
 **Enforcement model — two layers:**
 
-1. **Hook-enforced artifact-presence gate:** The phase composition entry for `implementation-drift-check` uses a new `gate` type: `"artifact-presence"`. The hook checks whether any of the following paths exist before emitting the entry:
+1. **Hook-enforced artifact-presence gate:** The phase composition entry for `implementation-drift-check` uses a new `gate` type: `"artifact-presence"`. The hook checks whether any of the following paths exist before emitting the entry (canonical paths first, legacy fallback):
    - `openspec/changes/*/` (any active OpenSpec change)
+   - `docs/plans/*-design.md` (canonical design artifact)
+   - `docs/plans/*-plan.md` (canonical plan artifact)
+   - `docs/plans/*-spec.md` (canonical spec artifact)
    - `openspec/specs/*/spec.md` (any canonical spec)
-   - `docs/superpowers/specs/*-design.md` (any design spec)
-   - `docs/superpowers/plans/*.md` (any plan)
+   - `docs/superpowers/specs/*-design.md` (legacy design spec)
+   - `docs/superpowers/plans/*.md` (legacy plan)
    - `tests/fixtures/evals/*.json` (any eval pack)
 
    This is a cheap filesystem glob check (~5ms) added to the post-jq Bash filter alongside the session-marker gate. If no artifacts match, the composition entry is suppressed mechanically — the LLM never sees it.
@@ -185,12 +188,13 @@ The SHIP fallback uses the session-marker gate (section 4.3) for dedup. The arti
 
 ### 2.3 Gather Comparison Material (Step 1)
 
-Read in priority order:
-1. OpenSpec delta specs (`openspec/changes/<feature>/specs/`)
-2. Canonical specs (`openspec/specs/<capability>/spec.md`)
-3. Design spec (`docs/superpowers/specs/*-design.md`)
-4. Plan task list (`docs/superpowers/plans/*.md`)
-5. Eval pack scenarios (`tests/fixtures/evals/*.json`)
+Read in priority order (canonical first, legacy fallback):
+1. OpenSpec delta specs (`openspec/changes/<feature>/specs/`) — active work, highest authority
+2. Canonical live intent (`docs/plans/*-design.md`, `docs/plans/*-plan.md`, `docs/plans/*-spec.md`)
+3. OpenSpec canonical specs (`openspec/specs/<capability>/spec.md`) — post-ship authoritative
+4. Archived intent (`docs/plans/archive/`) — optional, shipped intent history
+5. Legacy superpowers specs (`docs/superpowers/specs/*-design.md`, `docs/superpowers/plans/*.md`) — deprecated fallback
+6. Eval pack scenarios (`tests/fixtures/evals/*.json`)
 
 ### 2.4 Analyze Drift — Full Mode (Step 2)
 
