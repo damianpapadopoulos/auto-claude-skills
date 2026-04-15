@@ -13,8 +13,8 @@ Tiered GCP log investigation with playbook-driven mitigation and structured vali
 digraph stages {
     rankdir=LR;
     node [shape=box];
-    MITIGATE -> CLASSIFY [label="mitigation\nneeded"];
-    MITIGATE -> INVESTIGATE [label="code fix\nneeded"];
+    MITIGATE -> CLASSIFY [label="mitigation\nneeded\n(Step 5)"];
+    MITIGATE -> INVESTIGATE [label="no mitigation\n(Step 6)"];
     CLASSIFY -> EXECUTE [label="high\nconfidence"];
     CLASSIFY -> INVESTIGATE [label="low\nconfidence\n(Steps 1-5 only)"];
     INVESTIGATE -> CLASSIFY [label="re-classify\nafter probes"];
@@ -112,7 +112,7 @@ Before issuing a query matching a prior entry: reuse if within `freshness_window
 
 Every causal claim in synthesis, YAML, and postmortem must reference a specific query result. Words like "likely", "probably", "possibly" are prohibited in final attribution — replace with evidence-backed language (`"caused by X (evidence: [result])"`) or move to `open_questions`. Speculative language IS permitted in intermediate notes where it drives the next query.
 
-**Self-check:** Before emitting the Step 7 synthesis, scan for "likely", "probably", "possibly", "presumably", "may have", "might be" in causal sentences.
+**Self-check:** Before emitting the Step 7 synthesis, scan for "likely", "probably", "possibly", "presumably", "may have", "might be" in causal sentences. Replace each with evidence-backed language or move to `open_questions`.
 
 ### 8. MCP Result Processing — Never Re-Parse Cached Files
 

@@ -579,7 +579,7 @@ assert_file_contains "behavioral: error-taxonomy ref has tier routing rules" \
 
 # ---------------------------------------------------------------------------
 # Structural guard — SKILL.md word count
-# Pre-cleanup baseline was 13,649 words. Guard prevents regression.
+# Post-refactor baseline is ~11,400 words (down from 12,806). Guard prevents regression.
 # ---------------------------------------------------------------------------
 word_count=$(wc -w < "${SKILL_FILE}" | tr -d ' ')
 if [ "$word_count" -le 11500 ]; then
