@@ -385,7 +385,7 @@ If file exists → suppress the entry. If not → emit normally.
 **Marker lifecycle:**
 - Written by the skill SKILL.md instruction: "After completing, write marker via Bash"
 - Scoped to session token (no cross-session leakage)
-- Cleaned up at session end (existing cleanup in session-start-hook.sh)
+- Cleaned up at session start: this wave adds explicit cleanup of `.skill-*-ran-${TOKEN}` marker files in `session-start-hook.sh` alongside the existing prompt-count and zero-match resets. This prevents stale markers from a prior session suppressing fallback entries in a new session.
 
 #### Gate type: `artifact-presence`
 
@@ -516,7 +516,7 @@ Update existing hints in `config/default-triggers.json`:
 - Playwright is preferred browser path; Cypress is fallback. `webapp-testing` is optional companion, not hard dependency.
 - Reports are terminal-first. Committed eval goldens (`tests/fixtures/evals/`) and generated artifacts (`tests/artifacts/validation/`, gitignored) are strictly separated.
 - Eval pack authoring is manual in this wave. Schema + consumption + validation only.
-- The session-marker gate is the only new hook predicate. No arbitrary expression evaluation.
+- Two new hook gate predicates: `session-marker` (file existence check) and `artifact-presence` (filesystem glob check). No arbitrary expression evaluation.
 - Bash 3.2 compatibility for all hook changes. SKILL.md files have no Bash constraint.
 - Deployment automation, headless agents, Figma MCP, Computer Use, and temporal knowledge graphs are out of scope.
 - Outcome-to-rediscovery loop closure is deferred to a future wave.
