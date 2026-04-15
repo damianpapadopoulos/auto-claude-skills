@@ -7,8 +7,9 @@ When processing reviewer feedback, verify claims before accepting changes.
 ### 0. Intent Truth (Requirement Verification)
 IF reviewing changes to a specified capability:
 - **IF `openspec/changes/<feature>/specs/` exists:** Read delta specs for the active change. These are the most current intent during development. Verify the implementation matches the specified scenarios.
+- **ELSE IF `docs/plans/` has a matching design/plan/spec artifact:** Read it for current design intent
 - **ELSE IF `openspec/specs/<capability>/spec.md` exists:** Read the canonical spec. Verify the implementation satisfies all acceptance scenarios. Flag any specified requirement that is missing from the implementation or tests.
-- **ELSE IF `docs/superpowers/specs/` has a matching design spec:** Reference it for design intent verification, but note that SP specs may have diverged from implementation.
+- **ELSE IF `docs/superpowers/specs/` has a matching design spec (legacy):** Read it, but note it may be stale
 - **IF no artifacts found:** Review based on code quality and internal consistency only.
 - **IF the PR intentionally diverges from spec:** Note this as a spec update candidate — the spec should be revised to match the new intent after shipping.
 

@@ -37,15 +37,18 @@ openspec_state_mark_verified() {
     fi
 }
 
-# --- openspec_state_upsert_change <token> <slug> <plan_path> <spec_path> <capability> ---
+# --- openspec_state_upsert_change <token> <slug> <plan_path> <spec_path> <capability> [<design_path>] ---
 # Add or update a change entry in the changes map.
 # Idempotent: existing entries for other slugs are preserved.
+# Writes canonical field names (design_path, plan_path, spec_path) and
+# legacy aliases (sp_plan_path, sp_spec_path) for backward compatibility.
 openspec_state_upsert_change() {
     local token="${1:-}"
     local slug="${2:-}"
     local plan_path="${3:-}"
     local spec_path="${4:-}"
     local capability="${5:-}"
+    local design_path="${6:-}"
     [ -z "$token" ] && echo "[openspec-state] WARN: no session token, skipping state write" >&2 && return 0
     [ -z "$slug" ] && echo "[openspec-state] WARN: no change slug, skipping state write" >&2 && return 0
 
@@ -53,8 +56,11 @@ openspec_state_upsert_change() {
 
     if [ -f "$state_file" ]; then
         local tmp
-        tmp="$(jq --arg slug "$slug" --arg pp "$plan_path" --arg sp "$spec_path" --arg cap "$capability" '
+        tmp="$(jq --arg slug "$slug" --arg pp "$plan_path" --arg sp "$spec_path" --arg cap "$capability" --arg dp "$design_path" '
             .changes[$slug] = {
+                design_path: $dp,
+                plan_path: $pp,
+                spec_path: $sp,
                 sp_plan_path: $pp,
                 sp_spec_path: $sp,
                 capability_slug: $cap,
@@ -64,11 +70,14 @@ openspec_state_upsert_change() {
         printf '%s\n' "$tmp" > "$state_file"
     else
         # Create new file with just the change entry
-        jq -n --arg slug "$slug" --arg pp "$plan_path" --arg sp "$spec_path" --arg cap "$capability" '{
+        jq -n --arg slug "$slug" --arg pp "$plan_path" --arg sp "$spec_path" --arg cap "$capability" --arg dp "$design_path" '{
             openspec_surface: "none",
             verification_seen: false,
             verification_at: null,
             changes: {($slug): {
+                design_path: $dp,
+                plan_path: $pp,
+                spec_path: $sp,
                 sp_plan_path: $pp,
                 sp_spec_path: $sp,
                 capability_slug: $cap,
@@ -117,8 +126,12 @@ openspec_write_provenance() {
         jq --arg slug "$slug" --arg branch "$branch" --arg commit "$commit" --arg now "$now" '
             {
                 schema_version: 1,
-                sp_plan_path: (.changes[$slug].sp_plan_path // null),
-                sp_spec_path: (.changes[$slug].sp_spec_path // null),
+                design_path: (.changes[$slug].design_path // null),
+                plan_path: (.changes[$slug].plan_path // .changes[$slug].sp_plan_path // null),
+                spec_path: (.changes[$slug].spec_path // .changes[$slug].sp_spec_path // null),
+                # Legacy aliases (deprecated — readers should use canonical names above)
+                sp_plan_path: (.changes[$slug].sp_plan_path // .changes[$slug].plan_path // null),
+                sp_spec_path: (.changes[$slug].sp_spec_path // .changes[$slug].spec_path // null),
                 change_slug: $slug,
                 capability_slug: (.changes[$slug].capability_slug // null),
                 source_branch: $branch,
@@ -134,6 +147,9 @@ openspec_write_provenance() {
         # No state file — write minimal provenance
         jq -n --arg slug "$slug" --arg branch "$branch" --arg commit "$commit" --arg now "$now" '{
             schema_version: 1,
+            design_path: null,
+            plan_path: null,
+            spec_path: null,
             sp_plan_path: null,
             sp_spec_path: null,
             change_slug: $slug,

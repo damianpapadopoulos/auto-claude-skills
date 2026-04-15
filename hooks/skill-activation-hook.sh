@@ -1265,7 +1265,7 @@ HALT if any Red Flag is true:
 - Editing implementation files before invoking Skill(superpowers:writing-plans)
 - Implementing without an approved plan document
 - Skipping TDD steps in the plan
-- Not saving the plan to docs/superpowers/plans/ before executing"
+- Not saving the plan to docs/plans/ before executing"
     ;;
   IMPLEMENT)
     RED_FLAGS="

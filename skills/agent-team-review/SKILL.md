@@ -35,7 +35,9 @@ TeamCreate("code-review")
 
 Gather context:
 - Design doc from docs/plans/*-design.md
-- Implementation plan from docs/plans/*.md
+- Implementation plan from docs/plans/*-plan.md
+- Acceptance spec from docs/plans/*-spec.md (if exists)
+- Legacy fallback: docs/superpowers/specs/*-design.md
 - Git diff: git diff {base_sha}...HEAD
 - List of files changed
 ```

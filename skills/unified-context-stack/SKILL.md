@@ -33,7 +33,7 @@ These are injected by the session-start hook as: `Context Stack: context7=true, 
 - [Historical Truth](tiers/historical-truth.md) — Institutional memory retrieval and storage
 - [Intent Truth](tiers/intent-truth.md) — Feature specification and design rationale retrieval
 
-**Note:** Intent Truth checks for artifact presence in the workspace (`openspec/specs/`, `openspec/changes/`, `docs/superpowers/specs/`). The `OpenSpec:` capability line from session-start indicates CLI availability for write operations (used by `openspec-ship`), but Intent Truth retrieval works regardless of CLI installation — it reads local files.
+**Note:** Intent Truth checks for artifact presence in the workspace (`openspec/specs/`, `openspec/changes/`, `docs/plans/`, `docs/plans/archive/`, `docs/superpowers/specs/` [legacy]). The `OpenSpec:` capability line from session-start indicates CLI availability for write operations (used by `openspec-ship`), but Intent Truth retrieval works regardless of CLI installation — it reads local files.
 
 ## Phase Documents
 

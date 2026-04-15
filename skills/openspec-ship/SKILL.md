@@ -14,7 +14,7 @@ Invoke this skill during the SHIP phase after `verification-before-completion` p
 ## When to Skip
 
 Skip this skill ONLY when ALL of these are true:
-- No Superpowers plan was executed in this session (no `docs/superpowers/plans/` artifact)
+- No Superpowers plan was executed in this session (no `docs/plans/` or `docs/superpowers/plans/` artifact)
 - The session was debugging, reviewing, or non-feature work
 
 **Scope and size are NOT skip criteria.** If a Superpowers plan was executed — regardless of how small the change — this skill MUST run. A 3-file config change that went through brainstorming → writing-plans → execution still needs as-built documentation.
@@ -40,7 +40,7 @@ When this skill starts, populate the session state file with linkage information
 ## Input
 
 The user should provide:
-- **Required for SP artifact archival:** `plan_path` — the path to the Superpowers execution plan (e.g., `docs/superpowers/plans/2026-03-14-feature.md`). If not provided, skip SP artifact archival with warning.
+- **Required for SP artifact archival:** `plan_path` — the path to the implementation plan (e.g., `docs/plans/2026-04-15-feature-plan.md`); also checks legacy `docs/superpowers/plans/`. If not provided, skip SP artifact archival with warning.
 - **Optional:** `feature-name` — kebab-case change name. If not provided, derive from `plan_path` by stripping the date prefix (e.g., `2026-03-14-feature.md` → `feature`). If neither is available, ask the user.
 
 ## Steps
@@ -61,8 +61,9 @@ Based on the detected surface:
 ### Step 2: Derive Slugs
 
 **Session state (primary):** Read `~/.claude/.skill-session-token` to get the session token. Then read `~/.claude/.skill-openspec-state-<token>` for pre-populated linkage:
-- `changes.<slug>.sp_plan_path` — use as `plan_path`
-- `changes.<slug>.sp_spec_path` — use as `spec_path`
+- `changes.<slug>.design_path` — path to the design artifact (e.g., `docs/plans/2026-04-15-feature-design.md`)
+- `changes.<slug>.plan_path` — path to the implementation plan (e.g., `docs/plans/2026-04-15-feature-plan.md`); legacy alias: `sp_plan_path`
+- `changes.<slug>.spec_path` — path to the acceptance spec (e.g., `docs/plans/2026-04-15-feature-spec.md`); legacy alias: `sp_spec_path`
 - `changes.<slug>.capability_slug` — use as capability
 
 If the state file exists and has the relevant change entry, use those values. Skip user prompts for fields that are already populated.
@@ -70,7 +71,7 @@ If the state file exists and has the relevant change entry, use those values. Sk
 **Fallback (no state file):** Use the existing user-input flow (unchanged from current behavior).
 
 **Change slug (`<feature-name>`):**
-- If `plan_path` is provided: strip the leading date prefix from the plan filename stem. E.g., `docs/superpowers/plans/2026-03-14-openspec-ship.md` → `openspec-ship`.
+- If `plan_path` is provided: strip the leading date prefix from the plan filename stem. E.g., `docs/plans/2026-04-15-openspec-ship-plan.md` → `openspec-ship`.
 - If `plan_path` is not provided and no explicit feature name given: ask the user for a kebab-case change name. Do not guess.
 
 **Capability slug (`<capability>`):**
@@ -224,6 +225,21 @@ After the archive path exists and SP artifacts (if any) have been moved:
 2. Run the `openspec_write_provenance` helper (source `hooks/lib/openspec-state.sh` from the auto-claude-skills plugin root, then call `openspec_write_provenance "<archive_path>" "<token>" "<change_slug>"`).
 3. This creates `<archive_path>/superpowers/source.json` with schema_version, paths, branch, commit, surface, and timestamp.
 4. If the write fails, log a warning but do not fail the archive.
+
+### Step 7b: Archive Intent Artifacts
+
+If `design_path`, `plan_path`, or `spec_path` exist in session state:
+
+1. Create `docs/plans/archive/` if it doesn't exist
+2. Move the design, plan, and spec files to `docs/plans/archive/`:
+   ```bash
+   mkdir -p docs/plans/archive
+   for f in "$design_path" "$plan_path" "$spec_path"; do
+     [ -f "$f" ] && mv "$f" docs/plans/archive/
+   done
+   ```
+
+**Note:** `docs/plans/archive/` is the human-readable intent history. `openspec/changes/archive/` is the OpenSpec change archive. They serve different purposes and coexist.
 
 ## Graceful Degradation Summary
 

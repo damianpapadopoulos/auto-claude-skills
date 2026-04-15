@@ -11,42 +11,34 @@ workspace — this is independent of CLI installation. The `OpenSpec:` capabilit
 from session-start indicates CLI availability for write operations, but Intent Truth
 retrieval works with or without the CLI.
 
-## Source 1 (In-Progress): OpenSpec Active Changes
+## Intent Truth Sources (checked in order)
 
-**Condition:** `openspec/changes/<feature>/` exists in the workspace
+### Source 1: OpenSpec Active Changes (highest authority — in-progress work)
+**When:** `openspec/changes/<feature>/` exists in workspace
+**Read:** `proposal.md`, `design.md`, `specs/<capability>/spec.md`
+**Authority:** Most current — approved but unfinished work
 
-Read active change artifacts for the feature being worked on:
-- `proposal.md` for the change proposal (what and why)
-- `design.md` for design decisions in flight (how)
-- `specs/<capability>/spec.md` for delta requirements (acceptance criteria)
+### Source 2: Live Intent Artifacts (canonical design/plan/spec)
+**When:** Source 1 has no match AND `docs/plans/*-<keyword>-{design,plan,spec}.md` exists
+**Read:** Matching `-design.md`, `-plan.md`, `-spec.md` files
+**Authority:** Current session's design intent — may still be in progress
 
-Active changes represent approved-but-unfinished work. They are the most current
-intent source during development. Cross-reference with Internal Truth (current code
-state) when ambiguity exists.
+### Source 3: OpenSpec Canonical Specs (post-ship authoritative)
+**When:** Sources 1+2 have no match AND `openspec/specs/<capability>/spec.md` exists
+**Read:** The canonical spec
+**Authority:** Single source of truth after archival; code may have drifted
 
-## Source 2 (Authoritative): OpenSpec Canonical Specs
+### Source 4: Archived Intent (shipped intent history)
+**When:** Sources 1-3 have no match AND `docs/plans/archive/*-<keyword>-design.md` exists
+**Read:** Archived design/plan/spec files
+**Authority:** Historical — shows what was intended at ship time
 
-**Condition:** Source 1 has no matching active change AND `openspec/specs/<capability>/spec.md` exists
+### Source 5: Legacy Superpowers Specs (deprecated fallback)
+**When:** Sources 1-4 returned nothing AND `docs/superpowers/specs/*-<keyword>-design.md` exists
+**Read:** Legacy design specs
+**Authority:** Point-in-time; may be stale. Cross-reference with current code.
+**Note:** This source will be removed in a future version. New artifacts should go to `docs/plans/`.
 
-Read the canonical spec for the capability being worked on. Canonical specs are the
-single source of truth for feature requirements after a change has been archived.
-
-If canonical spec conflicts with code behavior, the spec defines intended behavior —
-the code may have drifted.
-
-## Source 3 (Historical): Superpowers Specs
-
-**Condition:** Sources 1+2 returned no matching artifacts AND Superpowers spec files
-exist in `docs/superpowers/specs/`
-
-Search for matching design specs:
-- `docs/superpowers/specs/*-<keyword>-design.md` for the design specification
-
-Superpowers specs are point-in-time design documents. They may be stale if the code
-evolved after the spec was written. Always cross-reference with Internal Truth (actual
-code) before treating as authoritative.
-
-## Source 4: No Artifacts — Skip
-
-No intent context is available. Do NOT hallucinate feature requirements. If the task
-requires understanding feature intent and no specs exist, ask the user.
+### No Artifacts Found
+**When:** All sources unavailable
+**Action:** Skip Intent Truth. Ask user. Do NOT hallucinate requirements.

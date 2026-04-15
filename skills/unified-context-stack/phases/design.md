@@ -7,8 +7,9 @@ Before proposing approaches, check what's already been decided.
 ### 0. Intent Truth
 IF the task involves a known feature or capability, check for existing specifications:
 - **IF `openspec/changes/<feature>/` exists:** Read `proposal.md`, `design.md`, and `specs/` for active change context. These represent the most current intent — proposed approaches must account for them.
+- **ELSE IF `docs/plans/` has a matching design/plan/spec artifact:** Read it for current design intent
 - **ELSE IF `openspec/specs/<capability>/spec.md` exists:** Read the canonical spec. Proposed approaches should satisfy existing requirements unless the user explicitly wants to change direction.
-- **ELSE IF `docs/superpowers/specs/` has a matching design spec:** Read it for design intent, but note it may be stale.
+- **ELSE IF `docs/superpowers/specs/` has a matching design spec (legacy):** Read it, but note it may be stale
 - **IF no artifacts found:** Proceed without spec context.
 
 ### 1. Historical Truth

@@ -78,10 +78,10 @@ test_upsert_change_preserves_entries() {
     # First: create state with verification
     openspec_state_mark_verified "$token" "opsx-core"
 
-    # Add first change
-    openspec_state_upsert_change "$token" "feature-a" "plans/a.md" "specs/a.md" "billing"
+    # Add first change (with design_path)
+    openspec_state_upsert_change "$token" "feature-a" "plans/a.md" "specs/a.md" "billing" "docs/plans/2026-04-15-feature-a-design.md"
 
-    # Add second change
+    # Add second change (without design_path — backward compat)
     openspec_state_upsert_change "$token" "feature-b" "plans/b.md" "specs/b.md" "auth"
 
     local state_file="${HOME}/.claude/.skill-openspec-state-${token}"
@@ -104,6 +104,24 @@ test_upsert_change_preserves_entries() {
     verified="$(jq -r '.verification_seen' "$state_file" 2>/dev/null)"
     assert_equals "verification still intact" "true" "$verified"
 
+    # Canonical field names
+    local design
+    design="$(jq -r '.changes["feature-a"].design_path' "$state_file" 2>/dev/null)"
+    assert_equals "design_path populated" "docs/plans/2026-04-15-feature-a-design.md" "$design"
+
+    local plan_new
+    plan_new="$(jq -r '.changes["feature-a"].plan_path' "$state_file" 2>/dev/null)"
+    assert_equals "plan_path (canonical) populated" "plans/a.md" "$plan_new"
+
+    local spec_new
+    spec_new="$(jq -r '.changes["feature-a"].spec_path' "$state_file" 2>/dev/null)"
+    assert_equals "spec_path (canonical) populated" "specs/a.md" "$spec_new"
+
+    # Legacy aliases still readable
+    local sp_plan
+    sp_plan="$(jq -r '.changes["feature-a"].sp_plan_path' "$state_file" 2>/dev/null)"
+    assert_equals "sp_plan_path (legacy) still set" "plans/a.md" "$sp_plan"
+
     teardown_test_env
 }
 test_upsert_change_preserves_entries
@@ -117,7 +135,7 @@ test_write_provenance_produces_source_json() {
 
     local token="test-$$"
     openspec_state_mark_verified "$token" "opsx-core"
-    openspec_state_upsert_change "$token" "my-feature" "plans/my.md" "specs/my.md" "my-cap"
+    openspec_state_upsert_change "$token" "my-feature" "plans/my.md" "specs/my.md" "my-cap" "docs/plans/my-design.md"
 
     local archive_dir="${HOME}/test-archive"
     mkdir -p "$archive_dir"
@@ -135,6 +153,15 @@ test_write_provenance_produces_source_json() {
     local plan
     plan="$(jq -r '.sp_plan_path' "$source_json" 2>/dev/null)"
     assert_equals "sp_plan_path populated" "plans/my.md" "$plan"
+
+    # Canonical fields in provenance
+    local plan_canonical
+    plan_canonical="$(jq -r '.plan_path' "$source_json" 2>/dev/null)"
+    assert_equals "plan_path (canonical) in provenance" "plans/my.md" "$plan_canonical"
+
+    local design_prov
+    design_prov="$(jq -r '.design_path' "$source_json" 2>/dev/null)"
+    assert_equals "design_path in provenance" "docs/plans/my-design.md" "$design_prov"
 
     local cap
     cap="$(jq -r '.capability_slug' "$source_json" 2>/dev/null)"
