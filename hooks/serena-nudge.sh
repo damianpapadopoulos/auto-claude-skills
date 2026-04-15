@@ -1,6 +1,14 @@
 #!/bin/bash
 # Serena nudge — hints when Grep is used for symbol lookups while serena=true
 # PreToolUse hook. Bash 3.2 compatible. Exits 0 always (hint only, fail-open).
+#
+# Design choice: Serena v1.1+ ships its own `serena-hooks remind` PreToolUse hook
+# that fires on ALL tool calls and tracks consecutive non-Serena usage. We keep
+# this plugin-native hook instead because:
+#   1. It checks registry state (serena=true) — safe when Serena is not installed.
+#   2. It only fires on Grep with symbol-like patterns — lower overhead.
+#   3. Serena's hooks require `serena-hooks` binary; plugin hooks must work for all users.
+# Users wanting broader drift protection can add `serena-hooks remind` via /setup.
 trap 'exit 0' ERR
 
 _INPUT="$(cat)"

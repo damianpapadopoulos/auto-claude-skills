@@ -176,12 +176,93 @@ Present only the missing tools. If none are missing, skip this step.
 |------|------|----------------|-------|-------------|
 | Context Hub CLI (`chub`) | npm global | `npm install -g @aisuite/chub` | Global | npm |
 | OpenSpec | npm global | `npm install -g @fission-ai/openspec@latest` | Global | npm |
-| Serena | MCP server | `claude mcp add serena -- uvx --from git+https://github.com/oraios/serena serena start-mcp-server --context claude-code --project "$(pwd)"` | Project-scoped | uv |
+| Serena | MCP server | See Serena install steps below | Project-scoped | uv |
 | Forgetful Memory | MCP server | `claude mcp add forgetful --scope user -- uvx forgetful-ai` | User (global) | uv |
 
 If uv was not installed in Step 5, skip Serena and Forgetful Memory with a note.
 
-The Serena command captures the current working directory at install time, making it project-scoped. Check for an existing serena MCP registration before adding a duplicate.
+**Serena install steps:**
+
+Check for an existing serena MCP registration before adding a duplicate. If Serena is already registered, detect whether it uses the old git-based install: run `claude mcp list` and inspect the serena entry's command — if it contains `uvx --from git+` it is the old install and should be upgraded (see upgrade note below). Alternatively, `command -v serena` returning a path indicates the new PyPI install is already on PATH.
+
+1. Install the Serena binary (one-time):
+```bash
+uv tool install -p 3.13 serena-agent@latest --prerelease=allow
+```
+
+2. Initialize Serena in the project (creates `.serena/project.yml` if missing):
+```bash
+serena init
+```
+
+3. Register the MCP server — choose one:
+
+Per-project (recommended, captures current working directory):
+```bash
+claude mcp add serena -- serena start-mcp-server --context claude-code --project "$(pwd)"
+```
+
+Global (uses working directory at runtime):
+```bash
+claude mcp add --scope user serena -- serena start-mcp-server --context claude-code --project-from-cwd
+```
+
+**Upgrading from the old git-based install:**
+
+If the user already has Serena registered via the old `uvx --from git+https://github.com/oraios/serena` method, upgrade as follows:
+
+```bash
+# Remove old MCP registration
+claude mcp remove serena
+
+# Install via PyPI (replaces the old git-based approach)
+uv tool install -p 3.13 serena-agent@latest --prerelease=allow
+
+# Re-register with new binary
+claude mcp add serena -- serena start-mcp-server --context claude-code --project "$(pwd)"
+```
+
+To upgrade an existing PyPI-based install to the latest version:
+```bash
+uv tool upgrade serena-agent --prerelease=allow
+```
+
+**Optional: Serena official hooks (recommended for heavy Serena usage)**
+
+Serena v1.1+ provides its own hooks to reduce agent drift. These are separate from the auto-claude-skills plugin's built-in nudge hook (which is lighter-weight and activates automatically). For users who want deeper Serena integration, **ask the user:** "Serena provides official hooks for session management and enhanced tool reminders. Would you like to add them to your settings?"
+
+If the user agrees, merge the following hook entries into the existing `.claude/settings.json` (project-level). Add to the `PreToolUse` array and `Stop` array respectively — do not replace any existing hook entries:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "serena-hooks remind --client=claude-code"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "serena-hooks cleanup --client=claude-code"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Note: Do NOT add the `serena-hooks activate` SessionStart hook — the auto-claude-skills session-start hook already handles Serena detection and context setup. Do NOT add the `serena-hooks auto-approve` hook — auto-approval is a user preference. The `remind` hook fires on every tool call (broader than our built-in Grep-only nudge) and the `cleanup` hook prevents session data leaks.
 
 After installation, verify MCP servers with `claude mcp list` (look for "Connected" status) and CLIs with `command -v`.
 
