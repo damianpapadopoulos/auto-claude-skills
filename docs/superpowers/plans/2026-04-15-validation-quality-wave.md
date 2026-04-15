@@ -88,7 +88,7 @@ setup_test_env
 # Check that evals directory has at least one file
 # ---------------------------------------------------------------------------
 eval_count="$(find "${EVALS_DIR}" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l | tr -d ' ')"
-assert_true "evals directory has at least one JSON file" "[ ${eval_count} -gt 0 ]"
+assert_not_empty "evals directory has at least one JSON file" "${eval_count}"
 
 # ---------------------------------------------------------------------------
 # Validate each eval pack
@@ -98,36 +98,37 @@ for eval_file in "${EVALS_DIR}"/*.json; do
     fname="$(basename "$eval_file")"
 
     # Valid JSON
-    jq empty "$eval_file" 2>/dev/null
-    assert_true "${fname}: is valid JSON" "[ $? -eq 0 ]"
+    assert_json_valid "${fname}: is valid JSON" "$eval_file"
 
     # Required top-level fields
     has_id="$(jq -r '.id // empty' "$eval_file")"
-    assert_true "${fname}: has 'id' field" "[ -n '${has_id}' ]"
+    assert_not_empty "${fname}: has 'id' field" "${has_id}"
 
     has_cap="$(jq -r '.capability // empty' "$eval_file")"
-    assert_true "${fname}: has 'capability' field" "[ -n '${has_cap}' ]"
+    assert_not_empty "${fname}: has 'capability' field" "${has_cap}"
 
     scenario_count="$(jq -r '.scenarios | length' "$eval_file")"
-    assert_true "${fname}: has at least one scenario" "[ ${scenario_count} -gt 0 ]"
+    assert_not_empty "${fname}: has at least one scenario" "${scenario_count}"
 
     # Validate each scenario
     local_i=0
     while [ "$local_i" -lt "$scenario_count" ]; do
         s_name="$(jq -r ".scenarios[${local_i}].name // empty" "$eval_file")"
-        assert_true "${fname}[${local_i}]: scenario has 'name'" "[ -n '${s_name}' ]"
+        assert_not_empty "${fname}[${local_i}]: scenario has 'name'" "${s_name}"
 
         s_path="$(jq -r ".scenarios[${local_i}].path // empty" "$eval_file")"
-        assert_true "${fname}[${local_i}]: scenario has 'path'" "[ -n '${s_path}' ]"
+        assert_not_empty "${fname}[${local_i}]: scenario has 'path'" "${s_path}"
 
         # Path must be one of: browser, api, cli
         case "$s_path" in
-            browser|api|cli) ;;
-            *) assert_true "${fname}[${local_i}]: path '${s_path}' is browser|api|cli" "false" ;;
+            browser|api|cli)
+                assert_not_empty "${fname}[${local_i}]: path '${s_path}' is valid" "${s_path}" ;;
+            *)
+                assert_equals "${fname}[${local_i}]: path must be browser|api|cli" "browser|api|cli" "${s_path}" ;;
         esac
 
         s_expected="$(jq -r ".scenarios[${local_i}].expected // empty" "$eval_file")"
-        assert_true "${fname}[${local_i}]: scenario has 'expected'" "[ -n '${s_expected}' ]"
+        assert_not_empty "${fname}[${local_i}]: scenario has 'expected'" "${s_expected}"
 
         local_i=$((local_i + 1))
     done
@@ -586,39 +587,33 @@ git commit -m "feat: add session-marker and artifact-presence gate predicates to
 
 ---
 
-### Task 9: Add session-marker cleanup to session-start-hook.sh
+### Task 9: Document session-marker lifecycle (no session-start cleanup needed)
 
 **Files:**
-- Modify: `hooks/session-start-hook.sh` (line ~59-60)
+- None (documentation/verification only)
 
-- [ ] **Step 1: Add marker file cleanup**
+Session markers are scoped to `${SESSION_TOKEN}` (e.g., `.skill-validation-ran-1713200000-12345`). A new session gets a new token, so stale markers from prior sessions are invisible — they will never match the new token's filename. This means:
 
-In `hooks/session-start-hook.sh`, find the existing cleanup lines (line ~59-60):
+- **No session-start cleanup is needed.** Deleting all `*-ran-*` files at session start would destroy concurrent sessions' markers, breaking session isolation.
+- **Stale markers are harmless.** They are zero-byte files (`touch`) that accumulate slowly and never match active tokens.
+- **This follows the existing pattern.** The `prompt-count` cleanup (`rm -f .skill-prompt-count-*`) has the same cross-session issue but is acceptable because prompt counts are statistics, not behavioral gates. Markers affect gating, so they need more care.
 
+- [ ] **Step 1: Verify marker filenames are session-scoped**
+
+Confirm the SKILL.md instructions in Tasks 2 and 3 both use the session-token-scoped pattern:
 ```bash
-rm -f "${HOME}/.claude/.skill-zero-match-count" 2>/dev/null || true
-rm -f "${HOME}/.claude/.skill-prompt-count-"* 2>/dev/null || true
+touch ~/.claude/.skill-validation-ran-$(cat ~/.claude/.skill-session-token 2>/dev/null || echo default)
+touch ~/.claude/.skill-drift-check-ran-$(cat ~/.claude/.skill-session-token 2>/dev/null || echo default)
 ```
 
-Add immediately after:
-
+And the hook gate check (Task 8) uses the same token:
 ```bash
-rm -f "${HOME}/.claude/.skill-"*"-ran-"* 2>/dev/null || true
+[[ -f "${HOME}/.claude/.skill-${_gate_marker}-${_SESSION_TOKEN:-default}" ]]
 ```
 
-This cleans up all `*-ran-*` session markers from prior sessions, preventing stale markers from suppressing SHIP fallback entries.
+- [ ] **Step 2: Verify no stale-marker collision is possible**
 
-- [ ] **Step 2: Verify hook syntax**
-
-Run: `bash -n hooks/session-start-hook.sh && echo "valid" || echo "BROKEN"`
-Expected: `valid`
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add hooks/session-start-hook.sh
-git commit -m "feat: add session-marker cleanup at session start for validation wave gates"
-```
+Run: `echo "no code changes needed — this task is verification only"`
 
 ---
 
@@ -627,52 +622,108 @@ git commit -m "feat: add session-marker cleanup at session start for validation 
 **Files:**
 - Modify: `tests/test-routing.sh` (add new test cases at the end, before the summary section)
 
-- [ ] **Step 1: Add runtime-validation routing test**
+- [ ] **Step 1: Add install_registry_with_validation() helper**
 
-Add to `tests/test-routing.sh` before the summary section:
+Add a new registry helper function to `tests/test-routing.sh`, after the existing `install_registry_with_wave1()` function (line ~530). Follow the established pattern — extend the base registry with the new skills via `jq .skills +=`:
 
 ```bash
-# ---------------------------------------------------------------------------
-# runtime-validation routing
-# ---------------------------------------------------------------------------
-echo "-- runtime-validation: trigger on 'validate the feature' --"
-OUTPUT="$(run_hook "I want to validate the feature works end to end")"
-CONTEXT="$(extract_context "$OUTPUT")"
-assert_contains "runtime-validation surfaces" "runtime-validation" "$CONTEXT"
-
-echo "-- runtime-validation: does NOT surface on debug prompt --"
-OUTPUT="$(run_hook "fix this crash in the auth module")"
-CONTEXT="$(extract_context "$OUTPUT")"
-assert_not_contains "runtime-validation not in debug" "runtime-validation" "$CONTEXT"
+# Helper: install registry extended with validation wave skills
+install_registry_with_validation() {
+    install_registry
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    local tmp_file
+    tmp_file="$(mktemp)"
+    jq '.skills += [
+      {
+        "name": "runtime-validation",
+        "role": "domain",
+        "phase": "REVIEW",
+        "triggers": ["(validate|validation|e2e|end.to.end|smoke.test|a11y|accessibility|exercise|try.it|does.it.work|interactive.test)"],
+        "trigger_mode": "regex",
+        "priority": 15,
+        "precedes": [],
+        "requires": [],
+        "invoke": "Skill(auto-claude-skills:runtime-validation)",
+        "available": true,
+        "enabled": true
+      },
+      {
+        "name": "implementation-drift-check",
+        "role": "domain",
+        "phase": "REVIEW",
+        "triggers": ["(drift|reflect|assumption|gap|deviat|on.track|off.track|spec.check|still.on.plan)"],
+        "trigger_mode": "regex",
+        "priority": 12,
+        "precedes": [],
+        "requires": [],
+        "invoke": "Skill(auto-claude-skills:implementation-drift-check)",
+        "available": true,
+        "enabled": true
+      }
+    ]' "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
+}
 ```
 
-- [ ] **Step 2: Add implementation-drift-check routing test**
+- [ ] **Step 2: Add isolated runtime-validation routing test**
 
-Add immediately after the runtime-validation tests:
+Add a new test function to `tests/test-routing.sh` before the summary section. Follow the established pattern (`setup_test_env` → `install_registry_with_validation` → run → `teardown_test_env`):
 
 ```bash
 # ---------------------------------------------------------------------------
-# implementation-drift-check routing
+# runtime-validation routing (isolated)
 # ---------------------------------------------------------------------------
-echo "-- implementation-drift-check: trigger on 'check drift' --"
-OUTPUT="$(run_hook "check drift against the spec")"
-CONTEXT="$(extract_context "$OUTPUT")"
-assert_contains "drift-check surfaces on explicit" "implementation-drift-check" "$CONTEXT"
+test_runtime_validation_routing() {
+    echo "-- runtime-validation routing --"
 
-echo "-- implementation-drift-check: trigger on 'am I still on plan' --"
-OUTPUT="$(run_hook "am I still on plan")"
-CONTEXT="$(extract_context "$OUTPUT")"
-assert_contains "drift-check surfaces on plan check" "implementation-drift-check" "$CONTEXT"
+    setup_test_env
+    install_registry_with_validation
+
+    echo "  trigger: 'validate the feature end to end'"
+    local output context
+    output="$(run_hook "I want to validate the feature works end to end")"
+    context="$(extract_context "$output")"
+    assert_contains "runtime-validation surfaces on validate prompt" "runtime-validation" "$context"
+    assert_not_contains "runtime-validation is not process driver" "Process: runtime-validation" "$context"
+
+    echo "  negative: 'fix this crash'"
+    output="$(run_hook "fix this crash in the auth module")"
+    context="$(extract_context "$output")"
+    assert_not_contains "runtime-validation not in debug" "runtime-validation" "$context"
+
+    teardown_test_env
+}
+test_runtime_validation_routing
 ```
 
-- [ ] **Step 3: Add non-displacement regression test**
+- [ ] **Step 3: Add isolated implementation-drift-check routing test**
+
+Add immediately after:
 
 ```bash
-echo "-- validation skills do not displace process drivers --"
-OUTPUT="$(run_hook "validate the feature works")"
-CONTEXT="$(extract_context "$OUTPUT")"
-assert_not_contains "runtime-validation is not process driver" "Process: runtime-validation" "$CONTEXT"
-assert_not_contains "drift-check is not process driver" "Process: implementation-drift-check" "$CONTEXT"
+# ---------------------------------------------------------------------------
+# implementation-drift-check routing (isolated)
+# ---------------------------------------------------------------------------
+test_drift_check_routing() {
+    echo "-- implementation-drift-check routing --"
+
+    setup_test_env
+    install_registry_with_validation
+
+    echo "  trigger: 'check drift against the spec'"
+    local output context
+    output="$(run_hook "check drift against the spec")"
+    context="$(extract_context "$output")"
+    assert_contains "drift-check surfaces on explicit" "implementation-drift-check" "$context"
+    assert_not_contains "drift-check is not process driver" "Process: implementation-drift-check" "$context"
+
+    echo "  trigger: 'am I still on plan'"
+    output="$(run_hook "am I still on plan")"
+    context="$(extract_context "$output")"
+    assert_contains "drift-check surfaces on plan check" "implementation-drift-check" "$context"
+
+    teardown_test_env
+}
+test_drift_check_routing
 ```
 
 - [ ] **Step 4: Run routing tests**
@@ -684,7 +735,7 @@ Expected: All tests pass including new ones. Zero failures.
 
 ```bash
 git add tests/test-routing.sh
-git commit -m "test: add routing tests for runtime-validation and implementation-drift-check"
+git commit -m "test: add isolated routing tests for runtime-validation and implementation-drift-check"
 ```
 
 ---
@@ -696,7 +747,7 @@ git commit -m "test: add routing tests for runtime-validation and implementation
 - Create: `tests/fixtures/scenarios/validation-14-api-smoke.json`
 - Create: `tests/fixtures/scenarios/validation-15-cli-smoke.json`
 - Create: `tests/fixtures/scenarios/drift-16-review-with-spec.json`
-- Create: `tests/fixtures/scenarios/drift-17-no-spec-no-fire.json`
+- Create: `tests/fixtures/scenarios/drift-17-trigger-exclusion.json`
 - Create: `tests/fixtures/scenarios/fallback-18-ship-after-review-skip.json`
 
 - [ ] **Step 1: Create validation-13 fixture**
@@ -757,17 +808,21 @@ Create `tests/fixtures/scenarios/drift-16-review-with-spec.json`:
 
 - [ ] **Step 5: Create drift-17 fixture**
 
-Create `tests/fixtures/scenarios/drift-17-no-spec-no-fire.json`:
+**Design note:** The artifact-presence gate is a coarse repo-level filter (suppresses drift-check in repos with NO design artifacts). In repos like auto-claude-skills that always have specs/plans, drift-check WILL appear in composition lines when the REVIEW phase is active. This fixture tests that drift-check does NOT appear as a *selected skill* when the prompt contains no drift-related trigger words — trigger exclusion, not artifact-presence gating. The artifact-presence gate is tested in isolation in Task 10's dedicated gate test.
+
+Create `tests/fixtures/scenarios/drift-17-trigger-exclusion.json`:
 
 ```json
 {
-  "name": "drift-17-no-spec-no-fire",
+  "name": "drift-17-trigger-exclusion",
   "prompt": "review my code changes and check for bugs",
   "expected_skills": ["requesting-code-review"],
   "expected_phase": "REVIEW",
-  "must_not_match": ["implementation-drift-check"]
+  "must_not_match": ["Domain: implementation-drift-check"]
 }
 ```
+
+Note: `must_not_match` checks `"Domain: implementation-drift-check"` (the skill activation line), not just `"implementation-drift-check"` (which could match composition parallel hints). This ensures the skill was not selected by the scoring engine, while allowing it to appear in composition context.
 
 - [ ] **Step 6: Create fallback-18 fixture**
 
@@ -779,9 +834,12 @@ Create `tests/fixtures/scenarios/fallback-18-ship-after-review-skip.json`:
   "prompt": "ship it, merge to main and push",
   "expected_skills": ["verification-before-completion"],
   "expected_phase": "SHIP",
+  "expected_in_composition": ["runtime-validation", "implementation-drift-check"],
   "must_not_match": []
 }
 ```
+
+Note: `expected_in_composition` uses the existing scenario runner feature (test-scenario-evals.sh line 88-97) to verify both sidecars appear in the SHIP composition chain as fallback entries.
 
 - [ ] **Step 7: Run scenario evals**
 
@@ -795,7 +853,7 @@ git add tests/fixtures/scenarios/validation-13-ui-with-playwright.json \
         tests/fixtures/scenarios/validation-14-api-smoke.json \
         tests/fixtures/scenarios/validation-15-cli-smoke.json \
         tests/fixtures/scenarios/drift-16-review-with-spec.json \
-        tests/fixtures/scenarios/drift-17-no-spec-no-fire.json \
+        tests/fixtures/scenarios/drift-17-trigger-exclusion.json \
         tests/fixtures/scenarios/fallback-18-ship-after-review-skip.json
 git commit -m "test: add scenario eval fixtures for validation and drift-check routing"
 ```

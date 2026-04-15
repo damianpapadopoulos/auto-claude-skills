@@ -385,7 +385,7 @@ If file exists → suppress the entry. If not → emit normally.
 **Marker lifecycle:**
 - Written by the skill SKILL.md instruction: "After completing, write marker via Bash"
 - Scoped to session token (no cross-session leakage)
-- Cleaned up at session start: this wave adds explicit cleanup of `.skill-*-ran-${TOKEN}` marker files in `session-start-hook.sh` alongside the existing prompt-count and zero-match resets. This prevents stale markers from a prior session suppressing fallback entries in a new session.
+- Not cleaned up at session start. Markers are session-token-scoped, so stale markers from prior sessions are invisible to new sessions (different token, different filename). Cleaning all `*-ran-*` files at session start would destroy concurrent sessions' markers, breaking session isolation. Stale markers are zero-byte files that accumulate harmlessly.
 
 #### Gate type: `artifact-presence`
 
@@ -399,6 +399,8 @@ done
 [[ $_has_artifact -eq 0 ]] && continue  # suppress entry
 ```
 If no artifacts match → suppress the entry mechanically. The LLM never sees it.
+
+**Scope:** The gate is a coarse repo-level filter — it checks whether the project has *any* design artifacts, not whether a specific feature has comparison material. In repos with permanent spec/plan directories (like auto-claude-skills itself), the gate will always pass. Feature-level relevance is LLM-evaluated via SKILL.md instructions. This two-layer model (mechanical coarse filter + LLM fine filter) prevents noise in artifact-free repos while allowing fine-grained mode selection in artifact-rich repos.
 
 **Performance:** ~5ms for 5 glob patterns. Well within the 50ms hook budget.
 
