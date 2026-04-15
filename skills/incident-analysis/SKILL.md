@@ -966,10 +966,7 @@ Build URLs from the evidence ledger (Constraint 6) using `references/evidence-li
 
 **Do not skip links because "the postmortem is generated from the synthesis."** The synthesis contains the link data — use it.
 
-**Permalink formatting (apply to all references in the generated postmortem):**
-- **Trace IDs:** `[Trace TRACE_ID](https://console.cloud.google.com/traces/list?project=PROJECT_ID&tid=TRACE_ID)`. For cross-project traces (Step 4), use each service's own project_id.
-- **Git commits:** `[Commit SHORT_HASH](https://github.com/ORG/REPO/commit/FULL_HASH)`. Derive org/repo from `git remote get-url origin`. If not GitHub-hosted, use raw hash.
-- **Log queries, metrics, deployments:** See `references/evidence-links.md` for URL templates and encoding rules.
+**Permalink formatting:** Use URL templates from `references/evidence-links.md` for all link types (logs, metrics, traces, deployments, source). For cross-project traces (Step 4), use each service's own project_id. Derive org/repo from `git remote get-url origin`.
 
 ### Step 4: Write to Disk
 
