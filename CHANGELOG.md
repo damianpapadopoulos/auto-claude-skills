@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- SDLC Coverage: 39 routing interaction regression tests across 5 collision groups (code-review, parallel/worktree, debug/incident, cross-phase, negatives)
+- SDLC Coverage: `design_path` session state field for tracking design artifacts through the SDLC pipeline
+- SDLC Coverage: Intent Truth 5-tier retrieval precedence (OpenSpec active > docs/plans/ live > canonical specs > archived > legacy)
+- SDLC Coverage: `docs/plans/archive/` intent archival step in openspec-ship (Step 7b)
+
+### Changed
+- Session state: canonical `plan_path`/`spec_path` fields with backward-compatible `sp_plan_path`/`sp_spec_path` legacy aliases
+- Intent Truth: `docs/plans/` now takes precedence over `openspec/specs/` for live design intent
+- openspec-ship: updated path references from `docs/superpowers/plans/` to canonical `docs/plans/`
+- agent-team-review: context gathering now includes acceptance spec and legacy fallback paths
+- Activation hook: plan-path warning updated to `docs/plans/`
+
+### Added
 - Wave 1 PDLC Safety Enrichments: `starter-template` domain skill — emits repo-native seed files (SKILL.md skeleton, routing entry, test snippets) when creating new skills
 - Wave 1 PDLC Safety Enrichments: `prototype-lab` domain skill — produces 3 thin comparable variants with mandatory Human Validation Plan
 - Wave 1 PDLC Safety Enrichments: `agent-safety-review` domain skill — evaluates autonomous agent designs for the lethal trifecta (private data + untrusted input + outbound action)
