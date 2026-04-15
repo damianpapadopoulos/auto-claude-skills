@@ -547,6 +547,37 @@ assert_contains "postmortem template: investigation notes mentions ruled-out wit
     "ruled-out hypothesis should include" "${TEMPLATE_CONTENT}"
 
 # ---------------------------------------------------------------------------
+# Behavioral verification — extracted content reachable from SKILL.md pointers
+# ---------------------------------------------------------------------------
+# For each behavioral eval fixture that tests extracted content, verify:
+# 1. SKILL.md pointer text contains the routing summary (agent sees it)
+# 2. Reference file contains the detailed procedure (agent can follow pointer)
+# 3. Eval fixture assertion patterns are satisfied by either pointer or reference
+
+# crashloop-exit-code-triage: tests CrashLoopBackOff branch (Task 2 extraction)
+CRASHLOOP_POINTER=$(sed -n '/CrashLoopBackOff triage (conditional/,/references\/deep-dive-branches.md/p' "${SKILL_FILE}")
+assert_contains "behavioral: SKILL.md pointer routes to deep-dive-branches" \
+    "references/deep-dive-branches.md" "${CRASHLOOP_POINTER}"
+assert_file_contains "behavioral: deep-dive ref has exit code triage procedure" \
+    "exit code.*termination\|termination.*exit code" "${DEEP_DIVE_REF}"
+assert_file_contains "behavioral: deep-dive ref has OOMKilled redirect" \
+    "137.*OOMKilled\|OOMKilled.*137" "${DEEP_DIVE_REF}"
+assert_file_contains "behavioral: deep-dive ref has previous container logs step" \
+    "previous.*container.*log\|previous.*log" "${DEEP_DIVE_REF}"
+
+# multi-service-shared-dependency: tests investigation spine (stays in SKILL.md)
+assert_file_contains "behavioral: SKILL.md has shared resource escalation" \
+    "Shared resource escalation" "${SKILL_FILE}"
+assert_file_contains "behavioral: SKILL.md references caller-investigation.md" \
+    "references/caller-investigation.md" "${SKILL_FILE}"
+
+# error taxonomy used in investigation: verify pointer + reference chain
+assert_file_contains "behavioral: SKILL.md pointer references error-taxonomy.md" \
+    "references/error-taxonomy.md" "${SKILL_FILE}"
+assert_file_contains "behavioral: error-taxonomy ref has tier routing rules" \
+    "Investigate Tier 1.*first" "${ERROR_TAXONOMY_REF}"
+
+# ---------------------------------------------------------------------------
 # Structural guard — SKILL.md word count
 # Pre-cleanup baseline was 13,649 words. Guard prevents regression.
 # ---------------------------------------------------------------------------
