@@ -625,13 +625,15 @@ ${_gate_line}"
             ;;
 ```
 
-- [ ] **Step 3: Set _PROJECT_ROOT variable**
+- [ ] **Step 3: Set _PROJECT_ROOT variable (overridable for testing)**
 
 Near the top of the hook (after `REGISTRY_CACHE` is defined, line ~58), add:
 
 ```bash
-_PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+_PROJECT_ROOT="${SKILL_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 ```
+
+This follows the existing `CLAUDE_PLUGIN_ROOT` pattern: the env var `SKILL_PROJECT_ROOT` allows tests to point the artifact-presence gate at a controlled directory. In production, it falls through to `git rev-parse --show-toplevel`.
 
 - [ ] **Step 4: Verify hook syntax**
 
@@ -798,9 +800,6 @@ test_artifact_presence_gate() {
     echo "-- artifact-presence gate --"
 
     setup_test_env
-    # Install a v4 registry that includes the drift-check composition entry
-    # with gate:artifact-presence. The test HOME has no spec/plan/eval artifacts,
-    # so the gate should suppress the composition entry.
     install_registry_with_validation
 
     # Patch registry to add phase_compositions.REVIEW with the gated entry
@@ -826,20 +825,28 @@ test_artifact_presence_gate() {
       ]
     }' "$cache_file" > "$tmp_file" && mv "$tmp_file" "$cache_file"
 
+    # Create a clean temp directory with no spec/plan/eval artifacts.
+    # Point the hook at it via SKILL_PROJECT_ROOT (the env var override
+    # added in Task 8 Step 3). This is the key: without this override,
+    # _PROJECT_ROOT resolves to the real repo root which has artifacts.
+    local artifact_free_root
+    artifact_free_root="$(mktemp -d "${TMPDIR:-/tmp}/acs-gate-test.XXXXXXXX")"
+
     echo "  gate should suppress drift-check in artifact-free project"
     local output context
-    output="$(run_hook "review my code changes")"
+    output="$(SKILL_PROJECT_ROOT="${artifact_free_root}" run_hook "review my code changes")"
     context="$(extract_context "$output")"
-    # In a clean test HOME with no spec/plan/eval files, the artifact-presence
-    # gate should suppress the drift-check composition entry entirely
+    # With SKILL_PROJECT_ROOT pointing to a clean temp dir, the gate's
+    # compgen -G checks find no matching artifacts → entry suppressed
     assert_not_contains "drift-check suppressed by gate" "implementation-drift-check" "$context"
 
+    rm -rf "${artifact_free_root}"
     teardown_test_env
 }
 test_artifact_presence_gate
 ```
 
-This test works because `setup_test_env` creates a clean temp HOME with no `openspec/`, `docs/superpowers/`, or `tests/fixtures/evals/` directories. The gate's `compgen -G` checks fail, suppressing the entry.
+This test works because `SKILL_PROJECT_ROOT` overrides `_PROJECT_ROOT` in the hook (Task 8 Step 3), pointing the artifact-presence gate at a clean temp directory with no `openspec/`, `docs/superpowers/`, or `tests/fixtures/evals/` files. The gate's `compgen -G` checks fail, suppressing the entry. The real repo's artifacts are invisible to this test.
 
 - [ ] **Step 5: Run routing tests**
 
