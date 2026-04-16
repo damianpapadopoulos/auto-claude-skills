@@ -118,6 +118,35 @@ Evaluate using the plain-text POSITION format. Focus on: implementation timeline
 
 ## Output
 
+**Check session preset first.** Read `~/.claude/skill-config.json` or check the activation context for the active preset. If the preset has `openspec_first: true` (e.g., `spec-driven`), use the spec-driven mode below. Otherwise, use solo mode.
+
+### Spec-driven mode (preset: `spec-driven`)
+
+After the debate, create `openspec/changes/<topic>/` (committed, visible to teammates):
+
+1. `openspec/changes/<topic>/proposal.md`:
+   - **Why** — problem statement
+   - **What Changes** — summary of the decision
+   - **Capabilities** — Added/Modified capabilities this change touches
+   - **Impact** — affected code, APIs, dependencies
+
+2. `openspec/changes/<topic>/design.md`:
+   - **Architecture** — consensus or lead's recommendation
+   - **Dissenting views** — what the critic and pragmatist flagged
+   - **Trade-offs** — what we're accepting
+   - **Decisions & Trade-offs** — rejected alternatives and rationale
+
+3. `openspec/changes/<topic>/specs/<capability>/spec.md`:
+   - **Acceptance Scenarios** — 2-4 GIVEN/WHEN/THEN scenarios defining success
+   - Use RFC 2119 keywords (MUST, SHOULD, MAY) in UPPERCASE
+
+**Capability auto-creation:** If no existing capability fits, create `openspec/specs/<new-capability>/` (auto-created, not gated on user approval). When introducing a new capability, emit a visible warning:
+> ⚠️ NEW CAPABILITY: This change introduces capability `<new-capability>`. Confirm the taxonomy is correct before archive.
+
+Prefer extending an existing capability over creating a new one — check `openspec/specs/` for close matches first.
+
+### Solo mode (default)
+
 After the debate, synthesize into a design document at `docs/plans/YYYY-MM-DD-{topic}-design.md` containing:
 
 1. **Problem statement** — what we're solving
