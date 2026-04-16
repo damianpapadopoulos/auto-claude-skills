@@ -37,3 +37,27 @@ Claude Code plugin for automatic skill routing based on prompt intent and SDLC p
 - `docs/plans/` is gitignored — use `git add -f` for design docs.
 - When user says "proceed", continue with the next logical step. Do not ask "what would you like to proceed with?" — infer from context.
 - `skills/incident-analysis/SKILL.md` has an 11,500-word test guard. Extract tables, YAML schemas (>15 lines), and URL templates to `references/` instead of inlining.
+
+## Spec Persistence Modes
+
+Two modes for where design intent is persisted:
+
+**Default (`docs/plans/`-first):** Design docs, plans, and specs go to `docs/plans/*.md` (gitignored). Low-ceremony, session-scoped. Best for solo dev or exploratory work. `openspec-ship` creates retrospective `openspec/changes/` at SHIP time.
+
+**Spec-driven mode (`openspec/changes/`-first):** Set `{"preset": "spec-driven"}` in `~/.claude/skill-config.json`. Design intent is committed to `openspec/changes/<feature>/proposal.md + design.md + specs/<cap>/spec.md` during DESIGN phase. Teammates see in-progress specs via `git pull`. `openspec-ship` syncs the existing change at SHIP time instead of creating from scratch.
+
+**When to use spec-driven:**
+- ≥2 active developers on the repo
+- Long-lived codebase where decision traceability matters
+- Teams with concurrent work on overlapping capabilities
+- Repos planning to add `openspec validate` to CI
+
+**When to stay default:**
+- Solo development
+- Short-lived repos / prototypes
+- Exploratory phases where designs frequently get rejected
+- Repos without an established capability taxonomy
+
+**Task plans stay local in both modes.** `docs/plans/*-plan.md` (task breakdowns, checkbox progress) is unchanged by the mode flag — those are the dev's execution scratch.
+
+**Switching modes:** Change the preset at any time; existing artifacts are not migrated. New features use the new location.
