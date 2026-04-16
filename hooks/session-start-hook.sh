@@ -420,6 +420,34 @@ if [ -n "$_preset_name" ] && [ "$_preset_name" != "null" ]; then
   fi
 fi
 
+# Step 6c: Apply openspec_first mode if preset enables it
+# Rewrites DESIGN and PLAN phase composition hints to point at
+# openspec/changes/ instead of docs/plans/ for design intent.
+# Task plans in docs/plans/*-plan.md are unchanged.
+if [ -n "$_preset_name" ] && [ "$_preset_name" != "null" ] && [ -f "$_preset_file" ]; then
+  _openspec_first="$(jq -r '.openspec_first // false' "$_preset_file" 2>/dev/null)"
+  if [ "$_openspec_first" = "true" ]; then
+    # Mutate phase_compositions in DEFAULT_JSON. DEFAULT_JSON is the source
+    # for Step 8's phase_compositions extraction, so mutating here propagates
+    # to the cache via PHASE_COMPOSITIONS.
+    DEFAULT_JSON="$(printf '%s' "${DEFAULT_JSON}" | jq '
+      (.phase_compositions.DESIGN.hints // []) |= map(
+        if (.text // "" | test("PERSIST DESIGN")) then
+          .text = "PERSIST DESIGN (spec-driven): Create `openspec/changes/<feature-slug>/proposal.md`, `openspec/changes/<feature-slug>/design.md`, and `openspec/changes/<feature-slug>/specs/<capability-slug>/spec.md` upfront after brainstorming approval. Sections in proposal: Why, What Changes, Capabilities (Added/Modified), Impact. Sections in design: Architecture, Trade-offs, Dissenting views, Decisions. Spec file uses RFC 2119 UPPERCASE keywords and 2-4 GIVEN/WHEN/THEN acceptance scenarios. Then run: source hooks/lib/openspec-state.sh && openspec_state_upsert_change \"$TOKEN\" \"$SLUG\" \"\" \"\" \"$CAPABILITY_SLUG\" \"\" to set change_slug + capability_slug in session state. If introducing a new capability, emit a visible NEW CAPABILITY warning for user review."
+        elif (.text // "" | test("DESIGN.PLAN CONTRACT")) then
+          .text = "DESIGN\u2192PLAN CONTRACT (spec-driven): Before transitioning from DESIGN to PLAN, the `openspec/changes/<feature-slug>/` folder MUST contain: (1) proposal.md with Capabilities section listing every subsystem touched, (2) design.md with Architecture and explicit out-of-scope, (3) specs/<capability-slug>/spec.md with 2-4 GIVEN/WHEN/THEN acceptance scenarios. These files are COMMITTED so teammates see in-progress design intent via git."
+        else . end
+      ) |
+      (.phase_compositions.PLAN.hints // []) |= map(
+        if (.text // "" | test("CARRY SCENARIOS")) then
+          .text = "CARRY SCENARIOS (spec-driven): Read acceptance scenarios from `openspec/changes/<feature-slug>/specs/<capability-slug>/spec.md` and carry them into the plan as verification criteria. Save the plan to `docs/plans/YYYY-MM-DD-<slug>-plan.md` (local task breakdown, gitignored)."
+        else . end
+      )
+    ')"
+    WARNINGS="$(printf '%s' "${WARNINGS}" | jq --arg m "spec-driven mode active: design intent persisted to openspec/changes/ (committed)" '. + [$m]')"
+  fi
+fi
+
 if [ -f "${USER_CONFIG}" ] && jq empty "${USER_CONFIG}" >/dev/null 2>&1; then
     USER_CONFIG_JSON="$(cat "${USER_CONFIG}")"
     SKILLS_JSON="$(printf '%s' "${SKILLS_JSON}" | jq --argjson cfg "$(printf '%s' "${USER_CONFIG_JSON}")" '
