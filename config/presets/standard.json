@@ -1,0 +1,6 @@
+{
+  "name": "standard",
+  "description": "Current default behavior — all discovered skills enabled. Same as no preset.",
+  "overrides": {},
+  "default_enabled": true
+}

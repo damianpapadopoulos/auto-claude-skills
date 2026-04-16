@@ -383,6 +383,43 @@ rm -f "${CACHE_FILE}.customs.$$"
 # -----------------------------------------------------------------
 WARNINGS="[]"
 
+# Step 6b: Resolve preset (if configured in skill-config.json)
+_preset_name=""
+if [ -f "${USER_CONFIG}" ]; then
+  _preset_name="$(jq -r '.preset // ""' "${USER_CONFIG}" 2>/dev/null)"
+fi
+if [ -n "$_preset_name" ] && [ "$_preset_name" != "null" ]; then
+  _preset_file="${PLUGIN_ROOT}/config/presets/${_preset_name}.json"
+  if [ -f "$_preset_file" ]; then
+    _default_enabled="$(jq -r '.default_enabled // true' "$_preset_file")"
+    _preset_overrides="$(jq -c '.overrides // {}' "$_preset_file")"
+    if [ "$_default_enabled" = "false" ]; then
+      # Disable all skills not in the preset's override list
+      SKILLS_JSON="$(printf '%s' "${SKILLS_JSON}" | jq --argjson po "$_preset_overrides" '
+        [.[] |
+          if ($po[.name] != null) then
+            .enabled = ($po[.name].enabled // true)
+          else
+            .enabled = false
+          end
+        ]
+      ')"
+    fi
+    # Apply any explicit overrides from preset
+    SKILLS_JSON="$(printf '%s' "${SKILLS_JSON}" | jq --argjson po "$_preset_overrides" '
+      [.[] |
+        if ($po[.name] != null) then
+          . + ($po[.name] | del(.enabled)) + { enabled: ($po[.name].enabled // .enabled) }
+        else .
+        end
+      ]
+    ')"
+    WARNINGS="$(printf '%s' "${WARNINGS}" | jq --arg m "Preset active: ${_preset_name} (${_preset_file})" '. + [$m]')"
+  else
+    WARNINGS="$(printf '%s' "${WARNINGS}" | jq --arg m "Preset '${_preset_name}' not found at ${_preset_file}" '. + [$m]')"
+  fi
+fi
+
 if [ -f "${USER_CONFIG}" ] && jq empty "${USER_CONFIG}" >/dev/null 2>&1; then
     USER_CONFIG_JSON="$(cat "${USER_CONFIG}")"
     SKILLS_JSON="$(printf '%s' "${SKILLS_JSON}" | jq --argjson cfg "$(printf '%s' "${USER_CONFIG_JSON}")" '

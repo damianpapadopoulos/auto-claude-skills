@@ -1,0 +1,6 @@
+{
+  "name": "full",
+  "description": "All skills enabled, including advanced skills. Same as standard but explicitly opt-in to everything.",
+  "overrides": {},
+  "default_enabled": true
+}

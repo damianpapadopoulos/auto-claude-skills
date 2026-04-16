@@ -1,0 +1,13 @@
+{
+  "name": "starter",
+  "description": "Core skills only — brainstorming, plans, debugging, code review, verification, commit. Ideal for new users or focused sessions.",
+  "overrides": {
+    "brainstorming": { "enabled": true },
+    "writing-plans": { "enabled": true },
+    "systematic-debugging": { "enabled": true },
+    "requesting-code-review": { "enabled": true },
+    "verification-before-completion": { "enabled": true },
+    "finishing-a-development-branch": { "enabled": true }
+  },
+  "default_enabled": false
+}
