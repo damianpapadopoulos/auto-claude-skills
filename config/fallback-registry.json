@@ -1242,6 +1242,10 @@
           "purpose": "Branch cleanup, merge, or PR creation"
         },
         {
+          "step": "write-learn-baseline",
+          "purpose": "Write learn baseline for outcome-review. Detects ship event (merge or PR) from git state. Snapshots hypotheses from session state. Writes to ~/.claude/.skill-learn-baselines/<slug>.json. Skips silently if no ship detected (Option 3 keep / Option 4 discard)."
+        },
+        {
           "plugin": "commit-commands",
           "use": "commands:/commit-push-pr",
           "when": "installed AND user chooses PR option",

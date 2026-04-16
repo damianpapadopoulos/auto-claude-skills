@@ -40,6 +40,10 @@ FALLBACK_CONTENT="$(cat "${FALLBACK}")"
 
 assert_contains "DISCOVER persistence hint in fallback" "PERSIST DISCOVERY" "${FALLBACK_CONTENT}"
 
+# --- Registry: write-learn-baseline SHIP step ---
+assert_contains "write-learn-baseline in SHIP sequence" "write-learn-baseline" "${REGISTRY_CONTENT}"
+assert_contains "write-learn-baseline in fallback" "write-learn-baseline" "${FALLBACK_CONTENT}"
+
 # Summary
 echo ""
 echo "=============================="
