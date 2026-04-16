@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Hypothesis-to-Learning Loop: Durable hypothesis artifact from DISCOVER through SHIP to LEARN — structured fields (Metric, Baseline, Target, Window) in product-discovery brief, persisted via session state, extracted by openspec-ship, denormalized into learn-baseline JSON, consumed by outcome-review with per-hypothesis validation table
+- Hypothesis-to-Learning Loop: `openspec_state_set_discovery_path` helper for targeted discovery_path merge in session state
+- Hypothesis-to-Learning Loop: PERSIST DISCOVERY composition hint in DISCOVER phase (matching existing DESIGN pattern)
+- Hypothesis-to-Learning Loop: `write-learn-baseline` SHIP composition step — conditional on ship event detection from git state
+- Hypothesis-to-Learning Loop: `discovery_path` field in OpenSpec provenance output
+
 ### Changed
 - Incident-analysis: Refactored SKILL.md from 12,806 to 11,408 words (~11% reduction) — extracted error taxonomy and deep-dive branches to reference files, compressed behavioral constraints, added stage-transition flowchart
 - Incident-analysis: Lowered word count guard from 13,000 to 11,500 with 18 new tests (behavioral navigation-chain verification)
