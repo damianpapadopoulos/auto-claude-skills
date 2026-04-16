@@ -55,6 +55,17 @@ Present a structured brief covering:
 
 **Constraints:** Known limitations — timeline, dependencies, technical constraints
 
+**Hypotheses:**
+
+### H1: [description]
+We believe [intervention] will [outcome].
+- **Metric:** [specific metric name or event, e.g., "checkout_completion_rate"]
+- **Baseline:** [current value or "unknown" — can be refined during DESIGN/PLAN]
+- **Target:** [directional — "increase", "decrease >20%", or specific threshold]
+- **Window:** [validation timeframe — "2 weeks post-ship", "next sprint"]
+
+Add H2, H3, etc. for additional hypotheses. All structured fields are nullable at discovery time.
+
 **Open Questions:** What needs to be answered before design can begin?
 
 ## Step 4: User Validation
