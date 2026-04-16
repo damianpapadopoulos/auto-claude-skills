@@ -26,7 +26,8 @@ If no PostHog MCP tools are available, ask the user to provide metrics directly:
 
 1. Check for a learn baseline file in `~/.claude/.skill-learn-baselines/`:
    - List files, match by feature name or branch name from the user's prompt
-   - If found, use the baseline's `shipped_at`, `suggested_metrics`, and `jira_ticket` fields
+   - If found, use the baseline's `shipped_at`, `ship_method`, `hypotheses`, and `jira_ticket` fields
+   - If `ship_method` is `"pull_request"`, verify the PR was actually merged before proceeding (check `pr_url` via `gh pr view`)
 2. If no baseline found, ask the user:
    > "Which feature should I review? Please provide the feature name, branch name, or Jira ticket ID."
 
@@ -37,6 +38,7 @@ If no PostHog MCP tools are available, ask the user to provide metrics directly:
 1. Query adoption metrics via `query-run` with HogQL:
    - Event counts for the feature's key events since `shipped_at`
    - Compare to the period before shipping (same duration)
+   - If the baseline has non-null `hypotheses`, use each hypothesis's `metric` field to target specific events/properties instead of generic adoption queries
 2. Check experiment results if applicable:
    - `list-experiments` to find experiments linked to the feature
    - `get-experiment` for results, significance, and variant performance
@@ -48,6 +50,7 @@ If no PostHog MCP tools are available, ask the user to provide metrics directly:
 **Tier 2 (Manual):**
 
 1. Ask the user to share metrics from their dashboards
+   - If the baseline has `hypotheses`, present each hypothesis and its metric to the user: "For H1 ([description]), I need the current value of [metric]. What is it?"
 2. Ask about any observed regressions or improvements
 3. Synthesize from what the user provides
 
@@ -70,6 +73,20 @@ Present a structured report:
 - **Regression detected** — [specific metric] degraded by [amount]. Investigate.
 - **Inconclusive** — Insufficient data. Revisit in [N] days.
 - **Mixed** — [positive metrics] improved but [negative metrics] regressed. Judgment call.
+
+**Hypothesis Validation** (when baseline has non-null `hypotheses`):
+
+| ID | Hypothesis | Metric | Baseline | Target | Actual | Status |
+|----|-----------|--------|----------|--------|--------|--------|
+| H1 | [description] | [metric] | [baseline] | [target] | [measured value] | [status] |
+
+Status values:
+- `Confirmed` — Actual meets or exceeds target
+- `Not confirmed` — Actual does not meet target
+- `Inconclusive` — Insufficient data, or validation window has not elapsed
+- `Partially confirmed` — Directionally correct but below target threshold
+
+When `hypotheses` is null in the baseline (or no baseline found): skip this section entirely. Fall back to the existing generic metrics flow with no behavioral change.
 
 **Recommendations:** Specific next actions based on the assessment.
 
