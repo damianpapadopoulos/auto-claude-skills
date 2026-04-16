@@ -53,5 +53,27 @@ standard="$PROJECT_ROOT/config/presets/standard.json"
 default_enabled="$(jq -r '.default_enabled' "$standard")"
 assert_equals "standard default_enabled is true" "true" "$default_enabled"
 
+# ---------------------------------------------------------------------------
+# Spec-driven preset structure
+# ---------------------------------------------------------------------------
+echo "-- Spec-Driven Preset Structure --"
+
+spec_driven="$PROJECT_ROOT/config/presets/spec-driven.json"
+assert_file_exists "spec-driven.json exists" "$spec_driven"
+assert_json_valid "spec-driven.json is valid JSON" "$spec_driven"
+
+name="$(jq -r '.name' "$spec_driven")"
+assert_equals "spec-driven name field" "spec-driven" "$name"
+
+openspec_first="$(jq -r '.openspec_first // false' "$spec_driven")"
+assert_equals "spec-driven enables openspec_first" "true" "$openspec_first"
+
+default_enabled="$(jq -r '.default_enabled' "$spec_driven")"
+assert_equals "spec-driven default_enabled is true" "true" "$default_enabled"
+
+# Description should mention spec-driven / openspec/changes/ for discoverability
+description="$(jq -r '.description' "$spec_driven")"
+assert_contains "spec-driven description mentions openspec/changes/" "openspec/changes/" "$description"
+
 print_summary
 exit $?

@@ -1,0 +1,7 @@
+{
+  "name": "spec-driven",
+  "description": "Spec-driven mode — commits design intent to openspec/changes/ instead of docs/plans/ so teammates see in-progress specs via git. Use for multi-user repos with durable decision traceability. Existing docs/plans/*-design.md files are NOT migrated; new work only.",
+  "overrides": {},
+  "default_enabled": true,
+  "openspec_first": true
+}
