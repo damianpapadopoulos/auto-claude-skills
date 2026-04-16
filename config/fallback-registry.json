@@ -210,6 +210,23 @@
       "enabled": true
     },
     {
+      "name": "deploy-gate",
+      "role": "domain",
+      "phase": "SHIP",
+      "triggers": [
+        "(deploy|release|promote|launch|go.live|readiness|pre.?deploy|ship.*prod)"
+      ],
+      "keywords": ["deploy-gate", "deployment readiness", "launch checklist"],
+      "trigger_mode": "regex",
+      "priority": 19,
+      "precedes": ["openspec-ship"],
+      "requires": ["verification-before-completion"],
+      "description": "Pre-ship deployment readiness checklist",
+      "invoke": "Skill(auto-claude-skills:deploy-gate)",
+      "available": true,
+      "enabled": true
+    },
+    {
       "name": "openspec-ship",
       "role": "workflow",
       "phase": "SHIP",
@@ -1189,6 +1206,14 @@
           "plugin": "hookify",
           "text": "Consider /hookify to create behavior rules",
           "when": "installed AND prompt matches (prevent|block|guard|rule)"
+        },
+        {
+          "text": "DESIGN\u2192PLAN CONTRACT: Before transitioning from DESIGN to PLAN, the design output MUST include: (1) **Capabilities affected** \u2014 list every subsystem/module this touches, (2) **Explicit out-of-scope** \u2014 what this change does NOT do, (3) **Acceptance scenarios** \u2014 2-4 GIVEN/WHEN/THEN scenarios that define success. Save the design output to `docs/plans/YYYY-MM-DD-<slug>-design.md`.",
+          "when": "always"
+        },
+        {
+          "text": "PERSIST DESIGN: After brainstorming (or design-debate) completes, save the design artifact to `docs/plans/YYYY-MM-DD-<slug>-design.md` with sections: Problem, Capabilities Affected, Out-of-Scope, Approach, Acceptance Scenarios, Decision. Then run: source hooks/lib/openspec-state.sh && openspec_state_upsert_change \"$TOKEN\" \"$SLUG\" \"\" \"\" \"\" \"$DESIGN_PATH\" to set design_path in session state.",
+          "when": "always"
         }
       ]
     },
@@ -1202,7 +1227,12 @@
           "purpose": "Gather curated API docs, map dependencies, check institutional memory before planning"
         }
       ],
-      "hints": []
+      "hints": [
+        {
+          "text": "CARRY SCENARIOS: If a design artifact exists at `docs/plans/*-design.md` for this feature, read its Acceptance Scenarios section and include them in the plan as verification criteria. Save the plan to `docs/plans/YYYY-MM-DD-<slug>-plan.md`.",
+          "when": "always"
+        }
+      ]
     },
     "IMPLEMENT": {
       "driver": "executing-plans",
@@ -1310,6 +1340,10 @@
     "SHIP": {
       "driver": "verification-before-completion",
       "sequence": [
+        {
+          "step": "deploy-gate",
+          "purpose": "Run deployment readiness checklist before documentation and archive"
+        },
         {
           "step": "runtime-validation",
           "purpose": "FALLBACK: Run realistic-context validation only if not already run in REVIEW",

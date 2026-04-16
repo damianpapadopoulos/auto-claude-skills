@@ -121,9 +121,18 @@ Evaluate using the plain-text POSITION format. Focus on: implementation timeline
 After the debate, synthesize into a design document at `docs/plans/YYYY-MM-DD-{topic}-design.md` containing:
 
 1. **Problem statement** — what we're solving
-2. **Recommended approach** — the consensus or lead's recommendation
-3. **Dissenting views** — what the critic and pragmatist flagged
-4. **Trade-offs** — what we're accepting
-5. **Decision** — what the user approved
+2. **Capabilities affected** — every subsystem/module this touches
+3. **Explicit out-of-scope** — what this change does NOT do
+4. **Recommended approach** — the consensus or lead's recommendation
+5. **Dissenting views** — what the critic and pragmatist flagged
+6. **Trade-offs** — what we're accepting
+7. **Acceptance scenarios** — 2-4 GIVEN/WHEN/THEN scenarios defining success
+8. **Decision** — what the user approved
+
+**Persistence:** This artifact is the canonical design intent. It will be:
+- Read by `writing-plans` to carry acceptance scenarios into the plan
+- Read by `agent-team-review` for spec compliance checking
+- Compared against as-built output by `openspec-ship` at archive time
+- Archived to `docs/plans/archive/` when the feature ships
 
 Then return to the brainstorming skill's sequential flow → writing-plans.

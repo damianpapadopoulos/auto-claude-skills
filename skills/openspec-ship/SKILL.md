@@ -241,6 +241,34 @@ If `design_path`, `plan_path`, or `spec_path` exist in session state:
 
 **Note:** `docs/plans/archive/` is the human-readable intent history. `openspec/changes/archive/` is the OpenSpec change archive. They serve different purposes and coexist.
 
+### Step 7c: Generate Divergences Report
+
+If `design_path` exists in session state and the design file is readable:
+
+1. Read the design artifact's **Acceptance Scenarios** section
+2. Read the design artifact's **Capabilities Affected** and **Out-of-Scope** sections
+3. Compare against what was actually built (from the OpenSpec change's `proposal.md` and `specs/`)
+4. Append a `## Divergences` section to the **archived** design doc:
+
+```markdown
+## Divergences (auto-generated at ship time)
+
+**Acceptance Scenarios:**
+- [x] GIVEN ... WHEN ... THEN ... — implemented as designed
+- [~] GIVEN ... WHEN ... THEN ... — implemented with modification: [describe]
+- [ ] GIVEN ... WHEN ... THEN ... — not implemented: [reason]
+
+**Scope changes:**
+- Added: [capability not in original out-of-scope or capabilities list]
+- Removed: [capability in original list but not implemented]
+- Modified: [capability implemented differently than designed]
+
+**Design decision changes:**
+- [any trade-offs or approach changes made during implementation]
+```
+
+**Important:** Write divergences to the **archived copy** in `docs/plans/archive/`, not the live file. The archive is the historical record; the live file may still be in use if the feature spans multiple sessions.
+
 ## Graceful Degradation Summary
 
 | OpenSpec CLI | Behavior |
