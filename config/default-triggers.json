@@ -1146,6 +1146,10 @@
           "plugin": "atlassian",
           "text": "ATLASSIAN: Pull Jira issues and Confluence docs to ground discovery in real backlog context.",
           "when": "installed"
+        },
+        {
+          "text": "PERSIST DISCOVERY: After product-discovery completes and the user approves the brief, save it to `docs/plans/YYYY-MM-DD-<slug>-discovery.md`. Then run: source hooks/lib/openspec-state.sh && openspec_state_set_discovery_path \"$TOKEN\" \"$SLUG\" \"$DISCOVERY_PATH\" to set discovery_path in session state.",
+          "when": "always"
         }
       ]
     },

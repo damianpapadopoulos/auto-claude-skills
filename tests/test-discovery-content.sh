@@ -28,6 +28,18 @@ assert_contains "Problem Statement section preserved" "**Problem Statement:**" "
 assert_contains "Acceptance Criteria section preserved" "**Acceptance Criteria:**" "${SKILL_CONTENT}"
 assert_contains "Open Questions section preserved" "**Open Questions:**" "${SKILL_CONTENT}"
 
+# --- Registry: DISCOVER persistence hint ---
+REGISTRY="${PROJECT_ROOT}/config/default-triggers.json"
+REGISTRY_CONTENT="$(cat "${REGISTRY}")"
+
+assert_contains "DISCOVER persistence hint in registry" "PERSIST DISCOVERY" "${REGISTRY_CONTENT}"
+assert_contains "discovery_path state write in hint" "openspec_state_set_discovery_path" "${REGISTRY_CONTENT}"
+
+FALLBACK="${PROJECT_ROOT}/config/fallback-registry.json"
+FALLBACK_CONTENT="$(cat "${FALLBACK}")"
+
+assert_contains "DISCOVER persistence hint in fallback" "PERSIST DISCOVERY" "${FALLBACK_CONTENT}"
+
 # Summary
 echo ""
 echo "=============================="

@@ -22,7 +22,7 @@
       "requires": [],
       "description": "Structured debugging: reproduce, hypothesise, isolate, fix, verify. Returns to the current phase after resolution.",
       "invoke": "Skill(superpowers:systematic-debugging)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -48,7 +48,7 @@
       "requires": [],
       "description": "Ask clarifying questions, explore options, and get user approval before planning. Activated for Build intents.",
       "invoke": "Skill(superpowers:brainstorming)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -94,7 +94,7 @@
       ],
       "description": "Break work into discrete tasks and confirm the plan with the user before execution begins.",
       "invoke": "Skill(superpowers:writing-plans)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -115,7 +115,7 @@
       ],
       "description": "Step-by-step execution of an approved plan. REQUIRED: set up git worktree first. If subagents available, use subagent-driven-development instead. Invoke finishing-a-development-branch after all tasks complete.",
       "invoke": "Skill(superpowers:executing-plans)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -130,7 +130,7 @@
       "requires": [],
       "description": "Fresh subagent per task with two-stage review (spec compliance then code quality). Preferred over executing-plans when subagents are available.",
       "invoke": "Skill(superpowers:subagent-driven-development)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -151,7 +151,7 @@
       ],
       "description": "Dispatch superpowers:code-reviewer subagent with git diff range and plan reference. Fix critical/important issues before proceeding.",
       "invoke": "Skill(superpowers:requesting-code-review)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -168,7 +168,7 @@
       "requires": [],
       "description": "Process review feedback with technical rigor: verify claims against codebase, push back if wrong, implement fixes one at a time.",
       "invoke": "Skill(superpowers:receiving-code-review)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -189,7 +189,7 @@
       ],
       "description": "Final verification checklist before shipping: tests pass, lint clean, no TODOs, docs updated.",
       "invoke": "Skill(superpowers:verification-before-completion)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -206,7 +206,7 @@
       ],
       "description": "Verify tests pass, present 4 options (merge local, create PR, keep branch, discard), execute chosen workflow, clean up worktree.",
       "invoke": "Skill(superpowers:finishing-a-development-branch)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -216,11 +216,19 @@
       "triggers": [
         "(deploy|release|promote|launch|go.live|readiness|pre.?deploy|ship.*prod)"
       ],
-      "keywords": ["deploy-gate", "deployment readiness", "launch checklist"],
+      "keywords": [
+        "deploy-gate",
+        "deployment readiness",
+        "launch checklist"
+      ],
       "trigger_mode": "regex",
       "priority": 19,
-      "precedes": ["openspec-ship"],
-      "requires": ["verification-before-completion"],
+      "precedes": [
+        "openspec-ship"
+      ],
+      "requires": [
+        "verification-before-completion"
+      ],
       "description": "Pre-ship deployment readiness checklist",
       "invoke": "Skill(auto-claude-skills:deploy-gate)",
       "available": true,
@@ -261,7 +269,7 @@
       "requires": [],
       "description": "Fan out independent tasks to parallel sub-agents and collect results.",
       "invoke": "Skill(superpowers:dispatching-parallel-agents)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -278,7 +286,7 @@
       "requires": [],
       "description": "Use git worktrees for parallel branch work. Trigger-gated required: activates when parallel/isolation keywords match.",
       "invoke": "Skill(superpowers:using-git-worktrees)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -295,7 +303,7 @@
       "requires": [],
       "description": "Author and maintain Claude Code skill files (SKILL.md). Meta-overlay for Claude tooling prompts.",
       "invoke": "Skill(superpowers:writing-skills)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -329,7 +337,7 @@
       "requires": [],
       "description": "Web application testing: browser automation, accessibility checks, visual regression, and E2E flows.",
       "invoke": "Skill(webapp-testing)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -346,7 +354,7 @@
       "requires": [],
       "description": "Co-author technical documents: proposals, specs, RFCs, and architecture docs.",
       "invoke": "Skill(doc-coauthoring)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -363,7 +371,7 @@
       "requires": [],
       "description": "Recommend Claude Code automation setups: hooks, MCP servers, plugins, and workflow optimisations.",
       "invoke": "Skill(claude-code-setup:claude-automation-recommender)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -380,7 +388,7 @@
       "requires": [],
       "description": "Improve CLAUDE.md project files: structure, clarity, and completeness of project instructions.",
       "invoke": "Skill(claude-md-management:claude-md-improver)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -516,7 +524,7 @@
       "requires": [],
       "description": "Composition-activated: TDD parallel hint in IMPLEMENT/DEBUG phases.",
       "invoke": "Skill(superpowers:test-driven-development)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -531,7 +539,7 @@
       "requires": [],
       "description": "Composition-activated: superpowers skill system introduction.",
       "invoke": "Skill(superpowers:using-superpowers)",
-      "available": true,
+      "available": false,
       "enabled": true
     },
     {
@@ -754,7 +762,7 @@
         "SHIP"
       ],
       "description": "Structured commit workflows and branch-to-PR automation",
-      "available": true
+      "available": false
     },
     {
       "name": "security-guidance",
@@ -771,7 +779,7 @@
         "*"
       ],
       "description": "Write-time security blocker for XSS, injection, unsafe deserialization",
-      "available": true
+      "available": false
     },
     {
       "name": "hookify",
@@ -794,7 +802,7 @@
         "DESIGN"
       ],
       "description": "Custom rule authoring for Claude behavior guards",
-      "available": true
+      "available": false
     },
     {
       "name": "feature-dev",
@@ -817,7 +825,7 @@
         "REVIEW"
       ],
       "description": "Full feature pipeline with parallel exploration and architecture agents",
-      "available": true
+      "available": false
     },
     {
       "name": "skill-creator",
@@ -839,7 +847,7 @@
         "DESIGN"
       ],
       "description": "Skill eval/improvement loop with benchmarking",
-      "available": true
+      "available": false
     },
     {
       "name": "context7",
@@ -860,7 +868,7 @@
         "DEBUG"
       ],
       "description": "Up-to-date library documentation via Context7 MCP. Resolves library IDs and fetches current docs, API references, and examples.",
-      "available": true
+      "available": false
     },
     {
       "name": "github",
@@ -887,7 +895,7 @@
         "SHIP"
       ],
       "description": "GitHub MCP for repository management. Create/review PRs, manage issues, search repos, and interact with GitHub APIs programmatically.",
-      "available": true
+      "available": false
     },
     {
       "name": "atlassian",
@@ -986,161 +994,14 @@
       ],
       "description": "PostHog analytics, experiments, and feature flags via MCP. Query adoption metrics, experiment results, and error rates.",
       "available": false
-    },
-    {
-      "name": "claude-code-setup",
-      "source": "auto-discovered",
-      "provides": {
-        "commands": [],
-        "skills": [
-          "claude-automation-recommender"
-        ],
-        "agents": [],
-        "hooks": []
-      },
-      "phase_fit": [
-        "*"
-      ],
-      "description": "Auto-discovered plugin",
-      "available": true
-    },
-    {
-      "name": "claude-md-management",
-      "source": "auto-discovered",
-      "provides": {
-        "commands": [
-          "/revise-claude-md"
-        ],
-        "skills": [
-          "claude-md-improver"
-        ],
-        "agents": [],
-        "hooks": []
-      },
-      "phase_fit": [
-        "*"
-      ],
-      "description": "Auto-discovered plugin",
-      "available": true
-    },
-    {
-      "name": "frontend-design",
-      "source": "auto-discovered",
-      "provides": {
-        "commands": [],
-        "skills": [
-          "frontend-design"
-        ],
-        "agents": [],
-        "hooks": []
-      },
-      "phase_fit": [
-        "*"
-      ],
-      "description": "Auto-discovered plugin",
-      "available": true
-    },
-    {
-      "name": "pr-review-toolkit",
-      "source": "auto-discovered",
-      "provides": {
-        "commands": [
-          "/review-pr"
-        ],
-        "skills": [],
-        "agents": [
-          "code-reviewer",
-          "code-simplifier",
-          "comment-analyzer",
-          "pr-test-analyzer",
-          "silent-failure-hunter",
-          "type-design-analyzer"
-        ],
-        "hooks": []
-      },
-      "phase_fit": [
-        "*"
-      ],
-      "description": "Auto-discovered plugin",
-      "available": true
-    },
-    {
-      "name": "ralph-loop",
-      "source": "auto-discovered",
-      "provides": {
-        "commands": [
-          "/cancel-ralph",
-          "/help",
-          "/ralph-loop"
-        ],
-        "skills": [],
-        "agents": [],
-        "hooks": []
-      },
-      "phase_fit": [
-        "*"
-      ],
-      "description": "Auto-discovered plugin",
-      "available": true
-    },
-    {
-      "name": "superpowers",
-      "source": "auto-discovered",
-      "provides": {
-        "commands": [
-          "/brainstorm",
-          "/execute-plan",
-          "/write-plan"
-        ],
-        "skills": [
-          "brainstorming",
-          "dispatching-parallel-agents",
-          "executing-plans",
-          "finishing-a-development-branch",
-          "receiving-code-review",
-          "requesting-code-review",
-          "subagent-driven-development",
-          "systematic-debugging",
-          "test-driven-development",
-          "using-git-worktrees",
-          "using-superpowers",
-          "verification-before-completion",
-          "writing-plans",
-          "writing-skills"
-        ],
-        "agents": [
-          "code-reviewer"
-        ],
-        "hooks": []
-      },
-      "phase_fit": [
-        "*"
-      ],
-      "description": "Auto-discovered plugin",
-      "available": true
-    },
-    {
-      "name": "typescript-lsp",
-      "source": "auto-discovered",
-      "provides": {
-        "commands": [],
-        "skills": [],
-        "agents": [],
-        "hooks": []
-      },
-      "phase_fit": [
-        "*"
-      ],
-      "description": "Auto-discovered plugin",
-      "available": true
     }
   ],
   "context_capabilities": {
-    "context7": true,
+    "context7": false,
     "context_hub_cli": true,
-    "context_hub_available": true,
-    "serena": true,
-    "forgetful_memory": true,
+    "context_hub_available": false,
+    "serena": false,
+    "forgetful_memory": false,
     "openspec": true,
     "posthog": false
   },
@@ -1172,6 +1033,10 @@
           "plugin": "atlassian",
           "text": "ATLASSIAN: Pull Jira issues and Confluence docs to ground discovery in real backlog context.",
           "when": "installed"
+        },
+        {
+          "text": "PERSIST DISCOVERY: After product-discovery completes and the user approves the brief, save it to `docs/plans/YYYY-MM-DD-<slug>-discovery.md`. Then run: source hooks/lib/openspec-state.sh && openspec_state_set_discovery_path \"$TOKEN\" \"$SLUG\" \"$DISCOVERY_PATH\" to set discovery_path in session state.",
+          "when": "always"
         }
       ]
     },
@@ -1208,7 +1073,7 @@
           "when": "installed AND prompt matches (prevent|block|guard|rule)"
         },
         {
-          "text": "DESIGN\u2192PLAN CONTRACT: Before transitioning from DESIGN to PLAN, the design output MUST include: (1) **Capabilities affected** \u2014 list every subsystem/module this touches, (2) **Explicit out-of-scope** \u2014 what this change does NOT do, (3) **Acceptance scenarios** \u2014 2-4 GIVEN/WHEN/THEN scenarios that define success. Save the design output to `docs/plans/YYYY-MM-DD-<slug>-design.md`.",
+          "text": "DESIGN→PLAN CONTRACT: Before transitioning from DESIGN to PLAN, the design output MUST include: (1) **Capabilities affected** — list every subsystem/module this touches, (2) **Explicit out-of-scope** — what this change does NOT do, (3) **Acceptance scenarios** — 2-4 GIVEN/WHEN/THEN scenarios that define success. Save the design output to `docs/plans/YYYY-MM-DD-<slug>-design.md`.",
           "when": "always"
         },
         {
