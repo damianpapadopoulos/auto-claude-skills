@@ -226,15 +226,43 @@ After the archive path exists and SP artifacts (if any) have been moved:
 3. This creates `<archive_path>/superpowers/source.json` with schema_version, paths, branch, commit, surface, and timestamp.
 4. If the write fails, log a warning but do not fail the archive.
 
+### Step 7a-bis: Extract Hypotheses into Session State
+
+If `discovery_path` exists in session state AND the file at that path is readable:
+
+1. Read the `## Hypotheses` section from the discovery artifact
+2. Parse each `### H<N>:` entry, extracting:
+   - `id` — the hypothesis ID (e.g., "H1")
+   - `description` — the prose hypothesis line ("We believe ...")
+   - `metric` — from the **Metric:** field
+   - `baseline` — from the **Baseline:** field
+   - `target` — from the **Target:** field
+   - `window` — from the **Window:** field
+3. Write to session state as `changes.<slug>.hypotheses`:
+
+```bash
+# Read session state
+TOKEN="$(cat ~/.claude/.skill-session-token 2>/dev/null)"
+STATE_FILE="${HOME}/.claude/.skill-openspec-state-${TOKEN}"
+
+# Extract and write hypotheses array
+# (LLM constructs the JSON array from parsed markdown, then merges into state)
+jq --arg slug "<slug>" --argjson hyps '<hypotheses_json_array>' '
+    .changes[$slug].hypotheses = $hyps
+' "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+```
+
+If `discovery_path` is absent in session state or the file is unreadable: Skip silently. `hypotheses` stays null in state. This covers sessions that entered at DEBUG or skipped discovery.
+
 ### Step 7b: Archive Intent Artifacts
 
-If `design_path`, `plan_path`, or `spec_path` exist in session state:
+If `discovery_path`, `design_path`, `plan_path`, or `spec_path` exist in session state:
 
 1. Create `docs/plans/archive/` if it doesn't exist
-2. Move the design, plan, and spec files to `docs/plans/archive/`:
+2. Move the discovery, design, plan, and spec files to `docs/plans/archive/`:
    ```bash
    mkdir -p docs/plans/archive
-   for f in "$design_path" "$plan_path" "$spec_path"; do
+   for f in "$discovery_path" "$design_path" "$plan_path" "$spec_path"; do
      [ -f "$f" ] && mv "$f" docs/plans/archive/
    done
    ```
