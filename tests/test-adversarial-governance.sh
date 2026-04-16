@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# test-adversarial-governance.sh — Governance constraint regression assertions
+# Validates that required safety invariants are present in key skills and compositions.
+set -u
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+. "${SCRIPT_DIR}/test-helpers.sh"
+
+echo "=== test-adversarial-governance.sh ==="
+
+# --- REVIEW composition: adversarial checklist ---
+REGISTRY="${PROJECT_ROOT}/config/default-triggers.json"
+REGISTRY_CONTENT="$(cat "${REGISTRY}")"
+FALLBACK="${PROJECT_ROOT}/config/fallback-registry.json"
+FALLBACK_CONTENT="$(cat "${FALLBACK}")"
+
+assert_contains "adversarial checklist in REVIEW hints (default)" "ADVERSARIAL REVIEW" "${REGISTRY_CONTENT}"
+assert_contains "adversarial checklist in REVIEW hints (fallback)" "ADVERSARIAL REVIEW" "${FALLBACK_CONTENT}"
+assert_contains "HITL check in adversarial checklist" "safety gate, HITL requirement" "${REGISTRY_CONTENT}"
+assert_contains "bypass patterns in adversarial checklist" "dangerouslyDisableSandbox" "${REGISTRY_CONTENT}"
+
+# --- agent-safety-review: design-time governance ---
+SAFETY_SKILL="${PROJECT_ROOT}/skills/agent-safety-review/SKILL.md"
+SAFETY_CONTENT="$(cat "${SAFETY_SKILL}")"
+
+assert_contains "agent-safety-review: lethal trifecta" "lethal trifecta" "${SAFETY_CONTENT}"
+assert_contains "agent-safety-review: blast-radius" "blast-radius" "${SAFETY_CONTENT}"
+
+# --- agent-team-review: adversarial reviewer ---
+TEAM_SKILL="${PROJECT_ROOT}/skills/agent-team-review/SKILL.md"
+TEAM_CONTENT="$(cat "${TEAM_SKILL}")"
+
+assert_contains "agent-team-review: adversarial-reviewer template" "adversarial-reviewer" "${TEAM_CONTENT}"
+assert_contains "agent-team-review: governance lens" "Governance" "${TEAM_CONTENT}"
+assert_contains "agent-team-review: HITL in adversarial focus" "HITL" "${TEAM_CONTENT}"
+assert_contains "agent-team-review: safety gate in adversarial focus" "safety gate" "${TEAM_CONTENT}"
+
+# Summary
+echo ""
+echo "=============================="
+echo "Tests run:    ${TESTS_RUN}"
+echo "Tests passed: ${TESTS_PASSED}"
+echo "Tests failed: ${TESTS_FAILED}"
+echo "=============================="
+if [ "${TESTS_FAILED}" -gt 0 ]; then
+    echo ""
+    echo "Failures:"
+    printf '%s' "${FAIL_MESSAGES}"
+    exit 1
+else
+    echo "All tests passed."
+fi
