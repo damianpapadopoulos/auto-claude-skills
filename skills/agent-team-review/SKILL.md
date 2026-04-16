@@ -7,7 +7,7 @@ description: Multi-perspective parallel code review with specialist reviewers fo
 
 ## Overview
 
-Parallel code review using agent teams. The lead spawns 2-3 reviewer teammates, each with a different review lens. Reviewers investigate independently, then the lead synthesizes findings into a unified review report.
+Parallel code review using agent teams. The lead spawns 2-4 reviewer teammates, each with a different review lens. Reviewers investigate independently, then the lead synthesizes findings into a unified review report.
 
 **Prerequisite:** Implementation must be complete (all tasks marked done). Activates for larger implementations (5+ files changed).
 
@@ -25,6 +25,7 @@ Parallel code review using agent teams. The lead spawns 2-3 reviewer teammates, 
 | `security-reviewer` | Security | Auth flows, input validation, secrets, OWASP risks |
 | `quality-reviewer` | Code quality | Patterns, maintainability, test coverage, edge cases |
 | `spec-reviewer` | Spec compliance | Does implementation match the design doc and plan? |
+| `adversarial-reviewer` | Governance | HITL bypass, scope expansion, safety gate weakening, permission escalation |
 
 ## Protocol
 
@@ -79,7 +80,7 @@ All messages use plain text via SendMessage. No structured JSON.
 ```
 FINDING: [blocking | warning | suggestion]
 File: src/auth.ts:42
-Category: security | quality | spec
+Category: security | quality | spec | governance
 Issue: SQL injection via unsanitized input
 Suggestion: Use parameterized queries
 ```
@@ -197,6 +198,39 @@ Task tool (general-purpose):
     - Report each finding using the plain-text FINDING format
     - Send all findings to the lead via SendMessage
     - Flag both missing features AND unplanned additions
+```
+
+### Adversarial Reviewer
+```
+Task tool (general-purpose):
+  name: "adversarial-reviewer"
+  team_name: "code-review"
+  prompt: |
+    You are a governance reviewer examining code changes for safety regressions.
+
+    ## Your Lens: Governance & Safety
+
+    Focus on:
+    - HITL (human-in-the-loop) requirements weakened or removed
+    - Autonomous action scope expanded without corresponding safety gate
+    - Safety gates, approval steps, or confirmation prompts bypassed or removed
+    - Permission escalation (new outbound actions, broader tool access)
+    - Hook behavior or composition routing changes that reduce guardrails
+    - Bypass patterns: dangerouslyDisableSandbox, --no-verify, force push, auto-approve
+    - Destructive operations added without confirmation gates
+
+    ## Context
+    Design doc: {design_doc}
+    Diff: {diff}
+    Files changed: {files}
+
+    ## Rules
+    - Read-only: do NOT modify any files
+    - Report each finding using the plain-text FINDING format
+    - Send all findings to the lead via SendMessage
+    - A finding is blocking if it removes or weakens an existing safety constraint
+    - A finding is warning if it adds new autonomous capability without explicit safety design
+    - A finding is suggestion if it could be made safer but isn't actively dangerous
 ```
 
 ## Integration
