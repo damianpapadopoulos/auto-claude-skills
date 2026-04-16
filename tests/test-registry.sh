@@ -1390,4 +1390,54 @@ test_frontmatter_backslash_escaping() {
 }
 test_frontmatter_backslash_escaping
 
+# ---------------------------------------------------------------------------
+# spec-driven preset mutates DESIGN PERSIST and PLAN CARRY hints
+# ---------------------------------------------------------------------------
+test_spec_driven_preset_mutates_design_hints() {
+    echo "-- test: spec-driven preset mutates DESIGN PERSIST hint --"
+    setup_test_env
+
+    # Activate spec-driven preset via user config
+    mkdir -p "${HOME}/.claude"
+    printf '{"preset":"spec-driven"}' > "${HOME}/.claude/skill-config.json"
+
+    local output
+    output="$(run_hook)"
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    assert_file_exists "cache file created" "${cache_file}"
+
+    local design_hint_text
+    design_hint_text="$(jq -r '.phase_compositions.DESIGN.hints[].text // empty' "${cache_file}" | tr '\n' ' ')"
+    assert_contains "DESIGN PERSIST hint redirects to openspec/changes/" "openspec/changes/" "${design_hint_text}"
+    assert_not_contains "DESIGN PERSIST no longer mentions docs/plans/ for design-md" "docs/plans/YYYY-MM-DD-<slug>-design.md" "${design_hint_text}"
+
+    local plan_hint_text
+    plan_hint_text="$(jq -r '.phase_compositions.PLAN.hints[].text // empty' "${cache_file}" | tr '\n' ' ')"
+    assert_contains "PLAN CARRY reads from openspec/changes/" "openspec/changes/" "${plan_hint_text}"
+
+    teardown_test_env
+}
+test_spec_driven_preset_mutates_design_hints
+
+# ---------------------------------------------------------------------------
+# Default (no preset) keeps DESIGN hints pointing at docs/plans/
+# ---------------------------------------------------------------------------
+test_default_preset_keeps_docs_plans_hints() {
+    echo "-- test: default preset keeps docs/plans/ hints --"
+    setup_test_env
+    # No skill-config.json → no preset → no mutation
+
+    local output
+    output="$(run_hook)"
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    local design_hint_text
+    design_hint_text="$(jq -r '.phase_compositions.DESIGN.hints[].text // empty' "${cache_file}" | tr '\n' ' ')"
+    assert_contains "DESIGN PERSIST still mentions docs/plans/" "docs/plans/YYYY-MM-DD-<slug>-design.md" "${design_hint_text}"
+
+    teardown_test_env
+}
+test_default_preset_keeps_docs_plans_hints
+
 print_summary
