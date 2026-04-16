@@ -78,7 +78,27 @@ If the state file exists and has the relevant change entry, use those values. Sk
 - If the linked SP spec references a specific capability: use that name in kebab-case.
 - If not identifiable: ask the user. Do not guess.
 
-### Step 3: Create Retrospective Change Folder
+### Step 3: Create OR Sync Change Folder
+
+**Pre-flight check:** Does `openspec/changes/<feature-name>/` already exist at the start of this SHIP phase?
+
+- **If YES (spec-driven mode path):** The change folder already exists because it was created upfront during DESIGN phase in a `spec-driven` preset session. Do NOT overwrite `proposal.md` or `design.md` — those are the committed historical decision record. Instead:
+  1. Validate the existing change folder structure with `openspec validate <feature-name>` (if CLI available).
+  2. Compare the existing `specs/<capability>/spec.md` against as-built code. If implementation diverged from the upfront spec, update `specs/<capability>/spec.md` to reflect what was actually built. Append a brief note at the bottom of `design.md`:
+     ```markdown
+     ## Implementation Notes (synced at ship time)
+     - [describe any deviations from the upfront design]
+     ```
+  3. Skip to Step 4 (Validate) and continue to Step 5 (Changelog) and Step 6 (Archive).
+
+- **If NO (retrospective mode path):** No upfront change exists. Proceed to create retrospectively — scaffold the change folder and populate it from as-built code and the execution plan.
+
+**New-capability safeguard:** If creating `openspec/specs/<new-capability>/` for the first time (no existing folder), emit a visible warning in your response:
+> ⚠️ NEW CAPABILITY: This change introduces capability `<new-capability>`. Confirm the taxonomy is correct before archive. Prefer extending an existing capability where possible — check `openspec/specs/` for close matches first.
+
+The user can then course-correct (rename, merge, or approve) before `openspec-ship` proceeds to archive.
+
+**Retrospective content (when no upfront change exists):**
 
 **OPSX path (CLI available):**
 1. Run `openspec new change <feature-name>` to scaffold the change folder.

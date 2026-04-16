@@ -206,6 +206,23 @@ SPEC
 test_proposal_validates_with_cli
 
 # ---------------------------------------------------------------------------
+# openspec-ship: idempotent sync for spec-driven mode
+# ---------------------------------------------------------------------------
+test_openspec_ship_idempotent_sync() {
+    echo "-- test: openspec-ship has idempotent pre-flight check --"
+    local SHIP_SKILL="${PROJECT_ROOT}/skills/openspec-ship/SKILL.md"
+    local SHIP_CONTENT
+    SHIP_CONTENT="$(cat "${SHIP_SKILL}")"
+
+    assert_contains "openspec-ship: pre-flight check documented" "Pre-flight check" "$SHIP_CONTENT"
+    assert_contains "openspec-ship: sync path (change exists)" "change folder already exists" "$SHIP_CONTENT"
+    assert_contains "openspec-ship: retrospective path preserved" "create retrospectively" "$SHIP_CONTENT"
+    assert_contains "openspec-ship: new capability warning" "NEW CAPABILITY" "$SHIP_CONTENT"
+    assert_contains "openspec-ship: spec-driven mode reference" "spec-driven" "$SHIP_CONTENT"
+}
+test_openspec_ship_idempotent_sync
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
