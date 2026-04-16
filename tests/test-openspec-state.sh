@@ -401,6 +401,76 @@ test_push_gate_allows_no_verification_in_chain() {
 test_push_gate_allows_no_verification_in_chain
 
 # ---------------------------------------------------------------------------
+# 5. set_discovery_path creates/merges discovery_path
+# ---------------------------------------------------------------------------
+test_set_discovery_path_creates_entry() {
+    echo "-- test: set_discovery_path creates change entry --"
+    setup_test_env
+
+    local token="test-$$"
+    # No prior state — should create file and change entry
+    openspec_state_set_discovery_path "$token" "my-feature" "docs/plans/2026-04-17-my-feature-discovery.md"
+
+    local state_file="${HOME}/.claude/.skill-openspec-state-${token}"
+    assert_equals "state file exists" "true" "$([ -f "$state_file" ] && echo true || echo false)"
+
+    local dp
+    dp="$(jq -r '.changes["my-feature"].discovery_path' "$state_file" 2>/dev/null)"
+    assert_equals "discovery_path set" "docs/plans/2026-04-17-my-feature-discovery.md" "$dp"
+
+    teardown_test_env
+}
+test_set_discovery_path_creates_entry
+
+test_set_discovery_path_merges_without_overwrite() {
+    echo "-- test: set_discovery_path merges without overwriting existing fields --"
+    setup_test_env
+
+    local token="test-$$"
+    # Pre-populate with upsert_change
+    openspec_state_mark_verified "$token" "opsx-core"
+    openspec_state_upsert_change "$token" "my-feature" "plans/my.md" "specs/my.md" "billing" "docs/plans/my-design.md"
+
+    # Now set discovery_path — should merge, not overwrite
+    openspec_state_set_discovery_path "$token" "my-feature" "docs/plans/my-discovery.md"
+
+    local state_file="${HOME}/.claude/.skill-openspec-state-${token}"
+
+    local dp
+    dp="$(jq -r '.changes["my-feature"].discovery_path' "$state_file" 2>/dev/null)"
+    assert_equals "discovery_path merged" "docs/plans/my-discovery.md" "$dp"
+
+    local design
+    design="$(jq -r '.changes["my-feature"].design_path' "$state_file" 2>/dev/null)"
+    assert_equals "design_path preserved after merge" "docs/plans/my-design.md" "$design"
+
+    local plan
+    plan="$(jq -r '.changes["my-feature"].plan_path' "$state_file" 2>/dev/null)"
+    assert_equals "plan_path preserved after merge" "plans/my.md" "$plan"
+
+    local verified
+    verified="$(jq -r '.verification_seen' "$state_file" 2>/dev/null)"
+    assert_equals "verification still intact after merge" "true" "$verified"
+
+    teardown_test_env
+}
+test_set_discovery_path_merges_without_overwrite
+
+test_set_discovery_path_noop_on_empty_token() {
+    echo "-- test: set_discovery_path no-op on empty token --"
+    setup_test_env
+
+    openspec_state_set_discovery_path "" "slug" "path.md"
+
+    local state_files
+    state_files="$(ls "${HOME}/.claude/.skill-openspec-state-"* 2>/dev/null | wc -l | tr -d ' ')"
+    assert_equals "no state file created on empty token" "0" "${state_files}"
+
+    teardown_test_env
+}
+test_set_discovery_path_noop_on_empty_token
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

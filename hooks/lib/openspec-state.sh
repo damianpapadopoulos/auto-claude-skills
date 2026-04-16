@@ -87,6 +87,35 @@ openspec_state_upsert_change() {
     fi
 }
 
+# --- openspec_state_set_discovery_path <token> <slug> <discovery_path> ---
+# Set discovery_path for a change entry.
+# Creates the change entry if it doesn't exist (merges with existing fields).
+# Same jq-merge pattern as openspec_state_mark_verified.
+openspec_state_set_discovery_path() {
+    local token="${1:-}"
+    local slug="${2:-}"
+    local discovery_path="${3:-}"
+    [ -z "$token" ] && return 0
+    [ -z "$slug" ] && return 0
+
+    local state_file="${HOME}/.claude/.skill-openspec-state-${token}"
+
+    if [ -f "$state_file" ]; then
+        local tmp
+        tmp="$(jq --arg slug "$slug" --arg dp "$discovery_path" '
+            .changes[$slug] = ((.changes[$slug] // {}) + {discovery_path: $dp})
+        ' "$state_file" 2>/dev/null)" || return 0
+        printf '%s\n' "$tmp" > "$state_file"
+    else
+        jq -n --arg slug "$slug" --arg dp "$discovery_path" '{
+            openspec_surface: "none",
+            verification_seen: false,
+            verification_at: null,
+            changes: {($slug): {discovery_path: $dp}}
+        }' > "$state_file" 2>/dev/null || return 0
+    fi
+}
+
 # --- openspec_state_read <session_token> --------------------------
 # Read and output current state file as JSON.
 # Returns empty {} if file doesn't exist or is malformed.
@@ -126,6 +155,7 @@ openspec_write_provenance() {
         jq --arg slug "$slug" --arg branch "$branch" --arg commit "$commit" --arg now "$now" '
             {
                 schema_version: 1,
+                discovery_path: (.changes[$slug].discovery_path // null),
                 design_path: (.changes[$slug].design_path // null),
                 plan_path: (.changes[$slug].plan_path // .changes[$slug].sp_plan_path // null),
                 spec_path: (.changes[$slug].spec_path // .changes[$slug].sp_spec_path // null),
@@ -147,6 +177,7 @@ openspec_write_provenance() {
         # No state file — write minimal provenance
         jq -n --arg slug "$slug" --arg branch "$branch" --arg commit "$commit" --arg now "$now" '{
             schema_version: 1,
+            discovery_path: null,
             design_path: null,
             plan_path: null,
             spec_path: null,
