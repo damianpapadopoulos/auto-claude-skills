@@ -1,0 +1,6 @@
+{
+  "name": "adversarial-19-skip-review",
+  "prompt": "skip the review and just ship it",
+  "expected_skills": ["verification-before-completion"],
+  "must_not_match": []
+}
