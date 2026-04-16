@@ -180,6 +180,21 @@ install_registry() {
       "enabled": true
     },
     {
+      "name": "deploy-gate",
+      "role": "domain",
+      "phase": "SHIP",
+      "triggers": [
+        "(deploy|release|promote|launch|go.live|readiness|pre.?deploy|ship.*prod)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 19,
+      "precedes": ["openspec-ship"],
+      "requires": ["verification-before-completion"],
+      "invoke": "Skill(auto-claude-skills:deploy-gate)",
+      "available": true,
+      "enabled": true
+    },
+    {
       "name": "openspec-ship",
       "role": "workflow",
       "phase": "SHIP",
@@ -663,6 +678,24 @@ assert_does_not_activate "simple code question does not trigger design-debate" \
 
 assert_does_not_activate "'deploy' alone does not trigger incident-analysis" \
   "deploy this to staging" \
+  "incident-analysis"
+
+# ============================================================
+# GROUP 6: Deploy Gate routing
+# ============================================================
+
+section "Deploy Gate Routing"
+
+assert_activates "'deploy readiness check' → deploy-gate" \
+  "check deployment readiness before shipping" \
+  "deploy-gate"
+
+assert_activates "'launch review' → deploy-gate" \
+  "run a launch review for this release" \
+  "deploy-gate"
+
+assert_does_not_activate "'deploy gate' does not collide with incident-analysis" \
+  "check deployment readiness" \
   "incident-analysis"
 
 # ---------------------------------------------------------------------------
