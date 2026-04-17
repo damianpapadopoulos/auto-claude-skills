@@ -1440,4 +1440,82 @@ test_default_preset_keeps_docs_plans_hints() {
 }
 test_default_preset_keeps_docs_plans_hints
 
+# ---------------------------------------------------------------------------
+# spec-driven preset WITHOUT the OpenSpec Validate workflow → warning emitted
+# ---------------------------------------------------------------------------
+test_spec_driven_warns_when_workflow_missing() {
+    echo "-- test: spec-driven active but workflow missing → warning --"
+    setup_test_env
+
+    # Activate spec-driven preset
+    mkdir -p "${HOME}/.claude"
+    printf '{"preset":"spec-driven"}' > "${HOME}/.claude/skill-config.json"
+
+    # Simulate a consumer repo with NO workflow file: session-start runs in a
+    # tempdir that does not contain .github/workflows/openspec-validate.yml.
+    # We override the target-repo detection via SKILL_TARGET_REPO so the hook
+    # looks at the clean tempdir instead of this plugin repo.
+    local consumer_repo
+    consumer_repo="$(mktemp -d "${TMPDIR:-/tmp}/acs-consumer.XXXXXXXX")"
+
+    local output
+    output="$(SKILL_TARGET_REPO="${consumer_repo}" run_hook)"
+
+    # The warning should appear in the activation context or stderr output.
+    # Look for the "OpenSpec Validate" hint nudge.
+    assert_contains "warning mentions missing OpenSpec Validate workflow" "OpenSpec Validate" "${output}"
+    assert_contains "warning points at /setup" "/setup" "${output}"
+
+    rm -rf "${consumer_repo}"
+    teardown_test_env
+}
+test_spec_driven_warns_when_workflow_missing
+
+# ---------------------------------------------------------------------------
+# spec-driven preset WITH the workflow present → no warning
+# ---------------------------------------------------------------------------
+test_spec_driven_silent_when_workflow_present() {
+    echo "-- test: spec-driven active with workflow present → no warning --"
+    setup_test_env
+
+    mkdir -p "${HOME}/.claude"
+    printf '{"preset":"spec-driven"}' > "${HOME}/.claude/skill-config.json"
+
+    # Simulate a consumer repo WITH the workflow file present.
+    local consumer_repo
+    consumer_repo="$(mktemp -d "${TMPDIR:-/tmp}/acs-consumer.XXXXXXXX")"
+    mkdir -p "${consumer_repo}/.github/workflows"
+    printf 'name: OpenSpec Validate\n' > "${consumer_repo}/.github/workflows/openspec-validate.yml"
+
+    local output
+    output="$(SKILL_TARGET_REPO="${consumer_repo}" run_hook)"
+
+    assert_not_contains "no warning when workflow is present" "spec-driven mode active but no OpenSpec Validate workflow" "${output}"
+
+    rm -rf "${consumer_repo}"
+    teardown_test_env
+}
+test_spec_driven_silent_when_workflow_present
+
+# ---------------------------------------------------------------------------
+# Default mode (no preset) → no warning regardless of workflow presence
+# ---------------------------------------------------------------------------
+test_default_mode_no_workflow_warning() {
+    echo "-- test: default mode → no workflow warning --"
+    setup_test_env
+    # No skill-config.json → no preset → no mutation, no warning
+
+    local consumer_repo
+    consumer_repo="$(mktemp -d "${TMPDIR:-/tmp}/acs-consumer.XXXXXXXX")"
+
+    local output
+    output="$(SKILL_TARGET_REPO="${consumer_repo}" run_hook)"
+
+    assert_not_contains "no warning in default mode" "spec-driven mode active but no OpenSpec Validate workflow" "${output}"
+
+    rm -rf "${consumer_repo}"
+    teardown_test_env
+}
+test_default_mode_no_workflow_warning
+
 print_summary

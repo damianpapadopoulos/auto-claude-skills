@@ -111,6 +111,37 @@ Optional. Create `~/.claude/skill-config.json` to customize routing behavior:
 
 Trigger syntax: `"+keyword"` adds, `"-keyword"` removes, `"keyword"` replaces all defaults.
 
+## Multi-User Mode (spec-driven)
+
+For repos with ≥2 active developers, turn on **spec-driven mode**: design intent is committed to `openspec/changes/<feature>/` (visible to teammates via `git pull`) instead of gitignored `docs/plans/`. Every PR is validated by a GitHub Actions gate.
+
+**30-second setup:**
+
+1. **Enable the preset** in `~/.claude/skill-config.json`:
+   ```json
+   { "preset": "spec-driven" }
+   ```
+
+2. **Install the CI gate** — copy two files from this plugin's repo into your target repo:
+   - `.github/workflows/openspec-validate.yml`
+   - `scripts/validate-active-openspec-changes.sh`
+
+   Or run `/setup` in Claude Code — it will offer to copy them for you.
+
+3. **Commit and push:**
+   ```bash
+   git add .github/workflows/openspec-validate.yml scripts/validate-active-openspec-changes.sh
+   git commit -m "ci: add OpenSpec Validate PR gate"
+   ```
+
+4. **Mark the check as Required** in GitHub Settings → Branches → Branch protection rules for `main`. Add `OpenSpec Validate` to the required status checks list.
+
+Full setup guide and rollback steps: [docs/CI.md](docs/CI.md).
+
+**What changes:** DESIGN phase writes to `openspec/changes/<feature>/proposal.md` + `design.md` + `specs/<cap>/spec.md` (committed) instead of `docs/plans/*.md` (gitignored). `openspec-ship` validates and syncs the existing change at SHIP time instead of creating from scratch. Task plans (`docs/plans/*-plan.md`) stay local in both modes.
+
+**Without the CI gate installed:** session-start emits a one-line warning nudging you to run `/setup` or copy the workflow files manually.
+
 ## Diagnostics
 
 ```

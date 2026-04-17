@@ -445,6 +445,15 @@ if [ -n "$_preset_name" ] && [ "$_preset_name" != "null" ] && [ -f "$_preset_fil
       )
     ')"
     WARNINGS="$(printf '%s' "${WARNINGS}" | jq --arg m "spec-driven mode active: design intent persisted to openspec/changes/ (committed)" '. + [$m]')"
+
+    # Discovery nudge: if the consumer repo is missing the OpenSpec Validate
+    # workflow, spec-driven mode has no CI enforcement. Emit a one-line hint
+    # pointing at /setup so the installer can fix it.
+    # SKILL_TARGET_REPO override lets tests point this at a clean tempdir.
+    _target_repo="${SKILL_TARGET_REPO:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+    if [ ! -f "${_target_repo}/.github/workflows/openspec-validate.yml" ]; then
+      WARNINGS="$(printf '%s' "${WARNINGS}" | jq --arg m "spec-driven mode active but no OpenSpec Validate workflow found at .github/workflows/openspec-validate.yml — run /setup to install the CI gate, or copy .github/workflows/openspec-validate.yml and scripts/validate-active-openspec-changes.sh from the auto-claude-skills plugin repo. See docs/CI.md for branch-protection setup." '. + [$m]')"
+    fi
   fi
 fi
 

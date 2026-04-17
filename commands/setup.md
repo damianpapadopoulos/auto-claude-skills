@@ -302,9 +302,67 @@ gcloud auth application-default login
 
 **kubectl** is only needed for v1.3 mitigation playbooks (rollback, restart, scale). Investigation works fully without it. If the user declines, note that playbook execution will be unavailable but investigation and postmortem generation will work normally.
 
+### 8. Multi-user mode (spec-driven + CI gate, optional)
+
+For repos with ≥2 active developers, enable spec-driven mode. Design intent is committed to `openspec/changes/<feature>/` (visible to teammates via `git pull`) instead of gitignored `docs/plans/`. A GitHub Actions workflow validates every active OpenSpec change on every PR.
+
+**Detection:** Check the target repo's state before presenting this step:
+- Is `~/.claude/skill-config.json` already set to `{"preset": "spec-driven"}`? If yes, skip preset activation.
+- Does `<target-repo>/.github/workflows/openspec-validate.yml` already exist? If yes, skip workflow copy.
+- Skip this entire step if both are already in place.
+
+**Ask the user:** "Does this repo have 2+ active developers, or do you want durable design traceability via committed OpenSpec changes? If yes, I'll enable spec-driven mode and install the CI validation gate."
+
+**If yes, execute these actions:**
+
+1. **Set the preset** in `~/.claude/skill-config.json`:
+   ```bash
+   # Merge the preset into existing config (preserves other fields)
+   jq '.preset = "spec-driven"' ~/.claude/skill-config.json > ~/.claude/skill-config.json.tmp \
+     && mv ~/.claude/skill-config.json.tmp ~/.claude/skill-config.json
+   # If the file doesn't exist yet:
+   echo '{"preset":"spec-driven"}' > ~/.claude/skill-config.json
+   ```
+
+2. **Copy the CI workflow files** from the plugin's source into the target repo. The plugin source is at `~/.claude/plugins/cache/auto-claude-skills-marketplace/auto-claude-skills/<version>/` or wherever Claude Code installed it — detect via the `CLAUDE_PLUGIN_ROOT` env var or search:
+   ```bash
+   PLUGIN_SRC="$(find ~/.claude/plugins/cache -name 'auto-claude-skills' -type d -maxdepth 5 | head -1)"
+   mkdir -p .github/workflows scripts
+   cp "${PLUGIN_SRC}/.github/workflows/openspec-validate.yml" .github/workflows/
+   cp "${PLUGIN_SRC}/scripts/validate-active-openspec-changes.sh" scripts/
+   chmod +x scripts/validate-active-openspec-changes.sh
+   ```
+
+3. **Stage and commit** (do NOT auto-push — the user should review):
+   ```bash
+   git add .github/workflows/openspec-validate.yml scripts/validate-active-openspec-changes.sh
+   git status
+   ```
+   Tell the user: "Files staged. Review with `git diff --staged`, then commit with a message like `ci: add OpenSpec Validate PR gate`."
+
+4. **Print the manual branch-protection checklist** (the workflow alone doesn't block — GitHub Settings does):
+   ```
+   Manual step to complete enforcement:
+   1. GitHub → Settings → Branches → Branch protection rules
+   2. Edit rule for `main` (or Add rule)
+   3. Check "Require status checks to pass before merging"
+   4. Add "OpenSpec Validate" to the required status checks list
+   5. Save
+
+   Full guide: <target-repo>/docs/CI.md (if you copied it) or the plugin's docs/CI.md
+   ```
+
+5. **Offer to copy `docs/CI.md`** too so the consumer repo has the full rollout documentation:
+   ```bash
+   mkdir -p docs
+   cp "${PLUGIN_SRC}/docs/CI.md" docs/CI.md
+   ```
+
+If the user declines this step, no changes are made. They can enable it later by re-running `/setup`.
+
 ## Execution
 
-Run each step in order. For steps 0 and 1, use AskUserQuestion to get the user's preference before taking action. For steps 2-4, if a skill directory already exists at the target path, skip it. For steps 5 and 6, use AskUserQuestion to get the user's preference before installing, and skip tools that are already installed.
+Run each step in order. For steps 0 and 1, use AskUserQuestion to get the user's preference before taking action. For steps 2-4, if a skill directory already exists at the target path, skip it. For steps 5, 6, and 8, use AskUserQuestion to get the user's preference before installing, and skip tools that are already installed.
 
 After setup, confirm what was configured:
 - Companion plugins: which were installed or skipped
