@@ -1,0 +1,52 @@
+# CODEOWNERS template for spec-driven repos
+#
+# This is a TEMPLATE, not an active CODEOWNERS file. Copy this into
+# .github/CODEOWNERS in your OWN repo and replace the @your-* placeholder
+# team handles with real GitHub teams or users.
+#
+# Paired with the `spec-driven` preset and the `OpenSpec Validate` CI gate,
+# this gives you per-capability review routing: every PR that touches a
+# given capability's spec automatically requires a review from that
+# capability's owner.
+#
+# GitHub docs: https://docs.github.com/en/repositories/managing-your-repositories-settings-and-security/customizing-your-repository/about-code-owners
+
+# -----------------------------------------------------------------------
+# Capability-level ownership
+# -----------------------------------------------------------------------
+# Canonical post-ship specs — authoritative contract per subsystem.
+# Anyone changing a capability's spec requires the owner's approval.
+
+# openspec/specs/auth/               @your-auth-team
+# openspec/specs/billing/            @your-platform-team
+# openspec/specs/checkout/           @your-commerce-team
+# openspec/specs/observability/      @your-sre-team
+# openspec/specs/incident-analysis/  @your-sre-team
+
+# -----------------------------------------------------------------------
+# In-flight changes (openspec/changes/)
+# -----------------------------------------------------------------------
+# Each active change folder can have its own ownership. Useful for
+# routing PRs that modify an in-progress spec to the right reviewer.
+# By default, any touch of openspec/changes/ requires the platform/arch
+# team to review the shape.
+
+# openspec/changes/                  @your-platform-team
+
+# -----------------------------------------------------------------------
+# Plugin / config surfaces
+# -----------------------------------------------------------------------
+# Changes to the routing config, hooks, or presets affect every
+# developer's workflow — require platform review.
+
+# config/                            @your-platform-team
+# hooks/                             @your-platform-team
+# .github/workflows/                 @your-platform-team
+
+# -----------------------------------------------------------------------
+# Catch-all (optional)
+# -----------------------------------------------------------------------
+# Fallback owner for anything not matched above. Comment out if you
+# prefer no fallback (unmatched files require no review).
+
+# *                                  @your-default-team

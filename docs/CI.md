@@ -73,6 +73,37 @@ bash scripts/validate-active-openspec-changes.sh
 
 Exits 0 (green) or 1 (red) with aggregated output per change.
 
+## Per-capability review routing (CODEOWNERS)
+
+Once your repo has a stable capability taxonomy under `openspec/specs/`, layer
+in GitHub's CODEOWNERS mechanism so each capability's spec auto-routes review
+requests to its owner.
+
+The plugin ships a template at `.github/CODEOWNERS.template`. To use it:
+
+1. Copy the template into your own repo as `.github/CODEOWNERS`:
+   ```bash
+   cp .github/CODEOWNERS.template .github/CODEOWNERS
+   ```
+2. Replace every `@your-*-team` placeholder with real GitHub teams or users.
+3. Commit and push.
+4. GitHub will auto-request reviews from the matching owner(s) on every PR
+   that touches a capability's spec or an in-flight change folder.
+
+**Why it pairs with the OpenSpec Validate gate:** the gate enforces *spec
+validity*; CODEOWNERS enforces *spec-author review*. Together they make
+capability contracts genuinely multi-user: an auth-team change can't land
+without auth-team approval AND without a valid spec.
+
+**Common patterns in the template:**
+- `openspec/specs/<capability>/` → capability owner team
+- `openspec/changes/` → platform/architecture team reviews all in-flight specs
+- `config/`, `hooks/`, `.github/workflows/` → platform team (workflow-affecting changes)
+
+**Do not copy this repo's CODEOWNERS.template verbatim.** The `@your-*-team`
+handles are placeholders; GitHub will ignore non-existent teams, which
+silently breaks the review-routing guarantee.
+
 ## Relationship to `spec-driven` preset
 
 The `spec-driven` preset (see CLAUDE.md "Spec Persistence Modes") is designed

@@ -123,6 +123,39 @@ assert_contains "workflow has timeout" "timeout-minutes" "${WORKFLOW_CONTENT}"
 assert_not_contains "workflow does not use @latest (pinned version)" "@fission-ai/openspec@latest" "${WORKFLOW_CONTENT}"
 
 # ---------------------------------------------------------------------------
+# CODEOWNERS template — for multi-user spec-driven repos
+# ---------------------------------------------------------------------------
+echo "-- CODEOWNERS template --"
+CODEOWNERS_TEMPLATE="${PROJECT_ROOT}/.github/CODEOWNERS.template"
+
+assert_file_exists "CODEOWNERS template exists" "${CODEOWNERS_TEMPLATE}"
+CODEOWNERS_CONTENT=""
+[ -f "${CODEOWNERS_TEMPLATE}" ] && CODEOWNERS_CONTENT="$(cat "${CODEOWNERS_TEMPLATE}")"
+
+# Should document that it's a template (not our repo's actual CODEOWNERS)
+assert_contains "template clearly marked as template" "template" "${CODEOWNERS_CONTENT}"
+
+# Should show the openspec/specs/<capability>/ pattern that unlocks per-capability ownership
+assert_contains "shows openspec/specs/ ownership pattern" "openspec/specs/" "${CODEOWNERS_CONTENT}"
+
+# Should also cover openspec/changes/ for in-flight review routing
+assert_contains "covers openspec/changes/ for in-flight specs" "openspec/changes/" "${CODEOWNERS_CONTENT}"
+
+# Should warn NOT to copy the template verbatim (team names are placeholders)
+assert_contains "warns to replace @placeholder teams" "@your-" "${CODEOWNERS_CONTENT}"
+
+# ---------------------------------------------------------------------------
+# docs/CI.md covers CODEOWNERS setup
+# ---------------------------------------------------------------------------
+echo "-- docs/CI.md CODEOWNERS section --"
+CI_DOC="${PROJECT_ROOT}/docs/CI.md"
+CI_CONTENT=""
+[ -f "${CI_DOC}" ] && CI_CONTENT="$(cat "${CI_DOC}")"
+
+assert_contains "docs/CI.md mentions CODEOWNERS" "CODEOWNERS" "${CI_CONTENT}"
+assert_contains "docs/CI.md points at the template" "CODEOWNERS.template" "${CI_CONTENT}"
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 print_summary
