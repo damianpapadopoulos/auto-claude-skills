@@ -1,0 +1,41 @@
+name: OpenSpec Validate
+
+# Hard-block PR gate for spec-driven mode: validates every active
+# (non-archived) OpenSpec change on every PR. For full enforcement, this
+# check must be marked as "required" in GitHub Branch Protection — see
+# docs/CI.md for setup steps.
+#
+# Security note: this workflow uses no untrusted PR inputs in run:
+# commands. All commands are static strings. Safe from command injection
+# per https://github.blog/security/vulnerability-research/how-to-catch-github-actions-workflow-injections-before-attackers-do/
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  openspec-validate:
+    name: OpenSpec Validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          # Cache global npm install so repeated workflow runs are fast
+          cache: npm
+          cache-dependency-path: "**/package-lock.json"
+
+      # Pinned version (not @latest) so a breaking OpenSpec release does not
+      # silently break PR gating. Bump deliberately via a PR that updates
+      # this file.
+      - name: Install OpenSpec CLI
+        run: npm install -g @fission-ai/openspec@1.3.0
+
+      - name: Validate all active OpenSpec changes
+        run: bash scripts/validate-active-openspec-changes.sh
