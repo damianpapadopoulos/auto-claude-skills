@@ -1,35 +1,47 @@
 # auto-claude-skills
 
-A [Claude Code](https://code.claude.com) plugin that routes skills, workflow guardrails, and optional tool integrations based on prompt intent and SDLC phase.
+A [Claude Code](https://code.claude.com) plugin that enables agentic PDLC (agent-assisted product development lifecycle): it helps Claude move from discovery through learning with the right skills, guardrails, and tool context for each phase.
 
-Instead of remembering which skill to invoke for each task, the plugin classifies your prompt, maps it to the current development phase, and injects the right skills, review flows, and companion-tool hints.
+Instead of relying on memory and ad hoc prompting, the plugin gives Claude a stronger operating model across the AI-enabled PDLC. It routes the right skill, surfaces the next step, guards planning/review/verification, and — in spec-driven mode — commits design intent to versioned artifacts so work stays aligned across sessions and teammates.
+
+## Why This Exists
+
+AI accelerates every phase of the lifecycle, but speed exposes three problems:
+
+- **Skill sprawl.** Dozens of installed skills, and remembering which to invoke is the user's job. Useful skills go unused.
+- **Skipped discipline.** Review, failing tests, ship verification, and as-built docs are easy to skip when the model feels confident. Small features ship without review; completion claims go unverified.
+- **Lost intent.** Design decisions live in chat transcripts, not committed specs. When work resumes in a later session or by a teammate, the *why* is gone and AI-assisted work drifts from intent.
+
+The plugin addresses these by routing skills on intent, gating the skipped transitions, and committing design intent to versioned specs when spec-driven mode is on.
 
 ## What It Does
 
-The plugin bundles and applies skills that are useful along the SDLC.
+The plugin turns a loose collection of skills, hooks, and integrations into a phase-aware delivery system.
 
 - **Prompt routing by intent.** Each prompt is scored against trigger patterns and matched to relevant skills. Prompts that match nothing produce no output — no noise on non-development work.
 
-- **Phase-aware SDLC guidance.** The plugin tracks your position in a structured pipeline and adjusts what it suggests:
+- **Phase-aware PDLC orchestration.** The plugin infers a likely phase and composes the relevant skills, sequences, and hints across the delivery lifecycle:
 
-  | Phase | What the plugin does |
-  |-------|---------------------|
-  | DISCOVER | Pulls Jira/Confluence context, synthesizes a discovery brief before design |
-  | DESIGN | Activates brainstorming, explores requirements before coding |
-  | PLAN | Structures implementation into discrete tasks with dependency ordering |
-  | IMPLEMENT | Enforces TDD, routes to parallel agents for independent work |
-  | REVIEW | Triggers multi-perspective code review with security scanning, processes feedback with rigor |
-  | SHIP | Requires verification evidence, generates as-built OpenSpec docs, guides branch completion |
-  | LEARN | Queries adoption metrics, synthesizes outcome report, creates follow-up work |
-  | DEBUG | Scores highest priority, overrides the current phase with structured root-cause analysis or incident investigation |
+  | Phase | Baseline path | Optional enhancers |
+  |-------|---------------|-------------------|
+  | DISCOVER | Pulls Jira/Confluence context, synthesizes a discovery brief before design | Context-stack lookups for prior decisions and specs |
+  | DESIGN | Activates brainstorming, explores requirements before coding | `design-debate`, `feature-dev`, `frontend-design` when installed and appropriate |
+  | PLAN | Structures implementation into discrete tasks with dependency ordering | Context lookups for APIs, blast radius, and past decisions |
+  | IMPLEMENT | Drives the execution-plan/TDD workflow; halts if implementation is written before a failing test | `agent-team-execution` for independent tasks, security guidance when installed |
+  | REVIEW | Routes into `requesting-code-review` plus security scanning | `agent-team-review`, PR toolkit specialists, runtime validation, and drift checks when applicable |
+  | SHIP | Routes through verification, `openspec-ship`, and branch completion | Commit/PR automation and memory consolidation when installed |
+  | LEARN | Routes to `outcome-review` for metrics and follow-up work | PostHog and Jira follow-through when installed |
+  | DEBUG | Overrides the current phase with structured debugging or incident investigation | `incident-analysis`, `alert-hygiene`, and observability context |
 
-- **Guardrails through hooks, not memory.** Phase composition enforces requirements like "write the failing test before implementation" and "show test runner output before claiming done" — computed fresh on every prompt. Phase-specific red flags halt progress when steps are skipped (e.g., editing code before brainstorming, claiming tests pass without runner output).
+- **Guardrails that support agentic work.** Phase-specific red flags, required sequences, and selective hard gates for high-risk cases like unverified pushes — most enforcement is in-session guidance, not blocking.
 
 - **Optional enrichment from companion tools.** When integrations like Jira, GitHub, Context7, Serena, or GCP Observability are installed, the routing engine injects phase-appropriate context to use them.
 
+- **Versioned intent, not ephemeral chat.** In spec-driven mode, design proposals and as-built specs live in `openspec/changes/`. Hypothesis artifacts, plan files, and team checkpoints are saved to disk so later skills, next sessions, and teammates pick up from the same intent.
+
 ## Example Prompts
 
-**"design a secure frontend component"** → DESIGN phase. Activates brainstorming (explore requirements before coding) and design-debate (multi-agent design exploration). With companion plugins, also activates frontend-design (UI patterns). Companion tools query library docs for relevant API constraints.
+**"design a secure frontend component"** → DESIGN phase. Activates brainstorming to explore requirements before coding. When `design-debate` is installed and the prompt warrants multi-agent exploration, it can also enter structured debate; `frontend-design` adds UI-specific patterns when installed. Companion tools query library docs for relevant API constraints.
 
 **"debug this login bug"** → DEBUG phase. Activates systematic-debugging (structured root-cause analysis). TDD is injected as a mandatory parallel — reproduce with a failing test before fixing. If GCP Observability is installed, context hints toward runtime logs.
 
@@ -38,6 +50,33 @@ The plugin bundles and applies skills that are useful along the SDLC.
 **"our alerts keep flapping"** → DEBUG phase. Activates alert-hygiene to pull GCP alert policies and incident history, cluster flapping patterns, and produce a confidence-grouped report with prescriptive next actions.
 
 **"ship this feature"** → SHIP phase. Activates a sequence starting with verification-before-completion (evidence before assertions), then openspec-ship (as-built documentation), through to finishing-a-development-branch (merge/PR/cleanup options).
+
+## End-to-End Example
+
+One feature flowing through all seven phases, showing what the plugin injects at each step:
+
+1. **DISCOVER** — *"pull Jira ticket ABC-123 and draft a discovery brief"*
+   `product-discovery` activates. Pulls the ticket, synthesizes the problem, and records a hypothesis artifact to reconcile later.
+
+2. **DESIGN** — *"let's design the approach"*
+   `brainstorming` runs clarifying questions, captures scope and out-of-scope, and writes `docs/plans/YYYY-MM-DD-<slug>-design.md` with acceptance scenarios before planning begins.
+
+3. **PLAN** — *"break this into tasks"*
+   `writing-plans` structures the work; the plan requires user confirmation before execution.
+
+4. **IMPLEMENT** — *"start on task 1"*
+   Execution-plan workflow runs. TDD is injected as a parallel — writing implementation before a failing test triggers a halt.
+
+5. **REVIEW** — *"review this before I push"*
+   `requesting-code-review` dispatches the code-reviewer subagent with the diff range and plan reference. `security-scanner` runs deterministic checks. For changes touching 3+ files or crossing module boundaries, `agent-team-review` adds parallel specialist reviewers.
+
+6. **SHIP** — *"ship it"*
+   `verification-before-completion` blocks ship claims without runner output. `openspec-ship` generates as-built docs that reconcile the DISCOVER hypothesis. `finishing-a-development-branch` presents merge/PR/keep/discard options.
+
+7. **LEARN** — *"check adoption after a week"*
+   `outcome-review` queries PostHog/Jira, reconciles actual outcome against the DISCOVER hypothesis, and files follow-up work.
+
+Artifacts from earlier phases stay readable throughout — the plan referenced in REVIEW is the file written in PLAN; the hypothesis reconciled in LEARN is the one recorded in DISCOVER.
 
 ## How It Works
 
