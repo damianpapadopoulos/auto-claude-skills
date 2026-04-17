@@ -223,6 +223,26 @@ test_openspec_ship_idempotent_sync() {
 test_openspec_ship_idempotent_sync
 
 # ---------------------------------------------------------------------------
+# openspec-ship: capability taxonomy inference heuristic
+# ---------------------------------------------------------------------------
+test_openspec_ship_capability_heuristic() {
+    echo "-- test: openspec-ship has capability inference heuristic --"
+    local SHIP_SKILL="${PROJECT_ROOT}/skills/openspec-ship/SKILL.md"
+    local SHIP_CONTENT
+    SHIP_CONTENT="$(cat "${SHIP_SKILL}")"
+
+    # Must instruct enumerating existing capabilities before creating a new one
+    assert_contains "ship: lists existing capabilities before create" "ls openspec/specs/" "$SHIP_CONTENT"
+    # Must have a heuristic that prefers extension
+    assert_contains "ship: prefers extending existing capability" "prefer extending" "$SHIP_CONTENT"
+    # Must have a confidence threshold — auto-create vs ask
+    assert_contains "ship: confidence threshold for auto-create" "confidence" "$SHIP_CONTENT"
+    # Must instruct asking user when uncertain
+    assert_contains "ship: ask when uncertain" "ask the user" "$SHIP_CONTENT"
+}
+test_openspec_ship_capability_heuristic
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

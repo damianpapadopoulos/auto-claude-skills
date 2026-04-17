@@ -29,6 +29,11 @@ assert_contains "design-debate: creates proposal.md" "proposal.md" "$DEBATE_CONT
 assert_contains "design-debate: creates specs/<capability>/" "specs/<capability>/" "$DEBATE_CONTENT"
 assert_contains "design-debate: new capability warning" "NEW CAPABILITY" "$DEBATE_CONTENT"
 
+# Capability inference heuristic (taxonomy polish from PR-B)
+assert_contains "design-debate: lists existing capabilities before create" "ls openspec/specs/" "$DEBATE_CONTENT"
+assert_contains "design-debate: prefers extending existing capability" "prefer extending" "$DEBATE_CONTENT"
+assert_contains "design-debate: ask when uncertain" "ask the user" "$DEBATE_CONTENT"
+
 teardown_test_env
 
 echo ""

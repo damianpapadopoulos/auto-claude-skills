@@ -140,10 +140,20 @@ After the debate, create `openspec/changes/<topic>/` (committed, visible to team
    - **Acceptance Scenarios** — 2-4 GIVEN/WHEN/THEN scenarios defining success
    - Use RFC 2119 keywords (MUST, SHOULD, MAY) in UPPERCASE
 
-**Capability auto-creation:** If no existing capability fits, create `openspec/specs/<new-capability>/` (auto-created, not gated on user approval). When introducing a new capability, emit a visible warning:
-> ⚠️ NEW CAPABILITY: This change introduces capability `<new-capability>`. Confirm the taxonomy is correct before archive.
+**Capability taxonomy inference (before deciding on `<capability>`):**
 
-Prefer extending an existing capability over creating a new one — check `openspec/specs/` for close matches first.
+First enumerate existing capabilities: `ls openspec/specs/`. Then apply this heuristic:
+
+1. **Noun-family match** — core domain noun matches an existing capability? → **prefer extending** that capability.
+2. **Subsystem overlap** — touches code paths already owned by an existing capability? → **prefer extending** that capability.
+3. **Genuinely new** — no match? Auto-create `openspec/specs/<new-capability>/`.
+
+When two existing capabilities look equally applicable, **ask the user** — do not guess.
+
+When creating a new capability, emit a visible warning:
+> ⚠️ NEW CAPABILITY: This change introduces capability `<new-capability>`. Confirm the taxonomy is correct before archive. Existing capabilities considered and rejected: `<list>`.
+
+**Bias:** err toward fewer, coarser capabilities. Micro-capabilities fragment review routing; a single capability with multiple requirements scales better.
 
 ### Solo mode (default)
 

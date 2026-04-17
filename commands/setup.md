@@ -358,6 +358,28 @@ For repos with ≥2 active developers, enable spec-driven mode. Design intent is
    cp "${PLUGIN_SRC}/docs/CI.md" docs/CI.md
    ```
 
+6. **Optional — migrate existing `docs/plans/*-design.md` artifacts.** If the
+   target repo already has in-progress design docs under `docs/plans/` from
+   before spec-driven mode was enabled, offer to run the migration script:
+   ```bash
+   # First: dry-run to preview what would be copied
+   bash "${PLUGIN_SRC}/scripts/migrate-docs-plans-to-openspec.sh" --dry-run
+   # If the inventory looks right, copy from the plugin into the target repo
+   # and apply:
+   mkdir -p scripts
+   cp "${PLUGIN_SRC}/scripts/migrate-docs-plans-to-openspec.sh" scripts/
+   chmod +x scripts/migrate-docs-plans-to-openspec.sh
+   bash scripts/migrate-docs-plans-to-openspec.sh --apply
+   ```
+   The script inventories `docs/plans/*-design.md`, derives a feature slug
+   per file, and copies content to `openspec/changes/<slug>/design.md`. It
+   never overwrites an existing target and never deletes the source.
+   Review the copied files — they may need `proposal.md` and
+   `specs/<capability>/spec.md` siblings to be fully valid OpenSpec changes.
+
+   Skip this step for repos that don't have pre-existing `docs/plans/` work
+   or where the user prefers to start fresh with spec-driven mode.
+
 If the user declines this step, no changes are made. They can enable it later by re-running `/setup`.
 
 ## Execution

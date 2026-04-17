@@ -93,10 +93,32 @@ If the state file exists and has the relevant change entry, use those values. Sk
 
 - **If NO (retrospective mode path):** No upfront change exists. Proceed to create retrospectively — scaffold the change folder and populate it from as-built code and the execution plan.
 
+**Capability taxonomy inference (run BEFORE deciding on `<capability-slug>`):**
+
+Before choosing any capability slug, enumerate existing ones and try to reuse:
+
+```bash
+ls openspec/specs/ 2>/dev/null
+```
+
+Apply this 3-step heuristic to the enumerated list:
+
+1. **Noun-family match** — if the feature's core domain noun (e.g., "authentication", "billing", "routing") appears verbatim or as a close synonym in an existing capability folder, **extend that capability**. Score: HIGH confidence.
+2. **Subsystem overlap** — if the feature touches code paths already covered by an existing capability (check `openspec/specs/<cap>/spec.md` requirements for subsystem references), **extend that capability**. Score: MEDIUM confidence.
+3. **Genuinely new surface** — if neither matches and the feature is a distinct subsystem, **create a new capability**. Score: LOW confidence — pause and double-check.
+
+**Decision gate based on confidence:**
+
+- **HIGH or MEDIUM confidence** (match to existing): auto-extend, no prompt. Proceed.
+- **LOW confidence** (no clear match): auto-create IS allowed to preserve plug-and-play, but emit the warning below and prefer asking the user first if the session is interactive.
+- **AMBIGUOUS** (two existing capabilities look equally applicable): ask the user explicitly — do NOT guess.
+
 **New-capability safeguard:** If creating `openspec/specs/<new-capability>/` for the first time (no existing folder), emit a visible warning in your response:
-> ⚠️ NEW CAPABILITY: This change introduces capability `<new-capability>`. Confirm the taxonomy is correct before archive. Prefer extending an existing capability where possible — check `openspec/specs/` for close matches first.
+> ⚠️ NEW CAPABILITY: This change introduces capability `<new-capability>`. Confirm the taxonomy is correct before archive. Prefer extending an existing capability where possible — check `openspec/specs/` for close matches first. Existing capabilities considered and rejected: `<list the enumerated capabilities and the reason each was rejected>`.
 
 The user can then course-correct (rename, merge, or approve) before `openspec-ship` proceeds to archive.
+
+**Bias:** prefer extending an existing capability over creating a new one; err toward fewer, coarser capabilities. Micro-capabilities ("auth-token-rotation", "auth-password-reset", "auth-mfa") fragment review routing and CODEOWNERS enforcement; a single "auth" capability with multiple requirements scales better. Split a capability only when it has clearly separable concerns that belong to different teams.
 
 **Retrospective content (when no upfront change exists):**
 
