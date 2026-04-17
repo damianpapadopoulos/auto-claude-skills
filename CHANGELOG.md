@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hypothesis-to-Learning Loop: PERSIST DISCOVERY composition hint in DISCOVER phase (matching existing DESIGN pattern)
 - Hypothesis-to-Learning Loop: `write-learn-baseline` SHIP composition step — conditional on ship event detection from git state
 - Hypothesis-to-Learning Loop: `discovery_path` field in OpenSpec provenance output
+- Adversarial Review Lens: Always-on 6-point governance checklist in REVIEW composition — HITL bypass, scope expansion, safety gate weakening, bypass patterns, hook/config changes
+- Adversarial Review Lens: `adversarial-reviewer` 4th specialist in agent-team-review with governance lens
+- Adversarial Review Lens: 4 adversarial routing scenario fixtures + 10 governance constraint regression assertions
 
 ### Changed
 - Incident-analysis: Refactored SKILL.md from 12,806 to 11,408 words (~11% reduction) — extracted error taxonomy and deep-dive branches to reference files, compressed behavioral constraints, added stage-transition flowchart
