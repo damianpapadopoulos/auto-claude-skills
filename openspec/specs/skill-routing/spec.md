@@ -38,3 +38,22 @@ Intent Truth retrieval MUST check sources in this order: OpenSpec active changes
 #### Scenario: Live intent takes precedence
 - **WHEN** both `docs/plans/*-design.md` and `openspec/specs/<cap>/spec.md` exist
 - **THEN** `docs/plans/` MUST be read first (Source 2 before Source 3)
+
+## Additional Requirements (from openspec-first-spec-persistence)
+
+### Requirement: Preset-Gated OpenSpec-First Mode
+The plugin MUST support a `spec-driven` preset that redirects DESIGN and PLAN artifact creation from `docs/plans/` to `openspec/changes/<feature>/` when the preset's `openspec_first` flag is `true`.
+
+#### Scenario: spec-driven preset active redirects DESIGN hints
+- **GIVEN** `~/.claude/skill-config.json` contains `{"preset": "spec-driven"}`
+- **WHEN** session-start hook runs
+- **THEN** the cached registry's `phase_compositions.DESIGN.hints[].text` MUST contain `openspec/changes/`
+
+### Requirement: openspec-ship Idempotent Pre-flight
+`openspec-ship` MUST detect whether `openspec/changes/<feature-name>/` already exists before creating it. If present, validate and sync; if absent, create retrospectively.
+
+### Requirement: New-Capability Warning
+When introducing a previously-unknown capability, skills MUST emit a visible `⚠️ NEW CAPABILITY:` warning for user taxonomy review.
+
+### Requirement: Dual-Mode design-debate Output
+`design-debate` MUST check the session preset and write its synthesis to `openspec/changes/<topic>/` in spec-driven mode or `docs/plans/YYYY-MM-DD-<topic>-design.md` in solo mode.

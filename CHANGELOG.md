@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Spec-Driven Mode: New `spec-driven` preset with `openspec_first: true` flag — redirects DESIGN/PLAN artifact creation to committed `openspec/changes/<feature>/` folders for multi-user repo visibility
+- Spec-Driven Mode: session-start-hook Step 6c rewrites DESIGN PERSIST, DESIGN→PLAN CONTRACT, and CARRY SCENARIOS hint text via jq when preset active
+- Spec-Driven Mode: openspec-ship idempotent pre-flight check — validates and syncs existing `openspec/changes/<feature>/` instead of overwriting when upfront change exists
+- Spec-Driven Mode: `⚠️ NEW CAPABILITY` warning when openspec-ship or design-debate introduces a capability not yet in `openspec/specs/`
+- Spec-Driven Mode: design-debate dual-mode output template (spec-driven + solo)
+- Spec-Driven Mode: CLAUDE.md "Spec Persistence Modes" documentation section
+
+### Added
 - Hypothesis-to-Learning Loop: Durable hypothesis artifact from DISCOVER through SHIP to LEARN — structured fields (Metric, Baseline, Target, Window) in product-discovery brief, persisted via session state, extracted by openspec-ship, denormalized into learn-baseline JSON, consumed by outcome-review with per-hypothesis validation table
 - Hypothesis-to-Learning Loop: `openspec_state_set_discovery_path` helper for targeted discovery_path merge in session state
 - Hypothesis-to-Learning Loop: PERSIST DISCOVERY composition hint in DISCOVER phase (matching existing DESIGN pattern)
