@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Close the DISCOVER → SHIP → LEARN loop by persisting structured hypotheses from the discovery brief through to the outcome review. Keeps product decisions tied to the evidence they were made on.
+
+## Requirements
 
 ### Requirement: Discovery Brief Hypothesis Section
 The product-discovery brief template MUST include a Hypotheses section with structured fields: Metric, Baseline, Target, Window. Each hypothesis MUST be numbered (H1, H2, etc.). All structured fields MAY be nullable at discovery time.

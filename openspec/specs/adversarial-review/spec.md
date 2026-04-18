@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Always-on governance review lens that treats every code review as adversarial. Provides a checklist, a specialist reviewer agent, and regression tests that catch HITL bypass, scope expansion, safety-gate weakening, and hook/config drift before merge.
+
+## Requirements
 
 ### Requirement: Always-On Adversarial Checklist
 The REVIEW phase composition MUST include an always-on adversarial checklist hint with governance checks for HITL bypass, scope expansion, safety gate weakening, bypass patterns, and hook/config changes. The checklist MUST fire on every code review, not only pattern-matched reviews.

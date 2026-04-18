@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Domain skills that enforce safety disciplines in DESIGN. Scaffolding for new skills, prototype variation for design decisions, and lethal-trifecta review for agent designs — co-selected alongside the superpowers process drivers without displacing them.
+
+## Requirements
 
 ### Requirement: starter-template domain skill
 The plugin MUST provide a `starter-template` domain skill in DESIGN phase that emits repo-native seed files when creating new skills, commands, plugins, hooks, or modules.
