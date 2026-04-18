@@ -29,14 +29,28 @@ _SESSION_TOKEN=""
     _SESSION_TOKEN="$(cat "${HOME}/.claude/.skill-session-token" 2>/dev/null)"
 [ -z "${_SESSION_TOKEN}" ] && exit 0
 
-# --- Push review gate (fires on all git push, independent of phase) ---
-# Replaces hookify require-review-before-push rule with state-aware check.
-# Block git push only when a composition chain exists and verification hasn't completed.
+# --- Push gate (fires on all git push, independent of phase) ---
+# Replaces hookify require-review-before-push rule with state-aware checks.
+# Gate order matches the canonical chain: REVIEW → VERIFY → SHIP. Review is
+# checked first because skipping review and then chasing verification is the
+# recurring failure mode — the more actionable message wins.
 # Ad-hoc pushes (no composition) are allowed — no gate needed for unplanned work.
 case "${_COMMAND}" in
     *"git push"*)
         _COMP_STATE="${HOME}/.claude/.skill-composition-state-${_SESSION_TOKEN}"
         if [ -f "${_COMP_STATE}" ] && command -v jq >/dev/null 2>&1; then
+            # Check 1: REVIEW in chain but not completed — deny with REVIEW message
+            _review_in_chain=false
+            _review_completed=false
+            jq -e '.chain | index("requesting-code-review")' "${_COMP_STATE}" >/dev/null 2>&1 && _review_in_chain=true
+            jq -e '.completed | index("requesting-code-review")' "${_COMP_STATE}" >/dev/null 2>&1 && _review_completed=true
+            if [ "${_review_in_chain}" = "true" ] && [ "${_review_completed}" = "false" ]; then
+                _MSG="PUSH GATE: A composition chain is active and requesting-code-review has not been completed. Complete the REVIEW → VERIFY → SHIP sequence before pushing. Invoke Skill(superpowers:requesting-code-review) first."
+                jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
+                exit 0
+            fi
+
+            # Check 2: VERIFY in chain but not completed — deny with VERIFY message
             _verif_in_chain=false
             _verif_completed=false
             jq -e '.chain | index("verification-before-completion")' "${_COMP_STATE}" >/dev/null 2>&1 && _verif_in_chain=true

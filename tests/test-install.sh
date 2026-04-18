@@ -167,11 +167,37 @@ else
         "file is not executable"
 fi
 
-# Test 9: Bundled skills exist
-for skill_name in agent-team-execution agent-team-review design-debate; do
+# Test 9: All bundled skills exist on disk AND are mentioned in README.
+# The README Bundled Skills table is the user-facing inventory; keeping it in
+# sync with skills/ is mandatory so readers don't think a skill is missing.
+README_CONTENT="$(cat "${PLUGIN_ROOT}/README.md")"
+for skill_name in \
+    agent-safety-review \
+    agent-team-execution \
+    agent-team-review \
+    alert-hygiene \
+    batch-scripting \
+    deploy-gate \
+    design-debate \
+    implementation-drift-check \
+    incident-analysis \
+    incident-trend-analyzer \
+    openspec-ship \
+    outcome-review \
+    product-discovery \
+    prototype-lab \
+    runtime-validation \
+    security-scanner \
+    skill-scaffold \
+    unified-context-stack
+do
     assert_file_exists \
         "skills/${skill_name}/SKILL.md exists" \
         "${PLUGIN_ROOT}/skills/${skill_name}/SKILL.md"
+    assert_contains \
+        "README references ${skill_name}" \
+        "${skill_name}" \
+        "${README_CONTENT}"
 done
 
 # Test 10: .claude-plugin/plugin.json exists and is valid JSON

@@ -432,6 +432,55 @@ test_push_gate_allows_no_verification_in_chain() {
 }
 test_push_gate_allows_no_verification_in_chain
 
+# Push gate must also enforce REVIEW completion, not just VERIFY. In the canonical
+# SDLC chain REVIEW precedes VERIFY, and memory_feedback_never_skip_review_ship_tdd
+# enshrines that REVIEW is mandatory — so pushing with REVIEW incomplete (even if
+# VERIFY is somehow complete) should be blocked.
+test_push_gate_blocks_unreviewed() {
+    echo "-- test: push gate blocks when requesting-code-review not completed --"
+    setup_test_env
+    mkdir -p "${HOME}/.claude"
+
+    mkdir -p "${TEST_TMPDIR}/repo/.git"
+    cd "${TEST_TMPDIR}/repo"
+    git init -q
+
+    # REVIEW in chain, NOT completed. VERIFY also in chain, not yet reached.
+    local comp='{"chain":["brainstorming","writing-plans","executing-plans","requesting-code-review","verification-before-completion"],"current_index":2,"completed":["brainstorming","writing-plans","executing-plans"],"updated_at":"2026-04-18T10:00:00Z"}'
+
+    local output
+    output="$(run_push_guard "test-push-noreview-$$" "IMPLEMENT" "${comp}")"
+
+    assert_contains "push gate blocks unreviewed" "PUSH GATE" "${output}"
+    assert_contains "push gate denies unreviewed" "deny" "${output}"
+    assert_contains "message mentions REVIEW" "requesting-code-review" "${output}"
+
+    teardown_test_env
+}
+test_push_gate_blocks_unreviewed
+
+test_push_gate_allows_reviewed_without_verify_in_chain() {
+    echo "-- test: push gate allows when review done and verification not in chain --"
+    setup_test_env
+    mkdir -p "${HOME}/.claude"
+
+    mkdir -p "${TEST_TMPDIR}/repo/.git"
+    cd "${TEST_TMPDIR}/repo"
+    git init -q
+
+    # REVIEW in chain and completed. VERIFY not in chain at all. Push should be allowed.
+    local comp='{"chain":["brainstorming","writing-plans","executing-plans","requesting-code-review"],"current_index":3,"completed":["brainstorming","writing-plans","executing-plans","requesting-code-review"],"updated_at":"2026-04-18T10:00:00Z"}'
+
+    local output
+    output="$(run_push_guard "test-push-reviewonly-$$" "REVIEW" "${comp}")"
+
+    assert_not_contains "push gate allows reviewed" "PUSH GATE" "${output}"
+    assert_not_contains "push gate no deny when reviewed" "deny" "${output}"
+
+    teardown_test_env
+}
+test_push_gate_allows_reviewed_without_verify_in_chain
+
 # ---------------------------------------------------------------------------
 # 5. set_discovery_path creates/merges discovery_path
 # ---------------------------------------------------------------------------

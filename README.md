@@ -112,6 +112,31 @@ SessionStart: 28 skills active (12 of 12 plugins). Setup complete
 
 The plugin works without every companion integration — it discovers what's installed and routes accordingly. More tools installed means richer context at each phase.
 
+## Bundled Skills
+
+This plugin ships 18 skills that phase composition selects automatically. Each is registered in `config/default-triggers.json` and discoverable at session start. Invoke one explicitly when the routing hasn't picked it up yet.
+
+| Phase | Skill | Purpose |
+|-------|-------|---------|
+| DISCOVER | [product-discovery](skills/product-discovery/SKILL.md) | Pulls Jira/Confluence context and synthesizes a discovery brief with structured hypothesis fields |
+| DESIGN | [design-debate](skills/design-debate/SKILL.md) | Multi-Agent Debate for complex designs — architect + critic + pragmatist with convergence |
+| DESIGN | [prototype-lab](skills/prototype-lab/SKILL.md) | Produces 3 thin comparable variants of a proposed design with a mandatory human validation plan |
+| DESIGN | [agent-safety-review](skills/agent-safety-review/SKILL.md) | Evaluates autonomous-agent designs for the lethal trifecta (private data + untrusted input + outbound action) |
+| DESIGN | [skill-scaffold](skills/skill-scaffold/SKILL.md) | Emits repo-native seed files (SKILL.md skeleton, routing entry, test snippets) when creating new skills |
+| IMPLEMENT | [agent-team-execution](skills/agent-team-execution/SKILL.md) | Executes plans with 3+ independent file-disjoint tasks via parallel specialist agents with shared contracts |
+| IMPLEMENT | [batch-scripting](skills/batch-scripting/SKILL.md) | Bulk file operations using `claude -p` with manifest, dry-run, and log-based retry |
+| REVIEW | [agent-team-review](skills/agent-team-review/SKILL.md) | Multi-perspective parallel code review (security, quality, spec compliance, adversarial governance) |
+| REVIEW | [security-scanner](skills/security-scanner/SKILL.md) | Semgrep SAST + Trivy vulnerability scanning with self-healing fix loop |
+| REVIEW | [runtime-validation](skills/runtime-validation/SKILL.md) | Realistic-context validation — browser E2E, API smoke, CLI checks, a11y audits with unified report |
+| REVIEW | [implementation-drift-check](skills/implementation-drift-check/SKILL.md) | Spec-drift detection, assumption surfacing, and coverage gap identification against Intent Truth |
+| DEBUG | [incident-analysis](skills/incident-analysis/SKILL.md) | Tiered GCP log investigation with trace correlation, completeness gates, and canonical postmortem output |
+| DEBUG | [incident-trend-analyzer](skills/incident-trend-analyzer/SKILL.md) | On-demand postmortem trend analysis — recurrence grouping, MTTR/MTTD from canonical postmortem corpus |
+| DEBUG | [alert-hygiene](skills/alert-hygiene/SKILL.md) | Clusters flapping alerts and produces a confidence-grouped report with prescriptive next actions |
+| SHIP | [openspec-ship](skills/openspec-ship/SKILL.md) | Creates retrospective OpenSpec change, validates, archives, updates changelog |
+| SHIP | [deploy-gate](skills/deploy-gate/SKILL.md) | Pre-ship deployment readiness checklist — verifies configuration, documentation, and CI status |
+| LEARN | [outcome-review](skills/outcome-review/SKILL.md) | Queries PostHog metrics, synthesizes outcome report with per-hypothesis validation, creates follow-up Jira work (gated) |
+| Cross-cutting | [unified-context-stack](skills/unified-context-stack/SKILL.md) | Tiered retrieval across External / Internal / Historical / Intent Truth with graceful degradation |
+
 ## Optional Integrations
 
 Installed via `/setup` unless noted. The routing engine discovers these automatically and injects phase-appropriate context when they're present.
