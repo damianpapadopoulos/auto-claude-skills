@@ -818,6 +818,33 @@ test_greeting_blocked() {
     teardown_test_env
 }
 
+# The blocklist can match legitimate dev prompts that happen to start with
+# "yes/no/ok/cool..." — silent exit leaves users confused. SKILL_DEBUG=1 should
+# emit a one-line stderr breadcrumb so users can diagnose the missing routing.
+test_greeting_blocklist_debug_hint() {
+    echo "-- test: SKILL_DEBUG emits stderr hint when blocklist fires --"
+    setup_test_env
+    install_registry
+
+    local stderr_out
+    stderr_out="$(jq -n --arg p "hello there" '{"prompt":$p}' | \
+        SKILL_DEBUG=1 CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        bash "${HOOK}" 2>&1 >/dev/null)"
+
+    assert_contains "blocklist debug hint emitted on SKILL_DEBUG=1" "greeting blocklist" "${stderr_out}"
+
+    # Default: no SKILL_DEBUG → stderr stays silent (existing behavior preserved)
+    local silent_stderr
+    silent_stderr="$(jq -n --arg p "hello there" '{"prompt":$p}' | \
+        CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        bash "${HOOK}" 2>&1 >/dev/null)"
+
+    assert_not_contains "no stderr hint when SKILL_DEBUG unset" "greeting blocklist" "${silent_stderr}"
+
+    teardown_test_env
+}
+test_greeting_blocklist_debug_hint
+
 # ---------------------------------------------------------------------------
 # 4. Slash command is blocked
 # ---------------------------------------------------------------------------

@@ -48,6 +48,10 @@ fi
 if [[ "$P" =~ $_BLOCKLIST ]]; then
   TAIL="${P#*[[:space:]]}"
   if [[ "$TAIL" == "$P" ]] || (( ${#TAIL} < 20 )); then
+    # Silent exit by default; SKILL_DEBUG=1 emits a one-line breadcrumb so users
+    # can diagnose the case where a legitimate dev prompt was swallowed.
+    [[ -n "${SKILL_DEBUG:-}" ]] && \
+      printf '[skill-hook] greeting blocklist matched prompt; no routing emitted. Set SKILL_EXPLAIN=1 for full scoring trace.\n' >&2
     exit 0
   fi
 fi

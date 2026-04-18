@@ -42,8 +42,11 @@ fi
 # Step 1c: Reset depth counter for new session
 # -----------------------------------------------------------------
 # Generate a session-scoped token so concurrent sessions don't share counters.
+# Format: <epoch>-<pid>-<rand>. The random suffix defends against collisions
+# when two sessions start in the same second with a reused PID (shell respawn,
+# rapid subshell invocation). Without it the token was 1-second-granularity.
 # Clean up stale counter files from previous sessions first.
-_SESSION_TOKEN="$(date +%s)-$$"
+_SESSION_TOKEN="$(date +%s)-$$-${RANDOM}${RANDOM}"
 printf '%s' "$_SESSION_TOKEN" > "${HOME}/.claude/.skill-session-token" 2>/dev/null || true
 # Read previous session's zero-match stats before cleanup
 _PREV_ZM=0
