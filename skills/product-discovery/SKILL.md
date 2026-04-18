@@ -75,9 +75,39 @@ Present the brief and ask:
 
 Wait for user confirmation. If they request changes, revise and re-present.
 
-## Step 5: Transition to Design
+## Step 5: Persist Discovery State
 
-Once the user approves the discovery brief:
+After the user approves the brief — this is mandatory. The LEARN-phase `outcome-review` skill reads a baseline written at SHIP time, which in turn depends on `discovery_path` and `hypotheses` being present in session state.
+
+1. **Write the brief** to `docs/plans/YYYY-MM-DD-<slug>-discovery.md` using the Write tool. Derive `<slug>` as kebab-case from the primary feature name.
+
+2. **Read the session token:**
+   ```bash
+   TOKEN="$(cat ~/.claude/.skill-session-token 2>/dev/null)"
+   ```
+
+3. **Source the state helpers** from the auto-claude-skills plugin root (typically `$CLAUDE_PLUGIN_ROOT/hooks/lib/openspec-state.sh`):
+   ```bash
+   . "$CLAUDE_PLUGIN_ROOT/hooks/lib/openspec-state.sh"
+   ```
+
+4. **Persist the discovery path:**
+   ```bash
+   openspec_state_set_discovery_path "$TOKEN" "<slug>" "docs/plans/YYYY-MM-DD-<slug>-discovery.md"
+   ```
+
+5. **Persist structured hypotheses** as a JSON array. Each H<N> from Step 3 becomes one object:
+   ```bash
+   HYPS='[{"id":"H1","description":"We believe ...","metric":"checkout_completion_rate","baseline":"0.12","target":"increase >20%","window":"2 weeks post-ship"}]'
+   openspec_state_set_hypotheses "$TOKEN" "<slug>" "$HYPS"
+   ```
+   Use `null` for fields unknown at discovery time. Keep them as JSON literals — the helper validates the shape.
+
+If any helper call fails (missing token, jq unavailable), note it in chat but continue to Step 6. The loop degrades gracefully; the session still produces a valid discovery artifact.
+
+## Step 6: Transition to Design
+
+Once discovery state is persisted:
 
 > "Discovery complete. Invoke Skill(superpowers:brainstorming) to begin design."
 

@@ -1,13 +1,36 @@
 #!/bin/bash
 # Consolidation stop hook — reminds about memory consolidation when session ends
+# and writes learn baselines for any shipped features with hypotheses.
 # Stop hook. Bash 3.2 compatible. Exits 0 always (advisory, fail-open).
 trap 'exit 0' ERR
 
 # Check session token
 [ -f "${HOME}/.claude/.skill-session-token" ] || exit 0
+_SESSION_TOKEN="$(cat "${HOME}/.claude/.skill-session-token" 2>/dev/null)"
+
+_proj_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+# --- Learn baseline write (safety net for hypothesis loop) ---
+# Iterates change slugs with non-empty hypotheses; the helper skips when no ship
+# signal (no archived_at and no openspec/changes/archive/<slug>/), so this is
+# idempotent and harmless when nothing has shipped.
+if [ -n "${_SESSION_TOKEN}" ] && command -v jq >/dev/null 2>&1; then
+    _STATE_FILE="${HOME}/.claude/.skill-openspec-state-${_SESSION_TOKEN}"
+    if [ -f "${_STATE_FILE}" ]; then
+        _PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+        _HELPER_LIB="${_PLUGIN_ROOT}/hooks/lib/openspec-state.sh"
+        if [ -f "${_HELPER_LIB}" ]; then
+            # shellcheck source=lib/openspec-state.sh
+            . "${_HELPER_LIB}"
+            _SLUGS="$(jq -r '.changes | to_entries[] | select(.value.hypotheses != null and (.value.hypotheses | length) > 0) | .key' "${_STATE_FILE}" 2>/dev/null)"
+            for _slug in ${_SLUGS}; do
+                openspec_state_write_learn_baseline "${_SESSION_TOKEN}" "${_slug}" 2>/dev/null || true
+            done
+        fi
+    fi
+fi
 
 # Check consolidation marker freshness
-_proj_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 _proj_hash="$(printf '%s' "${_proj_root}" | shasum | cut -d' ' -f1)"
 _consol_marker="${HOME}/.claude/.context-stack-consolidated-${_proj_hash}"
 

@@ -280,19 +280,22 @@ If `discovery_path` exists in session state AND the file at that path is readabl
    - `baseline` — from the **Baseline:** field
    - `target` — from the **Target:** field
    - `window` — from the **Window:** field
-3. Write to session state as `changes.<slug>.hypotheses`:
+3. Persist hypotheses and mark the change archived. Source the state helpers from the auto-claude-skills plugin, then call them:
 
 ```bash
-# Read session state
 TOKEN="$(cat ~/.claude/.skill-session-token 2>/dev/null)"
-STATE_FILE="${HOME}/.claude/.skill-openspec-state-${TOKEN}"
+. "$CLAUDE_PLUGIN_ROOT/hooks/lib/openspec-state.sh"
 
-# Extract and write hypotheses array
-# (LLM constructs the JSON array from parsed markdown, then merges into state)
-jq --arg slug "<slug>" --argjson hyps '<hypotheses_json_array>' '
-    .changes[$slug].hypotheses = $hyps
-' "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+HYPS='[{"id":"H1","description":"...","metric":"...","baseline":"...","target":"...","window":"..."}]'
+openspec_state_set_hypotheses "$TOKEN" "<slug>" "$HYPS"
+
+# Record the ship timestamp so write_learn_baseline captures the real ship time,
+# not the stop-hook wall-clock fallback. Call after archival in Step 7b completes,
+# or here if archival is already complete.
+openspec_state_mark_archived "$TOKEN" "<slug>"
 ```
+
+If the discovery description contains single-quotes (e.g., "it's faster"), construct the JSON via `jq -n` instead of shell-quoted literals to avoid quoting blow-ups.
 
 If `discovery_path` is absent in session state or the file is unreadable: Skip silently. `hypotheses` stays null in state. This covers sessions that entered at DEBUG or skipped discovery.
 

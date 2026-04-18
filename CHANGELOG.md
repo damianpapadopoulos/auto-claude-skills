@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Hypothesis-to-Learning Loop: `write-learn-baseline` SHIP step was declared in composition sequence but had no implementation — LEARN phase silently saw empty `~/.claude/.skill-learn-baselines/`. Added `openspec_state_set_hypotheses`, `openspec_state_mark_archived`, and `openspec_state_write_learn_baseline` helpers. Stop hook now writes baselines as a safety net for any shipped change with hypotheses.
+- Hypothesis-to-Learning Loop: `product-discovery` skill now auto-calls state helpers to persist `discovery_path` and structured hypotheses (was a composition hint the LLM could skip, breaking the loop at its source).
+- `openspec_state_upsert_change` was hard-overwriting `.changes[$slug]`, silently clobbering `discovery_path` when DESIGN ran after DISCOVER. Converted to a merge that preserves prior values when callers pass empty-string args.
+- Jira ticket extraction for learn baselines now filters common technical-standard prefixes (HTTP-2, SHA-256, ISO-8601, CVE-…, etc.) via shape + denylist, so the real ticket wins when it appears after technical prose.
+
 ### Added
 - Spec-Driven Mode: New `spec-driven` preset with `openspec_first: true` flag — redirects DESIGN/PLAN artifact creation to committed `openspec/changes/<feature>/` folders for multi-user repo visibility
 - Spec-Driven Mode: session-start-hook Step 6c rewrites DESIGN PERSIST, DESIGN→PLAN CONTRACT, and CARRY SCENARIOS hint text via jq when preset active

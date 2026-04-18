@@ -126,6 +126,38 @@ test_upsert_change_preserves_entries() {
 }
 test_upsert_change_preserves_entries
 
+test_upsert_change_empty_args_preserve_prior_values() {
+    echo "-- test: upsert with empty args preserves prior non-empty fields --"
+    setup_test_env
+
+    local token="test-$$"
+    openspec_state_upsert_change "$token" "my-feature" "plans/real.md" "specs/real.md" "billing" "docs/plans/real-design.md"
+
+    # Re-upsert with empty plan/spec/cap — simulates a caller that only wants to set design_path
+    openspec_state_upsert_change "$token" "my-feature" "" "" "" "docs/plans/new-design.md"
+
+    local state_file="${HOME}/.claude/.skill-openspec-state-${token}"
+
+    local plan
+    plan="$(jq -r '.changes["my-feature"].plan_path' "$state_file" 2>/dev/null)"
+    assert_equals "plan_path preserved on empty arg" "plans/real.md" "$plan"
+
+    local spec
+    spec="$(jq -r '.changes["my-feature"].spec_path' "$state_file" 2>/dev/null)"
+    assert_equals "spec_path preserved on empty arg" "specs/real.md" "$spec"
+
+    local cap
+    cap="$(jq -r '.changes["my-feature"].capability_slug' "$state_file" 2>/dev/null)"
+    assert_equals "capability_slug preserved on empty arg" "billing" "$cap"
+
+    local design
+    design="$(jq -r '.changes["my-feature"].design_path' "$state_file" 2>/dev/null)"
+    assert_equals "design_path updated when arg provided" "docs/plans/new-design.md" "$design"
+
+    teardown_test_env
+}
+test_upsert_change_empty_args_preserve_prior_values
+
 # ---------------------------------------------------------------------------
 # 4. write_provenance produces valid source.json
 # ---------------------------------------------------------------------------
@@ -469,6 +501,336 @@ test_set_discovery_path_noop_on_empty_token() {
     teardown_test_env
 }
 test_set_discovery_path_noop_on_empty_token
+
+# ---------------------------------------------------------------------------
+# 6. set_hypotheses creates/merges hypotheses array on change entry
+# ---------------------------------------------------------------------------
+test_set_hypotheses_creates_entry() {
+    echo "-- test: set_hypotheses creates change entry with hypotheses --"
+    setup_test_env
+
+    local token="test-$$"
+    local hyps='[{"id":"H1","description":"thing works","metric":"ctr","baseline":"0.1","target":"0.2","window":"2w"}]'
+    openspec_state_set_hypotheses "$token" "my-feature" "$hyps"
+
+    local state_file="${HOME}/.claude/.skill-openspec-state-${token}"
+    assert_equals "state file exists" "true" "$([ -f "$state_file" ] && echo true || echo false)"
+
+    local id
+    id="$(jq -r '.changes["my-feature"].hypotheses[0].id' "$state_file" 2>/dev/null)"
+    assert_equals "H1 id stored" "H1" "$id"
+
+    local count
+    count="$(jq '.changes["my-feature"].hypotheses | length' "$state_file" 2>/dev/null)"
+    assert_equals "one hypothesis" "1" "$count"
+
+    teardown_test_env
+}
+test_set_hypotheses_creates_entry
+
+test_set_hypotheses_merges_without_overwrite() {
+    echo "-- test: set_hypotheses preserves discovery_path/design_path --"
+    setup_test_env
+
+    local token="test-$$"
+    openspec_state_set_discovery_path "$token" "my-feature" "docs/plans/disc.md"
+    openspec_state_upsert_change "$token" "my-feature" "plans/p.md" "specs/s.md" "cap" "docs/plans/d.md"
+
+    local hyps='[{"id":"H1","description":"x","metric":"m","baseline":null,"target":null,"window":null}]'
+    openspec_state_set_hypotheses "$token" "my-feature" "$hyps"
+
+    local state_file="${HOME}/.claude/.skill-openspec-state-${token}"
+
+    local dp
+    dp="$(jq -r '.changes["my-feature"].discovery_path' "$state_file" 2>/dev/null)"
+    assert_equals "discovery_path preserved" "docs/plans/disc.md" "$dp"
+
+    local design
+    design="$(jq -r '.changes["my-feature"].design_path' "$state_file" 2>/dev/null)"
+    assert_equals "design_path preserved" "docs/plans/d.md" "$design"
+
+    local id
+    id="$(jq -r '.changes["my-feature"].hypotheses[0].id' "$state_file" 2>/dev/null)"
+    assert_equals "hypotheses merged" "H1" "$id"
+
+    teardown_test_env
+}
+test_set_hypotheses_merges_without_overwrite
+
+test_set_hypotheses_invalid_json_noop() {
+    echo "-- test: set_hypotheses no-op on invalid JSON --"
+    setup_test_env
+
+    local token="test-$$"
+    openspec_state_set_hypotheses "$token" "slug" "not json {{"
+
+    local state_files
+    state_files="$(ls "${HOME}/.claude/.skill-openspec-state-"* 2>/dev/null | wc -l | tr -d ' ')"
+    assert_equals "no state file on invalid JSON" "0" "${state_files}"
+
+    teardown_test_env
+}
+test_set_hypotheses_invalid_json_noop
+
+test_set_hypotheses_rejects_non_array_shape() {
+    echo "-- test: set_hypotheses rejects valid JSON that isn't an array --"
+    setup_test_env
+
+    local token="test-$$"
+    # Valid JSON but not an array — should be rejected since outcome-review iterates
+    openspec_state_set_hypotheses "$token" "slug" '{"id":"H1"}'
+    openspec_state_set_hypotheses "$token" "slug" '"a string"'
+    openspec_state_set_hypotheses "$token" "slug" '42'
+    openspec_state_set_hypotheses "$token" "slug" 'null'
+
+    local state_files
+    state_files="$(ls "${HOME}/.claude/.skill-openspec-state-"* 2>/dev/null | wc -l | tr -d ' ')"
+    assert_equals "non-array shapes rejected" "0" "${state_files}"
+
+    teardown_test_env
+}
+test_set_hypotheses_rejects_non_array_shape
+
+test_set_hypotheses_empty_inputs_noop() {
+    echo "-- test: set_hypotheses no-op on empty token/slug/json --"
+    setup_test_env
+
+    openspec_state_set_hypotheses "" "slug" "[]"
+    openspec_state_set_hypotheses "t" "" "[]"
+    openspec_state_set_hypotheses "t" "slug" ""
+
+    local state_files
+    state_files="$(ls "${HOME}/.claude/.skill-openspec-state-"* 2>/dev/null | wc -l | tr -d ' ')"
+    assert_equals "no state file on empty inputs" "0" "${state_files}"
+
+    teardown_test_env
+}
+test_set_hypotheses_empty_inputs_noop
+
+# ---------------------------------------------------------------------------
+# 7. write_learn_baseline — writes ~/.claude/.skill-learn-baselines/<slug>.json
+# ---------------------------------------------------------------------------
+test_write_learn_baseline_skipped_without_ship() {
+    echo "-- test: write_learn_baseline skips when no ship signal --"
+    setup_test_env
+
+    local token="test-$$"
+    local hyps='[{"id":"H1","description":"x","metric":"m","baseline":null,"target":null,"window":null}]'
+    openspec_state_set_hypotheses "$token" "my-feature" "$hyps"
+    # No archive dir, no archived_at → no ship signal
+    openspec_state_write_learn_baseline "$token" "my-feature"
+
+    local baseline_file="${HOME}/.claude/.skill-learn-baselines/my-feature.json"
+    assert_equals "baseline file not created" "false" "$([ -f "$baseline_file" ] && echo true || echo false)"
+
+    teardown_test_env
+}
+test_write_learn_baseline_skipped_without_ship
+
+test_write_learn_baseline_skipped_without_hypotheses() {
+    echo "-- test: write_learn_baseline skips when no hypotheses --"
+    setup_test_env
+
+    local token="test-$$"
+    # Create archive dir signal (ship event) but no hypotheses
+    local proj
+    proj="${TEST_TMPDIR}/repo"
+    mkdir -p "${proj}/openspec/changes/archive/my-feature" "${proj}/.git"
+    cd "$proj"
+    git init -q
+    openspec_state_mark_verified "$token" "none"
+    openspec_state_write_learn_baseline "$token" "my-feature"
+
+    local baseline_file="${HOME}/.claude/.skill-learn-baselines/my-feature.json"
+    assert_equals "baseline not created without hypotheses" "false" "$([ -f "$baseline_file" ] && echo true || echo false)"
+
+    teardown_test_env
+}
+test_write_learn_baseline_skipped_without_hypotheses
+
+test_write_learn_baseline_writes_on_archive_signal() {
+    echo "-- test: write_learn_baseline writes when archive dir exists --"
+    setup_test_env
+
+    local token="test-$$"
+    # Set up git repo + archive dir
+    local proj
+    proj="${TEST_TMPDIR}/repo"
+    mkdir -p "${proj}/openspec/changes/archive/my-feature" "${proj}/.git"
+    cd "$proj"
+    git init -q
+    # Write hypotheses to state
+    local hyps='[{"id":"H1","description":"thing","metric":"ctr","baseline":"0.1","target":"0.2","window":"2w"}]'
+    openspec_state_set_hypotheses "$token" "my-feature" "$hyps"
+
+    openspec_state_write_learn_baseline "$token" "my-feature"
+
+    local baseline_file="${HOME}/.claude/.skill-learn-baselines/my-feature.json"
+    assert_equals "baseline file created" "true" "$([ -f "$baseline_file" ] && echo true || echo false)"
+
+    # Check canonical fields
+    local slug
+    slug="$(jq -r '.slug' "$baseline_file" 2>/dev/null)"
+    assert_equals "slug recorded" "my-feature" "$slug"
+
+    local hyp_count
+    hyp_count="$(jq '.hypotheses | length' "$baseline_file" 2>/dev/null)"
+    assert_equals "hypotheses recorded" "1" "$hyp_count"
+
+    local shipped_at
+    shipped_at="$(jq -r '.shipped_at' "$baseline_file" 2>/dev/null)"
+    assert_not_contains "shipped_at populated" "null" "$shipped_at"
+
+    local schema
+    schema="$(jq -r '.schema_version' "$baseline_file" 2>/dev/null)"
+    assert_equals "schema_version present" "1" "$schema"
+
+    teardown_test_env
+}
+test_write_learn_baseline_writes_on_archive_signal
+
+test_write_learn_baseline_extracts_jira_ticket() {
+    echo "-- test: write_learn_baseline extracts Jira ticket from discovery file --"
+    setup_test_env
+
+    local token="test-$$"
+    local proj
+    proj="${TEST_TMPDIR}/repo"
+    mkdir -p "${proj}/openspec/changes/archive/my-feature" "${proj}/.git" "${proj}/docs/plans"
+    cd "$proj"
+    git init -q
+    # Discovery file with Jira ticket
+    printf '# Discovery\n\nLinked to ABC-1234 for context.\n' > "${proj}/docs/plans/disc.md"
+    openspec_state_set_discovery_path "$token" "my-feature" "docs/plans/disc.md"
+    local hyps='[{"id":"H1","description":"x","metric":"m","baseline":null,"target":null,"window":null}]'
+    openspec_state_set_hypotheses "$token" "my-feature" "$hyps"
+
+    openspec_state_write_learn_baseline "$token" "my-feature"
+
+    local baseline_file="${HOME}/.claude/.skill-learn-baselines/my-feature.json"
+    local jira
+    jira="$(jq -r '.jira_ticket' "$baseline_file" 2>/dev/null)"
+    assert_equals "jira extracted" "ABC-1234" "$jira"
+
+    local discovery_path
+    discovery_path="$(jq -r '.discovery_path' "$baseline_file" 2>/dev/null)"
+    assert_equals "discovery_path recorded" "docs/plans/disc.md" "$discovery_path"
+
+    teardown_test_env
+}
+test_write_learn_baseline_extracts_jira_ticket
+
+test_write_learn_baseline_jira_ignores_false_positives() {
+    echo "-- test: Jira extraction ignores HTTP-2/UTF-8/SHA-256 noise before the real ticket --"
+    setup_test_env
+
+    local token="test-$$"
+    local proj
+    proj="${TEST_TMPDIR}/repo"
+    mkdir -p "${proj}/openspec/changes/archive/my-feature" "${proj}/.git" "${proj}/docs/plans"
+    cd "$proj"
+    git init -q
+    # Discovery file: technical jargon appears BEFORE the Jira ticket
+    printf '# Discovery\n\nUses HTTP-2 and SHA-256 per ISO-8601. Tracked as PROJ-4567.\n' \
+        > "${proj}/docs/plans/disc.md"
+    openspec_state_set_discovery_path "$token" "my-feature" "docs/plans/disc.md"
+    local hyps='[{"id":"H1","description":"x","metric":"m","baseline":null,"target":null,"window":null}]'
+    openspec_state_set_hypotheses "$token" "my-feature" "$hyps"
+
+    openspec_state_write_learn_baseline "$token" "my-feature"
+
+    local baseline_file="${HOME}/.claude/.skill-learn-baselines/my-feature.json"
+    local jira
+    jira="$(jq -r '.jira_ticket' "$baseline_file" 2>/dev/null)"
+    # Must pick the real ticket (PROJ-4567), not HTTP-2 / SHA-256 / ISO-8601
+    assert_equals "real Jira ticket selected over noise" "PROJ-4567" "$jira"
+
+    teardown_test_env
+}
+test_write_learn_baseline_jira_ignores_false_positives
+
+test_write_learn_baseline_uses_archived_at_from_state() {
+    echo "-- test: write_learn_baseline uses archived_at from state when set --"
+    setup_test_env
+
+    local token="test-$$"
+    local proj
+    proj="${TEST_TMPDIR}/repo"
+    mkdir -p "${proj}/.git" # intentionally no archive dir — only archived_at signals ship
+    cd "$proj"
+    git init -q
+
+    local hyps='[{"id":"H1","description":"x","metric":"m","baseline":null,"target":null,"window":null}]'
+    openspec_state_set_hypotheses "$token" "my-feature" "$hyps"
+    openspec_state_mark_archived "$token" "my-feature" "2026-01-15T09:30:00Z"
+
+    openspec_state_write_learn_baseline "$token" "my-feature"
+
+    local baseline_file="${HOME}/.claude/.skill-learn-baselines/my-feature.json"
+    assert_equals "baseline created via archived_at signal" "true" \
+        "$([ -f "$baseline_file" ] && echo true || echo false)"
+
+    local shipped_at
+    shipped_at="$(jq -r '.shipped_at' "$baseline_file" 2>/dev/null)"
+    assert_equals "shipped_at matches archived_at" "2026-01-15T09:30:00Z" "$shipped_at"
+
+    teardown_test_env
+}
+test_write_learn_baseline_uses_archived_at_from_state
+
+test_write_learn_baseline_noop_on_empty_token() {
+    echo "-- test: write_learn_baseline no-op on empty token/slug --"
+    setup_test_env
+
+    openspec_state_write_learn_baseline "" "slug"
+    openspec_state_write_learn_baseline "t" ""
+
+    local baseline_count
+    baseline_count="$(ls "${HOME}/.claude/.skill-learn-baselines/"*.json 2>/dev/null | wc -l | tr -d ' ')"
+    assert_equals "no baseline on empty inputs" "0" "$baseline_count"
+
+    teardown_test_env
+}
+test_write_learn_baseline_noop_on_empty_token
+
+# ---------------------------------------------------------------------------
+# 8. consolidation-stop hook auto-writes learn baseline
+# ---------------------------------------------------------------------------
+test_consolidation_stop_writes_baseline() {
+    echo "-- test: consolidation-stop hook writes learn baseline on ship --"
+    setup_test_env
+
+    local token="stop-test-$$"
+    # Create session token file
+    printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
+
+    # Create project with archive dir signal
+    local proj
+    proj="${TEST_TMPDIR}/repo"
+    mkdir -p "${proj}/openspec/changes/archive/shipped-feature" "${proj}/.git"
+    cd "$proj"
+    git init -q
+    git commit --allow-empty -q -m "init" 2>/dev/null || true
+
+    # Populate session state with hypotheses
+    local hyps='[{"id":"H1","description":"x","metric":"m","baseline":null,"target":null,"window":null}]'
+    openspec_state_set_hypotheses "$token" "shipped-feature" "$hyps"
+
+    # Write freshen consolidation marker so hook doesn't bail early on that
+    local _proj_hash
+    _proj_hash="$(printf '%s' "${proj}" | shasum | cut -d' ' -f1)"
+    touch "${HOME}/.claude/.context-stack-consolidated-${_proj_hash}"
+
+    # Run the consolidation-stop hook
+    CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        bash "${PROJECT_ROOT}/hooks/consolidation-stop.sh" >/dev/null 2>&1
+
+    local baseline_file="${HOME}/.claude/.skill-learn-baselines/shipped-feature.json"
+    assert_equals "consolidation-stop wrote baseline" "true" "$([ -f "$baseline_file" ] && echo true || echo false)"
+
+    teardown_test_env
+}
+test_consolidation_stop_writes_baseline
 
 # ---------------------------------------------------------------------------
 # Summary

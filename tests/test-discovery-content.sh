@@ -28,6 +28,11 @@ assert_contains "Problem Statement section preserved" "**Problem Statement:**" "
 assert_contains "Acceptance Criteria section preserved" "**Acceptance Criteria:**" "${SKILL_CONTENT}"
 assert_contains "Open Questions section preserved" "**Open Questions:**" "${SKILL_CONTENT}"
 
+# --- SKILL.md auto-persists discovery state (closes hypothesis loop at source) ---
+assert_contains "Persist Discovery State step" "Persist Discovery State" "${SKILL_CONTENT}"
+assert_contains "SKILL calls set_discovery_path helper" "openspec_state_set_discovery_path" "${SKILL_CONTENT}"
+assert_contains "SKILL calls set_hypotheses helper" "openspec_state_set_hypotheses" "${SKILL_CONTENT}"
+
 # --- Registry: DISCOVER persistence hint ---
 REGISTRY="${PROJECT_ROOT}/config/default-triggers.json"
 REGISTRY_CONTENT="$(cat "${REGISTRY}")"
