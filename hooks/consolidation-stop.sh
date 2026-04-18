@@ -31,8 +31,18 @@ if [ -n "${_SESSION_TOKEN}" ] && command -v jq >/dev/null 2>&1; then
 fi
 
 # Check consolidation marker freshness
-_proj_hash="$(printf '%s' "${_proj_root}" | shasum | cut -d' ' -f1)"
-_consol_marker="${HOME}/.claude/.context-stack-consolidated-${_proj_hash}"
+# Marker path is keyed off git remote URL (stable across worktrees/clones of
+# the same repo); path-based fallback when no remote is configured. Must match
+# openspec-guard.sh and the ship-and-learn consolidation recipe.
+_PLUGIN_ROOT_LIB="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+if [ -f "${_PLUGIN_ROOT_LIB}/hooks/lib/consol-marker.sh" ]; then
+    # shellcheck source=lib/consol-marker.sh
+    . "${_PLUGIN_ROOT_LIB}/hooks/lib/consol-marker.sh"
+    _consol_marker="$(consol_marker_path "${_proj_root}")"
+else
+    _proj_hash="$(printf '%s' "${_proj_root}" | shasum | cut -d' ' -f1)"
+    _consol_marker="${HOME}/.claude/.context-stack-consolidated-${_proj_hash}"
+fi
 
 if [ -f "${_consol_marker}" ]; then
     _marker_time="$(stat -f %m "${_consol_marker}" 2>/dev/null || stat -c %Y "${_consol_marker}" 2>/dev/null || echo 0)"

@@ -979,7 +979,13 @@ ${HINTS}${COMPOSITION_HINTS}"
     if [[ "${_last_skill_chain_idx:--1}" -ge 0 ]]; then
       _comp_completed="$(printf '%s' "$_full_chain" | tr '|' '\n' | head -n "$((_last_skill_chain_idx + 1))" | jq -R . | jq -s . 2>/dev/null)" || _comp_completed="[]"
     fi
-    _comp_chain="$(printf '%s' "$_full_chain" | tr '|' '\n' | jq -R . | jq -s . 2>/dev/null)" || true
+    _comp_chain="$(printf '%s' "$_full_chain" | tr '|' '\n' | jq -R . | jq -s . 2>/dev/null)" || {
+      _comp_chain=""
+      # Surface the failure under SKILL_EXPLAIN so compaction-recovery debug
+      # isn't left guessing why state wasn't written.
+      [[ -n "${SKILL_EXPLAIN:-}" ]] && \
+        printf '[skill-hook] composition state write skipped: jq failed to encode chain\n' >&2
+    }
     if [[ -n "$_comp_chain" ]]; then
       jq -n --argjson chain "$_comp_chain" \
             --argjson completed "$_comp_completed" \

@@ -20,11 +20,14 @@ If the session produced working code from a Superpowers plan, generate permanent
 
 **Skip Condition:** Skip ONLY if no Superpowers plan was executed (debugging, reviewing, or non-feature work). Scope and size of the change are NOT skip criteria — if a plan was executed, as-built documentation is required regardless of how small the change.
 
-**REQUIRED before completing session:** If you discovered any architectural rules, API quirks, or project conventions during this session, you MUST consolidate them using the highest available tier below before claiming the work is done. After consolidation, write the marker:
+**REQUIRED before completing session:** If you discovered any architectural rules, API quirks, or project conventions during this session, you MUST consolidate them using the highest available tier below before claiming the work is done. After consolidation, write the marker via the shared helper so the path stays in sync with `openspec-guard.sh` and `consolidation-stop.sh` (which look for it):
 
 ```bash
-touch ~/.claude/.context-stack-consolidated-$(printf '%s' "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | shasum | cut -d' ' -f1)
+. "$CLAUDE_PLUGIN_ROOT/hooks/lib/consol-marker.sh"
+touch "$(consol_marker_path)"
 ```
+
+The helper keys the marker off the git remote URL when one is configured, so worktrees and clones of the same repo share a single marker. Falls back to the absolute project path when there's no remote.
 
 ## Memory Consolidation
 
