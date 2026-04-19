@@ -133,3 +133,49 @@ When `SKILL_EXPLAIN=1` is set, the PLAN-phase DESIGN COMPLETENESS block MUST emi
 - **WHEN** `SKILL_EXPLAIN=1` and two or more non-archived changes have `design_path` set
 - **THEN** stderr MUST contain a `WARN <N> open changes with design_path; picked first` line before the presence-flag breadcrumb
 
+### Requirement: Skill-tool completion advances composition state
+A `PostToolUse` hook matching `^Skill$` MUST advance `~/.claude/.skill-composition-state-<token>`'s `.completed` array when a chain-member `Skill` tool call returns successfully. The hook MUST extract the skill name from `tool_input.name` (falling back to `tool_input.skill`), strip the plugin prefix by removing the longest leading `<anything>:` segment, and append the bare name to `.completed` only if it appears in `.chain` and not yet in `.completed`. On advancement, the hook MUST also bump `.current` to the next chain member that follows the just-completed skill, or leave `.current` unchanged if the completed skill is the last chain member.
+
+#### Scenario: Chain-member Skill returns successfully
+- **WHEN** the `Skill` tool returns with `tool_response.is_error == false` for a plugin-prefixed name whose bare form is in `.chain` and not in `.completed`
+- **THEN** the hook MUST append the bare name to `.completed` preserving existing array order
+- **AND** `.current` MUST advance to the next chain member not yet completed
+
+#### Scenario: Last chain member preserves current
+- **WHEN** the just-completed skill is the final entry in `.chain`
+- **THEN** `.current` MUST remain unchanged (the existing value is preserved because no next chain member exists)
+
+#### Scenario: tool_input.skill fallback
+- **WHEN** the tool-use payload has `tool_input.skill` set instead of `tool_input.name`
+- **THEN** the hook MUST read the skill name from `tool_input.skill` and advance state identically
+
+### Requirement: Skill-completion hook fail-open contract
+The `PostToolUse` `^Skill$` hook MUST exit 0 on every error path and MUST NOT mutate the state file on any failure. Specifically: missing stdin, missing `jq`, missing session token, missing state file, malformed state JSON, errored `tool_response`, empty skill name, unknown skill name, non-chain-member, already-completed skill, and `mv` failure MUST all degrade to silent exit 0 with no state change.
+
+#### Scenario: Non-chain skill is a no-op
+- **WHEN** the bare skill name is not present in `.chain`
+- **THEN** the state file MUST remain byte-identical to its pre-call contents
+
+#### Scenario: Errored tool response is a no-op
+- **WHEN** `tool_response.is_error == true`
+- **THEN** the state file MUST remain byte-identical to its pre-call contents
+
+#### Scenario: Malformed state JSON is a no-op
+- **WHEN** the state file exists but fails `jq empty` validation
+- **THEN** the hook MUST exit 0 without overwriting or deleting the state file
+
+#### Scenario: Idempotent re-invocation
+- **WHEN** the hook is invoked twice in a row with the same skill name whose bare form is already in `.completed`
+- **THEN** `.completed` MUST NOT grow; its length MUST equal its `unique` length
+
+### Requirement: Skill-completion hook emits SKILL_EXPLAIN breadcrumb
+When `SKILL_EXPLAIN=1` is set in the environment and the hook advances state, it MUST emit a single-line breadcrumb to stderr naming the skill that was marked completed. The breadcrumb MUST NOT fire on any no-op path.
+
+#### Scenario: Breadcrumb on successful advance
+- **WHEN** `SKILL_EXPLAIN=1` and the hook appends a chain-member skill to `.completed`
+- **THEN** stderr MUST contain a line of the form `[skill-hook]   [completion] <skill-name> → completed`
+
+#### Scenario: Breadcrumb suppressed on no-op
+- **WHEN** `SKILL_EXPLAIN=1` but the skill name is not in `.chain` (or already in `.completed`, or the tool returned with an error)
+- **THEN** the hook MUST NOT emit a `[completion]` breadcrumb
+
