@@ -1374,6 +1374,82 @@ if [[ -n "$RED_FLAGS" ]]; then
   SKILL_LINES="${SKILL_LINES}${RED_FLAGS}"
 fi
 
+# =================================================================
+# DESIGN COMPLETENESS: PLAN-phase contract guard
+# Closes DESIGN->PLAN contract loop. Reads the active change's
+# design_path from session state and grep-checks for three canonical
+# section headers. Advisory-only (emits hint, does not deny).
+# Fail-open on every sub-check: missing state file, missing key,
+# missing design file, or grep errors all degrade silently.
+# =================================================================
+if [[ "${PRIMARY_PHASE}" == "PLAN" ]] && [[ -n "${_SESSION_TOKEN:-}" ]]; then
+  _STATE_FILE="${HOME}/.claude/.skill-openspec-state-${_SESSION_TOKEN}"
+  _DP_DESIGN=""
+  if [[ -f "$_STATE_FILE" ]] && jq empty "$_STATE_FILE" >/dev/null 2>&1; then
+    # Batched into one jq call: count candidates and pick first.
+    _DP_PAIR="$(jq -r '
+      [.changes // {} | to_entries[]
+        | select(.value.design_path != null and .value.design_path != "")
+        | select(.value.archived_at == null)
+        | .value.design_path] as $dps |
+      ($dps | length | tostring) + "\t" + ($dps[0] // "")
+    ' "$_STATE_FILE" 2>/dev/null)"
+    _DP_COUNT="${_DP_PAIR%%$'\t'*}"
+    _DP_DESIGN="${_DP_PAIR#*$'\t'}"
+    if [[ "${_DP_COUNT:-0}" -gt 1 ]] && [[ -n "${SKILL_EXPLAIN:-}" ]]; then
+      echo "[skill-hook]   [design-guard] WARN ${_DP_COUNT} open changes with design_path; picked first (${_DP_DESIGN})" >&2
+    fi
+  fi
+
+  if [[ -n "$_DP_DESIGN" ]]; then
+    DESIGN_COMPLETENESS=""
+    if [[ ! -f "$_DP_DESIGN" ]]; then
+      DESIGN_COMPLETENESS="
+DESIGN COMPLETENESS:
+  ! design file unreadable at ${_DP_DESIGN} — cannot verify DESIGN→PLAN contract.
+Action: confirm the design_path or re-run the design step before invoking Skill(superpowers:writing-plans)."
+      [[ -n "${SKILL_EXPLAIN:-}" ]] && \
+        echo "[skill-hook]   [design-guard] unreadable: ${_DP_DESIGN}" >&2
+    else
+      _DC_CAPS=0; _DC_OOS=0; _DC_ACC=0
+      grep -q '^## Capabilities Affected' "$_DP_DESIGN" 2>/dev/null && _DC_CAPS=1
+      grep -q '^## Out-of-Scope'           "$_DP_DESIGN" 2>/dev/null && _DC_OOS=1
+      grep -q '^## Acceptance Scenarios'   "$_DP_DESIGN" 2>/dev/null && _DC_ACC=1
+
+      if [[ $_DC_CAPS -eq 1 ]] && [[ $_DC_OOS -eq 1 ]] && [[ $_DC_ACC -eq 1 ]]; then
+        DESIGN_COMPLETENESS="
+DESIGN COMPLETENESS: all sections present (${_DP_DESIGN})"
+      else
+        if [[ $_DC_CAPS -eq 1 ]]; then
+          _DC_LINE_CAPS='  [OK] Capabilities Affected'
+        else
+          _DC_LINE_CAPS='  [X]  Capabilities Affected (missing — add `## Capabilities Affected` section)'
+        fi
+        if [[ $_DC_OOS -eq 1 ]]; then
+          _DC_LINE_OOS='  [OK] Out-of-Scope'
+        else
+          _DC_LINE_OOS='  [X]  Out-of-Scope (missing — add `## Out-of-Scope` section)'
+        fi
+        if [[ $_DC_ACC -eq 1 ]]; then
+          _DC_LINE_ACC='  [OK] Acceptance Scenarios'
+        else
+          _DC_LINE_ACC='  [X]  Acceptance Scenarios (missing — add `## Acceptance Scenarios` section)'
+        fi
+        DESIGN_COMPLETENESS="
+DESIGN COMPLETENESS (${_DP_DESIGN}):
+${_DC_LINE_CAPS}
+${_DC_LINE_OOS}
+${_DC_LINE_ACC}
+Action: complete the missing section(s) before invoking Skill(superpowers:writing-plans)."
+      fi
+      [[ -n "${SKILL_EXPLAIN:-}" ]] && \
+        echo "[skill-hook]   [design-guard] caps=${_DC_CAPS} oos=${_DC_OOS} acc=${_DC_ACC} path=${_DP_DESIGN}" >&2
+    fi
+
+    SKILL_LINES="${SKILL_LINES}${DESIGN_COMPLETENESS}"
+  fi
+fi
+
 # Domain invocation instruction (composition-aware)
 DOMAIN_HINT=""
 if [[ "$DOMAIN_COUNT" -gt 0 ]] || [[ -n "$OVERFLOW_DOMAIN" ]]; then

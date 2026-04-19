@@ -4984,4 +4984,362 @@ if [ -f "${ROUTING_EVALS}" ] && command -v jq >/dev/null 2>&1; then
     teardown_test_env
 fi
 
+# ---------------------------------------------------------------------------
+# DESIGN→PLAN contract guard (Option D — inline completeness check)
+# Design doc: docs/plans/2026-04-18-design-plan-guard-design.md
+# ---------------------------------------------------------------------------
+
+# Helper: seed session token + state file pointing at a design fixture path.
+_seed_plan_state() {
+    local token="$1" slug="$2" dp="$3"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+    jq -n --arg slug "${slug}" --arg dp "${dp}" '{
+        openspec_surface: "none",
+        verification_seen: false,
+        verification_at: null,
+        changes: {($slug): {
+            design_path: $dp,
+            plan_path: null,
+            spec_path: null,
+            sp_plan_path: null,
+            sp_spec_path: null,
+            capability_slug: null,
+            archived_at: null
+        }}
+    }' > "${HOME}/.claude/.skill-openspec-state-${token}"
+}
+
+# Helper: write a design fixture file with the named sections present.
+_write_design_fixture() {
+    local path="$1"; shift
+    mkdir -p "$(dirname "${path}")"
+    {
+        printf '# Design: fixture\n\n'
+        printf 'Intro paragraph.\n\n'
+        local section
+        for section in "$@"; do
+            printf '## %s\n\n' "${section}"
+            printf 'Body for %s.\n\n' "${section}"
+        done
+    } > "${path}"
+}
+
+test_plan_completeness_emits_when_all_sections_present() {
+    echo "-- test: DESIGN COMPLETENESS emits 'all sections present' when all three headers exist --"
+    setup_test_env
+    install_registry
+
+    local token="plan-guard-complete-$$"
+    local design="${HOME}/design-complete.md"
+    _write_design_fixture "${design}" "Capabilities Affected" "Out-of-Scope" "Acceptance Scenarios"
+    _seed_plan_state "${token}" "fixture-slug" "${design}"
+
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output context
+    output="$(run_hook "let us plan this out")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "completeness header present" "DESIGN COMPLETENESS" "${context}"
+    assert_contains "all-present one-liner" "all sections present" "${context}"
+    assert_not_contains "no missing-section call-to-action" "missing" "${context}"
+
+    teardown_test_env
+}
+test_plan_completeness_emits_when_all_sections_present
+
+test_plan_completeness_names_missing_section() {
+    echo "-- test: DESIGN COMPLETENESS names the specific missing section --"
+    setup_test_env
+    install_registry
+
+    local token="plan-guard-missing-$$"
+    local design="${HOME}/design-missing.md"
+    _write_design_fixture "${design}" "Capabilities Affected" "Acceptance Scenarios"
+    _seed_plan_state "${token}" "fixture-slug" "${design}"
+
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output context
+    output="$(run_hook "let us plan this out")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "header present" "DESIGN COMPLETENESS" "${context}"
+    assert_contains "names Out-of-Scope as missing" "Out-of-Scope" "${context}"
+    assert_contains "mentions the section is missing" "missing" "${context}"
+    assert_contains "tells LLM to complete before writing-plans" "writing-plans" "${context}"
+    assert_not_contains "Capabilities Affected not flagged" "Capabilities Affected (missing" "${context}"
+    assert_not_contains "Acceptance Scenarios not flagged" "Acceptance Scenarios (missing" "${context}"
+
+    teardown_test_env
+}
+test_plan_completeness_names_missing_section
+
+test_plan_completeness_silent_without_design_path() {
+    echo "-- test: DESIGN COMPLETENESS stays silent when no design_path in state --"
+    setup_test_env
+    install_registry
+
+    local token="plan-guard-nostate-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output context
+    output="$(run_hook "let us plan this out")"
+    context="$(extract_context "${output}")"
+
+    assert_not_contains "no completeness block without state" "DESIGN COMPLETENESS" "${context}"
+
+    teardown_test_env
+}
+test_plan_completeness_silent_without_design_path
+
+test_plan_completeness_silent_with_empty_changes() {
+    echo "-- test: DESIGN COMPLETENESS stays silent when state exists but changes is empty --"
+    setup_test_env
+    install_registry
+
+    local token="plan-guard-empty-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+    # State file exists and parses, but no changes recorded.
+    jq -n '{openspec_surface:"none",verification_seen:false,verification_at:null,changes:{}}' \
+        > "${HOME}/.claude/.skill-openspec-state-${token}"
+
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output context
+    output="$(run_hook "let us plan this out")"
+    context="$(extract_context "${output}")"
+
+    assert_not_contains "no completeness block with empty changes" "DESIGN COMPLETENESS" "${context}"
+
+    teardown_test_env
+}
+test_plan_completeness_silent_with_empty_changes
+
+test_plan_completeness_handles_missing_file() {
+    echo "-- test: DESIGN COMPLETENESS notes unreadable file gracefully --"
+    setup_test_env
+    install_registry
+
+    local token="plan-guard-unread-$$"
+    local design="${HOME}/does-not-exist/design.md"
+    _seed_plan_state "${token}" "fixture-slug" "${design}"
+
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output context
+    output="$(run_hook "let us plan this out")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "header present" "DESIGN COMPLETENESS" "${context}"
+    assert_contains "flags unreadable file" "unreadable" "${context}"
+    assert_contains "hook emitted context block" "SKILL ACTIVATION" "${context}"
+
+    teardown_test_env
+}
+test_plan_completeness_handles_missing_file
+
+# ---------------------------------------------------------------------------
+# Skill-completion PostToolUse hook — advances composition state .completed
+# when a chain-member Skill tool returns successfully.
+# Design: docs/plans/2026-04-19-skill-completion-hook-design.md
+# ---------------------------------------------------------------------------
+
+_run_completion_hook() {
+    local tool_name="$1"
+    local is_error="${2:-false}"
+    local input_key="${3:-name}"
+    local payload
+    payload="$(jq -n --arg n "${tool_name}" --arg k "${input_key}" --argjson e "${is_error}" '{
+        tool_name: "Skill",
+        tool_input: ({} | .[$k] = $n),
+        tool_response: {is_error: $e}
+    }')"
+    printf '%s' "${payload}" | \
+        CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        bash "${PROJECT_ROOT}/hooks/skill-completion-hook.sh" 2>/dev/null
+    return $?
+}
+
+_seed_comp_state() {
+    local token="$1" chain="$2" completed="$3" current="$4"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+    jq -n --argjson c "${chain}" --argjson d "${completed}" --arg u "${current}" '{
+        chain: $c,
+        completed: $d,
+        current: (if $u == "null" then null else $u end)
+    }' > "${HOME}/.claude/.skill-composition-state-${token}"
+}
+
+test_completion_advances_chain_member() {
+    echo "-- test: completion hook advances .completed for a chain-member skill --"
+    setup_test_env
+
+    local token="complete-chain-$$"
+    _seed_comp_state "${token}" \
+        '["brainstorming","writing-plans","executing-plans","requesting-code-review","verification-before-completion","openspec-ship","finishing-a-development-branch"]' \
+        '["brainstorming","writing-plans","executing-plans"]' \
+        "requesting-code-review"
+
+    _run_completion_hook "superpowers:requesting-code-review" false
+
+    local after_completed after_current
+    after_completed="$(jq -r '.completed | join(",")' "${HOME}/.claude/.skill-composition-state-${token}")"
+    after_current="$(jq -r '.current' "${HOME}/.claude/.skill-composition-state-${token}")"
+
+    assert_contains "completed contains requesting-code-review" "requesting-code-review" "${after_completed}"
+    assert_equals "current advances to next chain member" "verification-before-completion" "${after_current}"
+
+    teardown_test_env
+}
+test_completion_advances_chain_member
+
+test_completion_noop_for_non_chain_skill() {
+    echo "-- test: completion hook is a no-op for a non-chain skill --"
+    setup_test_env
+
+    local token="complete-nonchain-$$"
+    _seed_comp_state "${token}" \
+        '["brainstorming","writing-plans","executing-plans","requesting-code-review"]' \
+        '["brainstorming","writing-plans"]' \
+        "executing-plans"
+
+    local before
+    before="$(cat "${HOME}/.claude/.skill-composition-state-${token}")"
+
+    _run_completion_hook "auto-claude-skills:security-scanner" false
+
+    local after
+    after="$(cat "${HOME}/.claude/.skill-composition-state-${token}")"
+
+    assert_equals "state unchanged for non-chain skill" "${before}" "${after}"
+
+    teardown_test_env
+}
+test_completion_noop_for_non_chain_skill
+
+test_completion_noop_on_errored_tool_response() {
+    echo "-- test: completion hook is a no-op when tool_response.is_error is true --"
+    setup_test_env
+
+    local token="complete-err-$$"
+    _seed_comp_state "${token}" \
+        '["brainstorming","writing-plans","executing-plans","requesting-code-review"]' \
+        '["brainstorming","writing-plans","executing-plans"]' \
+        "requesting-code-review"
+
+    local before
+    before="$(cat "${HOME}/.claude/.skill-composition-state-${token}")"
+
+    _run_completion_hook "superpowers:requesting-code-review" true
+
+    local after
+    after="$(cat "${HOME}/.claude/.skill-composition-state-${token}")"
+
+    assert_equals "state unchanged on tool error" "${before}" "${after}"
+
+    teardown_test_env
+}
+test_completion_noop_on_errored_tool_response
+
+test_completion_idempotent_on_reinvocation() {
+    echo "-- test: completion hook is idempotent if the same skill is returned twice --"
+    setup_test_env
+
+    local token="complete-idem-$$"
+    _seed_comp_state "${token}" \
+        '["brainstorming","writing-plans","requesting-code-review"]' \
+        '["brainstorming","writing-plans","requesting-code-review"]' \
+        "null"
+
+    _run_completion_hook "superpowers:requesting-code-review" false
+
+    local after_completed_len after_completed_unique_len
+    after_completed_len="$(jq -r '.completed | length' "${HOME}/.claude/.skill-composition-state-${token}")"
+    after_completed_unique_len="$(jq -r '.completed | unique | length' "${HOME}/.claude/.skill-composition-state-${token}")"
+
+    assert_equals "completed stays deduplicated" "${after_completed_len}" "${after_completed_unique_len}"
+    assert_equals "completed length unchanged" "3" "${after_completed_len}"
+
+    teardown_test_env
+}
+test_completion_idempotent_on_reinvocation
+
+test_completion_graceful_on_malformed_state() {
+    echo "-- test: completion hook exits cleanly when state file is malformed JSON --"
+    setup_test_env
+
+    local token="complete-badjson-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+    printf '{not:valid json' > "${HOME}/.claude/.skill-composition-state-${token}"
+
+    local before
+    before="$(cat "${HOME}/.claude/.skill-composition-state-${token}")"
+
+    _run_completion_hook "superpowers:requesting-code-review" false
+    local exit_code=$?
+
+    local after
+    after="$(cat "${HOME}/.claude/.skill-composition-state-${token}")"
+
+    assert_equals "hook exits 0 on malformed state" "0" "${exit_code}"
+    assert_equals "malformed state is not overwritten" "${before}" "${after}"
+
+    teardown_test_env
+}
+test_completion_graceful_on_malformed_state
+
+test_completion_last_chain_member_preserves_current() {
+    echo "-- test: completion of the last chain member leaves .current as that skill (no next) --"
+    setup_test_env
+
+    local token="complete-last-$$"
+    _seed_comp_state "${token}" \
+        '["brainstorming","writing-plans","finishing-a-development-branch"]' \
+        '["brainstorming","writing-plans"]' \
+        "finishing-a-development-branch"
+
+    _run_completion_hook "superpowers:finishing-a-development-branch" false
+
+    local after_completed after_current
+    after_completed="$(jq -r '.completed | join(",")' "${HOME}/.claude/.skill-composition-state-${token}")"
+    after_current="$(jq -r '.current' "${HOME}/.claude/.skill-composition-state-${token}")"
+
+    assert_contains "last member added to completed" "finishing-a-development-branch" "${after_completed}"
+    assert_equals "current unchanged (no next member, fallthrough preserves existing)" \
+        "finishing-a-development-branch" "${after_current}"
+
+    teardown_test_env
+}
+test_completion_last_chain_member_preserves_current
+
+test_completion_reads_tool_input_skill_fallback() {
+    echo "-- test: completion hook falls back to .tool_input.skill when .tool_input.name is absent --"
+    setup_test_env
+
+    local token="complete-skillkey-$$"
+    _seed_comp_state "${token}" \
+        '["brainstorming","writing-plans","requesting-code-review"]' \
+        '["brainstorming","writing-plans"]' \
+        "requesting-code-review"
+
+    _run_completion_hook "superpowers:requesting-code-review" false "skill"
+
+    local after_completed
+    after_completed="$(jq -r '.completed | join(",")' "${HOME}/.claude/.skill-composition-state-${token}")"
+
+    assert_contains "completed advances via .tool_input.skill fallback" \
+        "requesting-code-review" "${after_completed}"
+
+    teardown_test_env
+}
+test_completion_reads_tool_input_skill_fallback
+
 print_summary
