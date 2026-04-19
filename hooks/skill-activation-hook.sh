@@ -976,8 +976,23 @@ ${HINTS}${COMPOSITION_HINTS}"
   # Guard: skip write if _current_idx is -1 (anchor not found in chain)
   if [[ -n "${_full_chain:-}" ]] && [[ "${_full_chain}" == *"|"* ]] && [[ -n "${_SESSION_TOKEN:-}" ]] && [[ "${_current_idx:--1}" -ge 0 ]]; then
     _comp_completed="[]"
-    if [[ "${_last_skill_chain_idx:--1}" -ge 0 ]]; then
-      _comp_completed="$(printf '%s' "$_full_chain" | tr '|' '\n' | head -n "$((_last_skill_chain_idx + 1))" | jq -R . | jq -s . 2>/dev/null)" || _comp_completed="[]"
+    # Determine how many chain positions are "done" for this write. Use the
+    # furthest-advanced of two signals:
+    #   (a) _current_idx - 1 — implicit, from the linear composition model
+    #       (being at a chain anchor means predecessors are done).
+    #   (b) _last_skill_chain_idx — explicit, from the last-invoked signal.
+    # Without (a), a prior prompt's domain/workflow skill that isn't in the
+    # chain resets _last_skill_chain_idx to -1 and drops `completed` back to
+    # empty, which then blocks chore commits at the push gate.
+    _progress_idx=-1
+    if [[ "${_current_idx:--1}" -gt 0 ]]; then
+      _progress_idx=$((_current_idx - 1))
+    fi
+    if [[ "${_last_skill_chain_idx:--1}" -gt "$_progress_idx" ]]; then
+      _progress_idx="$_last_skill_chain_idx"
+    fi
+    if [[ "$_progress_idx" -ge 0 ]]; then
+      _comp_completed="$(printf '%s' "$_full_chain" | tr '|' '\n' | head -n "$((_progress_idx + 1))" | jq -R . | jq -s . 2>/dev/null)" || _comp_completed="[]"
     fi
     _comp_chain="$(printf '%s' "$_full_chain" | tr '|' '\n' | jq -R . | jq -s . 2>/dev/null)" || {
       _comp_chain=""

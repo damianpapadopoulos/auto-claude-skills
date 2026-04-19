@@ -845,6 +845,70 @@ test_greeting_blocklist_debug_hint() {
 }
 test_greeting_blocklist_debug_hint
 
+# When the last-invoked signal is a non-chain skill (e.g., a domain skill like
+# security-scanner), the chain walker can't map it to the chain so
+# _last_skill_chain_idx stays -1 and `completed` previously reset to []. The
+# push gate keyed off `completed`, blocking legitimate chore commits after a
+# full SHIP cycle. Fix: use `_current_idx - 1` as a floor — by being at a
+# chain anchor, the linear composition model implies all predecessors are done.
+test_completed_uses_current_idx_floor() {
+    echo "-- test: completed array uses _current_idx - 1 as floor when last-invoked isn't in chain --"
+    setup_test_env
+    install_registry
+
+    local token="completed-floor-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+
+    # Simulate: last-invoked signal is a DOMAIN skill (not in any chain).
+    # Without the fix, this makes the walker reset completed to [].
+    jq -n '{skill:"security-scanner",phase:"REVIEW"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    # Prompt matches openspec-ship triggers (archive.*feature + as.?built + openspec)
+    # The test registry makes openspec-ship.requires = [verification-before-completion]
+    # and openspec-ship.precedes = [finishing-a-development-branch]. So the built
+    # chain is [verification-before-completion, openspec-ship, finishing], with
+    # _current_idx = 1 (openspec-ship).
+    jq -n --arg p "archive this feature as built openspec" '{"prompt":$p}' | \
+        CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        bash "${HOOK}" >/dev/null 2>&1
+
+    local state_file="${HOME}/.claude/.skill-composition-state-${token}"
+    assert_equals "state file written" "true" "$([ -f "${state_file}" ] && echo true || echo false)"
+
+    if [ -f "${state_file}" ]; then
+        local current_idx
+        current_idx="$(jq -r '.current_index' "${state_file}" 2>/dev/null)"
+        # Prompt may match multiple triggers; assert only that current_idx > 0
+        # (anchor is somewhere past the chain start, so predecessors exist).
+        if [ "${current_idx:-0}" -ge 1 ]; then
+            _record_pass "current_index points past chain start (implying progress)"
+        else
+            _record_fail "current_index points past chain start (implying progress)" \
+                "current_index was ${current_idx}"
+        fi
+
+        # The fix: completed length == current_index (every chain slot before
+        # the anchor is implicitly done via the linear composition model),
+        # even though the last-invoked signal is a non-chain domain skill.
+        local completed_count
+        completed_count="$(jq '.completed | length' "${state_file}" 2>/dev/null)"
+        assert_equals "completed length equals current_index" \
+            "${current_idx}" "${completed_count}"
+
+        # The first entry of completed should equal chain[0] (the earliest
+        # predecessor the walker found). Regardless of which skill matched,
+        # the predecessor chain is rooted at whatever requires-chain terminates.
+        local first_completed first_chain
+        first_completed="$(jq -r '.completed[0] // empty' "${state_file}" 2>/dev/null)"
+        first_chain="$(jq -r '.chain[0] // empty' "${state_file}" 2>/dev/null)"
+        assert_equals "completed[0] equals chain[0]" "${first_chain}" "${first_completed}"
+    fi
+
+    teardown_test_env
+}
+test_completed_uses_current_idx_floor
+
 # ---------------------------------------------------------------------------
 # 4. Slash command is blocked
 # ---------------------------------------------------------------------------
