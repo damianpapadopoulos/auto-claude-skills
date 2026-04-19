@@ -39,7 +39,7 @@ _TMP="$(jq --arg s "${_BARE}" '
   if ((.chain // []) | index($s)) != null
      and (((.completed // []) | index($s)) == null)
   then
-    .completed = ((.completed // []) + [$s] | unique_by(.))
+    .completed = ((.completed // []) + [$s])
     | .current = (
         (.chain // [])[(((.chain // []) | index($s)) + 1)] // .current
       )
