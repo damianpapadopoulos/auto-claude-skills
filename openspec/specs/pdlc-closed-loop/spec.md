@@ -1,0 +1,69 @@
+# PDLC Closed-Loop
+
+## Purpose
+
+Closes the product development lifecycle by routing DISCOVER-intent prompts to product-discovery and LEARN-intent prompts to outcome-review, with composition chaining and PostHog/Jira detection so learnings from one cycle feed the next discovery.
+
+## Requirements
+
+### Requirement: DISCOVER Phase Routing
+The routing engine MUST detect discovery-intent prompts and select the product-discovery skill. Two-tier trigger patterns: strong signals (discover, user.problem, pain.point, what.to.build, what.should.we, which.issue) and weak signals (backlog, sprint.plan, prioriti, triage, next.sprint, roadmap). Priority 35, role process.
+
+#### Scenario: Strong discovery trigger
+Given a prompt "what should we build for the next sprint"
+When the activation hook scores skills
+Then product-discovery is selected with label "Discover"
+
+#### Scenario: Disambiguation against DESIGN
+Given a prompt "build a new auth service"
+When the activation hook scores skills
+Then brainstorming is selected, not product-discovery
+
+### Requirement: LEARN Phase Routing
+The routing engine MUST detect outcome-review-intent prompts and select the outcome-review skill. Triggers: how.did.*(perform|do|go|work), outcome, adoption, funnel, cohort, experiment.result, feature.impact, post.launch, post.ship, measure, did.it.work. Keywords handle ambiguous terms (learn, metric, result). Priority 30, role process.
+
+#### Scenario: LEARN trigger
+Given a prompt "how did the auth feature perform after launch"
+When the activation hook scores skills
+Then outcome-review is selected with label "Learn / Measure"
+
+#### Scenario: False positive guard
+Given a prompt "show me the test results"
+When the activation hook scores skills
+Then outcome-review is NOT selected
+
+### Requirement: Composition Chain Integration
+The routing engine MUST wire `product-discovery.precedes = ["brainstorming"]` (DISCOVER → DESIGN) and `outcome-review.precedes = ["product-discovery"]` (LEARN → DISCOVER loop). The SHIP composition MUST include an advisory LEARN reminder hint.
+
+#### Scenario: DISCOVER precedes DESIGN
+- **WHEN** the composition chain is computed for a DISCOVER-then-DESIGN flow
+- **THEN** `product-discovery` appears before `brainstorming` in the chain
+
+#### Scenario: LEARN loop routes back to DISCOVER
+- **WHEN** outcome-review fires and the loop reopens
+- **THEN** the next-cycle precedence routes through product-discovery
+
+### Requirement: PostHog MCP Detection
+The session-start hook MUST detect PostHog MCP via `~/.claude.json` `mcpServers` and MUST set the posthog plugin available flag, following the established Serena/Forgetful pattern.
+
+#### Scenario: PostHog MCP present
+- **WHEN** `~/.claude.json` contains a PostHog entry under `mcpServers`
+- **THEN** the registry cache records `posthog=true`
+
+### Requirement: Graceful Degradation
+Both DISCOVER and LEARN skills MUST detect MCP availability at invocation: Tier 1 uses MCP tools when available; Tier 2 prompts the user for manual context; neither skill MUST hard-fail on missing MCPs.
+
+#### Scenario: MCP missing
+- **WHEN** product-discovery or outcome-review is invoked and the relevant MCP is unavailable
+- **THEN** the skill MUST prompt the user for manual context instead of failing
+
+### Requirement: Red Flags
+The skills MUST enforce phase red-flag guardrails. In DISCOVER: no code writing, no skipping Jira context, no jumping to design without a discovery brief. In LEARN: no Jira ticket creation without approval, no skipping metrics analysis, no code editing.
+
+#### Scenario: DISCOVER red flag tripped
+- **WHEN** product-discovery is invoked and the user asks to begin coding before the brief is approved
+- **THEN** the skill MUST halt and require brief approval before transition
+
+#### Scenario: LEARN red flag tripped
+- **WHEN** outcome-review is invoked and the user requests creating Jira tickets without review
+- **THEN** the skill MUST require explicit approval before `createJiraIssue`
