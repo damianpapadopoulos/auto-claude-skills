@@ -5155,15 +5155,17 @@ test_plan_completeness_handles_missing_file
 _run_completion_hook() {
     local tool_name="$1"
     local is_error="${2:-false}"
+    local input_key="${3:-name}"
     local payload
-    payload="$(jq -n --arg n "${tool_name}" --argjson e "${is_error}" '{
+    payload="$(jq -n --arg n "${tool_name}" --arg k "${input_key}" --argjson e "${is_error}" '{
         tool_name: "Skill",
-        tool_input: {name: $n},
+        tool_input: ({} | .[$k] = $n),
         tool_response: {is_error: $e}
     }')"
     printf '%s' "${payload}" | \
         CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
         bash "${PROJECT_ROOT}/hooks/skill-completion-hook.sh" 2>/dev/null
+    return $?
 }
 
 _seed_comp_state() {
@@ -5293,5 +5295,51 @@ test_completion_graceful_on_malformed_state() {
     teardown_test_env
 }
 test_completion_graceful_on_malformed_state
+
+test_completion_last_chain_member_preserves_current() {
+    echo "-- test: completion of the last chain member leaves .current as that skill (no next) --"
+    setup_test_env
+
+    local token="complete-last-$$"
+    _seed_comp_state "${token}" \
+        '["brainstorming","writing-plans","finishing-a-development-branch"]' \
+        '["brainstorming","writing-plans"]' \
+        "finishing-a-development-branch"
+
+    _run_completion_hook "superpowers:finishing-a-development-branch" false
+
+    local after_completed after_current
+    after_completed="$(jq -r '.completed | join(",")' "${HOME}/.claude/.skill-composition-state-${token}")"
+    after_current="$(jq -r '.current' "${HOME}/.claude/.skill-composition-state-${token}")"
+
+    assert_contains "last member added to completed" "finishing-a-development-branch" "${after_completed}"
+    assert_equals "current unchanged (no next member, fallthrough preserves existing)" \
+        "finishing-a-development-branch" "${after_current}"
+
+    teardown_test_env
+}
+test_completion_last_chain_member_preserves_current
+
+test_completion_reads_tool_input_skill_fallback() {
+    echo "-- test: completion hook falls back to .tool_input.skill when .tool_input.name is absent --"
+    setup_test_env
+
+    local token="complete-skillkey-$$"
+    _seed_comp_state "${token}" \
+        '["brainstorming","writing-plans","requesting-code-review"]' \
+        '["brainstorming","writing-plans"]' \
+        "requesting-code-review"
+
+    _run_completion_hook "superpowers:requesting-code-review" false "skill"
+
+    local after_completed
+    after_completed="$(jq -r '.completed | join(",")' "${HOME}/.claude/.skill-composition-state-${token}")"
+
+    assert_contains "completed advances via .tool_input.skill fallback" \
+        "requesting-code-review" "${after_completed}"
+
+    teardown_test_env
+}
+test_completion_reads_tool_input_skill_fallback
 
 print_summary
