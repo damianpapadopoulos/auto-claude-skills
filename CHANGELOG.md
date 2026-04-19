@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- DESIGN→PLAN contract guard: `hooks/skill-activation-hook.sh` now emits a `DESIGN COMPLETENESS` block in PLAN-phase activation output when the session has an active change with a non-null `design_path`. The block grep-checks the design file for `## Capabilities Affected`, `## Out-of-Scope`, and `## Acceptance Scenarios`, and emits one of three shapes: all-sections-present one-liner, per-section missing-annotations call-to-action, or unreadable-file notice. Advisory-only — does not deny the `Skill(writing-plans)` tool call. Fail-open on every sub-check (missing token, malformed state JSON, missing file, grep errors all degrade silently). `SKILL_EXPLAIN=1` emits a `[design-guard]` breadcrumb with presence flags + multi-change WARN when multiple open changes have `design_path`. Closes the DESIGN→PLAN contract loop (previously declared-but-not-enforced). Capability: `skill-routing`.
+
 ### Changed
 - OpenSpec canonical specs: migrated all 13 capability specs from the legacy `## ADDED Requirements` shape to the OpenSpec v1.2.0-strict `## Purpose` + `## Requirements` shape. Unblocks `openspec archive` without `--skip-specs` across every capability. Four tracked specs (`adversarial-review`, `hypothesis-loop`, `pdlc-safety`, `skill-routing`) ship in this commit; the other nine remain session-local under the existing `openspec/` gitignore convention and can be force-added if the team decides to track them. Four specs required minor content fixes (adding MUST/SHALL keywords or scenarios) to satisfy strict validation — pre-existing gaps, not migration-induced.
 
