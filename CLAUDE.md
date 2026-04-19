@@ -37,6 +37,7 @@ Claude Code plugin for automatic skill routing based on prompt intent and SDLC p
 - `docs/plans/` is gitignored — use `git add -f` for design docs.
 - When user says "proceed", continue with the next logical step. Do not ask "what would you like to proceed with?" — infer from context.
 - `skills/incident-analysis/SKILL.md` has an 11,500-word test guard. Extract tables, YAML schemas (>15 lines), and URL templates to `references/` instead of inlining.
+- PLAN-phase activation reads `design_path` from `~/.claude/.skill-openspec-state-<token>` and grep-checks the file for `## Capabilities Affected`, `## Out-of-Scope`, and `## Acceptance Scenarios`. All failures (missing token, missing state, missing keys, unreadable file, grep errors) fail-open — never block the hook. `SKILL_EXPLAIN=1` emits a `[design-guard]` breadcrumb to stderr.
 
 ## Spec Persistence Modes
 
