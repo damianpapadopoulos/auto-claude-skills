@@ -4984,4 +4984,142 @@ if [ -f "${ROUTING_EVALS}" ] && command -v jq >/dev/null 2>&1; then
     teardown_test_env
 fi
 
+# ---------------------------------------------------------------------------
+# DESIGN→PLAN contract guard (Option D — inline completeness check)
+# Design doc: docs/plans/2026-04-18-design-plan-guard-design.md
+# ---------------------------------------------------------------------------
+
+# Helper: seed session token + state file pointing at a design fixture path.
+_seed_plan_state() {
+    local token="$1" slug="$2" dp="$3"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+    jq -n --arg slug "${slug}" --arg dp "${dp}" '{
+        openspec_surface: "none",
+        verification_seen: false,
+        verification_at: null,
+        changes: {($slug): {
+            design_path: $dp,
+            plan_path: null,
+            spec_path: null,
+            sp_plan_path: null,
+            sp_spec_path: null,
+            capability_slug: null,
+            archived_at: null
+        }}
+    }' > "${HOME}/.claude/.skill-openspec-state-${token}"
+}
+
+# Helper: write a design fixture file with the named sections present.
+_write_design_fixture() {
+    local path="$1"; shift
+    mkdir -p "$(dirname "${path}")"
+    {
+        printf '# Design: fixture\n\n'
+        printf 'Intro paragraph.\n\n'
+        local section
+        for section in "$@"; do
+            printf '## %s\n\n' "${section}"
+            printf 'Body for %s.\n\n' "${section}"
+        done
+    } > "${path}"
+}
+
+test_plan_completeness_emits_when_all_sections_present() {
+    echo "-- test: DESIGN COMPLETENESS emits 'all sections present' when all three headers exist --"
+    setup_test_env
+    install_registry
+
+    local token="plan-guard-complete-$$"
+    local design="${HOME}/design-complete.md"
+    _write_design_fixture "${design}" "Capabilities Affected" "Out-of-Scope" "Acceptance Scenarios"
+    _seed_plan_state "${token}" "fixture-slug" "${design}"
+
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output context
+    output="$(run_hook "let us plan this out")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "completeness header present" "DESIGN COMPLETENESS" "${context}"
+    assert_contains "all-present one-liner" "all sections present" "${context}"
+    assert_not_contains "no missing-section call-to-action" "missing" "${context}"
+
+    teardown_test_env
+}
+test_plan_completeness_emits_when_all_sections_present
+
+test_plan_completeness_names_missing_section() {
+    echo "-- test: DESIGN COMPLETENESS names the specific missing section --"
+    setup_test_env
+    install_registry
+
+    local token="plan-guard-missing-$$"
+    local design="${HOME}/design-missing.md"
+    _write_design_fixture "${design}" "Capabilities Affected" "Acceptance Scenarios"
+    _seed_plan_state "${token}" "fixture-slug" "${design}"
+
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output context
+    output="$(run_hook "let us plan this out")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "header present" "DESIGN COMPLETENESS" "${context}"
+    assert_contains "names Out-of-Scope as missing" "Out-of-Scope" "${context}"
+    assert_contains "mentions the section is missing" "missing" "${context}"
+    assert_contains "tells LLM to complete before writing-plans" "writing-plans" "${context}"
+    assert_not_contains "Capabilities Affected not flagged" "Capabilities Affected (missing" "${context}"
+    assert_not_contains "Acceptance Scenarios not flagged" "Acceptance Scenarios (missing" "${context}"
+
+    teardown_test_env
+}
+test_plan_completeness_names_missing_section
+
+test_plan_completeness_silent_without_design_path() {
+    echo "-- test: DESIGN COMPLETENESS stays silent when no design_path in state --"
+    setup_test_env
+    install_registry
+
+    local token="plan-guard-nostate-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output context
+    output="$(run_hook "let us plan this out")"
+    context="$(extract_context "${output}")"
+
+    assert_not_contains "no completeness block without state" "DESIGN COMPLETENESS" "${context}"
+
+    teardown_test_env
+}
+test_plan_completeness_silent_without_design_path
+
+test_plan_completeness_handles_missing_file() {
+    echo "-- test: DESIGN COMPLETENESS notes unreadable file gracefully --"
+    setup_test_env
+    install_registry
+
+    local token="plan-guard-unread-$$"
+    local design="${HOME}/does-not-exist/design.md"
+    _seed_plan_state "${token}" "fixture-slug" "${design}"
+
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output context
+    output="$(run_hook "let us plan this out")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "header present" "DESIGN COMPLETENESS" "${context}"
+    assert_contains "flags unreadable file" "unreadable" "${context}"
+    assert_contains "hook emitted context block" "SKILL ACTIVATION" "${context}"
+
+    teardown_test_env
+}
+test_plan_completeness_handles_missing_file
+
 print_summary
