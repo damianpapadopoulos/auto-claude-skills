@@ -1386,12 +1386,19 @@ if [[ "${PRIMARY_PHASE}" == "PLAN" ]] && [[ -n "${_SESSION_TOKEN:-}" ]]; then
   _STATE_FILE="${HOME}/.claude/.skill-openspec-state-${_SESSION_TOKEN}"
   _DP_DESIGN=""
   if [[ -f "$_STATE_FILE" ]] && jq empty "$_STATE_FILE" >/dev/null 2>&1; then
-    _DP_DESIGN="$(jq -r '
+    # Batched into one jq call: count candidates and pick first.
+    _DP_PAIR="$(jq -r '
       [.changes // {} | to_entries[]
         | select(.value.design_path != null and .value.design_path != "")
         | select(.value.archived_at == null)
-        | .value.design_path] | .[0] // ""
+        | .value.design_path] as $dps |
+      ($dps | length | tostring) + "\t" + ($dps[0] // "")
     ' "$_STATE_FILE" 2>/dev/null)"
+    _DP_COUNT="${_DP_PAIR%%$'\t'*}"
+    _DP_DESIGN="${_DP_PAIR#*$'\t'}"
+    if [[ "${_DP_COUNT:-0}" -gt 1 ]] && [[ -n "${SKILL_EXPLAIN:-}" ]]; then
+      echo "[skill-hook]   [design-guard] WARN ${_DP_COUNT} open changes with design_path; picked first (${_DP_DESIGN})" >&2
+    fi
   fi
 
   if [[ -n "$_DP_DESIGN" ]]; then

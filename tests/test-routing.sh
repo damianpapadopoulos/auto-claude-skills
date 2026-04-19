@@ -5098,6 +5098,30 @@ test_plan_completeness_silent_without_design_path() {
 }
 test_plan_completeness_silent_without_design_path
 
+test_plan_completeness_silent_with_empty_changes() {
+    echo "-- test: DESIGN COMPLETENESS stays silent when state exists but changes is empty --"
+    setup_test_env
+    install_registry
+
+    local token="plan-guard-empty-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+    # State file exists and parses, but no changes recorded.
+    jq -n '{openspec_surface:"none",verification_seen:false,verification_at:null,changes:{}}' \
+        > "${HOME}/.claude/.skill-openspec-state-${token}"
+
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output context
+    output="$(run_hook "let us plan this out")"
+    context="$(extract_context "${output}")"
+
+    assert_not_contains "no completeness block with empty changes" "DESIGN COMPLETENESS" "${context}"
+
+    teardown_test_env
+}
+test_plan_completeness_silent_with_empty_changes
+
 test_plan_completeness_handles_missing_file() {
     echo "-- test: DESIGN COMPLETENESS notes unreadable file gracefully --"
     setup_test_env
