@@ -128,4 +128,50 @@ assert_contains "output names the failing assertion description" "Mentions exit 
 
 rm -f "${FAIL_RESPONSE_FILE}"
 
+# ---------------------------------------------------------------------------
+# Artifact: runner writes a JSON file with expected fields
+# ---------------------------------------------------------------------------
+echo "-- artifact: JSON file with expected fields --"
+
+ART_DIR="${TMPDIR:-/tmp}/acs-artifacts-$$"
+rm -rf "${ART_DIR}"
+mkdir -p "${ART_DIR}"
+
+ART_RESPONSE_FILE="${TMPDIR:-/tmp}/acs-art-resp-$$.txt"
+cat > "${ART_RESPONSE_FILE}" <<'EOF'
+Exit code 137 suggests OOMKilled termination.
+EOF
+
+MOCK_RESPONSE_FILE="${ART_RESPONSE_FILE}" \
+    BEHAVIORAL_EVALS=1 \
+    CLAUDE_BIN="${PROJECT_ROOT}/tests/fixtures/behavioral-runner/mock-claude.sh" \
+    ARTIFACTS_DIR="${ART_DIR}" \
+    SKILL_PATH="${PROJECT_ROOT}/skills/incident-analysis/SKILL.md" \
+    bash "${RUNNER}" \
+        --scenario well-formed-scenario \
+        --pack "${PROJECT_ROOT}/tests/fixtures/behavioral-runner/scenarios.json" >/dev/null 2>&1
+
+# Exactly one JSON artifact should exist in ART_DIR
+artifact_file="$(ls "${ART_DIR}"/*.json 2>/dev/null | head -n1)"
+
+assert_not_empty "artifact file was created" "${artifact_file}"
+assert_json_valid "artifact is valid JSON" "${artifact_file}"
+
+if [ -n "${artifact_file}" ] && [ -f "${artifact_file}" ]; then
+    scenario_id="$(jq -r '.scenario_id // empty' "${artifact_file}")"
+    model="$(jq -r '.model // empty' "${artifact_file}")"
+    raw_output="$(jq -r '.raw_output // empty' "${artifact_file}")"
+    overall="$(jq -r '.overall_passed // empty' "${artifact_file}")"
+    assertion_count="$(jq '.assertions | length' "${artifact_file}")"
+
+    assert_equals "artifact scenario_id matches" "well-formed-scenario" "${scenario_id}"
+    assert_contains "artifact model field is populated" "mock" "${model}"
+    assert_contains "artifact raw_output contains captured text" "137" "${raw_output}"
+    assert_equals "artifact overall_passed is true" "true" "${overall}"
+    assert_equals "artifact records one assertion" "1" "${assertion_count}"
+fi
+
+rm -f "${ART_RESPONSE_FILE}"
+rm -rf "${ART_DIR}"
+
 print_summary

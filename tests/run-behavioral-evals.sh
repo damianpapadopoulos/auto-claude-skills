@@ -184,5 +184,39 @@ else
     overall=1
 fi
 
-# Artifact emission added in Task 5.
+# -------- artifact emission --------
+ARTIFACTS_DIR="${ARTIFACTS_DIR:-tests/artifacts}"
+mkdir -p "${ARTIFACTS_DIR}"
+
+TIMESTAMP_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+ARTIFACT_FILE="${ARTIFACTS_DIR}/${SCENARIO_ID}-$(date -u +%Y%m%dT%H%M%SZ).json"
+
+if [ "${ALL_PASSED}" = "1" ]; then
+    overall_passed_json=true
+else
+    overall_passed_json=false
+fi
+
+jq -n \
+    --arg scenario_id "${SCENARIO_ID}" \
+    --arg timestamp "${TIMESTAMP_UTC}" \
+    --arg model "${MODEL}" \
+    --arg prompt "${SCENARIO_PROMPT}" \
+    --arg raw_output "${RAW_OUTPUT}" \
+    --argjson assertions "${ASSERTION_RESULTS_JSON}" \
+    --argjson overall "${overall_passed_json}" \
+    --argjson elapsed "${elapsed}" \
+    '{
+        scenario_id: $scenario_id,
+        timestamp_utc: $timestamp,
+        model: $model,
+        prompt: $prompt,
+        raw_output: $raw_output,
+        assertions: $assertions,
+        overall_passed: $overall,
+        elapsed_seconds: $elapsed
+    }' > "${ARTIFACT_FILE}"
+
+echo "artifact: ${ARTIFACT_FILE}"
+
 exit "${overall}"
