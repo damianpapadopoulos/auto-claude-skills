@@ -623,10 +623,11 @@ test_context_capabilities_in_health_output() {
 }
 
 test_lsp_guidance_in_output_when_present() {
-    echo "-- test: LSP guidance line appears when an lspServers plugin is installed --"
+    echo "-- test: LSP guidance line appears when lspServers plugin AND command binary both present --"
     setup_test_env
 
-    # Install a mock LSP plugin with the canonical lspServers manifest shape
+    # Install a mock LSP plugin whose command points at a binary guaranteed to exist (`true`).
+    # This mirrors the real contract: plugin declares the command, binary must resolve on PATH.
     local lsp_dir="${HOME}/.claude/plugins/cache/claude-plugins-official/mock-lsp/1.0.0/.claude-plugin"
     mkdir -p "${lsp_dir}"
     cat > "${lsp_dir}/plugin.json" <<'EOF'
@@ -636,7 +637,7 @@ test_lsp_guidance_in_output_when_present() {
   "version": "1.0.0",
   "lspServers": {
     "mock": {
-      "command": "mock-language-server",
+      "command": "true",
       "args": ["--stdio"],
       "extensionToLanguage": {".mock": "mock"}
     }
@@ -651,6 +652,45 @@ EOF
     context="$(printf '%s' "${output}" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
     assert_contains "output contains lsp=true flag" "lsp=true" "${context}"
     assert_contains "output contains LSP guidance line" "mcp__ide__getDiagnostics" "${context}"
+
+    teardown_test_env
+}
+
+test_lsp_false_positive_guard_when_binary_missing() {
+    echo "-- test: lsp=false when lspServers plugin present but command binary missing --"
+    setup_test_env
+
+    # Install a mock LSP plugin declaring a command that does not exist on PATH anywhere
+    local lsp_dir="${HOME}/.claude/plugins/cache/claude-plugins-official/mock-lsp-missing/1.0.0/.claude-plugin"
+    mkdir -p "${lsp_dir}"
+    cat > "${lsp_dir}/plugin.json" <<'EOF'
+{
+  "name": "mock-lsp-missing",
+  "description": "Mock LSP plugin whose server binary is not installed",
+  "version": "1.0.0",
+  "lspServers": {
+    "missing": {
+      "command": "this-language-server-does-not-exist-anywhere-on-path",
+      "args": ["--stdio"],
+      "extensionToLanguage": {".missing": "missing"}
+    }
+  }
+}
+EOF
+
+    local output
+    output="$(run_hook)"
+
+    local context
+    context="$(printf '%s' "${output}" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+    assert_contains "lsp=false when binary missing" "lsp=false" "${context}"
+    if printf '%s' "${context}" | grep -q "mcp__ide__getDiagnostics"; then
+        echo "  FAIL: LSP guidance line emitted despite binary missing"
+        TESTS_FAILED=$((${TESTS_FAILED:-0} + 1))
+    else
+        echo "  PASS: LSP guidance line absent when binary missing"
+        TESTS_PASSED=$((${TESTS_PASSED:-0} + 1))
+    fi
 
     teardown_test_env
 }
@@ -1104,6 +1144,7 @@ test_lsp_capability_shape
 test_context_capabilities_all_false
 test_context_capabilities_in_health_output
 test_lsp_guidance_in_output_when_present
+test_lsp_false_positive_guard_when_binary_missing
 test_lsp_guidance_absent_when_not_installed
 test_lsp_user_config_override
 test_user_config_override_rejects_arbitrary_keys

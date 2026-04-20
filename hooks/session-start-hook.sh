@@ -669,19 +669,31 @@ if command -v openspec >/dev/null 2>&1; then
     _has_openspec=true
 fi
 
-# LSP plugin: scan installed plugin manifests for the canonical `lspServers` key.
+# LSP capability: requires BOTH an installed LSP plugin AND a resolvable backing binary.
 # Claude Code's LSP plugin family (typescript-lsp, pyright-lsp, gopls-lsp, rust-analyzer-lsp,
 # jdtls-lsp, clangd-lsp, csharp-lsp, kotlin-lsp, lua-lsp, php-lsp, ruby-lsp, swift-lsp, ...)
-# each declare `lspServers` in their plugin.json. Any one of them present is sufficient to
-# flip lsp=true. Bash-side scan, early-exit on first match.
+# each declare `lspServers.<name>.command` in their plugin.json pointing at an external
+# language-server binary (e.g. `typescript-language-server`, installed via npm). The plugin
+# can be present without its backing binary (user installed the plugin but not the server),
+# in which case mcp__ide__getDiagnostics would fail at runtime. Flipping lsp=true only when
+# at least one command is resolvable prevents false-positive guidance.
+# Bash-side scan, early-exit on first plugin+binary pair that resolves.
 _has_lsp_plugin=false
 for _pjson in "${HOME}/.claude/plugins/cache"/*/*/.claude-plugin/plugin.json \
               "${HOME}/.claude/plugins/cache"/*/*/*/.claude-plugin/plugin.json; do
     [ -f "${_pjson}" ] || continue
-    if jq -e 'has("lspServers") and (.lspServers | length > 0)' "${_pjson}" >/dev/null 2>&1; then
-        _has_lsp_plugin=true
-        break
-    fi
+    # Extract non-null .lspServers.*.command values, newline-separated (empty if no lspServers).
+    _lsp_cmds="$(jq -r '(.lspServers // {}) | to_entries[] | .value.command // empty' "${_pjson}" 2>/dev/null)"
+    [ -z "${_lsp_cmds}" ] && continue
+    while IFS= read -r _cmd; do
+        [ -z "${_cmd}" ] && continue
+        if command -v "${_cmd}" >/dev/null 2>&1; then
+            _has_lsp_plugin=true
+            break 2
+        fi
+    done <<LSPEOF
+${_lsp_cmds}
+LSPEOF
 done
 
 # -----------------------------------------------------------------
