@@ -11,6 +11,13 @@ SERENA_NUDGE_HOOK="${PROJECT_ROOT}/hooks/serena-nudge.sh"
 PRE_COMPACT_HOOK="${PROJECT_ROOT}/hooks/pre-compact-hook.sh"
 SETUP_DEV_SCRIPT="${PROJECT_ROOT}/scripts/setup-dev.sh"
 
+write_serena_registry() {
+    mkdir -p "${HOME}/.claude"
+    cat > "${HOME}/.claude/.skill-registry-cache.json" <<'EOF'
+{"context_capabilities":{"serena":true}}
+EOF
+}
+
 echo "=== test-hook-utilities.sh ==="
 
 test_fix_plugin_manifests_strips_invalid_keys() {
@@ -60,13 +67,6 @@ test_fix_plugin_manifests_skips_invalid_json() {
     teardown_test_env
 }
 test_fix_plugin_manifests_skips_invalid_json
-
-write_serena_registry() {
-    mkdir -p "${HOME}/.claude"
-    cat > "${HOME}/.claude/.skill-registry-cache.json" <<'EOF'
-{"context_capabilities":{"serena":true}}
-EOF
-}
 
 test_serena_nudge_emits_hint_for_symbol_lookup() {
     echo "-- test: serena-nudge emits hint for symbol lookup --"
