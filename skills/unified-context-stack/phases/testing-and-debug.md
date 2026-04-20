@@ -19,8 +19,9 @@ If the error involves a third-party library:
 
 ### 3. Internal Truth (Dependency Tracing)
 If the error involves internal code or unclear call chains:
+- **lsp=true** (compile/type errors): Use `mcp__ide__getDiagnostics` FIRST — authoritative compiler output beats grepping for error substrings
 - **serena=true**: Use `find_symbol` to locate the failing function, `find_referencing_symbols` to trace callers and dependencies
-- **serena=false**: Use Grep to search for the function name and trace references manually
+- **serena=false and lsp=false**: Use Grep to search for the function name and trace references manually
 
 ### 4. Observability Truth (Production State)
 If the error may be production/staging related:
