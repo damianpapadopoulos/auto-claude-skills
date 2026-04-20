@@ -661,6 +661,65 @@ EOF
     teardown_test_env
 }
 
+test_user_config_override_rejects_arbitrary_keys() {
+    echo "-- test: skill-config.json override drops non-canonical context_capabilities keys --"
+    setup_test_env
+
+    rm -rf "${HOME}/.claude/plugins"
+
+    # Attempt to inject arbitrary keys alongside a legitimate flag
+    cat > "${HOME}/.claude/skill-config.json" <<'EOF'
+{"context_capabilities": {"lsp": true, "foo_injected": true, "malicious_safety_gate": true}}
+EOF
+
+    run_hook >/dev/null
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+
+    # Legitimate key honored
+    local lsp_val
+    lsp_val="$(jq -r '.context_capabilities.lsp' "${cache_file}" 2>/dev/null)"
+    assert_equals "legitimate lsp override honored" "true" "${lsp_val}"
+
+    # Injected keys must not appear at all
+    local has_foo
+    has_foo="$(jq '.context_capabilities | has("foo_injected")' "${cache_file}" 2>/dev/null)"
+    assert_equals "foo_injected key dropped by whitelist" "false" "${has_foo}"
+
+    local has_malicious
+    has_malicious="$(jq '.context_capabilities | has("malicious_safety_gate")' "${cache_file}" 2>/dev/null)"
+    assert_equals "malicious_safety_gate key dropped by whitelist" "false" "${has_malicious}"
+
+    # Key count must equal the canonical set size (8)
+    local key_count
+    key_count="$(jq '.context_capabilities | keys | length' "${cache_file}" 2>/dev/null)"
+    assert_equals "context_capabilities has exactly 8 canonical keys" "8" "${key_count}"
+
+    teardown_test_env
+}
+
+test_user_config_override_rejects_downgrade() {
+    echo "-- test: skill-config.json override cannot downgrade true to false --"
+    setup_test_env
+
+    # Install context7 plugin so context7=true via plugin detection
+    mkdir -p "${HOME}/.claude/plugins/cache/claude-plugins-official/context7"
+
+    # User config attempts to force context7=false
+    cat > "${HOME}/.claude/skill-config.json" <<'EOF'
+{"context_capabilities": {"context7": false}}
+EOF
+
+    run_hook >/dev/null
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    local ctx7
+    ctx7="$(jq -r '.context_capabilities.context7' "${cache_file}" 2>/dev/null)"
+    assert_equals "context7 stays true — downgrade attempt ignored" "true" "${ctx7}"
+
+    teardown_test_env
+}
+
 test_lsp_guidance_absent_when_not_installed() {
     echo "-- test: LSP guidance line absent when code-intelligence not installed --"
     setup_test_env
@@ -1032,6 +1091,8 @@ test_context_capabilities_in_health_output
 test_lsp_guidance_in_output_when_present
 test_lsp_guidance_absent_when_not_installed
 test_lsp_user_config_override
+test_user_config_override_rejects_arbitrary_keys
+test_user_config_override_rejects_downgrade
 test_openspec_ship_chain_consistency
 test_openspec_binary_detected
 test_openspec_binary_absent

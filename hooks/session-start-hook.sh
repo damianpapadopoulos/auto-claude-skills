@@ -699,6 +699,13 @@ OPENSPEC_CAPS="$(jq -n \
     {binary: $binary, commands: $commands, surface: $surface, warnings: $warnings}'
 )"
 
+# Canonical context_capabilities keys. Single source of truth consumed by:
+# 1. CONTEXT_CAPS producer below (initial detection object)
+# 2. User-config override filter (drops any non-canonical key from skill-config.json)
+# 3. Fallback-registry writer (Step 10c, hardcoded jq — kept in sync via comment)
+# If you add a capability, update this array AND the fallback writer's jq expression.
+_CANONICAL_CAP_KEYS='["context7","context_hub_cli","context_hub_available","serena","forgetful_memory","openspec","posthog","lsp"]'
+
 # Single jq call: detect all plugin capabilities, derive bindings, build CONTEXT_CAPS
 # (Context7 detection checks plugin name, not MCP tool names. Covers the standard
 # install path via claude-plugins-official. If Context7 were ever provided by a
@@ -738,11 +745,15 @@ fi
 
 # User-config override: skill-config.json may force context_capabilities on.
 # Augment-only: only upgrades false->true, never downgrades — matches MCP fallback pattern.
+# Whitelist-filtered: only canonical capability keys are honored; arbitrary keys are dropped.
+# This prevents users from injecting non-capability flags that would then leak into
+# any iterator-based consumer of context_capabilities (e.g. health-check summaries).
 if [ -f "${USER_CONFIG}" ] && jq empty "${USER_CONFIG}" >/dev/null 2>&1; then
     CONTEXT_CAPS="$(printf '%s' "${CONTEXT_CAPS}" | jq \
         --slurpfile uc "${USER_CONFIG}" \
+        --argjson allowed "${_CANONICAL_CAP_KEYS}" \
         '($uc[0].context_capabilities // {}) as $ovr |
-         reduce ($ovr | to_entries[]) as $e (.;
+         reduce ($ovr | to_entries[] | select(.key as $k | $allowed | index($k))) as $e (.;
              if ($e.value == true) and (.[$e.key] == false or .[$e.key] == null)
              then .[$e.key] = true
              else . end)'
@@ -880,25 +891,17 @@ _FALLBACK="${PLUGIN_ROOT}/config/fallback-registry.json"
 if [ -d "${PLUGIN_ROOT}/config" ] && [ -z "${_SKILL_TEST_MODE:-}" ] && [ -n "${DEFAULT_JSON_PRISTINE}" ]; then
     # Build fallback from pristine default-triggers.json only.
     # No user-config, no presets, no auto-discovery, no RESULT — pure curated shape.
-    # Canonical context_capabilities keys are hardcoded here (kept in sync with
-    # the CONTEXT_CAPS jq expression above; if you add a capability flag, add it here too).
-    _new_fallback="$(printf '%s' "${DEFAULT_JSON_PRISTINE}" | jq '
-        . as $d |
+    # Canonical context_capabilities keys come from _CANONICAL_CAP_KEYS (single source
+    # of truth defined near the CONTEXT_CAPS producer above).
+    _new_fallback="$(printf '%s' "${DEFAULT_JSON_PRISTINE}" | jq \
+        --argjson cap_keys "${_CANONICAL_CAP_KEYS}" \
+        '. as $d |
         {
             version: ($d.version // "4.0.0-fallback"),
             frontmatter_schema_version: 1,
             skills: [($d.skills // [])[] | . + {available: false, enabled: (.enabled // true)}],
             plugins: [($d.plugins // [])[] | . + {available: false}],
-            context_capabilities: {
-                context7: false,
-                context_hub_cli: false,
-                context_hub_available: false,
-                serena: false,
-                forgetful_memory: false,
-                openspec: false,
-                posthog: false,
-                lsp: false
-            },
+            context_capabilities: ($cap_keys | map({(.): false}) | add),
             openspec_capabilities: {binary: false, commands: [], surface: "none", warnings: []},
             phase_compositions: ($d.phase_compositions // {}),
             phase_guide: ($d.phase_guide // {}),
