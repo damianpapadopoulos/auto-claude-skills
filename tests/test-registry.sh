@@ -302,13 +302,13 @@ test_default_triggers_has_plugins_section() {
     local plugin_count
     plugin_count="$(jq '.plugins | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
 
-    # Should have 11 curated plugins (5 enhancers + context7 + github + atlassian + forgetful + unified-context-stack + posthog)
-    assert_equals "default-triggers has 11 plugins" "11" "${plugin_count}"
+    # Should have 12 curated plugins (5 enhancers + context7 + code-intelligence + github + atlassian + forgetful + unified-context-stack + posthog)
+    assert_equals "default-triggers has 12 plugins" "12" "${plugin_count}"
 
     # Each plugin should have required fields
     local valid_count
     valid_count="$(jq '[.plugins[] | select(.name and .source and .provides and .phase_fit and .description)] | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "all plugins have required fields" "11" "${valid_count}"
+    assert_equals "all plugins have required fields" "12" "${valid_count}"
 
     teardown_test_env
 }

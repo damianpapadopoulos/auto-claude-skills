@@ -988,6 +988,12 @@ if printf '%s' "${CONTEXT_CAPS}" | jq -e '.serena == true' >/dev/null 2>&1; then
 Serena: When navigating code, prefer mcp__serena__ tools (find_symbol, find_referencing_symbols, get_symbols_overview) over Grep/Read for symbol lookups and dependency mapping."
 fi
 
+# Emit LSP usage hint when available (complementary to Serena — LSP for diagnostics, Serena for symbol nav)
+if printf '%s' "${CONTEXT_CAPS}" | jq -e '.lsp == true' >/dev/null 2>&1; then
+    CONTEXT="${CONTEXT}
+LSP: Use mcp__ide__getDiagnostics for compile/type errors before grepping. Complementary to Serena — LSP for diagnostics, Serena for symbol navigation and structural edits."
+fi
+
 # Emit Forgetful usage hint when available
 if printf '%s' "${CONTEXT_CAPS}" | jq -e '.forgetful_memory == true' >/dev/null 2>&1; then
     CONTEXT="${CONTEXT}
