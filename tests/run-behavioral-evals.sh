@@ -97,6 +97,51 @@ if [ "${ASSERTION_COUNT}" -lt 1 ]; then
     exit 2
 fi
 
-# Subsequent tasks: skill loading + invocation + evaluation + artifact.
-echo "error: runner body not yet implemented (post-preflight)" >&2
-exit 2
+# -------- skill loading --------
+SKILL_PATH="${SKILL_PATH:-skills/incident-analysis/SKILL.md}"
+if [ ! -f "${SKILL_PATH}" ]; then
+    echo "error: skill file not found: ${SKILL_PATH}" >&2
+    exit 2
+fi
+SKILL_BODY="$(cat "${SKILL_PATH}")"
+
+# -------- prompt construction --------
+SCENARIO_PROMPT="$(printf '%s' "${SCENARIO_JSON}" | jq -r '.prompt')"
+CONSTRUCTED_PROMPT="<skill_guidance>
+${SKILL_BODY}
+</skill_guidance>
+
+<user_request>
+${SCENARIO_PROMPT}
+</user_request>"
+
+# -------- invoke claude -p --------
+start_ts="$(date +%s)"
+CLAUDE_JSON="$("${CLAUDE_BIN}" -p --output-format json "${CONSTRUCTED_PROMPT}" 2>&1)"
+claude_exit=$?
+end_ts="$(date +%s)"
+elapsed=$((end_ts - start_ts))
+
+if [ "${claude_exit}" -ne 0 ]; then
+    echo "error: claude invocation failed (exit ${claude_exit})" >&2
+    echo "${CLAUDE_JSON}" >&2
+    exit 2
+fi
+
+# -------- parse claude output --------
+RAW_OUTPUT="$(printf '%s' "${CLAUDE_JSON}" | jq -r '.result // empty')"
+MODEL="$(printf '%s' "${CLAUDE_JSON}" | jq -r '.model // "unknown"')"
+if [ -z "${RAW_OUTPUT}" ]; then
+    echo "error: claude response has no 'result' field" >&2
+    echo "${CLAUDE_JSON}" >&2
+    exit 2
+fi
+
+# Hand off to assertion evaluation (added in Task 4).
+echo "scenario: ${SCENARIO_ID} (model=${MODEL}, elapsed=${elapsed}s)"
+echo "--- raw output (first 200 chars) ---"
+printf '%s\n' "${RAW_OUTPUT}" | head -c 200
+echo ""
+# Placeholder pass signal until Task 4 lands:
+echo "PASS: invocation completed (scenario: ${SCENARIO_ID})"
+exit 0

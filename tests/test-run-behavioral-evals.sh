@@ -74,4 +74,32 @@ exit_code=$?
 assert_equals "exits with code 2 when scenario is malformed" "2" "${exit_code}"
 assert_contains "error names the missing field" "assertions" "${output}"
 
+# ---------------------------------------------------------------------------
+# Invocation: stubbed claude returns a response that matches the assertion
+# ---------------------------------------------------------------------------
+echo "-- invocation: stubbed claude pass case --"
+
+# Build a canned response that satisfies the 'well-formed-scenario' assertion
+# (regex: "exit.code|termination")
+CANNED_RESPONSE_FILE="${TMPDIR:-/tmp}/acs-mock-response-$$.txt"
+trap 'rm -f "${CANNED_RESPONSE_FILE}"' EXIT
+cat > "${CANNED_RESPONSE_FILE}" <<'EOF'
+Investigation: the pods are in CrashLoopBackOff with exit code 137,
+indicating an OOMKilled termination. Check previous container logs.
+EOF
+
+output="$(MOCK_RESPONSE_FILE="${CANNED_RESPONSE_FILE}" \
+BEHAVIORAL_EVALS=1 \
+CLAUDE_BIN="${PROJECT_ROOT}/tests/fixtures/behavioral-runner/mock-claude.sh" \
+ARTIFACTS_DIR="${TMPDIR:-/tmp}/acs-artifacts-$$" \
+SKILL_PATH="${PROJECT_ROOT}/skills/incident-analysis/SKILL.md" \
+bash "${RUNNER}" \
+  --scenario well-formed-scenario \
+  --pack "${PROJECT_ROOT}/tests/fixtures/behavioral-runner/scenarios.json" 2>&1)"
+exit_code=$?
+
+assert_equals "exits 0 when invocation completes and assertions pass" "0" "${exit_code}"
+assert_contains "output reports PASS for the matching assertion" "PASS" "${output}"
+assert_contains "output names the matched scenario id" "well-formed-scenario" "${output}"
+
 print_summary
