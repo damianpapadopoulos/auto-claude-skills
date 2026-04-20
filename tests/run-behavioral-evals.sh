@@ -130,7 +130,7 @@ fi
 
 # -------- parse claude output --------
 RAW_OUTPUT="$(printf '%s' "${CLAUDE_JSON}" | jq -r '.result // empty')"
-MODEL="$(printf '%s' "${CLAUDE_JSON}" | jq -r '.model // "unknown"')"
+MODEL="$(printf '%s' "${CLAUDE_JSON}" | jq -r '(.model // (.modelUsage | keys[0]? // empty)) // "unknown"')"
 if [ -z "${RAW_OUTPUT}" ]; then
     echo "error: claude response has no 'result' field" >&2
     echo "${CLAUDE_JSON}" >&2
