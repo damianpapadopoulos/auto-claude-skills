@@ -865,19 +865,32 @@ fi
 printf '%s' "${RESULT}" | jq '.registry' > "${CACHE_FILE}.tmp.$$" && mv "${CACHE_FILE}.tmp.$$" "${CACHE_FILE}"
 
 # -----------------------------------------------------------------
-# Step 10c: Auto-regenerate fallback registry (sanitized)
+# Step 10c: Auto-regenerate fallback registry (canonical shape only)
 # -----------------------------------------------------------------
-# The committed fallback is a zero-trust canonical shape — all .available=false
-# and all context_capabilities=false. It exists to give the no-jq path a
-# structurally valid registry, not a snapshot of the writer's machine. Runtime
-# cache (CACHE_FILE) keeps the machine-accurate flags.
+# The committed fallback is built from default-triggers.json (curated source
+# of truth) with every .available and every context_capabilities value zeroed.
+# It intentionally excludes auto-discovered plugins, user-installed skills,
+# and the writer's machine state — it exists to give the no-jq path a
+# structurally valid registry, not a snapshot of any particular machine.
+# Runtime cache (CACHE_FILE) keeps the machine-accurate flags for routing.
 _FALLBACK="${PLUGIN_ROOT}/config/fallback-registry.json"
-if [ -d "${PLUGIN_ROOT}/config" ] && [ -z "${_SKILL_TEST_MODE:-}" ]; then
-    _new_fallback="$(printf '%s' "${RESULT}" | jq '
-        .registry
-        | .skills = [.skills[] | .available = false]
-        | .plugins = [.plugins[] | .available = false]
-        | .context_capabilities = (.context_capabilities | with_entries(.value = false))
+if [ -d "${PLUGIN_ROOT}/config" ] && [ -z "${_SKILL_TEST_MODE:-}" ] && [ -n "${DEFAULT_JSON}" ]; then
+    _new_fallback="$(printf '%s' "${RESULT}" | jq \
+        --argjson default "${DEFAULT_JSON}" \
+        '.registry as $r |
+         # Start from canonical default-triggers and merge in the computed
+         # context_capabilities shape (keys only, all values zeroed).
+         $default
+         | .skills = [(.skills // [])[] | . + {available: false, enabled: (.enabled // true)}]
+         | .plugins = [(.plugins // [])[] | . + {available: false}]
+         | .version = ($r.version // "4.0.0-fallback")
+         | .frontmatter_schema_version = ($r.frontmatter_schema_version // 1)
+         | .context_capabilities = ($r.context_capabilities | with_entries(.value = false))
+         | .openspec_capabilities = {binary: false, commands: [], surface: "none", warnings: []}
+         | .phase_compositions = ($r.phase_compositions // {})
+         | .phase_guide = ($r.phase_guide // {})
+         | .methodology_hints = ($r.methodology_hints // [])
+         | .warnings = []
     ')"
     if [ -f "${_FALLBACK}" ]; then
         _existing="$(cat "${_FALLBACK}" 2>/dev/null)"

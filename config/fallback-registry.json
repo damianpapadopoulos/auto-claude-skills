@@ -1,6 +1,5 @@
 {
   "version": "4.0.0",
-  "frontmatter_schema_version": 1,
   "skills": [
     {
       "name": "systematic-debugging",
@@ -744,6 +743,222 @@
       "enabled": true
     }
   ],
+  "phase_guide": {
+    "DISCOVER": "product-discovery (pull Jira/Confluence context, synthesize discovery brief)",
+    "DESIGN": "brainstorming (ask questions, get approval)",
+    "PLAN": "writing-plans (break into tasks, confirm before execution)",
+    "IMPLEMENT": "executing-plans or subagent-driven-development (offer agent-team-execution for 3+ independent tasks)",
+    "REVIEW": "requesting-code-review",
+    "SHIP": "verification-before-completion + openspec-ship + finishing-a-development-branch",
+    "LEARN": "outcome-review (query metrics, synthesize outcome report, create follow-up work)",
+    "DEBUG": "systematic-debugging, then return to current phase"
+  },
+  "methodology_hints": [
+    {
+      "name": "ralph-loop",
+      "triggers": [
+        "(migrate|refactor.all|fix.all|batch|overnight|autonom|iterate|keep.(going|trying|fixing)|until.*(pass|work|complet|succeed)|make.*tests?.pass|run.*until|loop|coverage|greenfield)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "RALPH LOOP: Consider /ralph-loop for autonomous iteration."
+    },
+    {
+      "name": "pr-review",
+      "triggers": [
+        "(review|pull.?request|code.?review|(^|[^a-z])pr($|[^a-z]))"
+      ],
+      "trigger_mode": "regex",
+      "hint": "PR REVIEW: Consider /pr-review for structured review.",
+      "skill": "requesting-code-review"
+    },
+    {
+      "name": "unified-context-stack-hint",
+      "triggers": [
+        "(library|package|module|sdk|api|docs|documentation|reference|version|latest|upgrade|deprecat|migrat)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "CONTEXT STACK: Use the unified-context-stack for tiered documentation retrieval. Query Context Hub via Context7 (libraryId=/andrewyng/context-hub) first for curated docs, then fall back to broad Context7, then chub CLI, then web search. Read the phase document for your current SDLC phase from the unified-context-stack skill (paths listed in the Context Stack session-start output).",
+      "plugin": "unified-context-stack"
+    },
+    {
+      "name": "github-mcp",
+      "triggers": [
+        "(pull.?request|issue|github|merge|branch|repo|related.pr|similar.change|previous.attempt|what.was.tried|prior.art|code.history)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "GITHUB: If GitHub MCP tools are available, check for related PRs, issues, and workflow runs. Reference any GitHub context already discussed in this session.",
+      "plugin": "github",
+      "phases": [
+        "DESIGN",
+        "PLAN",
+        "DEBUG",
+        "REVIEW",
+        "SHIP"
+      ]
+    },
+    {
+      "name": "atlassian-jira",
+      "triggers": [
+        "(ticket|story|epic|acceptance.criter|definition.of.done|requirement|user.story|jira|sprint|backlog|discover|triage|prioriti)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "ATLASSIAN: If Jira MCP tools are available, pull acceptance criteria and linked context for relevant tickets. Reference any Jira context already discussed in this session.",
+      "phases": [
+        "DISCOVER",
+        "DESIGN",
+        "PLAN"
+      ]
+    },
+    {
+      "name": "atlassian-confluence",
+      "triggers": [
+        "(confluence|wiki|knowledge.base|design.doc|architecture.doc|adr|decision.record)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "ATLASSIAN: If Confluence MCP tools are available, search for relevant design docs and references. Keep searches narrow by title or space.",
+      "phases": [
+        "DESIGN",
+        "PLAN"
+      ]
+    },
+    {
+      "name": "gcp-observability",
+      "triggers": [
+        "(runtime.log|error.group|metric.regress|production.error|staging.error|verify.deploy|post.deploy|list.log|list.metric|trace.search|incident|postmortem|root.cause|outage|error.spike|log.analysis|5[0-9][0-9].error)",
+        "(connection.*(fail|refus|timeout|pool|exhaust)|oom.?kill|crash.?loop|cloud.?sql|proxy.*(restart|error|fail)|pod.*(restart|crash|evict)|sigterm|sigkill|latency.*(spike|p99)|p99.*(latency|spike|degrad)|deploy.*(fail|rollback))"
+      ],
+      "trigger_mode": "regex",
+      "hint": "INCIDENT ANALYSIS: Use Skill(auto-claude-skills:incident-analysis) for structured investigation. Stages: MITIGATE -> CLASSIFY -> (confidence-gated HITL or INVESTIGATE loop) -> EXECUTE -> VALIDATE -> POSTMORTEM. Detect tool tier (MCP > gcloud > guidance). Scope all queries to specific service + environment + narrow time window. Classify incident type against bundled playbooks, capture sanitized evidence, recheck state fingerprint before execution, validate post-mitigation conditions.",
+      "phases": [
+        "SHIP",
+        "DEBUG"
+      ]
+    },
+    {
+      "name": "posthog-metrics",
+      "triggers": [
+        "(metric|adoption|funnel|cohort|experiment|feature.flag|a.?b.test|conversion|retention|churn|engagement|posthog)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "POSTHOG: If PostHog MCP tools are available, query analytics and experiment results directly. Use outcome-review skill for structured post-ship analysis.",
+      "plugin": "posthog",
+      "phases": [
+        "LEARN",
+        "SHIP",
+        "DEBUG"
+      ]
+    },
+    {
+      "name": "gke",
+      "triggers": [
+        "(cluster|kubernetes|k8s|pod|node|namespace|workload|gke)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "GKE: If GKE MCP tools are available, query cluster context and logs. Prefer scoped LQL queries over broad log dumps.",
+      "phases": [
+        "SHIP",
+        "DEBUG"
+      ]
+    },
+    {
+      "name": "cloud-run",
+      "triggers": [
+        "(cloud.?run|serverless.deploy|revision|service.log|cloud.?run.service)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "CLOUD RUN: If Cloud Run MCP tools are available, check service state and recent logs.",
+      "phases": [
+        "SHIP",
+        "DEBUG"
+      ]
+    },
+    {
+      "name": "firebase",
+      "triggers": [
+        "(firebase|firestore|auth.user|security.rules|realtime.db|cloud.function|hosting)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "FIREBASE: If Firebase MCP tools are available, inspect resources read-only (documents, auth, rules). Use CLI for mutations.",
+      "phases": [
+        "IMPLEMENT",
+        "SHIP",
+        "DEBUG"
+      ]
+    },
+    {
+      "name": "playwright-mcp",
+      "triggers": [
+        "(screenshot|visual.test|browser.test|layout.regress|lighthouse|a11y|smoke.test|e2e|playwright)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "PLAYWRIGHT: If Playwright MCP tools are available, use them for visual verification. During REVIEW, use Skill(auto-claude-skills:runtime-validation) as the orchestration entry point for E2E validation.",
+      "phases": [
+        "IMPLEMENT",
+        "REVIEW",
+        "DEBUG",
+        "SHIP"
+      ]
+    },
+    {
+      "name": "frontend-playwright",
+      "triggers": [
+        "(component|page|form|modal|dialog|sidebar|navbar|header|footer|button|dropdown|tooltip|tab|card|widget|dashboard|landing.?page|login.?page|signup|onboard|checkout|ui|frontend|layout|style|css|tailwind|responsive)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "PLAYWRIGHT TESTING: Frontend changes detected. Include Playwright E2E tests covering the changed UI behavior. During REVIEW, use Skill(auto-claude-skills:runtime-validation) for orchestrated E2E and a11y validation.",
+      "phases": [
+        "DESIGN",
+        "IMPLEMENT"
+      ]
+    },
+    {
+      "name": "claude-md-maintenance",
+      "triggers": [
+        "(refactor|restructur|new.convention|architecture.change|reorganize|rename.*(module|package|directory))"
+      ],
+      "trigger_mode": "regex",
+      "hint": "CLAUDE.MD: If this session changed project conventions or structure, consider /revise-claude-md",
+      "skill": "claude-md-improver",
+      "phases": [
+        "IMPLEMENT",
+        "SHIP"
+      ]
+    },
+    {
+      "name": "openspec-ship-reminder",
+      "triggers": [
+        "(ship|merge|deploy|push|release|finish|complete|wrap.?up|finalize)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "OPENSPEC: After verification-before-completion passes, invoke openspec-ship to generate as-built documentation before committing. This is mandatory for feature shipping.",
+      "phases": [
+        "SHIP"
+      ]
+    },
+    {
+      "name": "phase-enforcement",
+      "triggers": [
+        "(fix|change|update|rename|move|add a|modify|edit|refactor|implement|write the|create the)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "PHASE ENFORCEMENT: You are in DESIGN/PLAN phase. Complete the current phase skill before editing implementation files. Small changes still require the full flow — scaled down, not skipped.",
+      "phases": [
+        "DESIGN",
+        "PLAN"
+      ]
+    },
+    {
+      "name": "deterministic-security-scan",
+      "triggers": [
+        "(security|vulnerabilit|owasp|cve|semgrep|trivy|sast|dast|dependency.audit)"
+      ],
+      "trigger_mode": "regex",
+      "hint": "SECURITY SCAN: If semgrep/trivy are installed, run deterministic scans before LLM review. Invoke Skill(auto-claude-skills:security-scanner).",
+      "phases": [
+        "*"
+      ]
+    }
+  ],
   "plugins": [
     {
       "name": "commit-commands",
@@ -1016,22 +1231,6 @@
       "available": false
     }
   ],
-  "context_capabilities": {
-    "context7": false,
-    "context_hub_cli": false,
-    "context_hub_available": false,
-    "serena": false,
-    "forgetful_memory": false,
-    "openspec": false,
-    "posthog": false,
-    "lsp": false
-  },
-  "openspec_capabilities": {
-    "binary": true,
-    "commands": [],
-    "surface": "openspec-core",
-    "warnings": []
-  },
   "phase_compositions": {
     "DISCOVER": {
       "driver": "product-discovery",
@@ -1334,221 +1533,22 @@
       "hints": []
     }
   },
-  "phase_guide": {
-    "DISCOVER": "product-discovery (pull Jira/Confluence context, synthesize discovery brief)",
-    "DESIGN": "brainstorming (ask questions, get approval)",
-    "PLAN": "writing-plans (break into tasks, confirm before execution)",
-    "IMPLEMENT": "executing-plans or subagent-driven-development (offer agent-team-execution for 3+ independent tasks)",
-    "REVIEW": "requesting-code-review",
-    "SHIP": "verification-before-completion + openspec-ship + finishing-a-development-branch",
-    "LEARN": "outcome-review (query metrics, synthesize outcome report, create follow-up work)",
-    "DEBUG": "systematic-debugging, then return to current phase"
+  "frontmatter_schema_version": 1,
+  "context_capabilities": {
+    "context7": false,
+    "context_hub_cli": false,
+    "context_hub_available": false,
+    "serena": false,
+    "forgetful_memory": false,
+    "openspec": false,
+    "posthog": false,
+    "lsp": false
   },
-  "methodology_hints": [
-    {
-      "name": "ralph-loop",
-      "triggers": [
-        "(migrate|refactor.all|fix.all|batch|overnight|autonom|iterate|keep.(going|trying|fixing)|until.*(pass|work|complet|succeed)|make.*tests?.pass|run.*until|loop|coverage|greenfield)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "RALPH LOOP: Consider /ralph-loop for autonomous iteration."
-    },
-    {
-      "name": "pr-review",
-      "triggers": [
-        "(review|pull.?request|code.?review|(^|[^a-z])pr($|[^a-z]))"
-      ],
-      "trigger_mode": "regex",
-      "hint": "PR REVIEW: Consider /pr-review for structured review.",
-      "skill": "requesting-code-review"
-    },
-    {
-      "name": "unified-context-stack-hint",
-      "triggers": [
-        "(library|package|module|sdk|api|docs|documentation|reference|version|latest|upgrade|deprecat|migrat)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "CONTEXT STACK: Use the unified-context-stack for tiered documentation retrieval. Query Context Hub via Context7 (libraryId=/andrewyng/context-hub) first for curated docs, then fall back to broad Context7, then chub CLI, then web search. Read the phase document for your current SDLC phase from the unified-context-stack skill (paths listed in the Context Stack session-start output).",
-      "plugin": "unified-context-stack"
-    },
-    {
-      "name": "github-mcp",
-      "triggers": [
-        "(pull.?request|issue|github|merge|branch|repo|related.pr|similar.change|previous.attempt|what.was.tried|prior.art|code.history)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "GITHUB: If GitHub MCP tools are available, check for related PRs, issues, and workflow runs. Reference any GitHub context already discussed in this session.",
-      "plugin": "github",
-      "phases": [
-        "DESIGN",
-        "PLAN",
-        "DEBUG",
-        "REVIEW",
-        "SHIP"
-      ]
-    },
-    {
-      "name": "atlassian-jira",
-      "triggers": [
-        "(ticket|story|epic|acceptance.criter|definition.of.done|requirement|user.story|jira|sprint|backlog|discover|triage|prioriti)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "ATLASSIAN: If Jira MCP tools are available, pull acceptance criteria and linked context for relevant tickets. Reference any Jira context already discussed in this session.",
-      "phases": [
-        "DISCOVER",
-        "DESIGN",
-        "PLAN"
-      ]
-    },
-    {
-      "name": "atlassian-confluence",
-      "triggers": [
-        "(confluence|wiki|knowledge.base|design.doc|architecture.doc|adr|decision.record)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "ATLASSIAN: If Confluence MCP tools are available, search for relevant design docs and references. Keep searches narrow by title or space.",
-      "phases": [
-        "DESIGN",
-        "PLAN"
-      ]
-    },
-    {
-      "name": "gcp-observability",
-      "triggers": [
-        "(runtime.log|error.group|metric.regress|production.error|staging.error|verify.deploy|post.deploy|list.log|list.metric|trace.search|incident|postmortem|root.cause|outage|error.spike|log.analysis|5[0-9][0-9].error)",
-        "(connection.*(fail|refus|timeout|pool|exhaust)|oom.?kill|crash.?loop|cloud.?sql|proxy.*(restart|error|fail)|pod.*(restart|crash|evict)|sigterm|sigkill|latency.*(spike|p99)|p99.*(latency|spike|degrad)|deploy.*(fail|rollback))"
-      ],
-      "trigger_mode": "regex",
-      "hint": "INCIDENT ANALYSIS: Use Skill(auto-claude-skills:incident-analysis) for structured investigation. Stages: MITIGATE -> CLASSIFY -> (confidence-gated HITL or INVESTIGATE loop) -> EXECUTE -> VALIDATE -> POSTMORTEM. Detect tool tier (MCP > gcloud > guidance). Scope all queries to specific service + environment + narrow time window. Classify incident type against bundled playbooks, capture sanitized evidence, recheck state fingerprint before execution, validate post-mitigation conditions.",
-      "phases": [
-        "SHIP",
-        "DEBUG"
-      ]
-    },
-    {
-      "name": "posthog-metrics",
-      "triggers": [
-        "(metric|adoption|funnel|cohort|experiment|feature.flag|a.?b.test|conversion|retention|churn|engagement|posthog)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "POSTHOG: If PostHog MCP tools are available, query analytics and experiment results directly. Use outcome-review skill for structured post-ship analysis.",
-      "plugin": "posthog",
-      "phases": [
-        "LEARN",
-        "SHIP",
-        "DEBUG"
-      ]
-    },
-    {
-      "name": "gke",
-      "triggers": [
-        "(cluster|kubernetes|k8s|pod|node|namespace|workload|gke)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "GKE: If GKE MCP tools are available, query cluster context and logs. Prefer scoped LQL queries over broad log dumps.",
-      "phases": [
-        "SHIP",
-        "DEBUG"
-      ]
-    },
-    {
-      "name": "cloud-run",
-      "triggers": [
-        "(cloud.?run|serverless.deploy|revision|service.log|cloud.?run.service)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "CLOUD RUN: If Cloud Run MCP tools are available, check service state and recent logs.",
-      "phases": [
-        "SHIP",
-        "DEBUG"
-      ]
-    },
-    {
-      "name": "firebase",
-      "triggers": [
-        "(firebase|firestore|auth.user|security.rules|realtime.db|cloud.function|hosting)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "FIREBASE: If Firebase MCP tools are available, inspect resources read-only (documents, auth, rules). Use CLI for mutations.",
-      "phases": [
-        "IMPLEMENT",
-        "SHIP",
-        "DEBUG"
-      ]
-    },
-    {
-      "name": "playwright-mcp",
-      "triggers": [
-        "(screenshot|visual.test|browser.test|layout.regress|lighthouse|a11y|smoke.test|e2e|playwright)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "PLAYWRIGHT: If Playwright MCP tools are available, use them for visual verification. During REVIEW, use Skill(auto-claude-skills:runtime-validation) as the orchestration entry point for E2E validation.",
-      "phases": [
-        "IMPLEMENT",
-        "REVIEW",
-        "DEBUG",
-        "SHIP"
-      ]
-    },
-    {
-      "name": "frontend-playwright",
-      "triggers": [
-        "(component|page|form|modal|dialog|sidebar|navbar|header|footer|button|dropdown|tooltip|tab|card|widget|dashboard|landing.?page|login.?page|signup|onboard|checkout|ui|frontend|layout|style|css|tailwind|responsive)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "PLAYWRIGHT TESTING: Frontend changes detected. Include Playwright E2E tests covering the changed UI behavior. During REVIEW, use Skill(auto-claude-skills:runtime-validation) for orchestrated E2E and a11y validation.",
-      "phases": [
-        "DESIGN",
-        "IMPLEMENT"
-      ]
-    },
-    {
-      "name": "claude-md-maintenance",
-      "triggers": [
-        "(refactor|restructur|new.convention|architecture.change|reorganize|rename.*(module|package|directory))"
-      ],
-      "trigger_mode": "regex",
-      "hint": "CLAUDE.MD: If this session changed project conventions or structure, consider /revise-claude-md",
-      "skill": "claude-md-improver",
-      "phases": [
-        "IMPLEMENT",
-        "SHIP"
-      ]
-    },
-    {
-      "name": "openspec-ship-reminder",
-      "triggers": [
-        "(ship|merge|deploy|push|release|finish|complete|wrap.?up|finalize)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "OPENSPEC: After verification-before-completion passes, invoke openspec-ship to generate as-built documentation before committing. This is mandatory for feature shipping.",
-      "phases": [
-        "SHIP"
-      ]
-    },
-    {
-      "name": "phase-enforcement",
-      "triggers": [
-        "(fix|change|update|rename|move|add a|modify|edit|refactor|implement|write the|create the)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "PHASE ENFORCEMENT: You are in DESIGN/PLAN phase. Complete the current phase skill before editing implementation files. Small changes still require the full flow — scaled down, not skipped.",
-      "phases": [
-        "DESIGN",
-        "PLAN"
-      ]
-    },
-    {
-      "name": "deterministic-security-scan",
-      "triggers": [
-        "(security|vulnerabilit|owasp|cve|semgrep|trivy|sast|dast|dependency.audit)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "SECURITY SCAN: If semgrep/trivy are installed, run deterministic scans before LLM review. Invoke Skill(auto-claude-skills:security-scanner).",
-      "phases": [
-        "*"
-      ]
-    }
-  ],
+  "openspec_capabilities": {
+    "binary": false,
+    "commands": [],
+    "surface": "none",
+    "warnings": []
+  },
   "warnings": []
 }
