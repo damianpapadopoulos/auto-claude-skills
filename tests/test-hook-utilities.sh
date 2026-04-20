@@ -35,6 +35,8 @@ EOF
     printf '{"name":"untouched","strict":true}\n' > "${unrelated_manifest}"
 
     bash "${FIX_HOOK}" >/dev/null 2>&1
+    local rc=$?
+    assert_equals "hook exits 0 on successful cleanup" "0" "${rc}"
 
     local has_invalid_keys
     has_invalid_keys="$(jq -r 'has("category") or has("source") or has("strict")' "${manifest}" 2>/dev/null)"
@@ -75,6 +77,8 @@ test_serena_nudge_emits_hint_for_symbol_lookup() {
 
     local output
     output="$(printf '%s' '{"tool_name":"Grep","tool_input":{"pattern":"OrderService"}}' | bash "${SERENA_NUDGE_HOOK}" 2>/dev/null)"
+    local rc=$?
+    assert_equals "hook exits 0 when emitting hint" "0" "${rc}"
 
     assert_not_empty "serena hint output is present" "${output}"
     assert_contains "serena hint mentions Serena" "Serena is available" "${output}"
@@ -94,8 +98,10 @@ test_serena_nudge_ignores_non_symbol_regex() {
 
     local output
     output="$(printf '%s' '{"tool_name":"Grep","tool_input":{"pattern":"foo.*bar"}}' | bash "${SERENA_NUDGE_HOOK}" 2>/dev/null)"
+    local rc=$?
 
     assert_equals "regex search does not emit hint" "" "${output}"
+    assert_equals "hook exits 0 for regex pattern" "0" "${rc}"
 
     teardown_test_env
 }
