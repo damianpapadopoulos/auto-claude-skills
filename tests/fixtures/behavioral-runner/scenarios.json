@@ -1,0 +1,15 @@
+[
+  {
+    "id": "well-formed-scenario",
+    "prompt": "tell me about crashloops",
+    "expected_behavior": "Must mention exit codes.",
+    "assertions": [
+      {"text": "exit.code|termination", "description": "Mentions exit codes"}
+    ]
+  },
+  {
+    "id": "malformed-missing-assertions",
+    "prompt": "whatever",
+    "expected_behavior": "n/a"
+  }
+]
