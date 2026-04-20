@@ -733,6 +733,19 @@ if [ -f "${_CLAUDE_JSON}" ] && command -v jq >/dev/null 2>&1; then
     )" || true
 fi
 
+# User-config override: skill-config.json may force context_capabilities on.
+# Augment-only: only upgrades false->true, never downgrades — matches MCP fallback pattern.
+if [ -f "${USER_CONFIG}" ] && jq empty "${USER_CONFIG}" >/dev/null 2>&1; then
+    CONTEXT_CAPS="$(printf '%s' "${CONTEXT_CAPS}" | jq \
+        --slurpfile uc "${USER_CONFIG}" \
+        '($uc[0].context_capabilities // {}) as $ovr |
+         reduce ($ovr | to_entries[]) as $e (.;
+             if ($e.value == true) and (.[$e.key] == false or .[$e.key] == null)
+             then .[$e.key] = true
+             else . end)'
+    )" || true
+fi
+
 # Override unified-context-stack plugin available flag when any capability is present
 if printf '%s' "${CONTEXT_CAPS}" | jq -e 'to_entries | any(.value == true)' >/dev/null 2>&1; then
     PLUGINS_JSON="$(printf '%s' "${PLUGINS_JSON}" | jq '

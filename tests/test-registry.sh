@@ -640,6 +640,27 @@ test_lsp_guidance_in_output_when_present() {
     teardown_test_env
 }
 
+test_lsp_user_config_override() {
+    echo "-- test: lsp honors skill-config.json override --"
+    setup_test_env
+
+    rm -rf "${HOME}/.claude/plugins"
+
+    # Write user config override
+    cat > "${HOME}/.claude/skill-config.json" <<'EOF'
+{"context_capabilities": {"lsp": true}}
+EOF
+
+    run_hook >/dev/null
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    local lsp_val
+    lsp_val="$(jq -r '.context_capabilities.lsp' "${cache_file}" 2>/dev/null)"
+    assert_equals "lsp=true via skill-config.json override" "true" "${lsp_val}"
+
+    teardown_test_env
+}
+
 test_lsp_guidance_absent_when_not_installed() {
     echo "-- test: LSP guidance line absent when code-intelligence not installed --"
     setup_test_env
@@ -1010,6 +1031,7 @@ test_context_capabilities_all_false
 test_context_capabilities_in_health_output
 test_lsp_guidance_in_output_when_present
 test_lsp_guidance_absent_when_not_installed
+test_lsp_user_config_override
 test_openspec_ship_chain_consistency
 test_openspec_binary_detected
 test_openspec_binary_absent
