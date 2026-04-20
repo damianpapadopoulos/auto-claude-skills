@@ -545,6 +545,29 @@ test_context_capabilities_detection() {
     teardown_test_env
 }
 
+test_lsp_capability_shape() {
+    echo "-- test: context_capabilities has lsp key --"
+    setup_test_env
+
+    rm -rf "${HOME}/.claude/plugins"
+
+    run_hook >/dev/null
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+
+    # lsp key must exist in context_capabilities (shape assertion)
+    local has_lsp
+    has_lsp="$(jq '.context_capabilities | has("lsp")' "${cache_file}" 2>/dev/null)"
+    assert_equals "context_capabilities has lsp key" "true" "${has_lsp}"
+
+    # lsp must default to false when no code-intelligence plugin or ide MCP configured
+    local lsp_val
+    lsp_val="$(jq -r '.context_capabilities.lsp' "${cache_file}" 2>/dev/null)"
+    assert_equals "lsp is false when nothing installed" "false" "${lsp_val}"
+
+    teardown_test_env
+}
+
 test_context_capabilities_all_false() {
     echo "-- test: context_capabilities all false when nothing installed --"
     setup_test_env
@@ -941,6 +964,7 @@ test_auto_discovers_unknown_plugins
 test_health_check_reports_new_plugins
 test_fallback_registry_skill_coverage
 test_context_capabilities_detection
+test_lsp_capability_shape
 test_context_capabilities_all_false
 test_context_capabilities_in_health_output
 test_openspec_ship_chain_consistency
