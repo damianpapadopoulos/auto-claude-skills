@@ -21,9 +21,10 @@ If a reviewer claims incorrect API usage:
 - If the reviewer is wrong, cite the documentation source in your response
 
 ### 2. Internal Truth (Dependency Safety)
-If a reviewer suggests an architectural change:
+If a reviewer suggests an architectural change or claims an error exists:
+- **lsp=true** (reviewer claims type/compile error): Use `mcp__ide__getDiagnostics` to verify before responding — authoritative output either confirms the reviewer or refutes the claim
 - **serena=true**: Use `find_referencing_symbols` to map all downstream dependencies before implementing
-- **serena=false**: Use Grep to find all references, Read to verify each usage. Extra caution on complex hierarchies.
+- **serena=false and lsp=false**: Use Grep to find all references, Read to verify each usage. Extra caution on complex hierarchies.
 - Flag any files that would break silently from the proposed change
 
 ### 3. Historical Truth (Convention Check)
