@@ -622,6 +622,47 @@ test_context_capabilities_in_health_output() {
     teardown_test_env
 }
 
+test_lsp_guidance_in_output_when_present() {
+    echo "-- test: LSP guidance line appears when code-intelligence installed --"
+    setup_test_env
+
+    # Install code-intelligence plugin (mock)
+    mkdir -p "${HOME}/.claude/plugins/cache/claude-plugins-official/code-intelligence"
+
+    local output
+    output="$(run_hook)"
+
+    local context
+    context="$(printf '%s' "${output}" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+    assert_contains "output contains lsp=true flag" "lsp=true" "${context}"
+    assert_contains "output contains LSP guidance line" "mcp__ide__getDiagnostics" "${context}"
+
+    teardown_test_env
+}
+
+test_lsp_guidance_absent_when_not_installed() {
+    echo "-- test: LSP guidance line absent when code-intelligence not installed --"
+    setup_test_env
+
+    rm -rf "${HOME}/.claude/plugins"
+
+    local output
+    output="$(run_hook)"
+
+    local context
+    context="$(printf '%s' "${output}" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+    # Guidance line must NOT appear when lsp=false (zero-noise contract)
+    if printf '%s' "${context}" | grep -q "mcp__ide__getDiagnostics"; then
+        echo "  FAIL: LSP guidance line appeared when lsp=false"
+        TESTS_FAILED=$((${TESTS_FAILED:-0} + 1))
+    else
+        echo "  PASS: LSP guidance line absent when not installed"
+        TESTS_PASSED=$((${TESTS_PASSED:-0} + 1))
+    fi
+
+    teardown_test_env
+}
+
 # ---------------------------------------------------------------------------
 # openspec-ship chain rewires are consistent
 # ---------------------------------------------------------------------------
@@ -967,6 +1008,8 @@ test_context_capabilities_detection
 test_lsp_capability_shape
 test_context_capabilities_all_false
 test_context_capabilities_in_health_output
+test_lsp_guidance_in_output_when_present
+test_lsp_guidance_absent_when_not_installed
 test_openspec_ship_chain_consistency
 test_openspec_binary_detected
 test_openspec_binary_absent
