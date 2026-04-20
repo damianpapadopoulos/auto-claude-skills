@@ -7,7 +7,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 . "${SCRIPT_DIR}/test-helpers.sh"
 
 FIX_HOOK="${PROJECT_ROOT}/hooks/fix-plugin-manifests.sh"
-SERENA_HOOK="${PROJECT_ROOT}/hooks/serena-nudge.sh"
+SERENA_NUDGE_HOOK="${PROJECT_ROOT}/hooks/serena-nudge.sh"
 PRE_COMPACT_HOOK="${PROJECT_ROOT}/hooks/pre-compact-hook.sh"
 SETUP_DEV_SCRIPT="${PROJECT_ROOT}/scripts/setup-dev.sh"
 
@@ -74,7 +74,7 @@ test_serena_nudge_emits_hint_for_symbol_lookup() {
     write_serena_registry
 
     local output
-    output="$(printf '%s' '{"tool_name":"Grep","tool_input":{"pattern":"OrderService"}}' | bash "${SERENA_HOOK}" 2>/dev/null)"
+    output="$(printf '%s' '{"tool_name":"Grep","tool_input":{"pattern":"OrderService"}}' | bash "${SERENA_NUDGE_HOOK}" 2>/dev/null)"
 
     assert_not_empty "serena hint output is present" "${output}"
     assert_contains "serena hint mentions Serena" "Serena is available" "${output}"
@@ -93,7 +93,7 @@ test_serena_nudge_ignores_non_symbol_regex() {
     write_serena_registry
 
     local output
-    output="$(printf '%s' '{"tool_name":"Grep","tool_input":{"pattern":"foo.*bar"}}' | bash "${SERENA_HOOK}" 2>/dev/null)"
+    output="$(printf '%s' '{"tool_name":"Grep","tool_input":{"pattern":"foo.*bar"}}' | bash "${SERENA_NUDGE_HOOK}" 2>/dev/null)"
 
     assert_equals "regex search does not emit hint" "" "${output}"
 
@@ -123,7 +123,7 @@ test_pre_compact_hook_logs_and_runs_cozempic() {
     printf 'transcript body\n' > "${transcript}"
 
     cat > "${HOME}/.local/bin/cozempic" <<EOF
-#!/bin/bash
+#!/usr/bin/env bash
 printf '%s\n' "\$*" >> "${command_log}"
 exit 0
 EOF
