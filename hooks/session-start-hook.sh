@@ -98,6 +98,9 @@ DEFAULT_JSON=""
 if [ -f "${DEFAULT_TRIGGERS}" ]; then
     DEFAULT_JSON="$(cat "${DEFAULT_TRIGGERS}")"
 fi
+# Pristine snapshot — DEFAULT_JSON may be mutated by preset activation (Step 6c).
+# The fallback writer must use this untouched copy to stay machine-agnostic.
+DEFAULT_JSON_PRISTINE="${DEFAULT_JSON}"
 
 # -----------------------------------------------------------------
 # Frontmatter parser: extract routing metadata from SKILL.md files
@@ -874,23 +877,34 @@ printf '%s' "${RESULT}" | jq '.registry' > "${CACHE_FILE}.tmp.$$" && mv "${CACHE
 # structurally valid registry, not a snapshot of any particular machine.
 # Runtime cache (CACHE_FILE) keeps the machine-accurate flags for routing.
 _FALLBACK="${PLUGIN_ROOT}/config/fallback-registry.json"
-if [ -d "${PLUGIN_ROOT}/config" ] && [ -z "${_SKILL_TEST_MODE:-}" ] && [ -n "${DEFAULT_JSON}" ]; then
-    _new_fallback="$(printf '%s' "${RESULT}" | jq \
-        --argjson default "${DEFAULT_JSON}" \
-        '.registry as $r |
-         # Start from canonical default-triggers and merge in the computed
-         # context_capabilities shape (keys only, all values zeroed).
-         $default
-         | .skills = [(.skills // [])[] | . + {available: false, enabled: (.enabled // true)}]
-         | .plugins = [(.plugins // [])[] | . + {available: false}]
-         | .version = ($r.version // "4.0.0-fallback")
-         | .frontmatter_schema_version = ($r.frontmatter_schema_version // 1)
-         | .context_capabilities = ($r.context_capabilities | with_entries(.value = false))
-         | .openspec_capabilities = {binary: false, commands: [], surface: "none", warnings: []}
-         | .phase_compositions = ($r.phase_compositions // {})
-         | .phase_guide = ($r.phase_guide // {})
-         | .methodology_hints = ($r.methodology_hints // [])
-         | .warnings = []
+if [ -d "${PLUGIN_ROOT}/config" ] && [ -z "${_SKILL_TEST_MODE:-}" ] && [ -n "${DEFAULT_JSON_PRISTINE}" ]; then
+    # Build fallback from pristine default-triggers.json only.
+    # No user-config, no presets, no auto-discovery, no RESULT — pure curated shape.
+    # Canonical context_capabilities keys are hardcoded here (kept in sync with
+    # the CONTEXT_CAPS jq expression above; if you add a capability flag, add it here too).
+    _new_fallback="$(printf '%s' "${DEFAULT_JSON_PRISTINE}" | jq '
+        . as $d |
+        {
+            version: ($d.version // "4.0.0-fallback"),
+            frontmatter_schema_version: 1,
+            skills: [($d.skills // [])[] | . + {available: false, enabled: (.enabled // true)}],
+            plugins: [($d.plugins // [])[] | . + {available: false}],
+            context_capabilities: {
+                context7: false,
+                context_hub_cli: false,
+                context_hub_available: false,
+                serena: false,
+                forgetful_memory: false,
+                openspec: false,
+                posthog: false,
+                lsp: false
+            },
+            openspec_capabilities: {binary: false, commands: [], surface: "none", warnings: []},
+            phase_compositions: ($d.phase_compositions // {}),
+            phase_guide: ($d.phase_guide // {}),
+            methodology_hints: ($d.methodology_hints // []),
+            warnings: []
+        }
     ')"
     if [ -f "${_FALLBACK}" ]; then
         _existing="$(cat "${_FALLBACK}" 2>/dev/null)"
