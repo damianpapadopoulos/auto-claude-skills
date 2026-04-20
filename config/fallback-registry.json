@@ -871,6 +871,26 @@
       "available": true
     },
     {
+      "name": "code-intelligence",
+      "source": "claude-plugins-official",
+      "provides": {
+        "commands": [],
+        "skills": [],
+        "agents": [],
+        "hooks": [],
+        "mcp_tools": [
+          "getDiagnostics"
+        ]
+      },
+      "phase_fit": [
+        "IMPLEMENT",
+        "DEBUG",
+        "REVIEW"
+      ],
+      "description": "Language-server-backed diagnostics via mcp__ide__getDiagnostics. Complementary to Serena — LSP for compiler/type errors, Serena for symbol navigation and structural edits.",
+      "available": false
+    },
+    {
       "name": "github",
       "source": "claude-plugins-official",
       "provides": {
@@ -1150,7 +1170,8 @@
     "serena": true,
     "forgetful_memory": true,
     "openspec": true,
-    "posthog": false
+    "posthog": false,
+    "lsp": false
   },
   "openspec_capabilities": {
     "binary": true,
