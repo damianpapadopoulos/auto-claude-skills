@@ -41,7 +41,7 @@ Note: Atlassian (Jira/Confluence) is available as a claude.ai managed integratio
 | feature-dev | claude-plugins-official | DESIGN | Parallel exploration and architecture agents |
 | hookify | claude-plugins-official | DESIGN | Custom behavior rule authoring |
 | skill-creator | claude-plugins-official | DESIGN | Skill eval/improvement with benchmarking |
-| code-intelligence | claude-plugins-official | IMPLEMENT, DEBUG, REVIEW | Language-server diagnostics via `mcp__ide__getDiagnostics` — complementary to Serena (LSP for type/compile errors, Serena for symbol nav and edits) |
+| `<language>-lsp` family | claude-plugins-official | IMPLEMENT, DEBUG, REVIEW | Per-language LSP plugins (e.g. `typescript-lsp`, `pyright-lsp`, `gopls-lsp`, `rust-analyzer-lsp`, `jdtls-lsp`, `clangd-lsp`, `csharp-lsp`, `kotlin-lsp`, `lua-lsp`, `php-lsp`, `ruby-lsp`, `swift-lsp`). Install the one(s) matching your stack. Any installed `*-lsp` plugin enables `mcp__ide__getDiagnostics` — complementary to Serena (LSP for type/compile errors, Serena for symbol nav and edits) |
 
 For each plugin the user wants, run:
 ```bash

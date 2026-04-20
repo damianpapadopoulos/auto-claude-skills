@@ -669,6 +669,21 @@ if command -v openspec >/dev/null 2>&1; then
     _has_openspec=true
 fi
 
+# LSP plugin: scan installed plugin manifests for the canonical `lspServers` key.
+# Claude Code's LSP plugin family (typescript-lsp, pyright-lsp, gopls-lsp, rust-analyzer-lsp,
+# jdtls-lsp, clangd-lsp, csharp-lsp, kotlin-lsp, lua-lsp, php-lsp, ruby-lsp, swift-lsp, ...)
+# each declare `lspServers` in their plugin.json. Any one of them present is sufficient to
+# flip lsp=true. Bash-side scan, early-exit on first match.
+_has_lsp_plugin=false
+for _pjson in "${HOME}/.claude/plugins/cache"/*/*/.claude-plugin/plugin.json \
+              "${HOME}/.claude/plugins/cache"/*/*/*/.claude-plugin/plugin.json; do
+    [ -f "${_pjson}" ] || continue
+    if jq -e 'has("lspServers") and (.lspServers | length > 0)' "${_pjson}" >/dev/null 2>&1; then
+        _has_lsp_plugin=true
+        break
+    fi
+done
+
 # -----------------------------------------------------------------
 # Step 8e: Detect OpenSpec capabilities (workspace commands + surface)
 # -----------------------------------------------------------------
@@ -713,12 +728,12 @@ _CANONICAL_CAP_KEYS='["context7","context_hub_cli","context_hub_available","sere
 CONTEXT_CAPS="$(printf '%s' "${PLUGINS_JSON}" | jq \
     --argjson chub "${_has_chub_cli}" \
     --argjson openspec "${_has_openspec}" \
+    --argjson lsp "${_has_lsp_plugin}" \
     '[.[] | select(.available == true) | .name] as $avail |
     ($avail | index("context7") != null) as $c7 |
     ($avail | index("serena") != null) as $ser |
     ($avail | index("forgetful") != null) as $fm |
     ($avail | index("posthog") != null) as $ph |
-    ($avail | index("code-intelligence") != null) as $lsp |
     {context7:$c7, context_hub_cli:$chub, context_hub_available:$c7, serena:$ser, forgetful_memory:$fm, openspec:$openspec, posthog:$ph, lsp:$lsp}'
 )"
 

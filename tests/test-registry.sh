@@ -302,13 +302,13 @@ test_default_triggers_has_plugins_section() {
     local plugin_count
     plugin_count="$(jq '.plugins | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
 
-    # Should have 12 curated plugins (5 enhancers + context7 + code-intelligence + github + atlassian + forgetful + unified-context-stack + posthog)
-    assert_equals "default-triggers has 12 plugins" "12" "${plugin_count}"
+    # Should have 11 curated plugins (5 enhancers + context7 + github + atlassian + forgetful + unified-context-stack + posthog)
+    assert_equals "default-triggers has 11 plugins" "11" "${plugin_count}"
 
     # Each plugin should have required fields
     local valid_count
     valid_count="$(jq '[.plugins[] | select(.name and .source and .provides and .phase_fit and .description)] | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "all plugins have required fields" "12" "${valid_count}"
+    assert_equals "all plugins have required fields" "11" "${valid_count}"
 
     teardown_test_env
 }
@@ -560,7 +560,7 @@ test_lsp_capability_shape() {
     has_lsp="$(jq '.context_capabilities | has("lsp")' "${cache_file}" 2>/dev/null)"
     assert_equals "context_capabilities has lsp key" "true" "${has_lsp}"
 
-    # lsp must default to false when no code-intelligence plugin or ide MCP configured
+    # lsp must default to false when no LSP plugin or ide MCP configured
     local lsp_val
     lsp_val="$(jq -r '.context_capabilities.lsp' "${cache_file}" 2>/dev/null)"
     assert_equals "lsp is false when nothing installed" "false" "${lsp_val}"
@@ -623,11 +623,26 @@ test_context_capabilities_in_health_output() {
 }
 
 test_lsp_guidance_in_output_when_present() {
-    echo "-- test: LSP guidance line appears when code-intelligence installed --"
+    echo "-- test: LSP guidance line appears when an lspServers plugin is installed --"
     setup_test_env
 
-    # Install code-intelligence plugin (mock)
-    mkdir -p "${HOME}/.claude/plugins/cache/claude-plugins-official/code-intelligence"
+    # Install a mock LSP plugin with the canonical lspServers manifest shape
+    local lsp_dir="${HOME}/.claude/plugins/cache/claude-plugins-official/mock-lsp/1.0.0/.claude-plugin"
+    mkdir -p "${lsp_dir}"
+    cat > "${lsp_dir}/plugin.json" <<'EOF'
+{
+  "name": "mock-lsp",
+  "description": "Mock LSP plugin for tests",
+  "version": "1.0.0",
+  "lspServers": {
+    "mock": {
+      "command": "mock-language-server",
+      "args": ["--stdio"],
+      "extensionToLanguage": {".mock": "mock"}
+    }
+  }
+}
+EOF
 
     local output
     output="$(run_hook)"
@@ -721,7 +736,7 @@ EOF
 }
 
 test_lsp_guidance_absent_when_not_installed() {
-    echo "-- test: LSP guidance line absent when code-intelligence not installed --"
+    echo "-- test: LSP guidance line absent when no lspServers plugin installed --"
     setup_test_env
 
     rm -rf "${HOME}/.claude/plugins"
