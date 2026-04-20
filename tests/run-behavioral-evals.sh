@@ -137,11 +137,52 @@ if [ -z "${RAW_OUTPUT}" ]; then
     exit 2
 fi
 
-# Hand off to assertion evaluation (added in Task 4).
+# -------- info header --------
 echo "scenario: ${SCENARIO_ID} (model=${MODEL}, elapsed=${elapsed}s)"
 echo "--- raw output (first 200 chars) ---"
 printf '%s\n' "${RAW_OUTPUT}" | head -c 200
 echo ""
-# Placeholder pass signal until Task 4 lands:
-echo "PASS: invocation completed (scenario: ${SCENARIO_ID})"
-exit 0
+
+# -------- assertion evaluation --------
+ASSERTION_RESULTS_JSON="[]"
+ALL_PASSED=1
+
+i=0
+while [ "${i}" -lt "${ASSERTION_COUNT}" ]; do
+    a_text="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${i}].text")"
+    a_desc="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${i}].description")"
+
+    # Case-insensitive regex match via grep -E -i. Non-zero exit = no match.
+    if printf '%s' "${RAW_OUTPUT}" | grep -E -i -q "${a_text}"; then
+        verdict="PASS"
+        passed=true
+    else
+        verdict="FAIL"
+        passed=false
+        ALL_PASSED=0
+    fi
+
+    printf '  %s [%d]: %s  (regex: %s)\n' "${verdict}" "${i}" "${a_desc}" "${a_text}"
+
+    ASSERTION_RESULTS_JSON="$(
+        printf '%s' "${ASSERTION_RESULTS_JSON}" | jq \
+            --argjson idx "${i}" \
+            --arg desc "${a_desc}" \
+            --arg regex "${a_text}" \
+            --argjson passed "${passed}" \
+            '. + [{index: $idx, description: $desc, regex: $regex, passed: $passed}]'
+    )"
+    i=$((i + 1))
+done
+
+# -------- overall verdict --------
+if [ "${ALL_PASSED}" = "1" ]; then
+    echo "scenario ${SCENARIO_ID}: OVERALL PASS"
+    overall=0
+else
+    echo "scenario ${SCENARIO_ID}: OVERALL FAIL"
+    overall=1
+fi
+
+# Artifact emission added in Task 5.
+exit "${overall}"

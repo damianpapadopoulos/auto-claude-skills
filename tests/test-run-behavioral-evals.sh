@@ -102,4 +102,30 @@ assert_equals "exits 0 when invocation completes and assertions pass" "0" "${exi
 assert_contains "output reports PASS for the matching assertion" "PASS" "${output}"
 assert_contains "output names the matched scenario id" "well-formed-scenario" "${output}"
 
+# ---------------------------------------------------------------------------
+# Verdict: stubbed claude returns a response that does NOT match the assertion
+# ---------------------------------------------------------------------------
+echo "-- verdict: stubbed claude fail case --"
+
+FAIL_RESPONSE_FILE="${TMPDIR:-/tmp}/acs-mock-fail-$$.txt"
+cat > "${FAIL_RESPONSE_FILE}" <<'EOF'
+I don't know much about this incident. Could you provide more details?
+EOF
+
+output="$(MOCK_RESPONSE_FILE="${FAIL_RESPONSE_FILE}" \
+BEHAVIORAL_EVALS=1 \
+CLAUDE_BIN="${PROJECT_ROOT}/tests/fixtures/behavioral-runner/mock-claude.sh" \
+ARTIFACTS_DIR="${TMPDIR:-/tmp}/acs-artifacts-$$" \
+SKILL_PATH="${PROJECT_ROOT}/skills/incident-analysis/SKILL.md" \
+bash "${RUNNER}" \
+  --scenario well-formed-scenario \
+  --pack "${PROJECT_ROOT}/tests/fixtures/behavioral-runner/scenarios.json" 2>&1)"
+exit_code=$?
+
+assert_equals "exits 1 when at least one assertion fails" "1" "${exit_code}"
+assert_contains "output reports FAIL for the unmatched assertion" "FAIL" "${output}"
+assert_contains "output names the failing assertion description" "Mentions exit codes" "${output}"
+
+rm -f "${FAIL_RESPONSE_FILE}"
+
 print_summary
