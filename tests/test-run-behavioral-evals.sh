@@ -166,6 +166,7 @@ if [ -n "${artifact_file}" ] && [ -f "${artifact_file}" ]; then
 
     assert_equals "artifact scenario_id matches" "well-formed-scenario" "${scenario_id}"
     assert_contains "artifact model field is populated" "mock" "${model}"
+    assert_not_contains "artifact model is not 'unknown' (parser reaches real .model or .modelUsage key)" "unknown" "${model}"
     assert_contains "artifact raw_output contains captured text" "137" "${raw_output}"
     assert_equals "artifact overall_passed is true" "true" "${overall}"
     assert_equals "artifact records one assertion" "1" "${assertion_count}"
