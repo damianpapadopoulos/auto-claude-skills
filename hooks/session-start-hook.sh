@@ -865,11 +865,20 @@ fi
 printf '%s' "${RESULT}" | jq '.registry' > "${CACHE_FILE}.tmp.$$" && mv "${CACHE_FILE}.tmp.$$" "${CACHE_FILE}"
 
 # -----------------------------------------------------------------
-# Step 10c: Auto-regenerate fallback registry
+# Step 10c: Auto-regenerate fallback registry (sanitized)
 # -----------------------------------------------------------------
+# The committed fallback is a zero-trust canonical shape — all .available=false
+# and all context_capabilities=false. It exists to give the no-jq path a
+# structurally valid registry, not a snapshot of the writer's machine. Runtime
+# cache (CACHE_FILE) keeps the machine-accurate flags.
 _FALLBACK="${PLUGIN_ROOT}/config/fallback-registry.json"
 if [ -d "${PLUGIN_ROOT}/config" ] && [ -z "${_SKILL_TEST_MODE:-}" ]; then
-    _new_fallback="$(printf '%s' "${RESULT}" | jq '.registry')"
+    _new_fallback="$(printf '%s' "${RESULT}" | jq '
+        .registry
+        | .skills = [.skills[] | .available = false]
+        | .plugins = [.plugins[] | .available = false]
+        | .context_capabilities = (.context_capabilities | with_entries(.value = false))
+    ')"
     if [ -f "${_FALLBACK}" ]; then
         _existing="$(cat "${_FALLBACK}" 2>/dev/null)"
         if [ "${_new_fallback}" != "${_existing}" ]; then
