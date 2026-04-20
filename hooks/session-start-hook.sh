@@ -708,7 +708,8 @@ CONTEXT_CAPS="$(printf '%s' "${PLUGINS_JSON}" | jq \
     ($avail | index("serena") != null) as $ser |
     ($avail | index("forgetful") != null) as $fm |
     ($avail | index("posthog") != null) as $ph |
-    {context7:$c7, context_hub_cli:$chub, context_hub_available:$c7, serena:$ser, forgetful_memory:$fm, openspec:$openspec, posthog:$ph}'
+    ($avail | index("code-intelligence") != null) as $lsp |
+    {context7:$c7, context_hub_cli:$chub, context_hub_available:$c7, serena:$ser, forgetful_memory:$fm, openspec:$openspec, posthog:$ph, lsp:$lsp}'
 )"
 
 # MCP fallback: check ~/.claude.json for servers not detected via plugins
@@ -727,7 +728,8 @@ if [ -f "${_CLAUDE_JSON}" ] && command -v jq >/dev/null 2>&1; then
          if .serena == false and ($all_mcp | has("serena")) then .serena = true else . end |
          if .forgetful_memory == false and ($all_mcp | has("forgetful")) then .forgetful_memory = true else . end |
          if .context7 == false and ($all_mcp | has("context7")) then .context7 = true else . end |
-         if .posthog == false and ($all_mcp | has("posthog")) then .posthog = true else . end'
+         if .posthog == false and ($all_mcp | has("posthog")) then .posthog = true else . end |
+         if .lsp == false and ($all_mcp | has("ide")) then .lsp = true else . end'
     )" || true
 fi
 
