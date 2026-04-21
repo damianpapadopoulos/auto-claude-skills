@@ -657,7 +657,7 @@ EOF
 }
 
 test_lsp_false_positive_guard_when_binary_missing() {
-    echo "-- test: lsp=false when lspServers plugin present but command binary missing --"
+    echo "-- test: lsp=false + partial-install diagnostic when binary missing --"
     setup_test_env
 
     # Install a mock LSP plugin declaring a command that does not exist on PATH anywhere
@@ -691,6 +691,11 @@ EOF
         echo "  PASS: LSP guidance line absent when binary missing"
         TESTS_PASSED=$((${TESTS_PASSED:-0} + 1))
     fi
+
+    # Partial-install diagnostic: tell the user exactly which plugin + which binary is missing
+    assert_contains "partial-install diagnostic emitted" "LSP (partial install)" "${context}"
+    assert_contains "diagnostic names the plugin" "mock-lsp-missing" "${context}"
+    assert_contains "diagnostic names the missing binary" "this-language-server-does-not-exist-anywhere-on-path" "${context}"
 
     teardown_test_env
 }

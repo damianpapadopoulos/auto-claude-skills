@@ -677,23 +677,35 @@ fi
 # can be present without its backing binary (user installed the plugin but not the server),
 # in which case mcp__ide__getDiagnostics would fail at runtime. Flipping lsp=true only when
 # at least one command is resolvable prevents false-positive guidance.
-# Bash-side scan, early-exit on first plugin+binary pair that resolves.
+#
+# Also captures plugin-present-binary-missing pairs so the hook can emit a "partial LSP
+# install" diagnostic at session-start telling the user exactly which binary to install.
 _has_lsp_plugin=false
+_lsp_partial=""   # "<plugin-name>|<missing-cmd-csv>" entries, newline-separated
 for _pjson in "${HOME}/.claude/plugins/cache"/*/*/.claude-plugin/plugin.json \
               "${HOME}/.claude/plugins/cache"/*/*/*/.claude-plugin/plugin.json; do
     [ -f "${_pjson}" ] || continue
     # Extract non-null .lspServers.*.command values, newline-separated (empty if no lspServers).
     _lsp_cmds="$(jq -r '(.lspServers // {}) | to_entries[] | .value.command // empty' "${_pjson}" 2>/dev/null)"
     [ -z "${_lsp_cmds}" ] && continue
+    _plugin_name="$(jq -r '.name // "unknown"' "${_pjson}" 2>/dev/null)"
+    _missing_for_plugin=""
+    _any_resolved=0
     while IFS= read -r _cmd; do
         [ -z "${_cmd}" ] && continue
         if command -v "${_cmd}" >/dev/null 2>&1; then
+            _any_resolved=1
             _has_lsp_plugin=true
-            break 2
+        else
+            _missing_for_plugin="${_missing_for_plugin}${_missing_for_plugin:+,}${_cmd}"
         fi
     done <<LSPEOF
 ${_lsp_cmds}
 LSPEOF
+    if [ "${_any_resolved}" -eq 0 ] && [ -n "${_missing_for_plugin}" ]; then
+        _lsp_partial="${_lsp_partial}${_lsp_partial:+
+}${_plugin_name}|${_missing_for_plugin}"
+    fi
 done
 
 # -----------------------------------------------------------------
@@ -1071,6 +1083,20 @@ fi
 if printf '%s' "${CONTEXT_CAPS}" | jq -e '.lsp == true' >/dev/null 2>&1; then
     CONTEXT="${CONTEXT}
 LSP: Use mcp__ide__getDiagnostics for compile/type errors before grepping. Complementary to Serena — LSP for diagnostics, Serena for symbol navigation and structural edits."
+elif [ -n "${_lsp_partial}" ]; then
+    # Plugin-present-binary-missing diagnostic — tell the user exactly what to install.
+    # Emit once, listing every partial plugin and its missing command(s).
+    _lsp_hint_body=""
+    while IFS= read -r _entry; do
+        [ -z "${_entry}" ] && continue
+        _pname="${_entry%%|*}"
+        _cmds="${_entry#*|}"
+        _lsp_hint_body="${_lsp_hint_body}${_lsp_hint_body:+; }${_pname} needs ${_cmds}"
+    done <<LSPHINTEOF
+${_lsp_partial}
+LSPHINTEOF
+    CONTEXT="${CONTEXT}
+LSP (partial install): ${_lsp_hint_body}. Install the backing language-server binary to enable lsp=true. See the plugin's README for the install command."
 fi
 
 # Emit Forgetful usage hint when available
