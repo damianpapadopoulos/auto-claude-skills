@@ -656,6 +656,37 @@ EOF
     teardown_test_env
 }
 
+test_lsp_ide_mcp_does_not_enable_lsp() {
+    echo "-- test: ide MCP server alone does NOT flip lsp=true (no false-positive via MCP) --"
+    setup_test_env
+
+    rm -rf "${HOME}/.claude/plugins"
+
+    # Write a ~/.claude.json with an `ide` MCP server configured. Under the old incorrect
+    # contract this would have flipped lsp=true. Under the shipped contract it must NOT,
+    # because there is no backing-binary check on the MCP signal and LSP plugins don't
+    # use mcpServers anyway.
+    cat > "${HOME}/.claude.json" <<'EOF'
+{
+  "mcpServers": {
+    "ide": {
+      "command": "some-mcp-server",
+      "args": []
+    }
+  }
+}
+EOF
+
+    run_hook >/dev/null
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    local lsp_val
+    lsp_val="$(jq -r '.context_capabilities.lsp' "${cache_file}" 2>/dev/null)"
+    assert_equals "ide MCP server alone does not enable lsp" "false" "${lsp_val}"
+
+    teardown_test_env
+}
+
 test_lsp_false_positive_guard_when_binary_missing() {
     echo "-- test: lsp=false + partial-install diagnostic when binary missing --"
     setup_test_env
@@ -1149,6 +1180,7 @@ test_lsp_capability_shape
 test_context_capabilities_all_false
 test_context_capabilities_in_health_output
 test_lsp_guidance_in_output_when_present
+test_lsp_ide_mcp_does_not_enable_lsp
 test_lsp_false_positive_guard_when_binary_missing
 test_lsp_guidance_absent_when_not_installed
 test_lsp_user_config_override

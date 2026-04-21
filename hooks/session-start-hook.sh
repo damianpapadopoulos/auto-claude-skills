@@ -777,10 +777,15 @@ if [ -f "${_CLAUDE_JSON}" ] && command -v jq >/dev/null 2>&1; then
          if .serena == false and ($all_mcp | has("serena")) then .serena = true else . end |
          if .forgetful_memory == false and ($all_mcp | has("forgetful")) then .forgetful_memory = true else . end |
          if .context7 == false and ($all_mcp | has("context7")) then .context7 = true else . end |
-         if .posthog == false and ($all_mcp | has("posthog")) then .posthog = true else . end |
-         if .lsp == false and ($all_mcp | has("ide")) then .lsp = true else . end'
+         if .posthog == false and ($all_mcp | has("posthog")) then .posthog = true else . end'
     )" || true
 fi
+# Note: no MCP fallback for lsp. Claude Code's LSP family uses the `lspServers` plugin-manifest
+# primitive, not MCP servers, and is detected earlier via the `_has_lsp_plugin` scan with a
+# mandatory `command -v` check. An `ide` MCP entry in ~/.claude.json would not guarantee a
+# working language server on PATH, so flipping lsp=true on that signal alone would re-introduce
+# the false-positive the plugin+binary contract is designed to prevent. Users who need to force
+# lsp=true can use `skill-config.json` `context_capabilities.lsp: true`.
 
 # User-config override: skill-config.json may force context_capabilities on.
 # Augment-only: only upgrades false->true, never downgrades — matches MCP fallback pattern.
