@@ -27,9 +27,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          # Cache global npm install so repeated workflow runs are fast
-          cache: npm
-          cache-dependency-path: "**/package-lock.json"
 
       # Pinned version (not @latest) so a breaking OpenSpec release does not
       # silently break PR gating. Bump deliberately via a PR that updates

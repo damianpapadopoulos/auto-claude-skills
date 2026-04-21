@@ -302,13 +302,13 @@ test_default_triggers_has_plugins_section() {
     local plugin_count
     plugin_count="$(jq '.plugins | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
 
-    # Should have 11 curated plugins (5 enhancers + context7 + github + atlassian + forgetful + unified-context-stack + posthog)
-    assert_equals "default-triggers has 11 plugins" "11" "${plugin_count}"
+    # Should have 12 curated plugins (5 enhancers + context7 + code-intelligence + github + atlassian + forgetful + unified-context-stack + posthog)
+    assert_equals "default-triggers has 12 plugins" "12" "${plugin_count}"
 
     # Each plugin should have required fields
     local valid_count
     valid_count="$(jq '[.plugins[] | select(.name and .source and .provides and .phase_fit and .description)] | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "all plugins have required fields" "11" "${valid_count}"
+    assert_equals "all plugins have required fields" "12" "${valid_count}"
 
     teardown_test_env
 }
@@ -545,6 +545,29 @@ test_context_capabilities_detection() {
     teardown_test_env
 }
 
+test_lsp_capability_shape() {
+    echo "-- test: context_capabilities has lsp key --"
+    setup_test_env
+
+    rm -rf "${HOME}/.claude/plugins"
+
+    run_hook >/dev/null
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+
+    # lsp key must exist in context_capabilities (shape assertion)
+    local has_lsp
+    has_lsp="$(jq '.context_capabilities | has("lsp")' "${cache_file}" 2>/dev/null)"
+    assert_equals "context_capabilities has lsp key" "true" "${has_lsp}"
+
+    # lsp must default to false when no code-intelligence plugin or ide MCP configured
+    local lsp_val
+    lsp_val="$(jq -r '.context_capabilities.lsp' "${cache_file}" 2>/dev/null)"
+    assert_equals "lsp is false when nothing installed" "false" "${lsp_val}"
+
+    teardown_test_env
+}
+
 test_context_capabilities_all_false() {
     echo "-- test: context_capabilities all false when nothing installed --"
     setup_test_env
@@ -595,6 +618,68 @@ test_context_capabilities_in_health_output() {
     context="$(printf '%s' "${output}" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
     assert_contains "output has Context Stack line" "Context Stack:" "${context}"
     assert_contains "output has context7=true" "context7=true" "${context}"
+
+    teardown_test_env
+}
+
+test_lsp_guidance_in_output_when_present() {
+    echo "-- test: LSP guidance line appears when code-intelligence installed --"
+    setup_test_env
+
+    # Install code-intelligence plugin (mock)
+    mkdir -p "${HOME}/.claude/plugins/cache/claude-plugins-official/code-intelligence"
+
+    local output
+    output="$(run_hook)"
+
+    local context
+    context="$(printf '%s' "${output}" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+    assert_contains "output contains lsp=true flag" "lsp=true" "${context}"
+    assert_contains "output contains LSP guidance line" "mcp__ide__getDiagnostics" "${context}"
+
+    teardown_test_env
+}
+
+test_lsp_user_config_override() {
+    echo "-- test: lsp honors skill-config.json override --"
+    setup_test_env
+
+    rm -rf "${HOME}/.claude/plugins"
+
+    # Write user config override
+    cat > "${HOME}/.claude/skill-config.json" <<'EOF'
+{"context_capabilities": {"lsp": true}}
+EOF
+
+    run_hook >/dev/null
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    local lsp_val
+    lsp_val="$(jq -r '.context_capabilities.lsp' "${cache_file}" 2>/dev/null)"
+    assert_equals "lsp=true via skill-config.json override" "true" "${lsp_val}"
+
+    teardown_test_env
+}
+
+test_lsp_guidance_absent_when_not_installed() {
+    echo "-- test: LSP guidance line absent when code-intelligence not installed --"
+    setup_test_env
+
+    rm -rf "${HOME}/.claude/plugins"
+
+    local output
+    output="$(run_hook)"
+
+    local context
+    context="$(printf '%s' "${output}" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+    # Guidance line must NOT appear when lsp=false (zero-noise contract)
+    if printf '%s' "${context}" | grep -q "mcp__ide__getDiagnostics"; then
+        echo "  FAIL: LSP guidance line appeared when lsp=false"
+        TESTS_FAILED=$((${TESTS_FAILED:-0} + 1))
+    else
+        echo "  PASS: LSP guidance line absent when not installed"
+        TESTS_PASSED=$((${TESTS_PASSED:-0} + 1))
+    fi
 
     teardown_test_env
 }
@@ -941,8 +1026,12 @@ test_auto_discovers_unknown_plugins
 test_health_check_reports_new_plugins
 test_fallback_registry_skill_coverage
 test_context_capabilities_detection
+test_lsp_capability_shape
 test_context_capabilities_all_false
 test_context_capabilities_in_health_output
+test_lsp_guidance_in_output_when_present
+test_lsp_guidance_absent_when_not_installed
+test_lsp_user_config_override
 test_openspec_ship_chain_consistency
 test_openspec_binary_detected
 test_openspec_binary_absent

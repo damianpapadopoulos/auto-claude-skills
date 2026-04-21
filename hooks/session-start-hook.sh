@@ -708,7 +708,8 @@ CONTEXT_CAPS="$(printf '%s' "${PLUGINS_JSON}" | jq \
     ($avail | index("serena") != null) as $ser |
     ($avail | index("forgetful") != null) as $fm |
     ($avail | index("posthog") != null) as $ph |
-    {context7:$c7, context_hub_cli:$chub, context_hub_available:$c7, serena:$ser, forgetful_memory:$fm, openspec:$openspec, posthog:$ph}'
+    ($avail | index("code-intelligence") != null) as $lsp |
+    {context7:$c7, context_hub_cli:$chub, context_hub_available:$c7, serena:$ser, forgetful_memory:$fm, openspec:$openspec, posthog:$ph, lsp:$lsp}'
 )"
 
 # MCP fallback: check ~/.claude.json for servers not detected via plugins
@@ -727,7 +728,21 @@ if [ -f "${_CLAUDE_JSON}" ] && command -v jq >/dev/null 2>&1; then
          if .serena == false and ($all_mcp | has("serena")) then .serena = true else . end |
          if .forgetful_memory == false and ($all_mcp | has("forgetful")) then .forgetful_memory = true else . end |
          if .context7 == false and ($all_mcp | has("context7")) then .context7 = true else . end |
-         if .posthog == false and ($all_mcp | has("posthog")) then .posthog = true else . end'
+         if .posthog == false and ($all_mcp | has("posthog")) then .posthog = true else . end |
+         if .lsp == false and ($all_mcp | has("ide")) then .lsp = true else . end'
+    )" || true
+fi
+
+# User-config override: skill-config.json may force context_capabilities on.
+# Augment-only: only upgrades false->true, never downgrades — matches MCP fallback pattern.
+if [ -f "${USER_CONFIG}" ] && jq empty "${USER_CONFIG}" >/dev/null 2>&1; then
+    CONTEXT_CAPS="$(printf '%s' "${CONTEXT_CAPS}" | jq \
+        --slurpfile uc "${USER_CONFIG}" \
+        '($uc[0].context_capabilities // {}) as $ovr |
+         reduce ($ovr | to_entries[]) as $e (.;
+             if ($e.value == true) and (.[$e.key] == false or .[$e.key] == null)
+             then .[$e.key] = true
+             else . end)'
     )" || true
 fi
 
@@ -984,6 +999,12 @@ fi
 if printf '%s' "${CONTEXT_CAPS}" | jq -e '.serena == true' >/dev/null 2>&1; then
     CONTEXT="${CONTEXT}
 Serena: When navigating code, prefer mcp__serena__ tools (find_symbol, find_referencing_symbols, get_symbols_overview) over Grep/Read for symbol lookups and dependency mapping."
+fi
+
+# Emit LSP usage hint when available (complementary to Serena — LSP for diagnostics, Serena for symbol nav)
+if printf '%s' "${CONTEXT_CAPS}" | jq -e '.lsp == true' >/dev/null 2>&1; then
+    CONTEXT="${CONTEXT}
+LSP: Use mcp__ide__getDiagnostics for compile/type errors before grepping. Complementary to Serena — LSP for diagnostics, Serena for symbol navigation and structural edits."
 fi
 
 # Emit Forgetful usage hint when available
