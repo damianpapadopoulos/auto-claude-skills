@@ -181,33 +181,39 @@ When `SKILL_EXPLAIN=1` is set in the environment and the hook advances state, it
 
 ### Requirement: LSP Capability Detection
 
-Session-start MUST detect the `lsp` context capability via three OR'd signals: (1) `code-intelligence` plugin present in the curated plugin list, (2) `ide` MCP server configured in `~/.claude.json` at user or project scope, or (3) `context_capabilities.lsp: true` in `~/.claude/skill-config.json`. The resulting flag MUST appear as `.context_capabilities.lsp` in the cache registry and in the session-start `Context Stack:` output line.
+Session-start MUST set `.context_capabilities.lsp = true` if AND ONLY IF BOTH conditions hold at session-start time:
 
-#### Scenario: code-intelligence plugin installed
+1. At least one installed plugin under `~/.claude/plugins/cache/<marketplace>/<plugin-name>/[<version>/].claude-plugin/plugin.json` declares a non-empty `lspServers` object with at least one `<server-name>.command` string.
+2. At least one declared `lspServers.<name>.command` resolves via POSIX `command -v` on the session's PATH at hook execution time.
 
-- **GIVEN** `~/.claude/plugins/cache/claude-plugins-official/code-intelligence/` exists
+The user MAY additionally force `lsp = true` by placing `{"context_capabilities": {"lsp": true}}` in `~/.claude/skill-config.json`; the override is governed by the general User-Config Capability Override requirement below. The resulting flag MUST appear as `.context_capabilities.lsp` in the cache registry and in the session-start `Context Stack:` output line.
+
+When a plugin is detected with `lspServers` declared but none of its `command` values resolve on PATH (a "partial install"), session-start MUST emit a diagnostic line naming the plugin and the missing command(s), so the user knows which binary to install. The diagnostic MUST NOT claim `lsp=true` when the capability is actually `false`.
+
+#### Scenario: LSP plugin installed with backing binary resolvable
+
+- **GIVEN** an installed plugin (e.g. `typescript-lsp`) whose `plugin.json` declares `lspServers.typescript.command = "typescript-language-server"`
+- **AND** `typescript-language-server` resolves via `command -v` on the session PATH
 - **WHEN** session-start runs
 - **THEN** `.context_capabilities.lsp` MUST equal `true` in `~/.claude/.skill-registry-cache.json`
+- **AND** the session-start `additionalContext` output MUST contain a line beginning with `LSP:` that references `mcp__ide__getDiagnostics`
 
-#### Scenario: ide MCP server configured
+#### Scenario: LSP plugin installed but backing binary missing
 
-- **GIVEN** no `code-intelligence` plugin directory exists
-- **AND** `~/.claude.json` contains `mcpServers.ide` or `projects.<cwd>.mcpServers.ide`
+- **GIVEN** an installed plugin (e.g. `typescript-lsp`) whose `plugin.json` declares a language-server command
+- **AND** that command does NOT resolve via `command -v` on the session PATH
 - **WHEN** session-start runs
-- **THEN** `.context_capabilities.lsp` MUST equal `true`
+- **THEN** `.context_capabilities.lsp` MUST equal `false`
+- **AND** the session-start `additionalContext` output MUST NOT contain the guidance line referencing `mcp__ide__getDiagnostics`
+- **AND** the session-start `additionalContext` output MUST contain a `LSP (partial install)` line naming both the plugin and the missing command
 
-#### Scenario: absent capability emits no guidance
+#### Scenario: no LSP plugin installed
 
-- **GIVEN** no LSP signal is detectable
+- **GIVEN** no installed plugin declares `lspServers`
 - **WHEN** session-start runs
 - **THEN** `.context_capabilities.lsp` MUST equal `false`
 - **AND** the session-start `additionalContext` output MUST NOT contain the string `mcp__ide__getDiagnostics`
-
-#### Scenario: present capability emits guidance line
-
-- **GIVEN** any LSP detection signal resolves to true
-- **WHEN** session-start runs
-- **THEN** the session-start `additionalContext` output MUST contain a line beginning with `LSP:` that references `mcp__ide__getDiagnostics`
+- **AND** the session-start `additionalContext` output MUST NOT contain a `LSP (partial install)` diagnostic (zero-noise contract)
 
 ### Requirement: User-Config Capability Override
 
@@ -216,9 +222,9 @@ Session-start MUST honor `~/.claude/skill-config.json` entries of shape `{"conte
 #### Scenario: legitimate override honored
 
 - **GIVEN** `~/.claude/skill-config.json` contains `{"context_capabilities": {"lsp": true}}`
-- **AND** no plugin or MCP signal for LSP exists
+- **AND** no LSP plugin is detected (or the declared language-server binary is not on PATH)
 - **WHEN** session-start runs
-- **THEN** `.context_capabilities.lsp` MUST equal `true` in the cache
+- **THEN** `.context_capabilities.lsp` MUST equal `true` in the cache — the override upgrades `false → true`
 
 #### Scenario: downgrade rejected
 
