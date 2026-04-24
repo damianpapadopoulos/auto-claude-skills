@@ -22,13 +22,27 @@ fi
 
 PROMPT=$(cat 2>/dev/null | jq -r '.prompt // empty' 2>/dev/null) || true
 
+# Read session token early so early-exit gates can check for active composition state.
+_SESSION_TOKEN=""
+[[ -f "${HOME}/.claude/.skill-session-token" ]] && _SESSION_TOKEN="$(cat "${HOME}/.claude/.skill-session-token" 2>/dev/null)"
+
+# _comp_active: returns 0 (true) if composition state is live for this session,
+# 1 (false) otherwise. Used to bypass short-prompt and blocklist early-exits
+# so bare acks during an active SDLC chain can reach the sticky-emission logic.
+_comp_active() {
+  [[ -z "${_SESSION_TOKEN}" ]] && return 1
+  local _f="${HOME}/.claude/.skill-composition-state-${_SESSION_TOKEN}"
+  [[ -f "$_f" ]] || return 1
+  jq -e '(.chain // [] | length) > (.completed // [] | length)' "$_f" >/dev/null 2>&1
+}
+
 # =================================================================
 # EARLY EXITS
 # =================================================================
 [[ -z "$PROMPT" ]] && exit 0
 # Skip slash commands — these are handled by the Skill tool directly
 [[ "$PROMPT" =~ ^[[:space:]]*/ ]] && exit 0
-(( ${#PROMPT} < 5 )) && exit 0
+(( ${#PROMPT} < 5 )) && ! _comp_active && exit 0
 # Escape hatch: [no-skills] marker or -- prefix suppresses all routing
 [[ "$PROMPT" == *"[no-skills]"* ]] && exit 0
 [[ "$PROMPT" =~ ^[[:space:]]*--[[:space:]] ]] && exit 0
@@ -52,7 +66,7 @@ if [[ "$P" =~ $_BLOCKLIST ]]; then
     # can diagnose the case where a legitimate dev prompt was swallowed.
     [[ -n "${SKILL_DEBUG:-}" ]] && \
       printf '[skill-hook] greeting blocklist matched prompt; no routing emitted. Set SKILL_EXPLAIN=1 for full scoring trace.\n' >&2
-    exit 0
+    _comp_active || exit 0
   fi
 fi
 
@@ -1054,9 +1068,7 @@ EOF
 # Track how many prompts have been sent to reduce verbosity over time.
 # File: $HOME/.claude/.skill-prompt-count
 # SKILL_VERBOSE=1 forces full output regardless of depth.
-# Read session token for session-scoped counter (avoids race between concurrent sessions)
-_SESSION_TOKEN=""
-[[ -f "${HOME}/.claude/.skill-session-token" ]] && _SESSION_TOKEN="$(cat "${HOME}/.claude/.skill-session-token" 2>/dev/null)"
+# _SESSION_TOKEN is read near the top of the file (before early-exit gates).
 _PROMPT_COUNT_FILE="${HOME}/.claude/.skill-prompt-count-${_SESSION_TOKEN:-default}"
 _PROMPT_COUNT=1
 if [[ -f "$_PROMPT_COUNT_FILE" ]]; then
