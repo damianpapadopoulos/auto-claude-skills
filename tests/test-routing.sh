@@ -910,6 +910,55 @@ test_completed_uses_current_idx_floor() {
 test_completed_uses_current_idx_floor
 
 # ---------------------------------------------------------------------------
+# 3b. Sticky composition on ack-shaped prompts
+# ---------------------------------------------------------------------------
+test_sticky_no_state_no_output() {
+    echo "-- test: bare ack with no composition state produces no output (regression baseline) --"
+    setup_test_env
+    install_registry
+
+    local token="sticky-no-state-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+    # Explicitly DO NOT create .skill-composition-state-${token}
+
+    local output
+    output="$(run_hook "yes")"
+
+    assert_equals "no output when no composition state" "" "${output}"
+
+    teardown_test_env
+}
+test_sticky_no_state_no_output
+
+test_sticky_implement_ack_emits_executing_plans() {
+    echo "-- test: bare 'yes' during IMPLEMENT chain emits executing-plans --"
+    setup_test_env
+    install_registry
+
+    local token="sticky-impl-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+
+    jq -n '{
+        chain: ["brainstorming","writing-plans","executing-plans","requesting-code-review","verification-before-completion","openspec-ship","finishing-a-development-branch"],
+        completed: ["brainstorming","writing-plans"],
+        current_index: 2
+    }' > "${HOME}/.claude/.skill-composition-state-${token}"
+
+    jq -n '{skill:"writing-plans",phase:"PLAN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local context
+    context="$(extract_context "$(run_hook "yes")")"
+
+    assert_contains "emits IMPLEMENT phase" "Phase: [IMPLEMENT]" "${context}"
+    assert_contains "emits executing-plans process skill" "executing-plans" "${context}"
+    assert_contains "emits invoke string" "Skill(superpowers:executing-plans)" "${context}"
+
+    teardown_test_env
+}
+test_sticky_implement_ack_emits_executing_plans
+
+# ---------------------------------------------------------------------------
 # 4. Slash command is blocked
 # ---------------------------------------------------------------------------
 test_slash_command_blocked() {
