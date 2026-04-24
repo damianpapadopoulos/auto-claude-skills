@@ -42,8 +42,21 @@ When resource exhaustion or capacity constraints contributed to the incident, in
 - Whether the condition is chronic (weeks of headroom drift) or acute (single event triggered exhaustion)
 This prevents "increase resource limits" action items without context on whether the headroom trend is systemic.
 
+**Systemic factors** (CAST — see `references/cast-framing.md`). Each category MUST have a non-empty observation or `N/A — <reason>`. Bare "N/A" blocks Q12 of the completeness gate.
+- **Safety Culture:** <observation or `N/A — <reason>`>
+- **Communication/Coordination:** <observation or `N/A — <reason>`>
+- **Management of Change:** <observation or `N/A — <reason>`>
+- **Safety Information System:** <observation or `N/A — <reason>`>
+- **Environmental Change:** <observation or `N/A — <reason>`>
+
 ## 7. Lessons Learned
 What went well, what went wrong, where we got lucky.
+
+**Mental model gaps** (CAST — see `references/cast-framing.md`). One bullet per relevant controller using the shape `<controller> believed <X>; actual was <Y>`. `N/A` acceptable only for single-controller incidents where the controller's model was correct; state the reason.
+- `<controller>` believed `<X>`; actual was `<Y>`.
+- …
+
+**Hindsight-bias check:** Scan Sections 6–8 for `should have`, `failed to`, `could have easily`, `obviously`, `it was clear that`. Replace with evidence-grounded framing (see `references/cast-framing.md` for replacement patterns) or move the claim to an open question if the supporting evidence is missing.
 
 ## 8. Investigation Notes
 Hypotheses investigated and ruled out. Each ruled-out hypothesis should include

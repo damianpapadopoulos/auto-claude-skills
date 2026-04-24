@@ -94,4 +94,14 @@ investigation_summary:
       disconfirming_evidence_sought: "<query or check performed>"
       result: "supported" | "disproved" | "inconclusive"
       evidence: "<specific result>"
+  mental_model_gaps:  # optional — Step 7 item 9 (CAST). Consumers that do not need CAST framing can ignore.
+    - controller: "<name — human role or automation component>"
+      believed: "<prior belief>"
+      actual: "<what was true>"
+  systemic_factors:  # optional — Step 7 item 10 (CAST). Each key: observation paragraph or "N/A — <reason>". Bare "N/A" blocks completeness gate Q12. See references/cast-framing.md.
+    safety_culture: "<observation or 'N/A — <reason>'>"
+    communication_coordination: "<observation or 'N/A — <reason>'>"
+    management_of_change: "<observation or 'N/A — <reason>'>"
+    safety_information_system: "<observation or 'N/A — <reason>'>"
+    environmental_change: "<observation or 'N/A — <reason>'>"
 ```

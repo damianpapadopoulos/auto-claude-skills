@@ -725,15 +725,17 @@ Sort chronologically. Present the candidate list to Step 7 for curation into the
 
 Write a synthesized summary as an explicit output block. The summary MUST include all of the following (not just timeline and root cause):
 
-1. **Timeline:** Curate the candidate timeline from Step 6b into the final timeline. Remove noise, merge related events, verify chronological ordering. Each entry retains `time_precision` and `evidence_source` from Step 6b. Flag any candidate events removed during curation (and why) so the completeness gate can assess coverage.
+1. **Timeline:** Curate Step 6b's candidate timeline — remove noise, merge related events, verify chronological ordering. Each entry retains `time_precision` and `evidence_source`. Flag removed candidates (and why) for the completeness gate.
 2. **Root cause:** The primary hypothesis with supporting evidence
-3. **ruled-out hypotheses:** Each alternative considered, the disconfirming evidence found, and why it was eliminated
+3. **ruled-out hypotheses:** Each alternative, disconfirming evidence, and elimination reason
 4. **hypothesis revisions:** Where the investigation changed direction, what triggered the revision, and what the previous hypothesis was
-5. **Completeness gate answers:** Responses to Step 8 questions (captured here so they survive the context boundary)
+5. **Completeness gate answers:** Step 8 question responses, captured for context-boundary survival
 6. **Inventory and impact:** Pod/replica counts, distribution, user-facing error counts from Steps 2b/2c
 7. **Evidence coverage and gaps:** Per-domain coverage assessment and explicit gap list (included in the structured block below)
 
-8. **Evidence links (Constraint 12):** After the root cause statement in the prose synthesis, include a `**Links:**` line with up to 3 verification links. After each ruled-out hypothesis, include a `**Links:**` line with up to 2 verification links. Use markdown link syntax with ` · ` separator. Omit the `**Links:**` line entirely when no valid URLs are available for that block.
+8. **Evidence links (Constraint 12):** After the root cause, include a `**Links:**` line (max 3 verification links). After each ruled-out hypothesis, include a `**Links:**` line (max 2). Markdown link syntax with ` · ` separator. Omit the `**Links:**` line entirely when no valid URLs are available for that block.
+9. **Mental model gaps (CAST):** per relevant controller, `<controller> believed <X>; actual was <Y>`. `N/A` only if single-controller with correct model (state reason).
+10. **Systemic factors (CAST):** observation or `N/A — <reason>` for each: Safety Culture, Communication/Coordination, Management of Change, Safety Information System, Environmental Change. Bare `N/A` blocks Q12. Self-check the synthesis prose you produce: replace `should have`, `failed to`, `could have easily`, `obviously`, `it was clear that` with evidence-grounded framing. See `references/cast-framing.md` for definitions, examples, and replacements.
 
 **Evidence coverage levels** (used in the `evidence_coverage` fields below):
 
@@ -773,6 +775,7 @@ Before transitioning to POSTMORTEM, answer each question explicitly in the synth
 | 9 | For shared-dependency failures: was caller-side amplification investigated? | Describe how dominant callers were identified (logs, traces, metrics, broker stats), what evidence was checked, and whether any caller was amplifying the failure. If shared-dependency escalation was not triggered, state "N/A — not a shared-dependency failure". |
 | 10 | For each service attributed to the root cause: does its error class match the hypothesized mechanism? Were non-matching services investigated independently? | `service_attribution` entries with status and evidence per service. Any `not-investigated` or `inconclusive` entries must be flagged as open questions. If only one service is involved, state "N/A — single-service incident". |
 | 11 | For multi-service incidents: were all services in the error chain queried independently? | `service_error_inventory` from Step 3c with per-service error class, tier, count, baseline comparison, and deployment history. Any service with `investigated: false` must be flagged as an open question. If only one service is involved, state "N/A — single-service incident". |
+| 12 | Were systemic factors addressed across the 5 CAST categories? | Observation or `not_applicable — <reason>` (equivalent: `N/A — <reason>`) for each: Safety Culture, Communication/Coordination, Management of Change, Safety Information System, Environmental Change. Bare `N/A`, bare `not_applicable`, or any token without a reason blocks closure. See `references/cast-framing.md`. |
 
 **Evidence coverage constraint:** If any domain in the `evidence_coverage` block (Step 7) is `partial` or `unavailable`, answers to Q1-Q3 must explicitly state what could change the answer given the gap. For example: "Root cause explains all observed symptoms, **but node-level metrics were unavailable — node-resource-exhaustion cannot be ruled out.**" A confident "yes" to Q1 is not possible when a relevant domain is missing.
 
@@ -780,13 +783,13 @@ Before transitioning to POSTMORTEM, answer each question explicitly in the synth
 
 **Full investigation mode:**
 - Q1-Q3 must have confident answers (accounting for evidence gaps). If any is "No" or "Unknown," return to INVESTIGATE Step 1 — for questions 1-2 with a revised hypothesis, for question 3 with targeted recovery-evidence queries.
-- Q4-Q11 must each be explicitly resolved with one of: an evidence-backed answer, `not_applicable` (genuinely does not apply — with reason), `unavailable` (tool/data missing — with reason), or `not_captured` (information not in available evidence — with reason). Bare "not assessed" is not allowed.
+- Q4-Q12 must each be explicitly resolved with one of: an evidence-backed answer, `not_applicable` (genuinely does not apply — with reason), `unavailable` (tool/data missing — with reason), or `not_captured` (information not in available evidence — with reason). Bare "not assessed" is not allowed.
 - **Closure is blocked** when any unresolved item weakens the chosen root cause, the named causal chain, or the root-cause layer coverage. Specifically: for the chosen root-cause service, either layer in `root_cause_layer_coverage` being anything other than `assessed` or a narrow `not_applicable` blocks closure. Additionally, the chosen root-cause service's `mechanism_status` must be `known` or `not_applicable` (when there is no application-layer mechanism to trace, e.g., pure infrastructure failures like node crashes, disk full, or network partitions) — `not_yet_traced` blocks closure for the root-cause service (though it is acceptable for non-root-cause services).
 - Peripheral items may be `not_captured` or `unavailable` and remain as open questions without blocking closure, provided they do not affect the causal chain.
 
 **Live-triage mode:**
 - Q1-Q3 must have answers (may be provisional). If any is "No" or "Unknown," return to INVESTIGATE Step 1.
-- Q4-Q11 remain advisory, but every unresolved item must populate `open_questions` in the synthesis.
+- Q4-Q12 remain advisory, but every unresolved item must populate `open_questions` in the synthesis.
 
 ### Step 9: Transition to POSTMORTEM
 
