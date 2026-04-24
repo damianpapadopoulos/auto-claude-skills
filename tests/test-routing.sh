@@ -958,6 +958,184 @@ test_sticky_implement_ack_emits_executing_plans() {
 }
 test_sticky_implement_ack_emits_executing_plans
 
+test_sticky_plan_ack_emits_writing_plans() {
+    echo "-- test: bare 'ok' during PLAN phase emits writing-plans --"
+    setup_test_env
+    install_registry
+
+    local token="sticky-plan-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+
+    jq -n '{
+        chain: ["brainstorming","writing-plans","executing-plans","requesting-code-review","verification-before-completion","openspec-ship","finishing-a-development-branch"],
+        completed: ["brainstorming"],
+        current_index: 1
+    }' > "${HOME}/.claude/.skill-composition-state-${token}"
+    jq -n '{skill:"brainstorming",phase:"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local context
+    context="$(extract_context "$(run_hook "ok")")"
+
+    assert_contains "emits PLAN phase" "Phase: [PLAN]" "${context}"
+    assert_contains "emits writing-plans" "writing-plans" "${context}"
+
+    teardown_test_env
+}
+test_sticky_plan_ack_emits_writing_plans
+
+test_sticky_review_ack_emits_requesting_code_review() {
+    echo "-- test: bare 'lgtm' during REVIEW transition emits requesting-code-review --"
+    setup_test_env
+    install_registry
+
+    local token="sticky-review-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+
+    jq -n '{
+        chain: ["brainstorming","writing-plans","executing-plans","requesting-code-review","verification-before-completion","openspec-ship","finishing-a-development-branch"],
+        completed: ["brainstorming","writing-plans","executing-plans"],
+        current_index: 3
+    }' > "${HOME}/.claude/.skill-composition-state-${token}"
+    jq -n '{skill:"executing-plans",phase:"IMPLEMENT"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local context
+    context="$(extract_context "$(run_hook "lgtm")")"
+
+    assert_contains "emits REVIEW phase" "Phase: [REVIEW]" "${context}"
+    assert_contains "emits requesting-code-review" "requesting-code-review" "${context}"
+
+    teardown_test_env
+}
+test_sticky_review_ack_emits_requesting_code_review
+
+test_sticky_abort_clears_state() {
+    echo "-- test: abort lexicon clears composition state and suppresses sticky --"
+    setup_test_env
+    install_registry
+
+    local token="sticky-abort-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+
+    jq -n '{
+        chain: ["brainstorming","writing-plans","executing-plans"],
+        completed: ["brainstorming"],
+        current_index: 1
+    }' > "${HOME}/.claude/.skill-composition-state-${token}"
+    jq -n '{skill:"brainstorming",phase:"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    run_hook "never mind, different plan" >/dev/null
+
+    assert_equals "composition-state deleted" "false" \
+        "$([ -f "${HOME}/.claude/.skill-composition-state-${token}" ] && echo true || echo false)"
+    assert_equals "last-invoked deleted" "false" \
+        "$([ -f "${HOME}/.claude/.skill-last-invoked-${token}" ] && echo true || echo false)"
+
+    teardown_test_env
+}
+test_sticky_abort_clears_state
+
+test_sticky_topic_change_no_sticky() {
+    echo "-- test: long non-ack prompt during active chain does not sticky-emit --"
+    setup_test_env
+    install_registry
+
+    local token="sticky-topic-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+
+    jq -n '{
+        chain: ["brainstorming","writing-plans","executing-plans"],
+        completed: ["brainstorming"],
+        current_index: 1
+    }' > "${HOME}/.claude/.skill-composition-state-${token}"
+    jq -n '{skill:"brainstorming",phase:"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local context
+    context="$(extract_context "$(run_hook "actually can you show me how the test would work instead")")"
+
+    if printf '%s' "${context}" | grep -qE '^Process: writing-plans'; then
+        _record_fail "sticky did not fire on topic-change" "Process line shows writing-plans"
+    else
+        _record_pass "sticky did not fire on topic-change"
+    fi
+
+    teardown_test_env
+}
+test_sticky_topic_change_no_sticky
+
+test_sticky_no_double_injection() {
+    echo "-- test: sticky does not hijack when a stronger trigger matches --"
+    setup_test_env
+    install_registry
+
+    local token="sticky-nodup-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+
+    jq -n '{
+        chain: ["brainstorming","writing-plans","executing-plans"],
+        completed: ["brainstorming"],
+        current_index: 1
+    }' > "${HOME}/.claude/.skill-composition-state-${token}"
+    jq -n '{skill:"brainstorming",phase:"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local context
+    context="$(extract_context "$(run_hook "debug the failing test")")"
+
+    assert_contains "systematic-debugging is top process" "Process: systematic-debugging" "${context}"
+
+    teardown_test_env
+}
+test_sticky_no_double_injection
+
+test_sticky_corrupt_state_fail_open() {
+    echo "-- test: corrupt composition-state JSON fails silently, no crash --"
+    setup_test_env
+    install_registry
+
+    local token="sticky-corrupt-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+
+    printf '{' > "${HOME}/.claude/.skill-composition-state-${token}"
+    jq -n '{skill:"brainstorming",phase:"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    run_hook "yes" >/dev/null
+    local exit_code=$?
+    assert_equals "hook exits 0 on corrupt state" "0" "${exit_code}"
+
+    teardown_test_env
+}
+test_sticky_corrupt_state_fail_open
+
+test_sticky_continue_still_works() {
+    echo "-- test: 'continue' during active IMPLEMENT chain still emits executing-plans --"
+    setup_test_env
+    install_registry
+
+    local token="sticky-continue-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+
+    jq -n '{
+        chain: ["brainstorming","writing-plans","executing-plans","requesting-code-review"],
+        completed: ["brainstorming","writing-plans"],
+        current_index: 2
+    }' > "${HOME}/.claude/.skill-composition-state-${token}"
+    jq -n '{skill:"writing-plans",phase:"PLAN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local context
+    context="$(extract_context "$(run_hook "continue")")"
+
+    assert_contains "continue emits executing-plans" "executing-plans" "${context}"
+
+    teardown_test_env
+}
+test_sticky_continue_still_works
+
 # ---------------------------------------------------------------------------
 # 4. Slash command is blocked
 # ---------------------------------------------------------------------------

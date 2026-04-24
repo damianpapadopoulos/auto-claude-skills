@@ -387,10 +387,13 @@ EOF
 
   [[ -z "$_current_name" ]] && return
 
-  # Abort lexicon: clear state and suppress this turn.
+  # Abort lexicon: clear state and fully suppress this turn. We exit the hook
+  # so downstream scoring/walker passes cannot re-write composition state from
+  # whatever the prompt happens to trigger (e.g., "different plan" matching
+  # writing-plans would otherwise resurrect the chain we just cleared).
   if [[ "$P" =~ $_ABORT_LEXICON ]]; then
     rm -f "$_comp_file" "$_signal_file" 2>/dev/null
-    return
+    exit 0
   fi
 
   # Eligibility gate: short prompt OR ack lexicon match.
@@ -415,26 +418,20 @@ EOF
   _phase="${_rest%%${_fs}*}"
   _invoke="${_rest#*${_fs}}"
 
-  # Do not double-inject if CURRENT already scored from a trigger match.
-  if printf '%s\n' "$SORTED" | grep -q "^[0-9]*|${_current_name}|"; then
-    return
-  fi
-
-  # Compute injection score: top process score + 5, floor of 40.
-  local _top_process_score=0
+  # Do not hijack if the prompt already scored a process skill naturally.
+  # Sticky is a fallback for when nothing natural matched (the "yes" case),
+  # not a boost for when real triggers are present.
   while IFS='|' read -r _ts _tn _tr _ti _tp; do
     [[ -z "$_tn" ]] && continue
     if [[ "$_tr" == "process" ]]; then
-      _top_process_score="$_ts"
-      break
+      return
     fi
   done <<EOF
 ${SORTED}
 EOF
-  local _inject_score=$((_top_process_score + 5))
-  (( _inject_score < 40 )) && _inject_score=40
 
-  local _new_line="${_inject_score}|${_current_name}|${_role}|${_invoke}|${_phase}"
+  # Inject CURRENT at a solid process-tier score. Role-cap selection will pick it.
+  local _new_line="50|${_current_name}|${_role}|${_invoke}|${_phase}"
   SORTED="$(printf '%s\n%s' "$_new_line" "$SORTED" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
 }
 
