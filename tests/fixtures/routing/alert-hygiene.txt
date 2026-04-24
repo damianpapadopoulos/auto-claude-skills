@@ -1,0 +1,17 @@
+# Regex fixtures for skill: alert-hygiene
+# Format: one directive per non-empty, non-comment line.
+#   MATCH: <prompt>     — regex from config/default-triggers.json for this skill must match
+#   NO_MATCH: <prompt>  — regex must NOT match
+# Tested deterministically by tests/test-regex-fixtures.sh (zero LLM cost).
+# These cover routing (regex), not description quality (see skills/alert-hygiene/evals/evals.json).
+
+MATCH: our alerts are flapping and pager is noisy, help tune thresholds
+MATCH: review alert policies for fatigue and suppress the worst offenders
+MATCH: incident volume is too high this sprint, we need to dedup notifications
+MATCH: please audit alert hygiene across this project
+MATCH: redesign our SLO burn rate alerts for billing
+
+NO_MATCH: pods are crashlooping investigate now
+NO_MATCH: write me a python script to rename files
+NO_MATCH: open a PR to bump the helm chart version
+NO_MATCH: design an SLO from scratch for the payment service
