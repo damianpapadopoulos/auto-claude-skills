@@ -290,3 +290,64 @@ The `unified-context-stack` tier documentation MUST present LSP diagnostics as t
 - **WHEN** a Claude session reads `skills/unified-context-stack/phases/code-review.md` section 2 (Internal Truth / Dependency Safety)
 - **THEN** the first bullet MUST direct Claude to `mcp__ide__getDiagnostics` when `lsp=true` and the reviewer claims a type/compile error
 
+### Requirement: LSP Nudge on Error-Hunt Grep
+
+The plugin MUST emit a `hookSpecificOutput.additionalContext` hint pointing at `mcp__ide__getDiagnostics` when Claude invokes the `Grep` tool with a pattern matching a language-agnostic error-hunt regex AND the registry cache has `context_capabilities.lsp = true`. The hint is advisory: the PreToolUse hook MUST NOT deny the Grep call. The hook MUST exit 0 under every circumstance, including when its guards skip the emit path.
+
+#### Scenario: error-hunt pattern fires the nudge
+
+- **GIVEN** the registry cache at `~/.claude/.skill-registry-cache.json` has `.context_capabilities.lsp` equal to `true`
+- **AND** Claude invokes `Grep` with a pattern containing any of: `TypeError`, `SyntaxError`, `ReferenceError`, `ImportError`, `ModuleNotFoundError`, `AttributeError`, `NameError`, `NullPointerException`, `ClassCastException`, `Cannot find module|name`, `is not assignable`, `implicit any`, `Property .* does not exist`, `does not exist on type`, `Expected ... got|but got`, `no matching`, `undefined symbol`, `cannot resolve`, `unresolved reference|import`, `use of undeclared`, `undefined reference to`, `not exported from`, `is not defined`, `has no attribute` (case-insensitive)
+- **WHEN** the `lsp-nudge.sh` PreToolUse hook runs
+- **THEN** the hook MUST emit a valid JSON payload with shape `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": "<hint>"}}` on stdout
+- **AND** the `additionalContext` string MUST reference `mcp__ide__getDiagnostics`
+- **AND** the hook MUST exit 0
+
+#### Scenario: plain-symbol pattern is silent
+
+- **GIVEN** the registry cache has `.context_capabilities.lsp` equal to `true`
+- **AND** Claude invokes `Grep` with a pattern that does not match the error-hunt regex (e.g., `authenticate`, `UserProfile`, `fetch_user`)
+- **WHEN** the `lsp-nudge.sh` PreToolUse hook runs
+- **THEN** the hook MUST NOT emit any `mcp__ide__getDiagnostics` hint
+- **AND** the hook MUST exit 0
+
+#### Scenario: lsp=false suppresses the nudge regardless of pattern
+
+- **GIVEN** the registry cache has `.context_capabilities.lsp` equal to `false`
+- **AND** Claude invokes `Grep` with an error-hunt pattern
+- **WHEN** the `lsp-nudge.sh` PreToolUse hook runs
+- **THEN** the hook MUST NOT emit any `mcp__ide__getDiagnostics` hint
+- **AND** the hook MUST exit 0
+
+#### Scenario: missing registry cache is fail-open
+
+- **GIVEN** the registry cache at `~/.claude/.skill-registry-cache.json` does not exist
+- **WHEN** the `lsp-nudge.sh` PreToolUse hook runs for any `Grep` invocation
+- **THEN** the hook MUST NOT emit any `mcp__ide__getDiagnostics` hint
+- **AND** the hook MUST exit 0
+
+### Requirement: Coexistence With Serena Nudge on Grep
+
+The plugin MUST register both `hooks/serena-nudge.sh` and `hooks/lsp-nudge.sh` as `PreToolUse` matchers for the `Grep` tool. Both hooks MUST run on every `Grep` invocation; each MUST emit its hint independently when its guards pass, without suppressing or interfering with the other.
+
+#### Scenario: both matchers configured
+
+- **WHEN** `hooks/hooks.json` is loaded
+- **THEN** the `PreToolUse` array MUST contain two entries with `matcher: "Grep"` whose `hooks[0].command` resolve to `serena-nudge.sh` and `lsp-nudge.sh` respectively
+
+#### Scenario: only LSP guards match
+
+- **GIVEN** both hooks are registered and the cache has `lsp=true` and `serena=false`
+- **AND** Claude invokes `Grep` with an error-hunt pattern (e.g., `TypeError: ...`)
+- **WHEN** the runtime fires both PreToolUse hooks
+- **THEN** the LSP nudge MUST emit its hint
+- **AND** the Serena nudge MUST exit 0 without emitting
+
+#### Scenario: only Serena guards match
+
+- **GIVEN** both hooks are registered and the cache has `serena=true` and `lsp=false`
+- **AND** Claude invokes `Grep` with a symbol-shape pattern (e.g., `authenticate`)
+- **WHEN** the runtime fires both PreToolUse hooks
+- **THEN** the Serena nudge MUST emit its hint
+- **AND** the LSP nudge MUST exit 0 without emitting
+

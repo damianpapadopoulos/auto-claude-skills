@@ -53,6 +53,15 @@
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/serena-nudge.sh"
           }
         ]
+      },
+      {
+        "matcher": "Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/lsp-nudge.sh"
+          }
+        ]
       }
     ],
     "PostToolUse": [
