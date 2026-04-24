@@ -231,7 +231,12 @@ jobs:
             output.
 
       - name: Reap prior eval comments
-        if: always() && steps.pr-ref.outputs.abort == 'false'
+        # SECURITY: gated on eval success (not `always()`) so a failed or
+        # prompt-injected eval step cannot silently wipe prior legitimate
+        # eval warnings on this PR. If the eval fails, prior comments
+        # remain visible as-is; the post step (also gated on
+        # structured_output) won't add a new one.
+        if: steps.eval.outcome == 'success' && steps.pr-ref.outputs.abort == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
