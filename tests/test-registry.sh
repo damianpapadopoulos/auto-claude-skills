@@ -731,6 +731,102 @@ EOF
     teardown_test_env
 }
 
+# ---------------------------------------------------------------------------
+# LSP nudge hook (hooks/lsp-nudge.sh) — PreToolUse Grep matcher
+# ---------------------------------------------------------------------------
+test_lsp_nudge_fires_on_error_hunt_pattern() {
+    echo "-- test: lsp-nudge emits hint on error-hunt Grep pattern when lsp=true --"
+    setup_test_env
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'EOF'
+{"context_capabilities": {"lsp": true, "serena": false}}
+EOF
+
+    local input='{"tool_name":"Grep","tool_input":{"pattern":"TypeError: Cannot read properties"}}'
+    local output
+    output="$(printf '%s' "${input}" | bash "${PROJECT_ROOT}/hooks/lsp-nudge.sh" 2>/dev/null)"
+
+    assert_contains "hint references mcp__ide__getDiagnostics" "mcp__ide__getDiagnostics" "${output}"
+    assert_contains "hint is structured as additionalContext" "additionalContext" "${output}"
+
+    teardown_test_env
+}
+
+test_lsp_nudge_silent_on_non_error_pattern() {
+    echo "-- test: lsp-nudge silent on plain-symbol Grep pattern when lsp=true --"
+    setup_test_env
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'EOF'
+{"context_capabilities": {"lsp": true, "serena": false}}
+EOF
+
+    local input='{"tool_name":"Grep","tool_input":{"pattern":"authenticate"}}'
+    local output
+    output="$(printf '%s' "${input}" | bash "${PROJECT_ROOT}/hooks/lsp-nudge.sh" 2>/dev/null)"
+
+    if printf '%s' "${output}" | grep -q "mcp__ide__getDiagnostics"; then
+        echo "  FAIL: LSP nudge fired on non-error pattern"
+        TESTS_FAILED=$((${TESTS_FAILED:-0} + 1))
+    else
+        echo "  PASS: LSP nudge silent on non-error pattern"
+        TESTS_PASSED=$((${TESTS_PASSED:-0} + 1))
+    fi
+
+    teardown_test_env
+}
+
+test_lsp_nudge_silent_when_lsp_false() {
+    echo "-- test: lsp-nudge silent when cache has lsp=false, regardless of pattern --"
+    setup_test_env
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'EOF'
+{"context_capabilities": {"lsp": false, "serena": false}}
+EOF
+
+    local input='{"tool_name":"Grep","tool_input":{"pattern":"TypeError: undefined is not a function"}}'
+    local output
+    output="$(printf '%s' "${input}" | bash "${PROJECT_ROOT}/hooks/lsp-nudge.sh" 2>/dev/null)"
+
+    if printf '%s' "${output}" | grep -q "mcp__ide__getDiagnostics"; then
+        echo "  FAIL: LSP nudge fired despite lsp=false"
+        TESTS_FAILED=$((${TESTS_FAILED:-0} + 1))
+    else
+        echo "  PASS: LSP nudge silent when lsp=false"
+        TESTS_PASSED=$((${TESTS_PASSED:-0} + 1))
+    fi
+
+    teardown_test_env
+}
+
+test_lsp_nudge_silent_when_cache_missing() {
+    echo "-- test: lsp-nudge silent and exits 0 when registry cache is missing --"
+    setup_test_env
+
+    rm -f "${HOME}/.claude/.skill-registry-cache.json"
+
+    local input='{"tool_name":"Grep","tool_input":{"pattern":"TypeError: Cannot read"}}'
+    local output exit_code
+    output="$(printf '%s' "${input}" | bash "${PROJECT_ROOT}/hooks/lsp-nudge.sh" 2>/dev/null)"
+    exit_code=$?
+
+    assert_equals "nudge exits 0 when cache missing" "0" "${exit_code}"
+    if printf '%s' "${output}" | grep -q "mcp__ide__getDiagnostics"; then
+        echo "  FAIL: LSP nudge emitted hint despite missing cache"
+        TESTS_FAILED=$((${TESTS_FAILED:-0} + 1))
+    else
+        echo "  PASS: LSP nudge silent when cache missing"
+        TESTS_PASSED=$((${TESTS_PASSED:-0} + 1))
+    fi
+
+    teardown_test_env
+}
+
 test_lsp_user_config_override() {
     echo "-- test: lsp honors skill-config.json override --"
     setup_test_env
@@ -1182,6 +1278,10 @@ test_context_capabilities_in_health_output
 test_lsp_guidance_in_output_when_present
 test_lsp_ide_mcp_does_not_enable_lsp
 test_lsp_false_positive_guard_when_binary_missing
+test_lsp_nudge_fires_on_error_hunt_pattern
+test_lsp_nudge_silent_on_non_error_pattern
+test_lsp_nudge_silent_when_lsp_false
+test_lsp_nudge_silent_when_cache_missing
 test_lsp_guidance_absent_when_not_installed
 test_lsp_user_config_override
 test_user_config_override_rejects_arbitrary_keys
