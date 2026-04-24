@@ -1,0 +1,51 @@
+[
+  {
+    "id": "flapping-alerts-positive",
+    "query": "Our pager is flooding from the same check flapping every 10 minutes — can we tune this down?",
+    "should_trigger": true,
+    "note": "canonical alert-fatigue surface"
+  },
+  {
+    "id": "alert-hygiene-audit-positive",
+    "query": "Do an alert hygiene review for our GCP monitoring project and tell me what's noise.",
+    "should_trigger": true
+  },
+  {
+    "id": "threshold-tune-positive",
+    "query": "I want to raise the CPU threshold on our latency burn-rate alert — walk me through the tradeoff.",
+    "should_trigger": true
+  },
+  {
+    "id": "slo-alert-redesign-positive",
+    "query": "Help me rework the SLO alerting for billing — too many false pages, burn rates feel wrong.",
+    "should_trigger": true
+  },
+  {
+    "id": "incident-volume-positive",
+    "query": "Our incident volume doubled this quarter and nobody's looked at which alerts are duplicates.",
+    "should_trigger": true
+  },
+  {
+    "id": "active-incident-negative",
+    "query": "Production is on fire — pods are crashlooping and connections are timing out, help me investigate now.",
+    "should_trigger": false,
+    "note": "incident-analysis territory; SKILL.md explicitly excludes active incident response"
+  },
+  {
+    "id": "slo-design-from-scratch-negative",
+    "query": "We don't have SLOs yet for the new payment service — design a latency and error SLO with burn-rate PromQL.",
+    "should_trigger": false,
+    "note": "SKILL.md explicitly excludes SLO design from scratch; this identifies redesign candidates only"
+  },
+  {
+    "id": "general-coding-negative",
+    "query": "Write me a Python script that renames files in a directory.",
+    "should_trigger": false
+  },
+  {
+    "id": "multi-project-negative",
+    "query": "Audit alerts across all 14 of our GCP projects and consolidate the report.",
+    "should_trigger": false,
+    "note": "SKILL.md explicitly scopes v1 to one monitoring project per invocation"
+  }
+]
