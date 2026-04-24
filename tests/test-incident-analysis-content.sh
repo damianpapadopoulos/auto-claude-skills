@@ -412,8 +412,8 @@ assert_file_contains "SKILL.md: gate requires mechanism_status known for root ca
     "mechanism_status.*must be.*known\|mechanism_status.*known.*blocks" "${SKILL_FILE}"
 assert_file_contains "SKILL.md: gate has live-triage mode section" \
     "Live-triage mode:" "${SKILL_FILE}"
-assert_file_contains "SKILL.md: gate governs Q4-Q11 explicitly" \
-    "Q4-Q11 must each be explicitly resolved" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: gate governs Q4-Q12 explicitly" \
+    "Q4-Q12 must each be explicitly resolved" "${SKILL_FILE}"
 
 # ---------------------------------------------------------------------------
 # P1 fix: root_cause_layer_coverage.mechanism_status allows not_applicable
@@ -576,6 +576,92 @@ assert_file_contains "behavioral: SKILL.md pointer references error-taxonomy.md"
     "references/error-taxonomy.md" "${SKILL_FILE}"
 assert_file_contains "behavioral: error-taxonomy ref has tier routing rules" \
     "Investigate Tier 1.*first" "${ERROR_TAXONOMY_REF}"
+
+# ---------------------------------------------------------------------------
+# CAST extensions — references/cast-framing.md (new file)
+# ---------------------------------------------------------------------------
+CAST_FRAMING_REF="${PROJECT_ROOT}/skills/incident-analysis/references/cast-framing.md"
+assert_file_exists "references/cast-framing.md exists" "${CAST_FRAMING_REF}"
+assert_file_contains "cast-framing ref: lists Safety Culture category" \
+    "Safety Culture" "${CAST_FRAMING_REF}"
+assert_file_contains "cast-framing ref: lists Communication/Coordination category" \
+    "Communication/Coordination" "${CAST_FRAMING_REF}"
+assert_file_contains "cast-framing ref: lists Management of Change category" \
+    "Management of Change" "${CAST_FRAMING_REF}"
+assert_file_contains "cast-framing ref: lists Safety Information System category" \
+    "Safety Information System" "${CAST_FRAMING_REF}"
+assert_file_contains "cast-framing ref: lists Environmental Change category" \
+    "Environmental Change" "${CAST_FRAMING_REF}"
+assert_file_contains "cast-framing ref: has mental-model-gap shape" \
+    "believed.*actual" "${CAST_FRAMING_REF}"
+assert_file_contains "cast-framing ref: enumerates hindsight-bias language" \
+    "should have" "${CAST_FRAMING_REF}"
+assert_file_contains "cast-framing ref: enumerates hindsight-bias language (failed to)" \
+    "failed to" "${CAST_FRAMING_REF}"
+
+# ---------------------------------------------------------------------------
+# CAST extensions — SKILL.md Step 7 items 9 (Mental model gaps) and 10 (Systemic factors)
+# ---------------------------------------------------------------------------
+STEP7_CAST_BLOCK=$(sed -n '/### Step 7: Context Discipline/,/### Step 8/p' "${SKILL_FILE}")
+assert_contains "SKILL.md: step 7 has Mental model gaps item" \
+    "Mental model gaps" "${STEP7_CAST_BLOCK}"
+assert_contains "SKILL.md: step 7 has Systemic factors item" \
+    "Systemic factors" "${STEP7_CAST_BLOCK}"
+assert_contains "SKILL.md: step 7 references cast-framing.md" \
+    "references/cast-framing.md" "${STEP7_CAST_BLOCK}"
+assert_contains "SKILL.md: step 7 has hindsight-bias self-check" \
+    "should have" "${STEP7_CAST_BLOCK}"
+
+# ---------------------------------------------------------------------------
+# CAST extensions — SKILL.md Step 8 completeness gate Q12
+# ---------------------------------------------------------------------------
+assert_file_contains "SKILL.md: completeness gate has Q12" \
+    "| 12 |" "${SKILL_FILE}"
+Q12_LINE=$(sed -n '/^| 12 |/p' "${SKILL_FILE}")
+assert_contains "SKILL.md: Q12 mentions Safety Culture category" \
+    "Safety Culture" "${Q12_LINE}"
+assert_contains "SKILL.md: Q12 mentions Communication/Coordination category" \
+    "Communication/Coordination" "${Q12_LINE}"
+assert_contains "SKILL.md: Q12 mentions Management of Change category" \
+    "Management of Change" "${Q12_LINE}"
+assert_contains "SKILL.md: Q12 mentions Safety Information System category" \
+    "Safety Information System" "${Q12_LINE}"
+assert_contains "SKILL.md: Q12 mentions Environmental Change category" \
+    "Environmental Change" "${Q12_LINE}"
+
+# ---------------------------------------------------------------------------
+# CAST extensions — postmortem-template.md §6 Systemic factors + §7 Mental model gaps
+# ---------------------------------------------------------------------------
+assert_file_contains "postmortem template: has Systemic factors sub-block" \
+    "Systemic factors" "${TEMPLATE_FILE}"
+assert_file_contains "postmortem template: Systemic factors lists Safety Culture" \
+    "Safety Culture" "${TEMPLATE_FILE}"
+assert_file_contains "postmortem template: Systemic factors lists Communication/Coordination" \
+    "Communication/Coordination" "${TEMPLATE_FILE}"
+assert_file_contains "postmortem template: Systemic factors lists Management of Change" \
+    "Management of Change" "${TEMPLATE_FILE}"
+assert_file_contains "postmortem template: Systemic factors lists Safety Information System" \
+    "Safety Information System" "${TEMPLATE_FILE}"
+assert_file_contains "postmortem template: Systemic factors lists Environmental Change" \
+    "Environmental Change" "${TEMPLATE_FILE}"
+assert_file_contains "postmortem template: has Mental model gaps sub-block" \
+    "Mental model gaps" "${TEMPLATE_FILE}"
+assert_file_contains "postmortem template: has hindsight-bias check" \
+    "Hindsight-bias check\|hindsight-bias check\|hindsight bias check" "${TEMPLATE_FILE}"
+
+# ---------------------------------------------------------------------------
+# CAST extensions — investigation-schema.md optional mental_model_gaps + systemic_factors
+# ---------------------------------------------------------------------------
+assert_file_contains "schema ref: has optional mental_model_gaps field" \
+    "mental_model_gaps:" "${SCHEMA_FILE}"
+assert_file_contains "schema ref: has optional systemic_factors field" \
+    "systemic_factors:" "${SCHEMA_FILE}"
+assert_file_contains "schema ref: systemic_factors has safety_culture key" \
+    "safety_culture:" "${SCHEMA_FILE}"
+assert_file_contains "schema ref: systemic_factors has management_of_change key" \
+    "management_of_change:" "${SCHEMA_FILE}"
+assert_file_contains "schema ref: systemic_factors has environmental_change key" \
+    "environmental_change:" "${SCHEMA_FILE}"
 
 # ---------------------------------------------------------------------------
 # Structural guard — SKILL.md word count

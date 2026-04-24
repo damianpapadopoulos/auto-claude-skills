@@ -3,9 +3,7 @@
 ## Purpose
 
 Structured production-incident investigation. Tiered observability detection (MCP → gcloud CLI → guidance-only), HITL-gated mutations, and canonical postmortem output that survives the session so incident context reaches the next phase and the next responder.
-
 ## Requirements
-
 ### Requirement: Tiered Tool Detection
 The skill SHALL detect available observability tools at runtime and MUST select the best execution tier.
 
@@ -235,3 +233,107 @@ The agent MUST use compact, structured decision records at the HITL gate.
 Given a proposal passes all eligibility checks
 When the agent presents the mitigation proposal
 Then the output includes: playbook ID, confidence band, coverage ratio, margin, evidence age, supporting signals with weights, contradictory signals, veto signals, unknown/unavailable signals, state fingerprint, command, explanation, and validation plan
+
+### Requirement: CAST Mental-Model-Gap Articulation in Synthesis
+
+Step 7 synthesis MUST emit a `Mental model gaps` section. For each controller (human role or automation component) relevant to the incident, the section SHALL record one entry of the shape `<controller> believed <X>; actual was <Y>`. If the incident has a single controller whose model was correct, the section MAY be `N/A — <reason>` with the reason stated explicitly.
+
+#### Scenario: Multi-controller incident
+- **WHEN** an investigation attributes the root cause across two or more controllers (e.g., backend service + deployment automation + shared database)
+- **THEN** Step 7 synthesis output contains a `Mental model gaps` block with at least one entry per relevant controller in the `<controller> believed <X>; actual was <Y>` shape
+
+#### Scenario: Single-controller incident with correct model
+- **WHEN** the incident involves a single controller whose prior model of the system was accurate and the failure was external (e.g., upstream vendor outage)
+- **THEN** the `Mental model gaps` block MAY be `N/A — <reason>` with a non-empty reason stated
+- **AND** the reason SHALL explain why no model correction is required
+
+#### Scenario: Action item without identified belief
+- **WHEN** the postmortem proposes an action item (runbook update, training, dashboard redesign)
+- **THEN** the action item implies a controller's prior belief was wrong
+- **AND** Step 7 synthesis SHALL name that controller and the belief explicitly in the `Mental model gaps` block
+
+### Requirement: CAST Systemic-Factor Coverage Across Five Categories
+
+Step 7 synthesis MUST emit a `Systemic factors` section covering all five CAST categories: Safety Culture, Communication/Coordination, Management of Change, Safety Information System, and Environmental Change. Each category SHALL contain either a non-empty observation paragraph OR `N/A — <reason>` (equivalently `not_applicable — <reason>`). A bare `N/A`, bare `not_applicable`, or any token without a non-empty reason SHALL block the completeness gate.
+
+#### Scenario: Complex multi-team incident
+- **WHEN** the investigation spans multiple services and teams
+- **THEN** each of the five CAST categories in Step 7 output has a non-empty observation paragraph
+
+#### Scenario: Simple config-typo incident
+- **WHEN** the incident is resolved in under 5 minutes by a single engineer via rollback
+- **THEN** categories that genuinely do not apply MAY be `N/A — <reason>` with the reason stated (e.g., "single engineer, no cross-team handoff involved")
+- **AND** the completeness gate SHALL accept the output
+
+#### Scenario: Unresolved category blocks closure
+- **WHEN** any of the five categories in Step 7 output is bare `N/A`, bare `not_applicable`, or has an empty reason
+- **THEN** Step 8 completeness gate Q12 SHALL block transition to POSTMORTEM
+- **AND** the investigation SHALL return to Step 7 to resolve the category
+
+### Requirement: Hindsight-Bias Self-Check in Synthesis
+
+Step 7 synthesis MUST include a self-check that scans the synthesis prose the operator produces for hindsight-bias language and replaces flagged phrases with evidence-grounded framing. The self-check SHALL cover at minimum the phrases `should have`, `failed to`, `could have easily`, `obviously`, and `it was clear that`. Replacement patterns SHALL be documented in `references/cast-framing.md`.
+
+#### Scenario: Phrase flagged during synthesis
+- **WHEN** a draft of Step 7 synthesis prose contains the phrase "the on-call engineer should have checked dashboards first"
+- **THEN** the self-check SHALL flag the phrase
+- **AND** guidance SHALL point to `references/cast-framing.md` for the evidence-grounded replacement shape (e.g., "the on-call engineer's model at T was <Y>; evidence that would have prompted dashboard check was <where it lived / why it wasn't visible>")
+
+#### Scenario: Insufficient evidence to replace
+- **WHEN** the hindsight-bias check flags a phrase but the supporting evidence for the replacement is missing
+- **THEN** the claim SHALL be moved to the `open_questions` section instead of being rewritten with speculation
+
+#### Scenario: Self-check scope
+- **WHEN** the self-check is performed
+- **THEN** it SHALL apply only to synthesis prose the operator produces, not to the SKILL.md file itself or any other reference material (e.g., SKILL.md Step 8 Q7 legitimately mentions `should have` in "which alerts should have fired but didn't" — this is documentation, not synthesis prose)
+
+### Requirement: Completeness Gate Question 12 (CAST Systemic Factors)
+
+Step 8 completeness gate MUST include Question 12 covering CAST systemic-factor coverage. Q12 SHALL require an observation or `not_applicable — <reason>` (equivalently `N/A — <reason>`) for each of the five categories. Q12 SHALL follow the existing Q4-Q12 resolution rule (evidence-backed answer, `not_applicable` with reason, `unavailable` with reason, or `not_captured` with reason — bare "not assessed" blocks closure).
+
+#### Scenario: Fully populated Q12
+- **WHEN** Step 7 synthesis has a non-empty entry or `N/A — <reason>` for each of the five CAST categories
+- **THEN** Q12 is resolved
+- **AND** transition to POSTMORTEM is allowed if all other gate questions are also resolved
+
+#### Scenario: Missing category blocks closure
+- **WHEN** one or more of the five CAST categories is empty, bare `N/A`, bare `not_applicable`, or `N/A —` with no reason
+- **THEN** Q12 is unresolved
+- **AND** Step 8 SHALL block transition to POSTMORTEM until the category is resolved
+
+#### Scenario: Existing Q4-Q11 resolution vocabulary applies to Q12
+- **WHEN** an author uses `not_applicable — <reason>`, `unavailable — <reason>`, or `not_captured — <reason>` for a CAST category
+- **THEN** Q12 SHALL accept the resolution
+- **AND** the vocabulary is equivalent to the Q12 row's `N/A — <reason>` shape
+
+### Requirement: Postmortem Template Sub-Blocks for CAST
+
+The built-in postmortem template (`references/postmortem-template.md`) MUST include:
+- Section 6 (Contributing Factors) SHALL contain a `Systemic factors` sub-block listing all five CAST categories.
+- Section 7 (Lessons Learned) SHALL contain a `Mental model gaps` sub-block and a `Hindsight-bias check` paragraph pointing at the hindsight-language replacement patterns.
+
+#### Scenario: Template copy-paste by postmortem author
+- **WHEN** an author copies the built-in template into a new postmortem
+- **THEN** §6 contains the five CAST category bullets as placeholders
+- **AND** §7 contains the `Mental model gaps` bullet list placeholder and the `Hindsight-bias check` paragraph
+
+#### Scenario: CAST reference pointer present
+- **WHEN** a reviewer or author opens the template
+- **THEN** both §6 and §7 new sub-blocks reference `references/cast-framing.md` for definitions and replacement patterns
+
+### Requirement: Optional CAST Fields in Investigation Summary Schema
+
+The canonical YAML schema for `investigation_summary` (`references/investigation-schema.md`) MUST document optional `mental_model_gaps` (a list of `{controller, believed, actual}` objects) and `systemic_factors` (a map with keys `safety_culture`, `communication_coordination`, `management_of_change`, `safety_information_system`, `environmental_change`) fields. Both fields SHALL be optional and purely additive; consumers that do not need CAST framing MUST be able to ignore them without error.
+
+#### Scenario: Schema consumer without CAST awareness
+- **WHEN** a consumer parses `investigation_summary` YAML that includes `mental_model_gaps` and `systemic_factors` fields
+- **THEN** the consumer SHALL be able to ignore those fields without schema-level validation errors
+
+#### Scenario: CAST-aware synthesis emits structured fields
+- **WHEN** Step 7 synthesis is emitted with CAST framing
+- **THEN** the YAML MAY populate `mental_model_gaps` and `systemic_factors` in the structure documented in the schema file
+
+#### Scenario: Schema enforcement
+- **WHEN** the change is shipped
+- **THEN** no validator, hook, or CI check SHALL enforce presence of the CAST fields in emitted YAML (prose-only enforcement via Step 7 and Q12 is the sole mechanism)
+
