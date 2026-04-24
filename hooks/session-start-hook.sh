@@ -41,12 +41,32 @@ fi
 # -----------------------------------------------------------------
 # Step 1c: Reset depth counter for new session
 # -----------------------------------------------------------------
-# Generate a session-scoped token so concurrent sessions don't share counters.
-# Format: <epoch>-<pid>-<rand>. The random suffix defends against collisions
-# when two sessions start in the same second with a reused PID (shell respawn,
-# rapid subshell invocation). Without it the token was 1-second-granularity.
-# Clean up stale counter files from previous sessions first.
-_SESSION_TOKEN="$(date +%s)-$$-${RANDOM}${RANDOM}"
+# Token strategy: prefer Claude Code's session_id from hook stdin (stable across
+# every SessionStart fire within the same conversation — IDE reloads, panel
+# restarts, etc.) so composition-state files keyed off the token survive
+# session-start re-fires. Without this, every SessionStart rotated the token
+# and orphaned in-flight composition state, blowing up the openspec-guard push
+# gate's REVIEW/VERIFY/SHIP checks (see #14, #15).
+#
+# Falls back to <epoch>-<pid>-<rand> when stdin is unavailable, contains no
+# session_id, or jq is missing — preserving the original collision-defense
+# guarantees for environments that don't deliver session_id.
+_HOOK_STDIN=""
+if [ ! -t 0 ]; then
+    _HOOK_STDIN="$(cat 2>/dev/null)" || _HOOK_STDIN=""
+fi
+_HOOK_SESSION_ID=""
+if [ -n "${_HOOK_STDIN}" ] && command -v jq >/dev/null 2>&1; then
+    _HOOK_SESSION_ID="$(printf '%s' "${_HOOK_STDIN}" | jq -r '.session_id // empty' 2>/dev/null)" || _HOOK_SESSION_ID=""
+fi
+if [ -n "${_HOOK_SESSION_ID}" ]; then
+    _SESSION_TOKEN="session-${_HOOK_SESSION_ID}"
+else
+    # Fallback for environments without session_id. Format: <epoch>-<pid>-<rand>.
+    # The random suffix defends against collisions when two sessions start in the
+    # same second with a reused PID (shell respawn, rapid subshell invocation).
+    _SESSION_TOKEN="$(date +%s)-$$-${RANDOM}${RANDOM}"
+fi
 printf '%s' "$_SESSION_TOKEN" > "${HOME}/.claude/.skill-session-token" 2>/dev/null || true
 # Read previous session's zero-match stats before cleanup
 _PREV_ZM=0

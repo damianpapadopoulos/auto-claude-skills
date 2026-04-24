@@ -545,6 +545,63 @@ test_context_capabilities_detection() {
     teardown_test_env
 }
 
+test_session_token_uses_session_id_when_provided() {
+    echo "-- test: session-start derives token from stdin .session_id when present --"
+    setup_test_env
+
+    # Run hook with a synthetic session_id on stdin
+    local input='{"session_id":"unit-test-stable-id-42","hook_event_name":"SessionStart","source":"startup"}'
+    printf '%s' "${input}" | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" _SKILL_TEST_MODE=1 bash "${PROJECT_ROOT}/hooks/session-start-hook.sh" >/dev/null 2>&1
+
+    local token
+    token="$(cat "${HOME}/.claude/.skill-session-token" 2>/dev/null)"
+    assert_equals "token equals session-<session_id>" "session-unit-test-stable-id-42" "${token}"
+
+    teardown_test_env
+}
+
+test_session_token_falls_back_when_no_session_id() {
+    echo "-- test: session-start falls back to epoch-pid-rand when stdin has no session_id --"
+    setup_test_env
+
+    # Run hook with empty stdin (no session_id available)
+    CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" _SKILL_TEST_MODE=1 bash "${PROJECT_ROOT}/hooks/session-start-hook.sh" >/dev/null 2>&1 < /dev/null
+
+    local token
+    token="$(cat "${HOME}/.claude/.skill-session-token" 2>/dev/null)"
+    # Fallback shape: <digits>-<digits>-<digits>
+    if printf '%s' "${token}" | grep -qE '^[0-9]+-[0-9]+-[0-9]+$'; then
+        echo "  PASS: fallback token has epoch-pid-rand shape"
+        TESTS_PASSED=$((${TESTS_PASSED:-0} + 1))
+    else
+        echo "  FAIL: fallback token shape unexpected: '${token}'"
+        TESTS_FAILED=$((${TESTS_FAILED:-0} + 1))
+    fi
+
+    teardown_test_env
+}
+
+test_session_token_stable_across_repeated_session_start() {
+    echo "-- test: same session_id → same token across repeated SessionStart fires --"
+    setup_test_env
+
+    local input='{"session_id":"reload-stability-test","hook_event_name":"SessionStart","source":"startup"}'
+
+    # First fire
+    printf '%s' "${input}" | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" _SKILL_TEST_MODE=1 bash "${PROJECT_ROOT}/hooks/session-start-hook.sh" >/dev/null 2>&1
+    local token_a
+    token_a="$(cat "${HOME}/.claude/.skill-session-token" 2>/dev/null)"
+
+    # Second fire (simulate IDE reload — same session_id)
+    printf '%s' "${input}" | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" _SKILL_TEST_MODE=1 bash "${PROJECT_ROOT}/hooks/session-start-hook.sh" >/dev/null 2>&1
+    local token_b
+    token_b="$(cat "${HOME}/.claude/.skill-session-token" 2>/dev/null)"
+
+    assert_equals "token unchanged across repeated SessionStart with same session_id" "${token_a}" "${token_b}"
+
+    teardown_test_env
+}
+
 test_lsp_capability_shape() {
     echo "-- test: context_capabilities has lsp key --"
     setup_test_env
@@ -1176,6 +1233,9 @@ test_auto_discovers_unknown_plugins
 test_health_check_reports_new_plugins
 test_fallback_registry_skill_coverage
 test_context_capabilities_detection
+test_session_token_uses_session_id_when_provided
+test_session_token_falls_back_when_no_session_id
+test_session_token_stable_across_repeated_session_start
 test_lsp_capability_shape
 test_context_capabilities_all_false
 test_context_capabilities_in_health_output
