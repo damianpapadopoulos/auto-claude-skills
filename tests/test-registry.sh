@@ -745,9 +745,11 @@ test_lsp_nudge_fires_on_error_hunt_pattern() {
 EOF
 
     local input='{"tool_name":"Grep","tool_input":{"pattern":"TypeError: Cannot read properties"}}'
-    local output
+    local output exit_code
     output="$(printf '%s' "${input}" | bash "${PROJECT_ROOT}/hooks/lsp-nudge.sh" 2>/dev/null)"
+    exit_code=$?
 
+    assert_equals "nudge exits 0 when firing" "0" "${exit_code}"
     assert_contains "hint references mcp__ide__getDiagnostics" "mcp__ide__getDiagnostics" "${output}"
     assert_contains "hint is structured as additionalContext" "additionalContext" "${output}"
 

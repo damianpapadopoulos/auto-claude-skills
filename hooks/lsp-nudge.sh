@@ -10,7 +10,13 @@ trap 'exit 0' ERR
 
 _INPUT="$(cat)"
 
-# Fast path: only care about Grep (matcher should handle this, but double-check)
+# Fast path: only care about Grep (matcher should handle this, but double-check).
+# Note: this hook is a no-op when jq is unavailable. The session-start hook already
+# requires jq to populate the registry cache; without jq the cache is served from
+# config/fallback-registry.json which has lsp=false, so the early-exit below fires
+# anyway. The no-jq printf fallback at the bottom of this file mirrors serena-nudge.sh
+# for consistency but is unreachable in practice because _TOOL_NAME stays empty
+# without jq, making the guard on the next line fail.
 _TOOL_NAME=""
 if command -v jq >/dev/null 2>&1; then
     _TOOL_NAME="$(printf '%s' "${_INPUT}" | jq -r '.tool_name // empty' 2>/dev/null)" || true
