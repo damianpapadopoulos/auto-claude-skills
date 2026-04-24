@@ -350,4 +350,71 @@ The plugin MUST register both `hooks/serena-nudge.sh` and `hooks/lsp-nudge.sh` a
 - **WHEN** the runtime fires both PreToolUse hooks
 - **THEN** the Serena nudge MUST emit its hint
 - **AND** the LSP nudge MUST exit 0 without emitting
+### Requirement: Per-Skill Regex Trigger Fixtures
+
+The repository MUST provide a deterministic test harness that verifies regex triggers in `config/default-triggers.json` against per-skill fixture files. The harness MUST lowercase prompts before matching (to mirror `hooks/skill-activation-hook.sh` pre-processing) and MUST use bash `[[ =~ ]]` extended regex (the same engine as the activation hook). The harness MUST be auto-discovered by the default `tests/run-tests.sh` so that fixture regressions break the default test suite at zero LLM cost.
+
+#### Scenario: Fixture directives drive assertions
+- **WHEN** `tests/fixtures/routing/<skill>.txt` contains a line `MATCH: <prompt>` and the skill has entries in `config/default-triggers.json`
+- **THEN** at least one trigger regex MUST match the lowercased prompt, or the test MUST fail with a line-numbered failure message citing the skill and the unmatched prompt.
+
+#### Scenario: Negative directives enforce specificity
+- **WHEN** the fixture contains a line `NO_MATCH: <prompt>`
+- **THEN** no trigger regex for that skill SHALL match the lowercased prompt, or the test MUST fail and cite the offending regex verbatim.
+
+#### Scenario: Comments and blank lines ignored
+- **WHEN** a fixture line is empty or begins with `#` (optionally preceded by whitespace)
+- **THEN** the line MUST be skipped without affecting pass/fail counts.
+
+#### Scenario: Missing trigger entry fails closed
+- **WHEN** a fixture file exists for a skill that has no matching entry in `config/default-triggers.json`
+- **THEN** the test MUST fail explicitly rather than silently pass.
+
+#### Scenario: Bash 3.2 compatibility
+- **WHEN** `tests/test-regex-fixtures.sh` runs on macOS `/bin/bash` (3.2.57)
+- **THEN** it MUST execute without invoking bash-4-only features (associative arrays, `mapfile`/`readarray`, `${var,,}`, `<<<` here-strings in load-bearing positions).
+
+### Requirement: Description Trigger Accuracy CI Gate
+
+The repository MUST provide a non-blocking PR workflow that scores each changed skill's SKILL.md frontmatter `description` against an optional per-skill eval pack (`skills/<name>/evals/evals.json`). The workflow MUST be opt-in via either a `run-eval` PR label or an `@claude run eval` PR comment. The workflow SHALL NOT fail the PR check; it SHALL only post advisory markdown results as a PR comment.
+
+#### Scenario: Happy path evaluation
+- **WHEN** a maintainer applies the `run-eval` label to a PR that edits `skills/<name>/SKILL.md` and `skills/<name>/evals/evals.json` exists
+- **THEN** the workflow MUST post a markdown table per changed skill containing per-case PASS/FAIL, trigger accuracy (recall on positives), specificity (correct skips on negatives), and overall percentage.
+
+#### Scenario: Missing eval pack graceful skip
+- **WHEN** a PR edits `skills/<name>/SKILL.md` and `evals/evals.json` does NOT exist for that skill
+- **THEN** the workflow MUST post a "skipped — add evals" section naming the skill and referencing `docs/eval-pack-schema.md`, rather than erroring.
+
+#### Scenario: Accuracy threshold flag
+- **WHEN** a skill's overall accuracy score is below 80%
+- **THEN** the workflow MUST flag the result with an explicit warning line that quotes the current description verbatim and recommends a rewrite.
+
+#### Scenario: Prior bot comment reaper
+- **WHEN** a new evaluation run completes successfully
+- **THEN** prior `github-actions[bot]` comments whose body matches "Skill Eval Results" MUST be deleted before the new table is posted.
+
+#### Scenario: Reaper disabled on eval failure
+- **WHEN** the eval step fails or is skipped (including the fork-PR abort path)
+- **THEN** the reaper step MUST NOT run, so that prior legitimate eval warnings on the PR survive unchanged.
+
+#### Scenario: Fork-PR head refused
+- **WHEN** the workflow is triggered for a PR whose `head.repo.full_name` differs from the base repository
+- **THEN** the workflow MUST emit a `::notice::` and abort before `actions/checkout@v4` runs, so that adversarial fork-PR content is never checked out while secrets are in scope.
+
+#### Scenario: Permission gate excludes read-only and triage users
+- **WHEN** the triggering user's permission (from `/repos/<repo>/collaborators/<user>/permission`) is not one of `admin`, `write`, or `maintain`
+- **THEN** the workflow MUST abort before checkout with a `::notice::` citing the actual permission level.
+
+### Requirement: Eval Pack Schema Convention
+
+Per-skill `evals/evals.json` files MUST be JSON arrays where each element is an object with at minimum a string `id`, a string `query`, and a boolean `should_trigger`. The optional field `note` MAY be included as a string used for reviewer context in the CI output. The schema MUST be documented at `docs/eval-pack-schema.md` with authoring guidelines covering case counts, positive/negative balance, and the 80% accuracy threshold.
+
+#### Scenario: Required fields present
+- **WHEN** an eval pack is consumed by the Description Trigger Accuracy CI Gate
+- **THEN** each case object MUST contain `id`, `query`, and `should_trigger`, or the gate MUST report the malformed case in its output rather than silently ignoring it.
+
+#### Scenario: Author guidelines reflect intent
+- **WHEN** a contributor reads `docs/eval-pack-schema.md`
+- **THEN** the document MUST describe: (a) recommended case count per skill (5–10), (b) the requirement that at least one-third of cases target explicit out-of-scope boundaries as `should_trigger: false`, (c) the 80% overall accuracy threshold, and (d) the `CLAUDE_CODE_OAUTH_TOKEN` repo secret required to run the CI gate.
 
