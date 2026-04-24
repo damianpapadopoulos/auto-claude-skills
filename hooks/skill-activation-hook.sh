@@ -71,6 +71,14 @@ if [[ "$P" =~ $_BLOCKLIST ]]; then
 fi
 
 # =================================================================
+# STICKY COMPOSITION LEXICONS
+# =================================================================
+# Used by _apply_sticky_composition to classify short-prompt intent
+# when composition state is active.
+_ACK_LEXICON='(^(yes|yep|yeah|yup|ok|okay|k|sure|go|sounds good|lgtm|approved|confirmed|do it|let.?s go|lets.? go|proceed|ship it|ready|correct|right)[[:space:]!.]*$|^(continue|resume|carry on|keep going|next|more)[[:space:]!.]*$)'
+_ABORT_LEXICON='(stop|cancel|never.?mind|scrap|abandon|forget (it|that|this)|drop (it|this)|change of plan|new idea|different (plan|direction|idea|approach)|start over|nah|no thanks)'
+
+# =================================================================
 # LOAD REGISTRY
 # =================================================================
 REGISTRY_CACHE="${HOME}/.claude/.skill-registry-cache.json"
@@ -309,67 +317,125 @@ ${SORTED}
 EOF
 
   SORTED="$(printf '%s' "$_new_sorted" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
+}
 
-  # --- IMPLEMENT stickiness ---
-  # If last phase was IMPLEMENT and prompt uses EXPLICIT continuation language,
-  # boost executing-plans above the top process skill. Generic build verbs
-  # (add/build/create) are NOT matched — they may indicate new design intents
-  # that must go through brainstorming (superpowers HARD-GATE).
-  local _last_phase
-  _last_phase="$(jq -r '.phase // empty' "$_signal_file" 2>/dev/null)"
-  if [[ "$_last_phase" == "IMPLEMENT" ]]; then
-    # Check top process phase in current SORTED
-    local _top_process_phase=""
-    while IFS='|' read -r _sp_score _sp_name _sp_role _sp_invoke _sp_phase; do
-      [[ -z "$_sp_name" ]] && continue
-      if [[ "$_sp_role" == "process" ]]; then
-        _top_process_phase="$_sp_phase"
-        break
-      fi
-    done <<EOF
-${SORTED}
-EOF
-    if [[ "$_top_process_phase" == "DESIGN" ]] || [[ -z "$_top_process_phase" ]]; then
-      # Only fire on EXPLICIT continuation language
+# --- _apply_sticky_composition ------------------------------------
+# Sticky-emit the CURRENT chain step when composition state is active
+# and the prompt is ack-shaped (in the ack lexicon OR short).
+# Abort-lexicon prompts clear composition state and suppress this turn.
+# Display-only: does NOT mutate .completed — that stays the responsibility
+# of the PostToolUse ^Skill$ completion hook.
+# Input globals: $P, $SORTED, $REGISTRY, $_SESSION_TOKEN, $_ACK_LEXICON, $_ABORT_LEXICON
+# Output: mutates $SORTED by injecting CURRENT skill, or deletes state on abort.
+# Fails open: any jq error, missing file, or unavailable skill returns without mutation.
+_apply_sticky_composition() {
+  [[ -z "${_SESSION_TOKEN}" ]] && return
+  local _comp_file="${HOME}/.claude/.skill-composition-state-${_SESSION_TOKEN}"
+  local _signal_file="${HOME}/.claude/.skill-last-invoked-${_SESSION_TOKEN}"
+
+  # Require at least one state source: composition file OR last-invoked signal.
+  [[ -f "$_comp_file" ]] || [[ -f "$_signal_file" ]] || return
+
+  local _current_name=""
+
+  # Primary: resolve CURRENT from composition state when available.
+  if [[ -f "$_comp_file" ]]; then
+    local _state
+    _state="$(jq -c '{chain: (.chain // []), completed: (.completed // [])}' "$_comp_file" 2>/dev/null)"
+    if [[ -n "$_state" ]]; then
+      _current_name="$(printf '%s' "$_state" | jq -r '
+        .chain as $c | .completed as $d |
+        if ($c | length) == 0 then empty
+        elif ($d | length) >= ($c | length) then empty
+        elif ($d | all(. as $x | $c | index($x))) then $c[$d | length]
+        else empty end
+      ' 2>/dev/null)"
+    fi
+  fi
+
+  # Fallback: composition state missing but last-invoked signals an IMPLEMENT
+  # session AND prompt explicitly asks to resume. Covers post-compaction cases
+  # where composition state was cleared. Narrow regex + no-dominant-process
+  # guard prevents hijacking when the prompt naturally routes elsewhere.
+  local _fallback_current=""
+  if [[ -z "$_current_name" ]] && [[ -f "$_signal_file" ]]; then
+    local _last_phase
+    _last_phase="$(jq -r '.phase // empty' "$_signal_file" 2>/dev/null)"
+    if [[ "$_last_phase" == "IMPLEMENT" ]]; then
       if [[ "$P" =~ (continue|resume|next.task|next.step|pick.up|carry.on|keep.going|where.were.we|what.s.next|move.on|proceed|finish.up|wrap.up.this|remaining|back.to.it) ]]; then
-          # Boost executing-plans above current top process
-          local _top_score=0
-          while IFS='|' read -r _bs_score _bs_name _bs_role _bs_invoke _bs_phase; do
-            [[ -z "$_bs_name" ]] && continue
-            [[ "$_bs_role" == "process" ]] && _top_score="$_bs_score" && break
-          done <<EOF
-${SORTED}
-EOF
-          local _sticky_score=$((_top_score + 5))
-          local _sticky_sorted=""
-          local _injected=0
-          while IFS='|' read -r _ss_score _ss_name _ss_role _ss_invoke _ss_phase; do
-            [[ -z "$_ss_name" ]] && continue
-            if [[ "$_ss_name" == "executing-plans" ]]; then
-              _sticky_sorted="${_sticky_sorted}${_sticky_score}|${_ss_name}|${_ss_role}|${_ss_invoke}|${_ss_phase}
-"
-              _injected=1
-            else
-              _sticky_sorted="${_sticky_sorted}${_ss_score}|${_ss_name}|${_ss_role}|${_ss_invoke}|${_ss_phase}
-"
-            fi
-          done <<EOF
-${SORTED}
-EOF
-          # If executing-plans wasn't in SORTED (no trigger match), inject it
-          # Only if it is available and enabled in the registry
-          if [[ "$_injected" -eq 0 ]]; then
-            local _ep_invoke
-            _ep_invoke="$(printf '%s' "$REGISTRY" | jq -r '.skills[] | select(.name == "executing-plans" and .available == true and .enabled == true) | .invoke // "SKIP"' 2>/dev/null)"
-            if [[ -n "$_ep_invoke" ]]; then
-              _sticky_sorted="${_sticky_score}|executing-plans|process|${_ep_invoke}|IMPLEMENT
-${_sticky_sorted}"
-            fi
+        # Only fire when no dominant process already scored (or top is DESIGN).
+        local _top_process_phase=""
+        while IFS='|' read -r _tps _tpn _tpr _tpi _tpp; do
+          [[ -z "$_tpn" ]] && continue
+          if [[ "$_tpr" == "process" ]]; then
+            _top_process_phase="$_tpp"
+            break
           fi
-          SORTED="$(printf '%s' "$_sticky_sorted" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
+        done <<EOF
+${SORTED}
+EOF
+        if [[ -z "$_top_process_phase" ]] || [[ "$_top_process_phase" == "DESIGN" ]]; then
+          _fallback_current="executing-plans"
+        fi
       fi
     fi
   fi
+
+  if [[ -z "$_current_name" ]] && [[ -n "$_fallback_current" ]]; then
+    _current_name="$_fallback_current"
+  fi
+
+  [[ -z "$_current_name" ]] && return
+
+  # Abort lexicon: clear state and suppress this turn.
+  if [[ "$P" =~ $_ABORT_LEXICON ]]; then
+    rm -f "$_comp_file" "$_signal_file" 2>/dev/null
+    return
+  fi
+
+  # Eligibility gate: short prompt OR ack lexicon match.
+  local _word_count
+  _word_count="$(printf '%s' "$P" | wc -w | tr -d '[:space:]')"
+  if ! { [[ "${_word_count:-0}" -le 6 ]] || [[ "$P" =~ $_ACK_LEXICON ]]; }; then
+    return
+  fi
+
+  # Registry lookup: skill must be available + enabled.
+  local _lookup
+  _lookup="$(printf '%s' "$REGISTRY" | jq -r --arg n "$_current_name" '
+    .skills[] | select(.name == $n and .available == true and .enabled == true) |
+    "\(.role // "process")\(.phase // "")\(.invoke // "Skill(\(.name))")"
+  ' 2>/dev/null)"
+  [[ -z "$_lookup" ]] && return
+
+  local _role _phase _invoke _fs
+  _fs=$'\x1f'
+  _role="${_lookup%%${_fs}*}"
+  local _rest="${_lookup#*${_fs}}"
+  _phase="${_rest%%${_fs}*}"
+  _invoke="${_rest#*${_fs}}"
+
+  # Do not double-inject if CURRENT already scored from a trigger match.
+  if printf '%s\n' "$SORTED" | grep -q "^[0-9]*|${_current_name}|"; then
+    return
+  fi
+
+  # Compute injection score: top process score + 5, floor of 40.
+  local _top_process_score=0
+  while IFS='|' read -r _ts _tn _tr _ti _tp; do
+    [[ -z "$_tn" ]] && continue
+    if [[ "$_tr" == "process" ]]; then
+      _top_process_score="$_ts"
+      break
+    fi
+  done <<EOF
+${SORTED}
+EOF
+  local _inject_score=$((_top_process_score + 5))
+  (( _inject_score < 40 )) && _inject_score=40
+
+  local _new_line="${_inject_score}|${_current_name}|${_role}|${_invoke}|${_phase}"
+  SORTED="$(printf '%s\n%s' "$_new_line" "$SORTED" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
 }
 
 # --- _select_by_role_caps -----------------------------------------
@@ -1111,6 +1177,7 @@ SKILL_DATA="$(printf '%s' "$REGISTRY" | jq -r '
 # --- Score, select, label, build, compose, format ---
 _score_skills
 _apply_context_bonus
+_apply_sticky_composition
 
 # --- Compute tentative phase for required-role pass 0 ---
 # Priority: process > workflow > domain > first required skill.
