@@ -179,3 +179,114 @@ When `SKILL_EXPLAIN=1` is set in the environment and the hook advances state, it
 - **WHEN** `SKILL_EXPLAIN=1` but the skill name is not in `.chain` (or already in `.completed`, or the tool returned with an error)
 - **THEN** the hook MUST NOT emit a `[completion]` breadcrumb
 
+### Requirement: LSP Capability Detection
+
+Session-start MUST set `.context_capabilities.lsp = true` if AND ONLY IF BOTH conditions hold at session-start time:
+
+1. At least one installed plugin under `~/.claude/plugins/cache/<marketplace>/<plugin-name>/[<version>/].claude-plugin/plugin.json` declares a non-empty `lspServers` object with at least one `<server-name>.command` string.
+2. At least one declared `lspServers.<name>.command` resolves via POSIX `command -v` on the session's PATH at hook execution time.
+
+The user MAY additionally force `lsp = true` by placing `{"context_capabilities": {"lsp": true}}` in `~/.claude/skill-config.json`; the override is governed by the general User-Config Capability Override requirement below. The resulting flag MUST appear as `.context_capabilities.lsp` in the cache registry and in the session-start `Context Stack:` output line.
+
+When a plugin is detected with `lspServers` declared but none of its `command` values resolve on PATH (a "partial install"), session-start MUST emit a diagnostic line naming the plugin and the missing command(s), so the user knows which binary to install. The diagnostic MUST NOT claim `lsp=true` when the capability is actually `false`.
+
+#### Scenario: LSP plugin installed with backing binary resolvable
+
+- **GIVEN** an installed plugin (e.g. `typescript-lsp`) whose `plugin.json` declares `lspServers.typescript.command = "typescript-language-server"`
+- **AND** `typescript-language-server` resolves via `command -v` on the session PATH
+- **WHEN** session-start runs
+- **THEN** `.context_capabilities.lsp` MUST equal `true` in `~/.claude/.skill-registry-cache.json`
+- **AND** the session-start `additionalContext` output MUST contain a line beginning with `LSP:` that references `mcp__ide__getDiagnostics`
+
+#### Scenario: LSP plugin installed but backing binary missing
+
+- **GIVEN** an installed plugin (e.g. `typescript-lsp`) whose `plugin.json` declares a language-server command
+- **AND** that command does NOT resolve via `command -v` on the session PATH
+- **WHEN** session-start runs
+- **THEN** `.context_capabilities.lsp` MUST equal `false`
+- **AND** the session-start `additionalContext` output MUST NOT contain the guidance line referencing `mcp__ide__getDiagnostics`
+- **AND** the session-start `additionalContext` output MUST contain a `LSP (partial install)` line naming both the plugin and the missing command
+
+#### Scenario: no LSP plugin installed
+
+- **GIVEN** no installed plugin declares `lspServers`
+- **WHEN** session-start runs
+- **THEN** `.context_capabilities.lsp` MUST equal `false`
+- **AND** the session-start `additionalContext` output MUST NOT contain the string `mcp__ide__getDiagnostics`
+- **AND** the session-start `additionalContext` output MUST NOT contain a `LSP (partial install)` diagnostic (zero-noise contract)
+
+### Requirement: User-Config Capability Override
+
+Session-start MUST honor `~/.claude/skill-config.json` entries of shape `{"context_capabilities": {"<flag>": true}}` for every canonical capability key, upgrading the detected flag from `false` to `true`. The override MUST NOT downgrade `true` to `false` under any circumstances. The override MUST silently drop any entry whose key is not in the canonical capability set, preventing injection of non-capability keys into `context_capabilities`.
+
+#### Scenario: legitimate override honored
+
+- **GIVEN** `~/.claude/skill-config.json` contains `{"context_capabilities": {"lsp": true}}`
+- **AND** no LSP plugin is detected (or the declared language-server binary is not on PATH)
+- **WHEN** session-start runs
+- **THEN** `.context_capabilities.lsp` MUST equal `true` in the cache — the override upgrades `false → true`
+
+#### Scenario: downgrade rejected
+
+- **GIVEN** a capability is detected as `true` via plugin presence (e.g., `context7`)
+- **AND** `~/.claude/skill-config.json` contains `{"context_capabilities": {"context7": false}}`
+- **WHEN** session-start runs
+- **THEN** `.context_capabilities.context7` MUST equal `true` — the override MUST NOT downgrade
+
+#### Scenario: arbitrary key rejected
+
+- **GIVEN** `~/.claude/skill-config.json` contains `{"context_capabilities": {"foo_injected": true, "malicious_safety_gate": true, "lsp": true}}`
+- **WHEN** session-start runs
+- **THEN** `.context_capabilities` MUST contain exactly the 8 canonical keys (`context7`, `context_hub_cli`, `context_hub_available`, `serena`, `forgetful_memory`, `openspec`, `posthog`, `lsp`)
+- **AND** `.context_capabilities.lsp` MUST equal `true`
+- **AND** `.context_capabilities.foo_injected` and `.context_capabilities.malicious_safety_gate` MUST NOT exist
+
+### Requirement: Canonical Fallback Registry Shape
+
+The committed `config/fallback-registry.json` served on the no-jq path MUST contain exclusively structural shape derived from `config/default-triggers.json`. It MUST NOT contain any machine-specific state, user configuration, or preset effects. Specifically: every `.plugins[].available` and every `.skills[].available` MUST be `false`; `.plugins[]` MUST be limited to curated entries from `default-triggers.json`; `.skills[]` MUST be limited to curated entries; `.context_capabilities` MUST contain exactly the canonical capability key set with every value `false`; and `.phase_compositions` MUST match `default-triggers.json` pre-preset content.
+
+#### Scenario: zero-trust availability
+
+- **WHEN** the session-start auto-regenerator writes `config/fallback-registry.json`
+- **THEN** `[.plugins[] | select(.available == true)] | length` MUST equal `0`
+- **AND** `[.skills[] | select(.available == true)] | length` MUST equal `0`
+- **AND** `[.context_capabilities | to_entries[] | select(.value == true)]` MUST be empty
+
+#### Scenario: preset activation does not leak
+
+- **GIVEN** `~/.claude/skill-config.json` sets `"preset": "spec-driven"` (rewrites `phase_compositions.DESIGN.hints`)
+- **WHEN** the auto-regenerator writes the fallback
+- **THEN** `config/fallback-registry.json` `.phase_compositions.DESIGN.hints` MUST match the `default-triggers.json` default text, not the spec-driven preset rewrite
+
+#### Scenario: user-config override keys do not leak
+
+- **GIVEN** `~/.claude/skill-config.json` sets `{"context_capabilities": {"foo_injected": true}}`
+- **WHEN** the auto-regenerator writes the fallback
+- **THEN** `config/fallback-registry.json` `.context_capabilities` MUST NOT contain the key `foo_injected`
+
+#### Scenario: auto-discovered plugins do not leak
+
+- **GIVEN** `~/.claude/plugins/cache/<marketplace>/<external-plugin>/` exists with a valid plugin.json
+- **WHEN** the auto-regenerator writes the fallback
+- **THEN** `config/fallback-registry.json` `.plugins` MUST NOT contain an entry for `<external-plugin>`
+
+### Requirement: LSP Tier Guidance in unified-context-stack
+
+The `unified-context-stack` tier documentation MUST present LSP diagnostics as the first-choice tool for compile/type errors when `lsp=true`, Serena as the tool for symbol navigation and structural edits when `serena=true`, and Grep/Read/Edit as the fallback when neither capability is present or when the content is non-code (log strings, YAML values, config text).
+
+#### Scenario: internal-truth tier ordering
+
+- **WHEN** a Claude session reads `skills/unified-context-stack/tiers/internal-truth.md`
+- **THEN** the file MUST define three tiers in order: Tier 0 (LSP diagnostics), Tier 1 (Serena symbol navigation), Tier 2 (standard tools)
+
+#### Scenario: testing-and-debug phase guidance
+
+- **WHEN** a Claude session reads `skills/unified-context-stack/phases/testing-and-debug.md` section 3 (Internal Truth)
+- **THEN** the first bullet MUST direct Claude to `mcp__ide__getDiagnostics` when `lsp=true`
+- **AND** the Serena and Grep bullets MUST appear after as `serena=true` and `serena=false and lsp=false` branches respectively
+
+#### Scenario: code-review phase guidance
+
+- **WHEN** a Claude session reads `skills/unified-context-stack/phases/code-review.md` section 2 (Internal Truth / Dependency Safety)
+- **THEN** the first bullet MUST direct Claude to `mcp__ide__getDiagnostics` when `lsp=true` and the reviewer claims a type/compile error
+

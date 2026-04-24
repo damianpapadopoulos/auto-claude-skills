@@ -302,13 +302,13 @@ test_default_triggers_has_plugins_section() {
     local plugin_count
     plugin_count="$(jq '.plugins | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
 
-    # Should have 12 curated plugins (5 enhancers + context7 + code-intelligence + github + atlassian + forgetful + unified-context-stack + posthog)
-    assert_equals "default-triggers has 12 plugins" "12" "${plugin_count}"
+    # Should have 11 curated plugins (5 enhancers + context7 + github + atlassian + forgetful + unified-context-stack + posthog)
+    assert_equals "default-triggers has 11 plugins" "11" "${plugin_count}"
 
     # Each plugin should have required fields
     local valid_count
     valid_count="$(jq '[.plugins[] | select(.name and .source and .provides and .phase_fit and .description)] | length' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "all plugins have required fields" "12" "${valid_count}"
+    assert_equals "all plugins have required fields" "11" "${valid_count}"
 
     teardown_test_env
 }
@@ -560,7 +560,7 @@ test_lsp_capability_shape() {
     has_lsp="$(jq '.context_capabilities | has("lsp")' "${cache_file}" 2>/dev/null)"
     assert_equals "context_capabilities has lsp key" "true" "${has_lsp}"
 
-    # lsp must default to false when no code-intelligence plugin or ide MCP configured
+    # lsp must default to false when no LSP plugin or ide MCP configured
     local lsp_val
     lsp_val="$(jq -r '.context_capabilities.lsp' "${cache_file}" 2>/dev/null)"
     assert_equals "lsp is false when nothing installed" "false" "${lsp_val}"
@@ -623,11 +623,27 @@ test_context_capabilities_in_health_output() {
 }
 
 test_lsp_guidance_in_output_when_present() {
-    echo "-- test: LSP guidance line appears when code-intelligence installed --"
+    echo "-- test: LSP guidance line appears when lspServers plugin AND command binary both present --"
     setup_test_env
 
-    # Install code-intelligence plugin (mock)
-    mkdir -p "${HOME}/.claude/plugins/cache/claude-plugins-official/code-intelligence"
+    # Install a mock LSP plugin whose command points at a binary guaranteed to exist (`true`).
+    # This mirrors the real contract: plugin declares the command, binary must resolve on PATH.
+    local lsp_dir="${HOME}/.claude/plugins/cache/claude-plugins-official/mock-lsp/1.0.0/.claude-plugin"
+    mkdir -p "${lsp_dir}"
+    cat > "${lsp_dir}/plugin.json" <<'EOF'
+{
+  "name": "mock-lsp",
+  "description": "Mock LSP plugin for tests",
+  "version": "1.0.0",
+  "lspServers": {
+    "mock": {
+      "command": "true",
+      "args": ["--stdio"],
+      "extensionToLanguage": {".mock": "mock"}
+    }
+  }
+}
+EOF
 
     local output
     output="$(run_hook)"
@@ -636,6 +652,81 @@ test_lsp_guidance_in_output_when_present() {
     context="$(printf '%s' "${output}" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
     assert_contains "output contains lsp=true flag" "lsp=true" "${context}"
     assert_contains "output contains LSP guidance line" "mcp__ide__getDiagnostics" "${context}"
+
+    teardown_test_env
+}
+
+test_lsp_ide_mcp_does_not_enable_lsp() {
+    echo "-- test: ide MCP server alone does NOT flip lsp=true (no false-positive via MCP) --"
+    setup_test_env
+
+    rm -rf "${HOME}/.claude/plugins"
+
+    # Write a ~/.claude.json with an `ide` MCP server configured. Under the old incorrect
+    # contract this would have flipped lsp=true. Under the shipped contract it must NOT,
+    # because there is no backing-binary check on the MCP signal and LSP plugins don't
+    # use mcpServers anyway.
+    cat > "${HOME}/.claude.json" <<'EOF'
+{
+  "mcpServers": {
+    "ide": {
+      "command": "some-mcp-server",
+      "args": []
+    }
+  }
+}
+EOF
+
+    run_hook >/dev/null
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    local lsp_val
+    lsp_val="$(jq -r '.context_capabilities.lsp' "${cache_file}" 2>/dev/null)"
+    assert_equals "ide MCP server alone does not enable lsp" "false" "${lsp_val}"
+
+    teardown_test_env
+}
+
+test_lsp_false_positive_guard_when_binary_missing() {
+    echo "-- test: lsp=false + partial-install diagnostic when binary missing --"
+    setup_test_env
+
+    # Install a mock LSP plugin declaring a command that does not exist on PATH anywhere
+    local lsp_dir="${HOME}/.claude/plugins/cache/claude-plugins-official/mock-lsp-missing/1.0.0/.claude-plugin"
+    mkdir -p "${lsp_dir}"
+    cat > "${lsp_dir}/plugin.json" <<'EOF'
+{
+  "name": "mock-lsp-missing",
+  "description": "Mock LSP plugin whose server binary is not installed",
+  "version": "1.0.0",
+  "lspServers": {
+    "missing": {
+      "command": "this-language-server-does-not-exist-anywhere-on-path",
+      "args": ["--stdio"],
+      "extensionToLanguage": {".missing": "missing"}
+    }
+  }
+}
+EOF
+
+    local output
+    output="$(run_hook)"
+
+    local context
+    context="$(printf '%s' "${output}" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+    assert_contains "lsp=false when binary missing" "lsp=false" "${context}"
+    if printf '%s' "${context}" | grep -q "mcp__ide__getDiagnostics"; then
+        echo "  FAIL: LSP guidance line emitted despite binary missing"
+        TESTS_FAILED=$((${TESTS_FAILED:-0} + 1))
+    else
+        echo "  PASS: LSP guidance line absent when binary missing"
+        TESTS_PASSED=$((${TESTS_PASSED:-0} + 1))
+    fi
+
+    # Partial-install diagnostic: tell the user exactly which plugin + which binary is missing
+    assert_contains "partial-install diagnostic emitted" "LSP (partial install)" "${context}"
+    assert_contains "diagnostic names the plugin" "mock-lsp-missing" "${context}"
+    assert_contains "diagnostic names the missing binary" "this-language-server-does-not-exist-anywhere-on-path" "${context}"
 
     teardown_test_env
 }
@@ -661,8 +752,67 @@ EOF
     teardown_test_env
 }
 
+test_user_config_override_rejects_arbitrary_keys() {
+    echo "-- test: skill-config.json override drops non-canonical context_capabilities keys --"
+    setup_test_env
+
+    rm -rf "${HOME}/.claude/plugins"
+
+    # Attempt to inject arbitrary keys alongside a legitimate flag
+    cat > "${HOME}/.claude/skill-config.json" <<'EOF'
+{"context_capabilities": {"lsp": true, "foo_injected": true, "malicious_safety_gate": true}}
+EOF
+
+    run_hook >/dev/null
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+
+    # Legitimate key honored
+    local lsp_val
+    lsp_val="$(jq -r '.context_capabilities.lsp' "${cache_file}" 2>/dev/null)"
+    assert_equals "legitimate lsp override honored" "true" "${lsp_val}"
+
+    # Injected keys must not appear at all
+    local has_foo
+    has_foo="$(jq '.context_capabilities | has("foo_injected")' "${cache_file}" 2>/dev/null)"
+    assert_equals "foo_injected key dropped by whitelist" "false" "${has_foo}"
+
+    local has_malicious
+    has_malicious="$(jq '.context_capabilities | has("malicious_safety_gate")' "${cache_file}" 2>/dev/null)"
+    assert_equals "malicious_safety_gate key dropped by whitelist" "false" "${has_malicious}"
+
+    # Key count must equal the canonical set size (8)
+    local key_count
+    key_count="$(jq '.context_capabilities | keys | length' "${cache_file}" 2>/dev/null)"
+    assert_equals "context_capabilities has exactly 8 canonical keys" "8" "${key_count}"
+
+    teardown_test_env
+}
+
+test_user_config_override_rejects_downgrade() {
+    echo "-- test: skill-config.json override cannot downgrade true to false --"
+    setup_test_env
+
+    # Install context7 plugin so context7=true via plugin detection
+    mkdir -p "${HOME}/.claude/plugins/cache/claude-plugins-official/context7"
+
+    # User config attempts to force context7=false
+    cat > "${HOME}/.claude/skill-config.json" <<'EOF'
+{"context_capabilities": {"context7": false}}
+EOF
+
+    run_hook >/dev/null
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    local ctx7
+    ctx7="$(jq -r '.context_capabilities.context7' "${cache_file}" 2>/dev/null)"
+    assert_equals "context7 stays true — downgrade attempt ignored" "true" "${ctx7}"
+
+    teardown_test_env
+}
+
 test_lsp_guidance_absent_when_not_installed() {
-    echo "-- test: LSP guidance line absent when code-intelligence not installed --"
+    echo "-- test: LSP guidance line absent when no lspServers plugin installed --"
     setup_test_env
 
     rm -rf "${HOME}/.claude/plugins"
@@ -1030,8 +1180,12 @@ test_lsp_capability_shape
 test_context_capabilities_all_false
 test_context_capabilities_in_health_output
 test_lsp_guidance_in_output_when_present
+test_lsp_ide_mcp_does_not_enable_lsp
+test_lsp_false_positive_guard_when_binary_missing
 test_lsp_guidance_absent_when_not_installed
 test_lsp_user_config_override
+test_user_config_override_rejects_arbitrary_keys
+test_user_config_override_rejects_downgrade
 test_openspec_ship_chain_consistency
 test_openspec_binary_detected
 test_openspec_binary_absent

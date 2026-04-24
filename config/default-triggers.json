@@ -1002,25 +1002,6 @@
       "description": "Up-to-date library documentation via Context7 MCP. Resolves library IDs and fetches current docs, API references, and examples."
     },
     {
-      "name": "code-intelligence",
-      "source": "claude-plugins-official",
-      "provides": {
-        "commands": [],
-        "skills": [],
-        "agents": [],
-        "hooks": [],
-        "mcp_tools": [
-          "getDiagnostics"
-        ]
-      },
-      "phase_fit": [
-        "IMPLEMENT",
-        "DEBUG",
-        "REVIEW"
-      ],
-      "description": "Language-server-backed diagnostics via mcp__ide__getDiagnostics. Complementary to Serena — LSP for compiler/type errors, Serena for symbol navigation and structural edits."
-    },
-    {
       "name": "github",
       "source": "claude-plugins-official",
       "provides": {

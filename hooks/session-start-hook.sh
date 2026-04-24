@@ -98,6 +98,9 @@ DEFAULT_JSON=""
 if [ -f "${DEFAULT_TRIGGERS}" ]; then
     DEFAULT_JSON="$(cat "${DEFAULT_TRIGGERS}")"
 fi
+# Pristine snapshot — DEFAULT_JSON may be mutated by preset activation (Step 6c).
+# The fallback writer must use this untouched copy to stay machine-agnostic.
+DEFAULT_JSON_PRISTINE="${DEFAULT_JSON}"
 
 # -----------------------------------------------------------------
 # Frontmatter parser: extract routing metadata from SKILL.md files
@@ -666,6 +669,45 @@ if command -v openspec >/dev/null 2>&1; then
     _has_openspec=true
 fi
 
+# LSP capability: requires BOTH an installed LSP plugin AND a resolvable backing binary.
+# Claude Code's LSP plugin family (typescript-lsp, pyright-lsp, gopls-lsp, rust-analyzer-lsp,
+# jdtls-lsp, clangd-lsp, csharp-lsp, kotlin-lsp, lua-lsp, php-lsp, ruby-lsp, swift-lsp, ...)
+# each declare `lspServers.<name>.command` in their plugin.json pointing at an external
+# language-server binary (e.g. `typescript-language-server`, installed via npm). The plugin
+# can be present without its backing binary (user installed the plugin but not the server),
+# in which case mcp__ide__getDiagnostics would fail at runtime. Flipping lsp=true only when
+# at least one command is resolvable prevents false-positive guidance.
+#
+# Also captures plugin-present-binary-missing pairs so the hook can emit a "partial LSP
+# install" diagnostic at session-start telling the user exactly which binary to install.
+_has_lsp_plugin=false
+_lsp_partial=""   # "<plugin-name>|<missing-cmd-csv>" entries, newline-separated
+for _pjson in "${HOME}/.claude/plugins/cache"/*/*/.claude-plugin/plugin.json \
+              "${HOME}/.claude/plugins/cache"/*/*/*/.claude-plugin/plugin.json; do
+    [ -f "${_pjson}" ] || continue
+    # Extract non-null .lspServers.*.command values, newline-separated (empty if no lspServers).
+    _lsp_cmds="$(jq -r '(.lspServers // {}) | to_entries[] | .value.command // empty' "${_pjson}" 2>/dev/null)"
+    [ -z "${_lsp_cmds}" ] && continue
+    _plugin_name="$(jq -r '.name // "unknown"' "${_pjson}" 2>/dev/null)"
+    _missing_for_plugin=""
+    _any_resolved=0
+    while IFS= read -r _cmd; do
+        [ -z "${_cmd}" ] && continue
+        if command -v "${_cmd}" >/dev/null 2>&1; then
+            _any_resolved=1
+            _has_lsp_plugin=true
+        else
+            _missing_for_plugin="${_missing_for_plugin}${_missing_for_plugin:+,}${_cmd}"
+        fi
+    done <<LSPEOF
+${_lsp_cmds}
+LSPEOF
+    if [ "${_any_resolved}" -eq 0 ] && [ -n "${_missing_for_plugin}" ]; then
+        _lsp_partial="${_lsp_partial}${_lsp_partial:+
+}${_plugin_name}|${_missing_for_plugin}"
+    fi
+done
+
 # -----------------------------------------------------------------
 # Step 8e: Detect OpenSpec capabilities (workspace commands + surface)
 # -----------------------------------------------------------------
@@ -696,6 +738,13 @@ OPENSPEC_CAPS="$(jq -n \
     {binary: $binary, commands: $commands, surface: $surface, warnings: $warnings}'
 )"
 
+# Canonical context_capabilities keys. Single source of truth consumed by:
+# 1. CONTEXT_CAPS producer below (initial detection object)
+# 2. User-config override filter (drops any non-canonical key from skill-config.json)
+# 3. Fallback-registry writer (Step 10c, hardcoded jq — kept in sync via comment)
+# If you add a capability, update this array AND the fallback writer's jq expression.
+_CANONICAL_CAP_KEYS='["context7","context_hub_cli","context_hub_available","serena","forgetful_memory","openspec","posthog","lsp"]'
+
 # Single jq call: detect all plugin capabilities, derive bindings, build CONTEXT_CAPS
 # (Context7 detection checks plugin name, not MCP tool names. Covers the standard
 # install path via claude-plugins-official. If Context7 were ever provided by a
@@ -703,12 +752,12 @@ OPENSPEC_CAPS="$(jq -n \
 CONTEXT_CAPS="$(printf '%s' "${PLUGINS_JSON}" | jq \
     --argjson chub "${_has_chub_cli}" \
     --argjson openspec "${_has_openspec}" \
+    --argjson lsp "${_has_lsp_plugin}" \
     '[.[] | select(.available == true) | .name] as $avail |
     ($avail | index("context7") != null) as $c7 |
     ($avail | index("serena") != null) as $ser |
     ($avail | index("forgetful") != null) as $fm |
     ($avail | index("posthog") != null) as $ph |
-    ($avail | index("code-intelligence") != null) as $lsp |
     {context7:$c7, context_hub_cli:$chub, context_hub_available:$c7, serena:$ser, forgetful_memory:$fm, openspec:$openspec, posthog:$ph, lsp:$lsp}'
 )"
 
@@ -728,18 +777,27 @@ if [ -f "${_CLAUDE_JSON}" ] && command -v jq >/dev/null 2>&1; then
          if .serena == false and ($all_mcp | has("serena")) then .serena = true else . end |
          if .forgetful_memory == false and ($all_mcp | has("forgetful")) then .forgetful_memory = true else . end |
          if .context7 == false and ($all_mcp | has("context7")) then .context7 = true else . end |
-         if .posthog == false and ($all_mcp | has("posthog")) then .posthog = true else . end |
-         if .lsp == false and ($all_mcp | has("ide")) then .lsp = true else . end'
+         if .posthog == false and ($all_mcp | has("posthog")) then .posthog = true else . end'
     )" || true
 fi
+# Note: no MCP fallback for lsp. Claude Code's LSP family uses the `lspServers` plugin-manifest
+# primitive, not MCP servers, and is detected earlier via the `_has_lsp_plugin` scan with a
+# mandatory `command -v` check. An `ide` MCP entry in ~/.claude.json would not guarantee a
+# working language server on PATH, so flipping lsp=true on that signal alone would re-introduce
+# the false-positive the plugin+binary contract is designed to prevent. Users who need to force
+# lsp=true can use `skill-config.json` `context_capabilities.lsp: true`.
 
 # User-config override: skill-config.json may force context_capabilities on.
 # Augment-only: only upgrades false->true, never downgrades — matches MCP fallback pattern.
+# Whitelist-filtered: only canonical capability keys are honored; arbitrary keys are dropped.
+# This prevents users from injecting non-capability flags that would then leak into
+# any iterator-based consumer of context_capabilities (e.g. health-check summaries).
 if [ -f "${USER_CONFIG}" ] && jq empty "${USER_CONFIG}" >/dev/null 2>&1; then
     CONTEXT_CAPS="$(printf '%s' "${CONTEXT_CAPS}" | jq \
         --slurpfile uc "${USER_CONFIG}" \
+        --argjson allowed "${_CANONICAL_CAP_KEYS}" \
         '($uc[0].context_capabilities // {}) as $ovr |
-         reduce ($ovr | to_entries[]) as $e (.;
+         reduce ($ovr | to_entries[] | select(.key as $k | $allowed | index($k))) as $e (.;
              if ($e.value == true) and (.[$e.key] == false or .[$e.key] == null)
              then .[$e.key] = true
              else . end)'
@@ -865,11 +923,36 @@ fi
 printf '%s' "${RESULT}" | jq '.registry' > "${CACHE_FILE}.tmp.$$" && mv "${CACHE_FILE}.tmp.$$" "${CACHE_FILE}"
 
 # -----------------------------------------------------------------
-# Step 10c: Auto-regenerate fallback registry
+# Step 10c: Auto-regenerate fallback registry (canonical shape only)
 # -----------------------------------------------------------------
+# The committed fallback is built from default-triggers.json (curated source
+# of truth) with every .available and every context_capabilities value zeroed.
+# It intentionally excludes auto-discovered plugins, user-installed skills,
+# and the writer's machine state — it exists to give the no-jq path a
+# structurally valid registry, not a snapshot of any particular machine.
+# Runtime cache (CACHE_FILE) keeps the machine-accurate flags for routing.
 _FALLBACK="${PLUGIN_ROOT}/config/fallback-registry.json"
-if [ -d "${PLUGIN_ROOT}/config" ] && [ -z "${_SKILL_TEST_MODE:-}" ]; then
-    _new_fallback="$(printf '%s' "${RESULT}" | jq '.registry')"
+if [ -d "${PLUGIN_ROOT}/config" ] && [ -z "${_SKILL_TEST_MODE:-}" ] && [ -n "${DEFAULT_JSON_PRISTINE}" ]; then
+    # Build fallback from pristine default-triggers.json only.
+    # No user-config, no presets, no auto-discovery, no RESULT — pure curated shape.
+    # Canonical context_capabilities keys come from _CANONICAL_CAP_KEYS (single source
+    # of truth defined near the CONTEXT_CAPS producer above).
+    _new_fallback="$(printf '%s' "${DEFAULT_JSON_PRISTINE}" | jq \
+        --argjson cap_keys "${_CANONICAL_CAP_KEYS}" \
+        '. as $d |
+        {
+            version: ($d.version // "4.0.0-fallback"),
+            frontmatter_schema_version: 1,
+            skills: [($d.skills // [])[] | . + {available: false, enabled: (.enabled // true)}],
+            plugins: [($d.plugins // [])[] | . + {available: false}],
+            context_capabilities: ($cap_keys | map({(.): false}) | add),
+            openspec_capabilities: {binary: false, commands: [], surface: "none", warnings: []},
+            phase_compositions: ($d.phase_compositions // {}),
+            phase_guide: ($d.phase_guide // {}),
+            methodology_hints: ($d.methodology_hints // []),
+            warnings: []
+        }
+    ')"
     if [ -f "${_FALLBACK}" ]; then
         _existing="$(cat "${_FALLBACK}" 2>/dev/null)"
         if [ "${_new_fallback}" != "${_existing}" ]; then
@@ -1005,6 +1088,20 @@ fi
 if printf '%s' "${CONTEXT_CAPS}" | jq -e '.lsp == true' >/dev/null 2>&1; then
     CONTEXT="${CONTEXT}
 LSP: Use mcp__ide__getDiagnostics for compile/type errors before grepping. Complementary to Serena — LSP for diagnostics, Serena for symbol navigation and structural edits."
+elif [ -n "${_lsp_partial}" ]; then
+    # Plugin-present-binary-missing diagnostic — tell the user exactly what to install.
+    # Emit once, listing every partial plugin and its missing command(s).
+    _lsp_hint_body=""
+    while IFS= read -r _entry; do
+        [ -z "${_entry}" ] && continue
+        _pname="${_entry%%|*}"
+        _cmds="${_entry#*|}"
+        _lsp_hint_body="${_lsp_hint_body}${_lsp_hint_body:+; }${_pname} needs ${_cmds}"
+    done <<LSPHINTEOF
+${_lsp_partial}
+LSPHINTEOF
+    CONTEXT="${CONTEXT}
+LSP (partial install): ${_lsp_hint_body}. Install the backing language-server binary to enable lsp=true. See the plugin's README for the install command."
 fi
 
 # Emit Forgetful usage hint when available

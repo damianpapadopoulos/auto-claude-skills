@@ -41,7 +41,7 @@ Note: Atlassian (Jira/Confluence) is available as a claude.ai managed integratio
 | feature-dev | claude-plugins-official | DESIGN | Parallel exploration and architecture agents |
 | hookify | claude-plugins-official | DESIGN | Custom behavior rule authoring |
 | skill-creator | claude-plugins-official | DESIGN | Skill eval/improvement with benchmarking |
-| code-intelligence | claude-plugins-official | IMPLEMENT, DEBUG, REVIEW | Language-server diagnostics via `mcp__ide__getDiagnostics` — complementary to Serena (LSP for type/compile errors, Serena for symbol nav and edits) |
+| `<language>-lsp` family | claude-plugins-official | IMPLEMENT, DEBUG, REVIEW | Per-language LSP plugins (e.g. `typescript-lsp`, `pyright-lsp`, `gopls-lsp`, `rust-analyzer-lsp`, `jdtls-lsp`, `clangd-lsp`, `csharp-lsp`, `kotlin-lsp`, `lua-lsp`, `php-lsp`, `ruby-lsp`, `swift-lsp`). **Requires two steps:** (1) install the plugin for your stack, AND (2) install the backing language-server binary declared in the plugin's `plugin.json` `lspServers.<name>.command`. Each plugin's README has the install command for its server (e.g. `npm install -g typescript-language-server` for `typescript-lsp`, `go install golang.org/x/tools/gopls@latest` for `gopls-lsp`, etc.). auto-claude-skills sets `lsp=true` only when both the plugin and at least one declared binary are present. Complementary to Serena (LSP for type/compile errors, Serena for symbol nav and edits). |
 
 For each plugin the user wants, run:
 ```bash
