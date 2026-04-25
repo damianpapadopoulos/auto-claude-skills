@@ -1077,6 +1077,51 @@ test_sticky_cancel_clears_state() {
 }
 test_sticky_cancel_clears_state
 
+test_sticky_advances_with_completed() {
+    echo "-- test: sticky emits chain[completed.length] as .completed grows (advancement boundary) --"
+    setup_test_env
+    install_registry
+
+    # The integration boundary: post-tool completion-hook advances .completed; the
+    # activation-hook walker reads .completed length to compute CURRENT. As
+    # completed grows from 0 to N-1, CURRENT must move through the chain in
+    # lockstep — never re-emitting the previous step.
+    local chain='["brainstorming","writing-plans","executing-plans","requesting-code-review","verification-before-completion","openspec-ship","finishing-a-development-branch"]'
+
+    local i=0
+    while [ "$i" -lt 6 ]; do
+        local token="sticky-advance-$$-${i}"
+        printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+
+        jq -n --argjson chain "${chain}" --argjson i "$i" '{
+            chain: $chain,
+            completed: ($chain[:$i])
+        }' > "${HOME}/.claude/.skill-composition-state-${token}"
+
+        local expected
+        expected="$(printf '%s' "${chain}" | jq -r --argjson i "$i" '.[$i]')"
+
+        local context
+        context="$(extract_context "$(run_hook "yes")")"
+
+        # Skill may emit on Process: prefix, Workflow: prefix, or as a bare
+        # "<name> -> Skill(...)" line depending on its role and slot.
+        if printf '%s' "${context}" | grep -qE "(^|^Process: |^Workflow: )${expected} -> "; then
+            _record_pass "step ${i}: emits ${expected}"
+        else
+            _record_fail "step ${i}: emits ${expected}" \
+                "no top-line emission for '${expected}'"
+        fi
+
+        rm -f "${HOME}/.claude/.skill-session-token" \
+              "${HOME}/.claude/.skill-composition-state-${token}"
+        i=$((i+1))
+    done
+
+    teardown_test_env
+}
+test_sticky_advances_with_completed
+
 # ---------------------------------------------------------------------------
 # 4. Slash command is blocked
 # ---------------------------------------------------------------------------
