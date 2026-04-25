@@ -119,5 +119,21 @@
       {"text": "incident logs|baseline logs|deploy history", "description": "Uses stable human-readable labels, not raw LQL or full URLs"},
       {"text": "evidence_links.*type.*logs|type.*logs.*label.*url", "description": "YAML evidence_links entries have the required type/label/url shape"}
     ]
+  },
+  {
+    "id": "cast-systemic-factors-coverage",
+    "prompt": "hcs-gb billing tab returning 500s in prod since ~07:16 UTC this morning. Every GB coach trying to open the billing tab gets forced logout. backend-core v4.132.0 was deployed overnight around 20:14 UTC; calendar microservice extraction (CORE-6079/6097/6085) shipped in that release. HCS-GB team and backend-core team are on the call; OCS frontend team being pulled in because of the logout behavior.",
+    "expected_behavior": "Step 7 synthesis must emit Mental model gaps (per-controller belief-vs-actual) and Systemic factors across all 5 CAST categories (Safety Culture, Communication/Coordination, Management of Change, Safety Information System, Environmental Change). Output must reference references/cast-framing.md.",
+    "assertions": [
+      {"text": "Mental model gaps", "description": "Emits the Mental model gaps section header"},
+      {"text": "believed.*actual", "description": "At least one controller-belief line in the <believed X; actual Y> shape"},
+      {"text": "Systemic factors", "description": "Emits the Systemic factors section header"},
+      {"text": "Safety Culture", "description": "Names category 1"},
+      {"text": "Communication/Coordination", "description": "Names category 2"},
+      {"text": "Management of Change", "description": "Names category 3"},
+      {"text": "Safety Information System", "description": "Names category 4"},
+      {"text": "Environmental Change", "description": "Names category 5"},
+      {"text": "cast-framing\\.md", "description": "Points at the framing reference"}
+    ]
   }
 ]

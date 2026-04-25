@@ -42,3 +42,9 @@ The pack schema accepts three optional fields per entry:
 - `skill_version: string` — version of `SKILL.md` when the assertions were authored.
 
 None are required for v1 evaluation.
+
+### Notable scenarios
+
+- `cast-systemic-factors-coverage` — Exercises Step 7 items 9–10 (Mental model gaps, Systemic factors across all 5 CAST categories) and Q12 coverage. Prompt derived from the 2026-04-08 billing-tab postmortem — a multi-team incident **not** seen during CAST design, so the fixture is an independent regression signal rather than a circular test against the incident that shaped the surface.
+
+To list all scenarios: `jq '[.[].id]' tests/fixtures/incident-analysis/evals/behavioral.json`.
