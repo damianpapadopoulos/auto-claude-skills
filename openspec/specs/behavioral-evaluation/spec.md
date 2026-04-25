@@ -1,7 +1,9 @@
 # behavioral-evaluation Specification
 
 ## Purpose
-TBD - created by archiving change behavioral-eval-runner-v1. Update Purpose after archive.
+
+Opt-in behavioral evaluation harness for installed skills. Wraps a SKILL.md verbatim in `<skill_guidance>` tags around a fixture-prompt `<user_request>`, invokes `claude -p --output-format json`, and asserts case-insensitive ERE regexes from `assertions[].text` against the captured raw output. Provides regression signal for skill behavior that schema validation and content-grep tests cannot reach (e.g. "does the skill actually emit Step 7 synthesis with the expected sections when invoked"). Per-run JSON artifact under `tests/artifacts/`. Opt-in via `BEHAVIORAL_EVALS=1` so the default test suite stays free of LLM cost; CI gating waits until the runner catches a real regression.
+
 ## Requirements
 ### Requirement: Opt-In Execution Gate
 
