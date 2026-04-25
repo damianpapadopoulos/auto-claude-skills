@@ -31,6 +31,7 @@ Claude Code plugin for automatic skill routing based on prompt intent and SDLC p
 ## Gotchas
 
 - `[[ $P =~ $trigger ]]` returns exit 1 on regex non-match — never use `set -e` in routing hooks.
+- Grepping runtime text output (CLI/log streams, not source — Serena/LSP don't apply): use `grep -F` (or `\[ERROR\]`) when matching literals containing regex metacharacters. `grep "[ERROR]"` is a character class matching any of `E,R,O` and silently returns wrong lines; `grep "v1.9.0"` matches `v1X9Y0` because `.` is a wildcard. Bites `incident-analysis` (log-level greps), `behavioral-evaluation` (version-string assertions), and any future runtime-output parser.
 - jq is optional at runtime; session-start falls back to `config/fallback-registry.json`.
 - Concurrent sessions share `~/.claude/` — session-token scoping prevents counter races.
 - `CLAUDE_PLUGIN_ROOT` from env; fallback: `$(cd "$(dirname "$0")/.." && pwd)`.
