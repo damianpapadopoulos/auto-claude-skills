@@ -350,6 +350,7 @@ The plugin MUST register both `hooks/serena-nudge.sh` and `hooks/lsp-nudge.sh` a
 - **WHEN** the runtime fires both PreToolUse hooks
 - **THEN** the Serena nudge MUST emit its hint
 - **AND** the LSP nudge MUST exit 0 without emitting
+
 ### Requirement: Per-Skill Regex Trigger Fixtures
 
 The repository MUST provide a deterministic test harness that verifies regex triggers in `config/default-triggers.json` against per-skill fixture files. The harness MUST lowercase prompts before matching (to mirror `hooks/skill-activation-hook.sh` pre-processing) and MUST use bash `[[ =~ ]]` extended regex (the same engine as the activation hook). The harness MUST be auto-discovered by the default `tests/run-tests.sh` so that fixture regressions break the default test suite at zero LLM cost.
@@ -417,4 +418,74 @@ Per-skill `evals/evals.json` files MUST be JSON arrays where each element is an 
 #### Scenario: Author guidelines reflect intent
 - **WHEN** a contributor reads `docs/eval-pack-schema.md`
 - **THEN** the document MUST describe: (a) recommended case count per skill (5–10), (b) the requirement that at least one-third of cases target explicit out-of-scope boundaries as `should_trigger: false`, (c) the 80% overall accuracy threshold, and (d) the `CLAUDE_CODE_OAUTH_TOKEN` repo secret required to run the CI gate.
+
+### Requirement: Sticky Composition Emission on Bare Acks
+
+The activation hook MUST sticky-emit the CURRENT chain step when composition state is active and the user's prompt is short (≤ 6 words by whitespace count), so the SDLC chain context remains visible across bare acknowledgment prompts that would otherwise produce no routing output.
+
+The hook MUST treat the composition-state file (`~/.claude/.skill-composition-state-<token>`) as authoritative: `CURRENT = .chain[length(.completed)]`. Sticky emission is display-only and MUST NOT mutate `.completed`; chain advancement remains the responsibility of the `PostToolUse ^Skill$` completion hook.
+
+#### Scenario: Bare ack during active chain emits CURRENT
+
+- **GIVEN** composition state with `chain=[brainstorming, writing-plans, executing-plans, ...]` and `completed=[brainstorming, writing-plans]`
+- **WHEN** the user submits the prompt `yes`
+- **THEN** the hook MUST emit `Phase: [IMPLEMENT]`, `Process: executing-plans -> Skill(superpowers:executing-plans)`, and the full composition chain block with `[CURRENT] Step 3: executing-plans`
+
+#### Scenario: Sticky advances as completed grows
+
+- **GIVEN** the canonical 7-step SDLC chain
+- **WHEN** `.completed` grows from `[]` to `[A,B,C,D,E,F]` across the lifetime of a session
+- **THEN** for each `i` in 0..N-1, a bare ack MUST emit `chain[i]` as the active skill — never re-emitting the previous step
+
+#### Scenario: No composition state means no sticky
+
+- **GIVEN** no `~/.claude/.skill-composition-state-<token>` file exists
+- **WHEN** the user submits a bare ack
+- **THEN** the hook MUST exit through the pre-existing short-prompt or blocklist path with empty output
+
+#### Scenario: Corrupt composition state fails open
+
+- **GIVEN** the composition-state file contains invalid JSON
+- **WHEN** any prompt arrives
+- **THEN** the sticky function MUST return silently, the hook MUST exit 0, and no crash MUST occur
+
+#### Scenario: Hijack guard prevents over-emission
+
+- **GIVEN** an active composition chain with `CURRENT=writing-plans`
+- **WHEN** the user submits `debug the failing test` (matches `systematic-debugging` naturally)
+- **THEN** sticky MUST NOT inject `writing-plans` — the natural process match wins
+
+### Requirement: Pure-Cancel Prompts Clear Composition State
+
+The activation hook MUST recognize a small set of unambiguous cancellation prompts and clear the composition-state file when matched. The match MUST be anchored to the whole prompt (with optional surrounding whitespace and trailing punctuation) so mixed prompts that contain a cancel word alongside other content do not trigger this path.
+
+Recognized cancellation tokens: `stop`, `cancel`, `abort`, `nevermind`/`never mind`, `forget it`, `scrap that`, `drop it`, `no thanks`, `nope`, `nah`. Trailing punctuation `[ \t!.,?:;]` MUST be tolerated. Leading whitespace MUST be tolerated.
+
+#### Scenario: Pure cancel clears state and suppresses sticky
+
+- **GIVEN** an active composition chain
+- **WHEN** the user submits `cancel`, `stop.`, `cancel?`, `stop!`, `  never mind  `, `nope`, or `no thanks`
+- **THEN** the composition-state file MUST be deleted and the hook MUST NOT emit `Process: writing-plans` (or any other CURRENT-step sticky line)
+
+#### Scenario: Mixed prompt with cancel word routes naturally
+
+- **GIVEN** an active chain with `CURRENT=writing-plans`
+- **WHEN** the user submits `never mind, different plan`
+- **THEN** the cancel regex MUST NOT match (anchor blocks); composition state MUST persist; routing MUST proceed via natural trigger matching where `plan` matches `writing-plans`
+
+### Requirement: Composition-State-Aware Early-Exit Bypass
+
+The activation hook MUST consult composition state before exiting via the short-prompt gate (`PROMPT < 5 chars`) or the greeting blocklist. When `_comp_active` returns true (chain length > completed length), both early exits MUST be bypassed so the bare-ack prompt reaches the routing pipeline.
+
+#### Scenario: Short prompt bypassed when chain alive
+
+- **GIVEN** composition state with a live chain
+- **WHEN** the user submits `yes` (3 chars, ≤ 5)
+- **THEN** the short-prompt early-exit MUST NOT fire; the hook MUST continue to scoring
+
+#### Scenario: Blocklist bypassed when chain alive
+
+- **GIVEN** composition state with a live chain
+- **WHEN** the user submits `ok` (in the greeting blocklist)
+- **THEN** the blocklist early-exit MUST NOT fire; the hook MUST continue to scoring
 
