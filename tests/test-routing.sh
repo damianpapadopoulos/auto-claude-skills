@@ -1032,6 +1032,37 @@ test_sticky_corrupt_state_fail_open() {
 }
 test_sticky_corrupt_state_fail_open
 
+test_sticky_cancel_clears_state() {
+    echo "-- test: pure cancel prompt clears composition state and suppresses sticky --"
+    setup_test_env
+    install_registry
+
+    local token="sticky-cancel-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+
+    jq -n '{
+        chain: ["brainstorming","writing-plans","executing-plans"],
+        completed: ["brainstorming"]
+    }' > "${HOME}/.claude/.skill-composition-state-${token}"
+
+    local context
+    context="$(extract_context "$(run_hook "cancel")")"
+
+    # Composition file must be gone.
+    assert_equals "composition-state cleared" "false" \
+        "$([ -f "${HOME}/.claude/.skill-composition-state-${token}" ] && echo true || echo false)"
+
+    # Sticky did not emit writing-plans (would otherwise be the CURRENT step).
+    if printf '%s' "${context}" | grep -qE '^Process: writing-plans'; then
+        _record_fail "sticky did not fire on cancel" "writing-plans appeared as Process"
+    else
+        _record_pass "sticky did not fire on cancel"
+    fi
+
+    teardown_test_env
+}
+test_sticky_cancel_clears_state
+
 # ---------------------------------------------------------------------------
 # 4. Slash command is blocked
 # ---------------------------------------------------------------------------

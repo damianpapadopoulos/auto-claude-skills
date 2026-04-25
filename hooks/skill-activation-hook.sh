@@ -324,6 +324,15 @@ _apply_sticky_composition() {
   local _comp_file="${HOME}/.claude/.skill-composition-state-${_SESSION_TOKEN}"
   [[ -f "$_comp_file" ]] || return
 
+  # Pure-cancel prompts clear the chain and suppress sticky for this turn.
+  # Anchored to whole-prompt match so mixed prompts (e.g., "never mind,
+  # different plan" — where "plan" naturally matches writing-plans) do not
+  # pass through here; those go to the hijack guard below or normal routing.
+  if [[ "$P" =~ ^(stop|cancel|abort|nevermind|never.mind|forget.it|scrap.that|drop.it)[[:space:]!.,]*$ ]]; then
+    rm -f "$_comp_file" 2>/dev/null
+    return
+  fi
+
   # CURRENT = chain[length(completed)]. Bail if exhausted, chain empty, or any
   # completed entry is not in chain (malformed state).
   local _current_name
