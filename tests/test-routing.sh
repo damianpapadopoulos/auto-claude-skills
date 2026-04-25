@@ -1032,32 +1032,46 @@ test_sticky_corrupt_state_fail_open() {
 }
 test_sticky_corrupt_state_fail_open
 
-test_sticky_cancel_clears_state() {
-    echo "-- test: pure cancel prompt clears composition state and suppresses sticky --"
-    setup_test_env
-    install_registry
-
-    local token="sticky-cancel-$$"
+_seed_active_chain() {
+    local token="$1"
     printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
-
     jq -n '{
         chain: ["brainstorming","writing-plans","executing-plans"],
         completed: ["brainstorming"]
     }' > "${HOME}/.claude/.skill-composition-state-${token}"
+}
 
-    local context
-    context="$(extract_context "$(run_hook "cancel")")"
+test_sticky_cancel_clears_state() {
+    echo "-- test: pure cancel prompts (with punctuation variants) clear chain and suppress sticky --"
+    setup_test_env
+    install_registry
 
-    # Composition file must be gone.
-    assert_equals "composition-state cleared" "false" \
-        "$([ -f "${HOME}/.claude/.skill-composition-state-${token}" ] && echo true || echo false)"
+    local token base=$$
+    local i=0
+    for prompt in "cancel" "stop." "cancel?" "stop!" "  never mind  " "nope" "no thanks"; do
+        i=$((i+1))
+        token="sticky-cancel-${base}-${i}"
+        _seed_active_chain "${token}"
 
-    # Sticky did not emit writing-plans (would otherwise be the CURRENT step).
-    if printf '%s' "${context}" | grep -qE '^Process: writing-plans'; then
-        _record_fail "sticky did not fire on cancel" "writing-plans appeared as Process"
-    else
-        _record_pass "sticky did not fire on cancel"
-    fi
+        local context
+        context="$(extract_context "$(run_hook "${prompt}")")"
+
+        local comp_present
+        comp_present="$([ -f "${HOME}/.claude/.skill-composition-state-${token}" ] && echo true || echo false)"
+        if [ "${comp_present}" = "false" ]; then
+            _record_pass "cancel cleared state for prompt: '${prompt}'"
+        else
+            _record_fail "cancel cleared state for prompt: '${prompt}'" \
+                "composition-state still present"
+        fi
+
+        if printf '%s' "${context}" | grep -qE '^Process: writing-plans'; then
+            _record_fail "no sticky for prompt: '${prompt}'" \
+                "writing-plans appeared as Process"
+        else
+            _record_pass "no sticky for prompt: '${prompt}'"
+        fi
+    done
 
     teardown_test_env
 }

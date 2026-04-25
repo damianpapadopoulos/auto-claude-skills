@@ -328,7 +328,8 @@ _apply_sticky_composition() {
   # Anchored to whole-prompt match so mixed prompts (e.g., "never mind,
   # different plan" — where "plan" naturally matches writing-plans) do not
   # pass through here; those go to the hijack guard below or normal routing.
-  if [[ "$P" =~ ^(stop|cancel|abort|nevermind|never.mind|forget.it|scrap.that|drop.it)[[:space:]!.,]*$ ]]; then
+  # Trailing punctuation class covers . , ! ? ; : and trailing whitespace.
+  if [[ "$P" =~ ^[[:space:]]*(stop|cancel|abort|nevermind|never.mind|forget.it|scrap.that|drop.it|no.thanks|nope|nah)[[:space:]!.,?:\;]*$ ]]; then
     rm -f "$_comp_file" 2>/dev/null
     return
   fi
