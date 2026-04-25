@@ -910,6 +910,219 @@ test_completed_uses_current_idx_floor() {
 test_completed_uses_current_idx_floor
 
 # ---------------------------------------------------------------------------
+# 3b. Sticky composition on ack-shaped prompts
+# ---------------------------------------------------------------------------
+test_sticky_no_state_no_output() {
+    echo "-- test: bare ack with no composition state produces no output (regression baseline) --"
+    setup_test_env
+    install_registry
+
+    local token="sticky-no-state-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+    # Explicitly DO NOT create .skill-composition-state-${token}
+
+    local output
+    output="$(run_hook "yes")"
+
+    assert_equals "no output when no composition state" "" "${output}"
+
+    teardown_test_env
+}
+test_sticky_no_state_no_output
+
+test_sticky_implement_ack_emits_executing_plans() {
+    echo "-- test: bare 'yes' during IMPLEMENT chain emits executing-plans --"
+    setup_test_env
+    install_registry
+
+    local token="sticky-impl-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+
+    jq -n '{
+        chain: ["brainstorming","writing-plans","executing-plans","requesting-code-review","verification-before-completion","openspec-ship","finishing-a-development-branch"],
+        completed: ["brainstorming","writing-plans"],
+        current_index: 2
+    }' > "${HOME}/.claude/.skill-composition-state-${token}"
+
+    jq -n '{skill:"writing-plans",phase:"PLAN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local context
+    context="$(extract_context "$(run_hook "yes")")"
+
+    assert_contains "emits IMPLEMENT phase" "Phase: [IMPLEMENT]" "${context}"
+    assert_contains "emits executing-plans process skill" "executing-plans" "${context}"
+    assert_contains "emits invoke string" "Skill(superpowers:executing-plans)" "${context}"
+
+    teardown_test_env
+}
+test_sticky_implement_ack_emits_executing_plans
+
+test_sticky_topic_change_no_sticky() {
+    echo "-- test: long non-ack prompt during active chain does not sticky-emit --"
+    setup_test_env
+    install_registry
+
+    local token="sticky-topic-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+
+    jq -n '{
+        chain: ["brainstorming","writing-plans","executing-plans"],
+        completed: ["brainstorming"],
+        current_index: 1
+    }' > "${HOME}/.claude/.skill-composition-state-${token}"
+    jq -n '{skill:"brainstorming",phase:"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local context
+    context="$(extract_context "$(run_hook "actually can you show me how the test would work instead")")"
+
+    if printf '%s' "${context}" | grep -qE '^Process: writing-plans'; then
+        _record_fail "sticky did not fire on topic-change" "Process line shows writing-plans"
+    else
+        _record_pass "sticky did not fire on topic-change"
+    fi
+
+    teardown_test_env
+}
+test_sticky_topic_change_no_sticky
+
+test_sticky_no_double_injection() {
+    echo "-- test: sticky does not hijack when a stronger trigger matches --"
+    setup_test_env
+    install_registry
+
+    local token="sticky-nodup-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+
+    jq -n '{
+        chain: ["brainstorming","writing-plans","executing-plans"],
+        completed: ["brainstorming"],
+        current_index: 1
+    }' > "${HOME}/.claude/.skill-composition-state-${token}"
+    jq -n '{skill:"brainstorming",phase:"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local context
+    context="$(extract_context "$(run_hook "debug the failing test")")"
+
+    assert_contains "systematic-debugging is top process" "Process: systematic-debugging" "${context}"
+
+    teardown_test_env
+}
+test_sticky_no_double_injection
+
+test_sticky_corrupt_state_fail_open() {
+    echo "-- test: corrupt composition-state JSON fails silently, no crash --"
+    setup_test_env
+    install_registry
+
+    local token="sticky-corrupt-$$"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+
+    printf '{' > "${HOME}/.claude/.skill-composition-state-${token}"
+    jq -n '{skill:"brainstorming",phase:"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    run_hook "yes" >/dev/null
+    local exit_code=$?
+    assert_equals "hook exits 0 on corrupt state" "0" "${exit_code}"
+
+    teardown_test_env
+}
+test_sticky_corrupt_state_fail_open
+
+_seed_active_chain() {
+    local token="$1"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+    jq -n '{
+        chain: ["brainstorming","writing-plans","executing-plans"],
+        completed: ["brainstorming"]
+    }' > "${HOME}/.claude/.skill-composition-state-${token}"
+}
+
+test_sticky_cancel_clears_state() {
+    echo "-- test: pure cancel prompts (with punctuation variants) clear chain and suppress sticky --"
+    setup_test_env
+    install_registry
+
+    local token base=$$
+    local i=0
+    for prompt in "cancel" "stop." "cancel?" "stop!" "  never mind  " "nope" "no thanks"; do
+        i=$((i+1))
+        token="sticky-cancel-${base}-${i}"
+        _seed_active_chain "${token}"
+
+        local context
+        context="$(extract_context "$(run_hook "${prompt}")")"
+
+        local comp_present
+        comp_present="$([ -f "${HOME}/.claude/.skill-composition-state-${token}" ] && echo true || echo false)"
+        if [ "${comp_present}" = "false" ]; then
+            _record_pass "cancel cleared state for prompt: '${prompt}'"
+        else
+            _record_fail "cancel cleared state for prompt: '${prompt}'" \
+                "composition-state still present"
+        fi
+
+        if printf '%s' "${context}" | grep -qE '^Process: writing-plans'; then
+            _record_fail "no sticky for prompt: '${prompt}'" \
+                "writing-plans appeared as Process"
+        else
+            _record_pass "no sticky for prompt: '${prompt}'"
+        fi
+    done
+
+    teardown_test_env
+}
+test_sticky_cancel_clears_state
+
+test_sticky_advances_with_completed() {
+    echo "-- test: sticky emits chain[completed.length] as .completed grows (advancement boundary) --"
+    setup_test_env
+    install_registry
+
+    # The integration boundary: post-tool completion-hook advances .completed; the
+    # activation-hook walker reads .completed length to compute CURRENT. As
+    # completed grows from 0 to N-1, CURRENT must move through the chain in
+    # lockstep — never re-emitting the previous step.
+    local chain='["brainstorming","writing-plans","executing-plans","requesting-code-review","verification-before-completion","openspec-ship","finishing-a-development-branch"]'
+
+    local i=0
+    while [ "$i" -lt 6 ]; do
+        local token="sticky-advance-$$-${i}"
+        printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+
+        jq -n --argjson chain "${chain}" --argjson i "$i" '{
+            chain: $chain,
+            completed: ($chain[:$i])
+        }' > "${HOME}/.claude/.skill-composition-state-${token}"
+
+        local expected
+        expected="$(printf '%s' "${chain}" | jq -r --argjson i "$i" '.[$i]')"
+
+        local context
+        context="$(extract_context "$(run_hook "yes")")"
+
+        # Skill may emit on Process: prefix, Workflow: prefix, or as a bare
+        # "<name> -> Skill(...)" line depending on its role and slot.
+        if printf '%s' "${context}" | grep -qE "(^|^Process: |^Workflow: )${expected} -> "; then
+            _record_pass "step ${i}: emits ${expected}"
+        else
+            _record_fail "step ${i}: emits ${expected}" \
+                "no top-line emission for '${expected}'"
+        fi
+
+        rm -f "${HOME}/.claude/.skill-session-token" \
+              "${HOME}/.claude/.skill-composition-state-${token}"
+        i=$((i+1))
+    done
+
+    teardown_test_env
+}
+test_sticky_advances_with_completed
+
+# ---------------------------------------------------------------------------
 # 4. Slash command is blocked
 # ---------------------------------------------------------------------------
 test_slash_command_blocked() {
@@ -4144,24 +4357,28 @@ test_new_design_during_implement() {
 test_new_design_during_implement
 
 test_stickiness_on_resume() {
-    echo "-- test: stickiness fires on resume language --"
+    echo "-- test: stickiness fires when composition state has executing-plans as CURRENT --"
     setup_test_env
     install_registry_v4
 
     local token="test-resume-session"
     printf '%s' "$token" > "${HOME}/.claude/.skill-session-token"
-    printf '{"skill":"executing-plans","phase":"IMPLEMENT"}' \
+    printf '{"skill":"writing-plans","phase":"PLAN"}' \
         > "${HOME}/.claude/.skill-last-invoked-${token}"
+    jq -n '{
+        chain: ["brainstorming","writing-plans","executing-plans","requesting-code-review"],
+        completed: ["brainstorming","writing-plans"]
+    }' > "${HOME}/.claude/.skill-composition-state-${token}"
 
     local output
-    output="$(run_hook "pick up where we left off")"
+    output="$(run_hook "yes")"
     local context
     context="$(extract_context "${output}")"
 
     if printf '%s' "${context}" | grep -q 'executing-plans'; then
-        _record_pass "stickiness fires on resume language"
+        _record_pass "stickiness fires on bare ack with active chain"
     else
-        _record_fail "stickiness fires on resume language" "executing-plans not selected"
+        _record_fail "stickiness fires on bare ack with active chain" "executing-plans not selected"
     fi
 
     teardown_test_env

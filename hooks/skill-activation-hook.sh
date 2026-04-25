@@ -22,13 +22,27 @@ fi
 
 PROMPT=$(cat 2>/dev/null | jq -r '.prompt // empty' 2>/dev/null) || true
 
+# Read session token early so early-exit gates can check for active composition state.
+_SESSION_TOKEN=""
+[[ -f "${HOME}/.claude/.skill-session-token" ]] && _SESSION_TOKEN="$(cat "${HOME}/.claude/.skill-session-token" 2>/dev/null)"
+
+# _comp_active: returns 0 (true) if composition state is live for this session,
+# 1 (false) otherwise. Used to bypass short-prompt and blocklist early-exits
+# so bare acks during an active SDLC chain can reach the sticky-emission logic.
+_comp_active() {
+  [[ -z "${_SESSION_TOKEN}" ]] && return 1
+  local _f="${HOME}/.claude/.skill-composition-state-${_SESSION_TOKEN}"
+  [[ -f "$_f" ]] || return 1
+  jq -e '(.chain // [] | length) > (.completed // [] | length)' "$_f" >/dev/null 2>&1
+}
+
 # =================================================================
 # EARLY EXITS
 # =================================================================
 [[ -z "$PROMPT" ]] && exit 0
 # Skip slash commands — these are handled by the Skill tool directly
 [[ "$PROMPT" =~ ^[[:space:]]*/ ]] && exit 0
-(( ${#PROMPT} < 5 )) && exit 0
+(( ${#PROMPT} < 5 )) && ! _comp_active && exit 0
 # Escape hatch: [no-skills] marker or -- prefix suppresses all routing
 [[ "$PROMPT" == *"[no-skills]"* ]] && exit 0
 [[ "$PROMPT" =~ ^[[:space:]]*--[[:space:]] ]] && exit 0
@@ -52,7 +66,7 @@ if [[ "$P" =~ $_BLOCKLIST ]]; then
     # can diagnose the case where a legitimate dev prompt was swallowed.
     [[ -n "${SKILL_DEBUG:-}" ]] && \
       printf '[skill-hook] greeting blocklist matched prompt; no routing emitted. Set SKILL_EXPLAIN=1 for full scoring trace.\n' >&2
-    exit 0
+    _comp_active || exit 0
   fi
 fi
 
@@ -295,67 +309,74 @@ ${SORTED}
 EOF
 
   SORTED="$(printf '%s' "$_new_sorted" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
+}
 
-  # --- IMPLEMENT stickiness ---
-  # If last phase was IMPLEMENT and prompt uses EXPLICIT continuation language,
-  # boost executing-plans above the top process skill. Generic build verbs
-  # (add/build/create) are NOT matched — they may indicate new design intents
-  # that must go through brainstorming (superpowers HARD-GATE).
-  local _last_phase
-  _last_phase="$(jq -r '.phase // empty' "$_signal_file" 2>/dev/null)"
-  if [[ "$_last_phase" == "IMPLEMENT" ]]; then
-    # Check top process phase in current SORTED
-    local _top_process_phase=""
-    while IFS='|' read -r _sp_score _sp_name _sp_role _sp_invoke _sp_phase; do
-      [[ -z "$_sp_name" ]] && continue
-      if [[ "$_sp_role" == "process" ]]; then
-        _top_process_phase="$_sp_phase"
-        break
-      fi
-    done <<EOF
-${SORTED}
-EOF
-    if [[ "$_top_process_phase" == "DESIGN" ]] || [[ -z "$_top_process_phase" ]]; then
-      # Only fire on EXPLICIT continuation language
-      if [[ "$P" =~ (continue|resume|next.task|next.step|pick.up|carry.on|keep.going|where.were.we|what.s.next|move.on|proceed|finish.up|wrap.up.this|remaining|back.to.it) ]]; then
-          # Boost executing-plans above current top process
-          local _top_score=0
-          while IFS='|' read -r _bs_score _bs_name _bs_role _bs_invoke _bs_phase; do
-            [[ -z "$_bs_name" ]] && continue
-            [[ "$_bs_role" == "process" ]] && _top_score="$_bs_score" && break
-          done <<EOF
-${SORTED}
-EOF
-          local _sticky_score=$((_top_score + 5))
-          local _sticky_sorted=""
-          local _injected=0
-          while IFS='|' read -r _ss_score _ss_name _ss_role _ss_invoke _ss_phase; do
-            [[ -z "$_ss_name" ]] && continue
-            if [[ "$_ss_name" == "executing-plans" ]]; then
-              _sticky_sorted="${_sticky_sorted}${_sticky_score}|${_ss_name}|${_ss_role}|${_ss_invoke}|${_ss_phase}
-"
-              _injected=1
-            else
-              _sticky_sorted="${_sticky_sorted}${_ss_score}|${_ss_name}|${_ss_role}|${_ss_invoke}|${_ss_phase}
-"
-            fi
-          done <<EOF
-${SORTED}
-EOF
-          # If executing-plans wasn't in SORTED (no trigger match), inject it
-          # Only if it is available and enabled in the registry
-          if [[ "$_injected" -eq 0 ]]; then
-            local _ep_invoke
-            _ep_invoke="$(printf '%s' "$REGISTRY" | jq -r '.skills[] | select(.name == "executing-plans" and .available == true and .enabled == true) | .invoke // "SKIP"' 2>/dev/null)"
-            if [[ -n "$_ep_invoke" ]]; then
-              _sticky_sorted="${_sticky_score}|executing-plans|process|${_ep_invoke}|IMPLEMENT
-${_sticky_sorted}"
-            fi
-          fi
-          SORTED="$(printf '%s' "$_sticky_sorted" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
-      fi
-    fi
+# --- _apply_sticky_composition ------------------------------------
+# Sticky-emit the CURRENT chain step when composition state is active and
+# the prompt is short (a bare ack like "yes"/"ok"/"do it"). Display-only:
+# does NOT mutate .completed — that stays the responsibility of the
+# PostToolUse ^Skill$ completion hook.
+# Input globals: $P, $SORTED, $REGISTRY, $_SESSION_TOKEN
+# Output: mutates $SORTED by injecting CURRENT skill.
+# Fails open: any jq error, missing file, or unavailable skill returns silently.
+_apply_sticky_composition() {
+  [[ -z "${_SESSION_TOKEN}" ]] && return
+  local _comp_file="${HOME}/.claude/.skill-composition-state-${_SESSION_TOKEN}"
+  [[ -f "$_comp_file" ]] || return
+
+  # Pure-cancel prompts clear the chain and suppress sticky for this turn.
+  # Anchored to whole-prompt match so mixed prompts (e.g., "never mind,
+  # different plan" — where "plan" naturally matches writing-plans) do not
+  # pass through here; those go to the hijack guard below or normal routing.
+  # Trailing punctuation class covers . , ! ? ; : and trailing whitespace.
+  if [[ "$P" =~ ^[[:space:]]*(stop|cancel|abort|nevermind|never.mind|forget.it|scrap.that|drop.it|no.thanks|nope|nah)[[:space:]!.,?:\;]*$ ]]; then
+    rm -f "$_comp_file" 2>/dev/null
+    return
   fi
+
+  # CURRENT = chain[length(completed)]. Bail if exhausted, chain empty, or any
+  # completed entry is not in chain (malformed state).
+  local _current_name
+  _current_name="$(jq -r '
+    (.chain // []) as $c | (.completed // []) as $d |
+    if ($c | length) == 0 then empty
+    elif ($d | length) >= ($c | length) then empty
+    elif ($d | all(. as $x | $c | index($x))) then $c[$d | length]
+    else empty end
+  ' "$_comp_file" 2>/dev/null)"
+  [[ -z "$_current_name" ]] && return
+
+  # Eligibility: only fire on short prompts (the "yes"/"ok"/"do it" case).
+  # Longer prompts route via normal triggers.
+  local _word_count
+  _word_count="$(printf '%s' "$P" | wc -w | tr -d '[:space:]')"
+  [[ "${_word_count:-0}" -le 6 ]] || return
+
+  # Registry lookup.
+  local _lookup
+  _lookup="$(printf '%s' "$REGISTRY" | jq -r --arg n "$_current_name" '
+    .skills[] | select(.name == $n and .available == true and .enabled == true) |
+    [(.role // "process"), (.phase // ""), (.invoke // "Skill(\(.name))")] | @tsv
+  ' 2>/dev/null)"
+  [[ -z "$_lookup" ]] && return
+
+  local _role _phase _invoke
+  _role="$(printf '%s' "$_lookup" | awk -F'\t' '{print $1}')"
+  _phase="$(printf '%s' "$_lookup" | awk -F'\t' '{print $2}')"
+  _invoke="$(printf '%s' "$_lookup" | awk -F'\t' '{print $3}')"
+
+  # Hijack guard: skip injection if a process skill already scored naturally.
+  # Sticky is a fallback for the no-trigger-match case, not a boost.
+  while IFS='|' read -r _ts _tn _tr _ti _tp; do
+    [[ -z "$_tn" ]] && continue
+    [[ "$_tr" == "process" ]] && return
+  done <<EOF
+${SORTED}
+EOF
+
+  # Inject CURRENT at a solid process-tier score; role-cap picks it.
+  local _new_line="50|${_current_name}|${_role}|${_invoke}|${_phase}"
+  SORTED="$(printf '%s\n%s' "$_new_line" "$SORTED" | grep -v '^$' | sort -s -t'|' -k1 -rn)"
 }
 
 # --- _select_by_role_caps -----------------------------------------
@@ -1054,9 +1075,7 @@ EOF
 # Track how many prompts have been sent to reduce verbosity over time.
 # File: $HOME/.claude/.skill-prompt-count
 # SKILL_VERBOSE=1 forces full output regardless of depth.
-# Read session token for session-scoped counter (avoids race between concurrent sessions)
-_SESSION_TOKEN=""
-[[ -f "${HOME}/.claude/.skill-session-token" ]] && _SESSION_TOKEN="$(cat "${HOME}/.claude/.skill-session-token" 2>/dev/null)"
+# _SESSION_TOKEN is read near the top of the file (before early-exit gates).
 _PROMPT_COUNT_FILE="${HOME}/.claude/.skill-prompt-count-${_SESSION_TOKEN:-default}"
 _PROMPT_COUNT=1
 if [[ -f "$_PROMPT_COUNT_FILE" ]]; then
@@ -1099,6 +1118,7 @@ SKILL_DATA="$(printf '%s' "$REGISTRY" | jq -r '
 # --- Score, select, label, build, compose, format ---
 _score_skills
 _apply_context_bonus
+_apply_sticky_composition
 
 # --- Compute tentative phase for required-role pass 0 ---
 # Priority: process > workflow > domain > first required skill.
