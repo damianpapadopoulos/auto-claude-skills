@@ -6,7 +6,17 @@ set -u
 
 usage() {
     cat >&2 <<'EOF'
-usage: BEHAVIORAL_EVALS=1 tests/run-behavioral-evals.sh --scenario <id> [--pack <path>]
+usage: BEHAVIORAL_EVALS=1 tests/run-behavioral-evals.sh --scenario <id> [options]
+
+Options:
+  --scenario <id>          required — scenario id from the pack
+  --pack <path>            override default pack path
+                           (default: tests/fixtures/incident-analysis/evals/behavioral.json)
+  --variance <N>           run scenario N times and emit per-assertion pass-rate
+                           summary (default: 1, single run)
+  --variance-report <path> override default variance-report markdown path
+                           (default: docs/plans/<today>-cast-eval-variance-report.md)
+  -h, --help               show this message
 
 Environment:
   BEHAVIORAL_EVALS=1      required to run; any other value is a no-op
@@ -15,8 +25,8 @@ Environment:
   SKILL_PATH              override skill file (default: 'skills/incident-analysis/SKILL.md')
 
 Exit codes:
-  0  all assertions passed
-  1  at least one assertion failed
+  0  single run: all assertions passed | variance run: report written
+  1  single run: at least one assertion failed
   2  guard / schema / precondition failure
 EOF
 }
@@ -30,6 +40,8 @@ fi
 # -------- argument parsing --------
 SCENARIO_ID=""
 PACK_PATH="tests/fixtures/incident-analysis/evals/behavioral.json"
+VARIANCE_N=1
+VARIANCE_REPORT=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -39,6 +51,14 @@ while [ $# -gt 0 ]; do
             ;;
         --pack)
             PACK_PATH="${2:-}"
+            shift 2
+            ;;
+        --variance)
+            VARIANCE_N="${2:-}"
+            shift 2
+            ;;
+        --variance-report)
+            VARIANCE_REPORT="${2:-}"
             shift 2
             ;;
         -h|--help)
@@ -57,6 +77,23 @@ if [ -z "${SCENARIO_ID}" ]; then
     echo "error: --scenario <id> is required" >&2
     usage
     exit 2
+fi
+
+# Validate VARIANCE_N is a positive integer
+case "${VARIANCE_N}" in
+    ''|*[!0-9]*)
+        echo "error: --variance must be a positive integer (got '${VARIANCE_N}')" >&2
+        exit 2
+        ;;
+    0)
+        echo "error: --variance must be >= 1" >&2
+        exit 2
+        ;;
+esac
+
+# Default report path when --variance > 1 and no explicit path
+if [ "${VARIANCE_N}" -gt 1 ] && [ -z "${VARIANCE_REPORT}" ]; then
+    VARIANCE_REPORT="docs/plans/$(date +%Y-%m-%d)-cast-eval-variance-report.md"
 fi
 
 # -------- claude binary check --------
