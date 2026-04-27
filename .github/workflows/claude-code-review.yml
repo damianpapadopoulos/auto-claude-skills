@@ -47,6 +47,9 @@ concurrency:
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
+    permissions:
+      # Read-only — this job only checks out the PR head and runs git diff.
+      contents: read
     outputs:
       changed_skill_paths: ${{ steps.changes.outputs.changed_skill_paths }}
       changed_hook_paths: ${{ steps.changes.outputs.changed_hook_paths }}

@@ -147,6 +147,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
             --json-schema '{"type":"object","properties":{"results":{"type":"string"}},"required":["results"]}'
+            --allowed-tools 'Read Bash(git diff:*)'
           prompt: |
             Evaluate trigger accuracy for skills changed in this PR. This is a
             non-blocking advisory gate. Follow these steps exactly — do not
