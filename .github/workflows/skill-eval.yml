@@ -135,11 +135,13 @@ jobs:
       - name: Run skill eval
         id: eval
         if: steps.pr-ref.outputs.abort == 'false'
-        # SECURITY: pinned to the v1 release commit SHA. Floating @v1 can
-        # silently move; pinning is GitHub's recommended hardening when the
-        # action receives secrets. Update by running:
-        #   gh api repos/anthropics/claude-code-action/git/refs/tags/v1
-        uses: anthropics/claude-code-action@e58dfa55559035499a4982426bb73605e8b5ad8e  # v1
+        # SECURITY: pinned to the PEELED commit SHA of v1, not the tag
+        # object. Floating @v1 can silently move; pinning is GitHub's
+        # recommended hardening when the action receives secrets. To bump:
+        #   tag_obj=$(gh api repos/anthropics/claude-code-action/git/refs/tags/v1 --jq '.object.sha')
+        #   gh api repos/anthropics/claude-code-action/git/tags/$tag_obj --jq '.object.sha'
+        # Bump in lockstep with claude-code-review.yml and claude.yml.
+        uses: anthropics/claude-code-action@567fe954a4527e81f132d87d1bdbcc94f7737434  # v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
