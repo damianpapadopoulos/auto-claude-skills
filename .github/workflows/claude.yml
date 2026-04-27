@@ -1,4 +1,27 @@
-name: Claude Code
+name: Claude Code Assist
+
+# SECURITY MODEL
+#
+# This workflow lets a maintainer say `@claude <ask>` in any issue, PR
+# comment, or PR review. Claude can then read repo state, make commits,
+# and push. That power makes this workflow a high-value target.
+#
+# Defenses (same architecture as skill-eval.yml):
+#   1. `author_association` allow-list in the job `if:` (cheap pre-filter,
+#      blocks external contributors at zero API-call cost).
+#   2. First step: permission API check — require admin/write/maintain.
+#      `author_association` alone includes triage-role users who don't
+#      have write access; the permission API is the authoritative gate.
+#   3. First step: fork-PR refusal. When the event is comment/review on a
+#      PR whose head repo != base repo, abort before checkout. Closes the
+#      "trusted user replies on a hostile fork PR" case.
+#   4. `anthropics/claude-code-action` pinned to a release commit SHA, not
+#      the floating @v1 tag.
+#   5. All user-controlled inputs flow through `env:` blocks, not direct
+#      `${{ ... }}` substitution into `run:` scripts.
+#
+# If you don't actively use `@claude` mentions, consider deleting this
+# workflow entirely. The smallest secure surface is no surface.
 
 on:
   issue_comment:
@@ -10,41 +33,136 @@ on:
   pull_request_review:
     types: [submitted]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.issue.number }}-${{ github.actor }}
+  cancel-in-progress: true
+
 jobs:
   claude:
+    # The `||` chain in the second clause picks the actor's association
+    # from the FIRST event field that's populated. Order is intentional:
+    #   issue_comment / pull_request_review_comment -> comment.author_association (commenter)
+    #   pull_request_review                          -> review.author_association  (reviewer)
+    #   issues                                       -> issue.author_association   (issue *author*)
+    # KNOWN LIMITATION: for `issues: assigned`, the trigger actor is the
+    # assigner (github.event.sender), not the issue author. The if-clause
+    # pre-filter checks issue.author_association — that's the wrong field
+    # for the assigned sub-type. There's no `github.event.sender.author_association`
+    # in the issues payload, so the cheap filter can't be made precise.
+    # The authoritative gate is the permission API check in the first
+    # step (which DOES query the sender's permission), so safety is intact;
+    # the only consequence is that a maintainer assigning an external
+    # contributor's @claude-tagged issue may be rejected by the if-clause
+    # before reaching the permission check. Workaround: comment @claude
+    # instead of using assignment.
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      (
+        (github.event_name == 'issue_comment' && github.event.comment.user.type != 'Bot' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'pull_request_review_comment' && github.event.comment.user.type != 'Bot' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'pull_request_review' && github.event.review.user.type != 'Bot' && contains(github.event.review.body, '@claude')) ||
+        (github.event_name == 'issues' && github.event.issue.user.type != 'Bot' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      ) &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association || github.event.review.author_association || github.event.issue.author_association)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
+      # `@claude` may commit and push fixes when asked; contents:write is
+      # required for that capability. If you only want a read-only
+      # assistant (questions/reviews, no commits), drop to contents:read.
+      # No id-token: write — claude_code_oauth_token authenticates the
+      # action; OIDC token exchange is only needed for Bedrock/Vertex/
+      # Foundry. Add it back if you switch to one of those providers.
       contents: write
       pull-requests: write
       issues: write
-      id-token: write
       actions: read
     steps:
+      - name: Verify trigger permission, reject fork-PR
+        id: guard
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER_FROM_ISSUE: ${{ github.event.issue.number }}
+          PR_NUMBER_FROM_PR: ${{ github.event.pull_request.number }}
+          IS_PR_COMMENT: ${{ github.event.issue.pull_request != null }}
+          ACTOR_COMMENT: ${{ github.event.comment.user.login }}
+          ACTOR_REVIEW: ${{ github.event.review.user.login }}
+          ACTOR_SENDER: ${{ github.event.sender.login }}
+        run: |
+          set -euo pipefail
+
+          case "$EVENT_NAME" in
+            issue_comment|pull_request_review_comment) ACTOR="$ACTOR_COMMENT" ;;
+            pull_request_review) ACTOR="$ACTOR_REVIEW" ;;
+            # `issues` covers both `opened` and `assigned` sub-types.
+            # github.event.issue.user is the issue *author*, which is
+            # wrong for `assigned` (a maintainer assigning a contributor's
+            # issue to claude). github.event.sender is who triggered the
+            # event — correct in both sub-types. The if-clause separately
+            # filters bot-authored issues via issue.user.type.
+            issues) ACTOR="$ACTOR_SENDER" ;;
+            *) ACTOR="$ACTOR_SENDER" ;;
+          esac
+
+          if [ -z "$ACTOR" ] || [ "$ACTOR" = "null" ]; then
+            echo "::error::Could not resolve triggering actor for event $EVENT_NAME"
+            echo "abort=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Authoritative permission check (closes the triage-role gap
+          # that author_association alone leaves open).
+          permission="$(gh api "/repos/${REPO}/collaborators/${ACTOR}/permission" --jq '.permission' 2>/dev/null || echo "none")"
+          case "$permission" in
+            admin|write|maintain) ;;
+            *)
+              echo "::notice::Refusing to run @claude — '${ACTOR}' has permission '${permission}', need admin/write/maintain."
+              echo "abort=true" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
+
+          # Fork-PR refusal: when the trigger references a PR, verify
+          # head.repo == base.repo. Skip for issue-only triggers.
+          PR_NUMBER=""
+          if [ "$EVENT_NAME" = "issue_comment" ] && [ "$IS_PR_COMMENT" = "true" ]; then
+            PR_NUMBER="$PR_NUMBER_FROM_ISSUE"
+          elif [ "$EVENT_NAME" = "pull_request_review_comment" ] || [ "$EVENT_NAME" = "pull_request_review" ]; then
+            PR_NUMBER="$PR_NUMBER_FROM_PR"
+          fi
+
+          if [ -n "$PR_NUMBER" ]; then
+            HEAD_REPO="$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" --jq '.head.repo.full_name' 2>/dev/null || echo "")"
+            if [ -z "$HEAD_REPO" ]; then
+              echo "::error::Could not resolve PR #${PR_NUMBER} head repo"
+              echo "abort=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if [ "$HEAD_REPO" != "$REPO" ]; then
+              echo "::notice::Refusing to run @claude on fork-PR head ($HEAD_REPO) — secrets would be exposed to untrusted code."
+              echo "abort=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          echo "abort=false" >> "$GITHUB_OUTPUT"
+
       - name: Checkout repository
+        if: steps.guard.outputs.abort == 'false'
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
       - name: Run Claude Code
         id: claude
-        uses: anthropics/claude-code-action@v1
+        if: steps.guard.outputs.abort == 'false'
+        # SECURITY: pinned to the PEELED commit SHA of v1, not the tag
+        # object. Update in lockstep with claude-code-review.yml and
+        # skill-eval.yml. See the bump command in claude-code-review.yml.
+        uses: anthropics/claude-code-action@567fe954a4527e81f132d87d1bdbcc94f7737434  # v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-
-          # This is an optional setting that allows Claude to read CI results on PRs
           additional_permissions: |
             actions: read
-
-          # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
-          # prompt: 'Update the pull request description to include a summary of changes.'
-
-          # Optional: Add claude_args to customize behavior and configuration
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
-          # claude_args: '--allowed-tools Bash(gh pr:*)'
 
