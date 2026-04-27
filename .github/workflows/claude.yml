@@ -43,15 +43,24 @@ jobs:
     # from the FIRST event field that's populated. Order is intentional:
     #   issue_comment / pull_request_review_comment -> comment.author_association (commenter)
     #   pull_request_review                          -> review.author_association  (reviewer)
-    #   issues                                       -> issue.author_association   (opener)
+    #   issues                                       -> issue.author_association   (issue *author*)
+    # KNOWN LIMITATION: for `issues: assigned`, the trigger actor is the
+    # assigner (github.event.sender), not the issue author. The if-clause
+    # pre-filter checks issue.author_association — that's the wrong field
+    # for the assigned sub-type. There's no `github.event.sender.author_association`
+    # in the issues payload, so the cheap filter can't be made precise.
     # The authoritative gate is the permission API check in the first
-    # step; this is only the cheap pre-filter.
+    # step (which DOES query the sender's permission), so safety is intact;
+    # the only consequence is that a maintainer assigning an external
+    # contributor's @claude-tagged issue may be rejected by the if-clause
+    # before reaching the permission check. Workaround: comment @claude
+    # instead of using assignment.
     if: |
       (
         (github.event_name == 'issue_comment' && github.event.comment.user.type != 'Bot' && contains(github.event.comment.body, '@claude')) ||
         (github.event_name == 'pull_request_review_comment' && github.event.comment.user.type != 'Bot' && contains(github.event.comment.body, '@claude')) ||
         (github.event_name == 'pull_request_review' && github.event.review.user.type != 'Bot' && contains(github.event.review.body, '@claude')) ||
-        (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+        (github.event_name == 'issues' && github.event.issue.user.type != 'Bot' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
       ) &&
       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association || github.event.review.author_association || github.event.issue.author_association)
     runs-on: ubuntu-latest
@@ -79,7 +88,6 @@ jobs:
           IS_PR_COMMENT: ${{ github.event.issue.pull_request != null }}
           ACTOR_COMMENT: ${{ github.event.comment.user.login }}
           ACTOR_REVIEW: ${{ github.event.review.user.login }}
-          ACTOR_ISSUE: ${{ github.event.issue.user.login }}
           ACTOR_SENDER: ${{ github.event.sender.login }}
         run: |
           set -euo pipefail
@@ -87,7 +95,13 @@ jobs:
           case "$EVENT_NAME" in
             issue_comment|pull_request_review_comment) ACTOR="$ACTOR_COMMENT" ;;
             pull_request_review) ACTOR="$ACTOR_REVIEW" ;;
-            issues) ACTOR="$ACTOR_ISSUE" ;;
+            # `issues` covers both `opened` and `assigned` sub-types.
+            # github.event.issue.user is the issue *author*, which is
+            # wrong for `assigned` (a maintainer assigning a contributor's
+            # issue to claude). github.event.sender is who triggered the
+            # event — correct in both sub-types. The if-clause separately
+            # filters bot-authored issues via issue.user.type.
+            issues) ACTOR="$ACTOR_SENDER" ;;
             *) ACTOR="$ACTOR_SENDER" ;;
           esac
 
