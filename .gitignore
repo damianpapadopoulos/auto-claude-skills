@@ -12,5 +12,6 @@ docs/superpowers-analysis.md
 .worktrees/
 __pycache__/
 *.pyc
+.DS_Store
 # Behavioral eval runner artifacts (opt-in, local-only)
 tests/artifacts/
