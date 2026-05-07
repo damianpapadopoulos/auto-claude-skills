@@ -5,6 +5,8 @@
 # revival criteria documented in
 # docs/plans/archive/2026-05-07-serena-triggering-redesign-design.md
 # (also captured in openspec/specs/skill-routing/spec.md).
+# Telemetry schema: see hooks/serena-nudge.sh (canonical reference). $5 is the
+# class field — the join key across nudge / observe / followup records.
 #
 # Bash 3.2 compatible. Fail-open (exit 0 on any error). jq required; no-op when
 # jq is unavailable.
