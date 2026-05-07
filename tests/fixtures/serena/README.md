@@ -49,6 +49,19 @@ Two known runner caveats apply (project memory `feedback_inner_claude_p_tool_acc
 
 2. **`serena=true` must be true in the registry that the inner `claude -p` sees.** If the inner Claude session does not have Serena MCP installed and registered, the SessionStart banner will not include the Serena propagation line and the assertion will fail for the wrong reason. Verify Serena availability in the eval workspace before interpreting failures.
 
+## Empirical baseline (2026-05-07)
+
+Three runs against the default `claude -p` model (Haiku 4.5 — note: `--model sonnet|opus` is silently overridden by Claude Code for non-interactive `-p` calls; cross-model evals via this runner are not currently feasible without a config change).
+
+| Run | n | Assertion 1 (Serena reference) | Classification |
+|---|---|---|---|
+| n=5 | 5 | 1/5 = 20% | broken |
+| n=10 run A | 10 | 9/10 = 90% | stable |
+| n=10 run B | 10 | 3/10 = 30% | broken |
+| **Pooled** | **25** | **13/25 = 52%** | **flaky** |
+
+Banner-driven propagation works about half the time. Between-run variance is wide (20% / 90% / 30% within an hour) — interpret single-run results with care; pool across multiple runs for an honest classification. Reports archived at `docs/plans/archive/2026-05-07-serena-propagation-baseline-haiku-*.md`.
+
 ## Interpreting results
 
 | Variance result | Interpretation |
