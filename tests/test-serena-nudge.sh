@@ -47,6 +47,10 @@ assert_not_contains "stays silent on lookahead" "find_symbol" "$(_invoke_hook '(
 assert_not_contains "stays silent on broad char class" "find_symbol" "$(_invoke_hook '[A-Za-z 0-9_-]+ failed')"
 # Free-text quoted phrase.
 assert_not_contains "stays silent on free text" "find_symbol" "$(_invoke_hook 'Connection refused')"
+# Suppressors are authoritative — definition-prefix combined with heavy alternation
+# is a free-text-style grep, not a symbol lookup. The spec MUST NOT applies.
+assert_not_contains "stays silent on definition-prefix + heavy alternation" "find_symbol" "$(_invoke_hook 'class |def |function |interface |struct ')"
+assert_not_contains "stays silent on definition-prefix + lookaround" "find_symbol" "$(_invoke_hook '(?<=^)class +Foo')"
 
 # --- Telemetry — fires append a TSV line ---
 

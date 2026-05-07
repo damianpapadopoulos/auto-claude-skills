@@ -19,10 +19,17 @@ CUTOFF=$((NOW - WINDOW))
 
 awk -F'\t' -v cutoff="${CUTOFF}" '
 $1 >= cutoff {
-    kind = $4; cls = $5;
+    kind = $4; cls = $5; tok = $2; turn = $3;
     if (kind == "nudge" || kind == "observe") {
-        firings[cls]++;
-        if (!(cls in seen)) { seen[cls] = 1; order[++ord] = cls; }
+        # Dedupe by (token, turn, class) so multiple firings within the same
+        # turn count once. The follow-through correlator records at most one
+        # followup per (turn, class) pair, so the denominator must match.
+        key = tok "\x01" turn "\x01" cls;
+        if (!(key in firing_seen)) {
+            firing_seen[key] = 1;
+            firings[cls]++;
+            if (!(cls in seen)) { seen[cls] = 1; order[++ord] = cls; }
+        }
     } else if (kind == "followup") {
         followups[cls]++;
     }

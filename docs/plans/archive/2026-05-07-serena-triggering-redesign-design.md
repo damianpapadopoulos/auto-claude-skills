@@ -140,6 +140,6 @@ Ship the three MVP changes (Grep extension, banner additions, banner cleanup) pl
 |---|---|
 | Grep regex extension | Delete if follow-through % < 40 over 14 days with ≥30 firings. |
 | Read matcher (parked) | Revive if `read_large_source` observations without follow-through > 60% over 14 days AND Grep extension follow-through ≥ 40%. |
-| Glob matcher (parked) | Revive if `glob_definition_hunt` observations dominate the missed-opportunity log without an intervening Grep step. |
+| Glob matcher (parked) | Revive if `glob_definition_hunt` observations dominate the missed-opportunity log without an intervening Grep step. **Note:** The current `scripts/serena-telemetry-report.sh` aggregates per-class but does not record per-session event ordering. To rigorously evaluate "no intervening Grep" at the 14-day mark, either (a) extend the report to scan raw telemetry per session and detect Glob→Read sequences, or (b) add a sequence-aware view at evaluation time. Tracked as a follow-up — flagged by Codex during PR #25 review. |
 | Edit-rename matcher (parked) | Revive only with a scope-aware precheck design — separate proposal, blocked on shell-to-MCP wrapper feasibility study. |
 | Telemetry layer itself | Delete if file growth becomes a maintenance burden AND no parked matcher has been revived. |

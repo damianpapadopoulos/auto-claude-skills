@@ -50,6 +50,18 @@ assert_contains "read_large_source shows 25% follow-through" "25%" "${out}"
 assert_contains "report includes glob_definition_hunt class" "glob_definition_hunt" "${out}"
 assert_contains "glob_definition_hunt shows 0% follow-through" "0%" "${out}"
 
+# --- Per-turn dedup: two nudges in the same turn count once ---
+# Matches followthrough's (turn, matcher) idempotent dedup, so the rate is comparable.
+rm -f "${TELEM}"
+# Two grep_extension nudges in turn=42, one followup. Without dedup this would
+# be 50% (1/2); with dedup it's 100% (1/1).
+printf '%d\ttok-D\t42\tnudge\tgrep_extension\tword_boundary\n' "$((NOW - 100))" >>"${TELEM}"
+printf '%d\ttok-D\t42\tnudge\tgrep_extension\tdotted_qualified\n' "$((NOW - 99))" >>"${TELEM}"
+printf '%d\ttok-D\t42\tfollowup\tgrep_extension\tfind_symbol\n' "$((NOW - 90))" >>"${TELEM}"
+out_dedup="$(bash "${TOOL}" 14 2>/dev/null)"
+assert_contains "per-turn dedup: 2 same-turn nudges count as 1 firing" "       1" "${out_dedup}"
+assert_contains "per-turn dedup yields 100%" "100%" "${out_dedup}"
+
 # --- Empty telemetry → graceful empty report ---
 rm -f "${TELEM}"
 out_empty="$(bash "${TOOL}" 14 2>/dev/null)"

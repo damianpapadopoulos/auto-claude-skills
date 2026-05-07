@@ -69,6 +69,8 @@ fi
 #    - heavy alternation (3+ alternatives)
 #    - lookaround
 #    - broad character classes containing whitespace
+# Suppressors are authoritative — definition-prefix wrapped in heavy alternation
+# is treated as a free-text grep, not a symbol lookup, per the spec MUST NOT.
 if [ -n "${_CLASS}" ]; then
     if printf '%s' "${_PATTERN}" | grep -qE '\|.*\|.*\|' 2>/dev/null; then
         _CLASS=""
@@ -78,14 +80,6 @@ if [ -n "${_CLASS}" ]; then
         _CLASS=""
     fi
 fi
-
-# Definition prefix overrides the suppress rules above — strong signal even
-# when wrapped in regex. Re-promote it.
-case "${_PATTERN}" in
-    *"class "*|*"def "*|*"function "*|*"func "*|*"interface "*|*"struct "*|*"import "*|*"type "*)
-        _CLASS="definition_prefix"
-        ;;
-esac
 
 [ -n "${_CLASS}" ] || exit 0
 
