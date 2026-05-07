@@ -60,6 +60,20 @@ LAST="$(tail -1 "${TELEM}")"
 assert_contains "observation correlates to followup" "followup" "${LAST}"
 assert_contains "observation followup carries read_large_source" "read_large_source" "${LAST}"
 
+# Multi-session safety: a busy concurrent session writing 250 lines must not
+# evict our own session's nudge out of the lookup window.
+rm -f "${TELEM}"
+printf '1700000000\ttok-OUR\t5\tnudge\tgrep_extension\tword_boundary\n' >>"${TELEM}"
+i=1
+while [ "${i}" -le 250 ]; do
+    printf '1700000001\ttok-NOISY\t%d\tobserve\tread_large_source\tsrc/x.ts\n' "${i}" >>"${TELEM}"
+    i=$((i+1))
+done
+_invoke_followthrough mcp__serena__find_symbol 6 tok-OUR >/dev/null
+LAST="$(tail -1 "${TELEM}")"
+assert_contains "concurrent session noise does not evict our nudge from the window" "followup" "${LAST}"
+assert_contains "followup carries our session token" "tok-OUR" "${LAST}"
+
 # Errored Serena tool result → no followup.
 rm -f "${TELEM}"
 printf '1700000000\ttok-F\t5\tnudge\tgrep_extension\tword_boundary\n' >>"${TELEM}"

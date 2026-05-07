@@ -32,15 +32,18 @@ _TURN="${CLAUDE_TURN_ID:-0}"
 _TS="$(date +%s 2>/dev/null || echo 0)"
 _SERENA_TOOL_SHORT="${_TOOL#mcp__serena__}"
 
-# Pull last 200 lines for this session, find unmarked nudges/observations within
-# 3 turns. Idempotency: skip if a followup already exists keyed by (turn, matcher).
-_RECENT="$(tail -200 "${_TELEM}" 2>/dev/null | awk -F'\t' -v tok="${_TOKEN}" '$2==tok')"
+# Filter telemetry by this session's token first, then take the most recent
+# 200 lines. Filtering before tail prevents concurrent sessions from evicting
+# our own nudges out of the last-200 window in a multi-session environment.
+_RECENT="$(awk -F'\t' -v tok="${_TOKEN}" '$2==tok' "${_TELEM}" 2>/dev/null | tail -200)"
 [ -n "${_RECENT}" ] || exit 0
 
-# Build the (turn|matcher) set of already-correlated entries.
-_SEEN="$(printf '%s\n' "${_RECENT}" | awk -F'\t' '$4=="followup"{print $3"|"$5}')"
+# Build the (turn, matcher) set of already-correlated entries. Use tab as the
+# composite key delimiter — matcher class names cannot contain tabs (TSV
+# invariant), so collisions are impossible by construction.
+_SEEN="$(printf '%s\n' "${_RECENT}" | awk -F'\t' '$4=="followup"{print $3"\t"$5}')"
 
-# Find candidate (turn|matcher) pairs to correlate now.
+# Find candidate (turn, matcher) pairs to correlate now.
 # Use a temp file to capture pairs across the awk subshell boundary.
 _TMP="$(mktemp 2>/dev/null || printf '/tmp/serena-ft-%s' "$$")"
 printf '%s\n' "${_RECENT}" | awk -F'\t' \
@@ -50,7 +53,7 @@ printf '%s\n' "${_RECENT}" | awk -F'\t' \
      ($4=="nudge" || $4=="observe") {
          delta = cur - $3;
          if (delta < 0 || delta > 3) next;
-         key = $3 "|" $5;
+         key = $3 "\t" $5;
          if (key in seen_set) next;
          print $3 "\t" $5;
          seen_set[key] = 1;
