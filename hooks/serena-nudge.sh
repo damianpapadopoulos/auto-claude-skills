@@ -30,20 +30,58 @@ _SERENA="$(jq -r '.context_capabilities.serena // false' "${_CACHE}" 2>/dev/null
 _PATTERN="$(printf '%s' "${_INPUT}" | jq -r '.tool_input.pattern // empty' 2>/dev/null)" || true
 [ -n "${_PATTERN}" ] || exit 0
 
+# Classify the pattern. Empty class means "do not fire".
+_CLASS=""
+
+# 1. Definition prefix — works for both literal and regex variants.
 case "${_PATTERN}" in
-    *class\ *|*def\ *|*function\ *|*func\ *|*interface\ *|*struct\ *|*import\ *)
-        ;; # likely symbol lookup
-    *)
-        # Check for bare CamelCase or snake_case identifiers (no regex operators)
-        if printf '%s' "${_PATTERN}" | grep -qE '^[A-Z][a-zA-Z0-9]+$' 2>/dev/null; then
-            : # CamelCase — likely a class/type name
-        elif printf '%s' "${_PATTERN}" | grep -qE '^[a-z_][a-z0-9_]+$' 2>/dev/null; then
-            : # snake_case — likely a function name
-        else
-            exit 0 # regex pattern or complex search — not a symbol lookup
-        fi
+    *"class "*|*"def "*|*"function "*|*"func "*|*"interface "*|*"struct "*|*"import "*|*"type "*)
+        _CLASS="definition_prefix"
         ;;
 esac
+
+# 2. Plain CamelCase / snake_case (legacy class).
+if [ -z "${_CLASS}" ]; then
+    if printf '%s' "${_PATTERN}" | grep -qE '^[A-Z][a-zA-Z0-9]+$' 2>/dev/null; then
+        _CLASS="camelcase"
+    elif printf '%s' "${_PATTERN}" | grep -qE '^[a-z_][a-z0-9_]+$' 2>/dev/null; then
+        _CLASS="snake_case"
+    fi
+fi
+
+# 3. Word-boundary symbol — \bIdentifier\b or ^Identifier$.
+if [ -z "${_CLASS}" ]; then
+    if printf '%s' "${_PATTERN}" | grep -qE '^\\b[A-Za-z_][A-Za-z0-9_]*\\b$' 2>/dev/null; then
+        _CLASS="word_boundary"
+    elif printf '%s' "${_PATTERN}" | grep -qE '^\^[A-Za-z_][A-Za-z0-9_]*\$$' 2>/dev/null; then
+        _CLASS="word_boundary"
+    fi
+fi
+
+# 4. Dotted / qualified member access — Foo\.bar or Foo::bar (one level).
+if [ -z "${_CLASS}" ]; then
+    if printf '%s' "${_PATTERN}" | grep -qE '^[A-Za-z_][A-Za-z0-9_]*(\\\.|::)[A-Za-z_][A-Za-z0-9_]*$' 2>/dev/null; then
+        _CLASS="dotted_qualified"
+    fi
+fi
+
+# 5. Suppress on patterns that are clearly not symbol shapes:
+#    - heavy alternation (3+ alternatives)
+#    - lookaround
+#    - broad character classes containing whitespace
+# Suppressors are authoritative — definition-prefix wrapped in heavy alternation
+# is treated as a free-text grep, not a symbol lookup, per the spec MUST NOT.
+if [ -n "${_CLASS}" ]; then
+    if printf '%s' "${_PATTERN}" | grep -qE '\|.*\|.*\|' 2>/dev/null; then
+        _CLASS=""
+    elif printf '%s' "${_PATTERN}" | grep -qE '\(\?[=!<]' 2>/dev/null; then
+        _CLASS=""
+    elif printf '%s' "${_PATTERN}" | grep -qE '\[[^]]* [^]]*\]' 2>/dev/null; then
+        _CLASS=""
+    fi
+fi
+
+[ -n "${_CLASS}" ] || exit 0
 
 _MSG="Serena is available. Consider find_symbol or get_symbols_overview for symbol lookups instead of Grep."
 if command -v jq >/dev/null 2>&1; then
@@ -51,4 +89,14 @@ if command -v jq >/dev/null 2>&1; then
 else
     printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"%s"}}\n' "${_MSG}"
 fi
+
+# Telemetry — append-only TSV. Disabled by SERENA_TELEMETRY=0.
+if [ "${SERENA_TELEMETRY:-1}" != "0" ]; then
+    _TELEM="${HOME}/.claude/.serena-nudge-telemetry"
+    _TS="$(date +%s 2>/dev/null || echo 0)"
+    _TOKEN="${CLAUDE_SESSION_TOKEN:-unknown}"
+    _TURN="${CLAUDE_TURN_ID:-0}"
+    printf '%s\t%s\t%s\tnudge\tgrep_extension\t%s\n' "${_TS}" "${_TOKEN}" "${_TURN}" "${_CLASS}" >>"${_TELEM}" 2>/dev/null || true
+fi
+
 exit 0
