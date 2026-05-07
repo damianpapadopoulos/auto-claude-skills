@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Serena telemetry schema: pattern class moved to field 5, matcher source name (`grep_extension`) moved to field 6 in `nudge` records. `observe` and `followup` records already used field 5 for class. The follow-through correlator and rolling-window report now key on a single field consistently across all kinds, producing per-class follow-through buckets instead of collapsing all `nudge` follow-throughs under `grep_extension`. Telemetry has only existed since 2026-05-07 (PR #25); no migration is needed since no production data has accumulated yet. Capability: `skill-routing`.
+
+### Added
+- `scripts/serena-glob-sequence-check.sh` — sequence-aware analysis of `glob_definition_hunt` observations. Classifies each observation as `Serena followup` / `Intervening Grep` / `revival signal` by looking ahead 3 turns within the same session. Closes the gap Codex flagged during PR #25 review: the per-class rolling-window report could not measure the design's "Glob → Read without intervening Grep" revival criterion. Tests in `tests/test-serena-glob-sequence-check.sh`. Capability: `skill-routing`.
+
+### Fixed
+- `hooks/serena-followthrough.sh` — replaced the predictable `/tmp/serena-ft-$$` mktemp fallback with `${TMPDIR:-/tmp}/serena-ft-$$-${RANDOM}` to harden against same-PID-modulo collisions on shared hosts. Capability: `skill-routing`.
+
+## [3.31.0] — 2026-05-07
+
 ### Added
 - Serena triggering redesign — wider Grep matcher, silent observers for parked-matcher revival evidence, follow-through correlator, and rolling-window report.
   - `hooks/serena-nudge.sh` now classifies regex word-boundary (`\bIdent\b`, `^Ident$`), dotted/qualified member access (`Foo\.bar`, `Foo::bar`), and embedded definition-prefix patterns (`^class +Foo\b`, `def +process_\w+`) in addition to the existing CamelCase/snake_case/literal-prefix classes. Suppression rules cover heavy alternation (3+ alternatives), lookaround, and broad character classes containing whitespace. On fire, appends a TSV line to `~/.claude/.serena-nudge-telemetry`.
