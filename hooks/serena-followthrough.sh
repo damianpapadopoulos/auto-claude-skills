@@ -3,6 +3,8 @@
 # When a Serena MCP tool returns successfully, scans recent telemetry lines from
 # the same session and appends a `followup` record for each unmarked nudge or
 # observation within 3 turns. Used to compute follow-through % per matcher class.
+# Telemetry schema: see hooks/serena-nudge.sh (canonical reference). $5 is the
+# class field — the join key across nudge / observe / followup records.
 # Bash 3.2 compatible. Fail-open. jq required; no-op when unavailable.
 trap 'exit 0' ERR
 
