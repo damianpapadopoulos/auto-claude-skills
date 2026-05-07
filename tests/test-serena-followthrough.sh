@@ -19,7 +19,7 @@ _invoke_followthrough() {
     local tool="$1" turn="$2" token="${3:-tok-A}"
     local input
     input="$(jq -n --arg t "${tool}" '{tool_name:$t, tool_input:{}, tool_response:{ok:true}}')"
-    CLAUDE_SESSION_TOKEN="${token}" CLAUDE_TURN_ID="${turn}" printf '%s' "${input}" | bash "${HOOK}" 2>/dev/null
+    printf '%s' "${input}" | env CLAUDE_SESSION_TOKEN="${token}" CLAUDE_TURN_ID="${turn}" bash "${HOOK}" 2>/dev/null
 }
 
 # Seed: a nudge at turn 5 in session tok-A.
@@ -64,7 +64,7 @@ assert_contains "observation followup carries read_large_source" "read_large_sou
 rm -f "${TELEM}"
 printf '1700000000\ttok-F\t5\tnudge\tgrep_extension\tword_boundary\n' >>"${TELEM}"
 err_input="$(jq -n '{tool_name:"mcp__serena__find_symbol", tool_input:{}, tool_response:{is_error:true}}')"
-CLAUDE_SESSION_TOKEN=tok-F CLAUDE_TURN_ID=6 printf '%s' "${err_input}" | bash "${HOOK}" 2>/dev/null
+printf '%s' "${err_input}" | env CLAUDE_SESSION_TOKEN=tok-F CLAUDE_TURN_ID=6 bash "${HOOK}" 2>/dev/null
 LAST="$(tail -1 "${TELEM}")"
 assert_not_contains "no followup on errored tool result" "followup" "${LAST}"
 

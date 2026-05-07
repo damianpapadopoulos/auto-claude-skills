@@ -119,6 +119,15 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "^mcp__serena__",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/serena-followthrough.sh"
+          }
+        ]
       }
     ],
     "PreCompact": [
