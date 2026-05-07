@@ -1,0 +1,106 @@
+{
+  "id": "serena-grep-patterns",
+  "capability": "serena-nudge",
+  "source": {
+    "spec": "docs/plans/2026-05-07-serena-triggering-redesign-design.md",
+    "plan": "docs/superpowers/plans/2026-05-07-serena-triggering-redesign.md",
+    "prototype": null
+  },
+  "scenarios": [
+    {
+      "name": "fires-on-word-boundary-symbol",
+      "description": "\\bUserService\\b fires the Grep nudge with find_symbol guidance",
+      "path": "cli",
+      "inputs": {
+        "tool_name": "Grep",
+        "pattern": "\\bUserService\\b"
+      },
+      "expected": {
+        "output_contains": "find_symbol",
+        "telemetry_class": "word_boundary"
+      },
+      "tags": ["serena", "grep", "regex"]
+    },
+    {
+      "name": "fires-on-dotted-member-access",
+      "description": "User\\.profile fires the Grep nudge",
+      "path": "cli",
+      "inputs": {
+        "tool_name": "Grep",
+        "pattern": "User\\.profile"
+      },
+      "expected": {
+        "output_contains": "find_symbol",
+        "telemetry_class": "dotted_qualified"
+      },
+      "tags": ["serena", "grep", "dotted"]
+    },
+    {
+      "name": "fires-on-rust-cpp-member-access",
+      "description": "User::profile fires the Grep nudge",
+      "path": "cli",
+      "inputs": {
+        "tool_name": "Grep",
+        "pattern": "User::profile"
+      },
+      "expected": {
+        "output_contains": "find_symbol",
+        "telemetry_class": "dotted_qualified"
+      },
+      "tags": ["serena", "grep", "dotted"]
+    },
+    {
+      "name": "fires-on-definition-prefix-in-regex",
+      "description": "^class +Foo\\b fires the Grep nudge with definition_prefix class",
+      "path": "cli",
+      "inputs": {
+        "tool_name": "Grep",
+        "pattern": "^class +Foo\\b"
+      },
+      "expected": {
+        "output_contains": "find_symbol",
+        "telemetry_class": "definition_prefix"
+      },
+      "tags": ["serena", "grep", "definition"]
+    },
+    {
+      "name": "stays-silent-on-free-text",
+      "description": "Free-text phrases like 'Connection refused' do NOT fire the nudge",
+      "path": "cli",
+      "inputs": {
+        "tool_name": "Grep",
+        "pattern": "Connection refused"
+      },
+      "expected": {
+        "output_not_contains": "find_symbol"
+      },
+      "tags": ["serena", "grep", "false-positive-guard"]
+    },
+    {
+      "name": "stays-silent-on-broad-char-class",
+      "description": "Patterns with whitespace inside character classes do NOT fire",
+      "path": "cli",
+      "inputs": {
+        "tool_name": "Grep",
+        "pattern": "[A-Za-z 0-9_-]+ failed"
+      },
+      "expected": {
+        "output_not_contains": "find_symbol"
+      },
+      "tags": ["serena", "grep", "false-positive-guard"]
+    },
+    {
+      "name": "stays-silent-on-heavy-alternation",
+      "description": "Patterns with 3+ alternations do NOT fire",
+      "path": "cli",
+      "inputs": {
+        "tool_name": "Grep",
+        "pattern": "foo|bar|baz|qux|quux"
+      },
+      "expected": {
+        "output_not_contains": "find_symbol"
+      },
+      "tags": ["serena", "grep", "false-positive-guard"]
+    }
+  ]
+}
