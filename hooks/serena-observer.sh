@@ -3,7 +3,8 @@
 # missed-opportunity classes to ~/.claude/.serena-nudge-telemetry. Never emits
 # user-visible additionalContext. Used to gather evidence for the parked-matcher
 # revival criteria documented in
-# docs/plans/2026-05-07-serena-triggering-redesign-design.md.
+# docs/plans/archive/2026-05-07-serena-triggering-redesign-design.md
+# (also captured in openspec/specs/skill-routing/spec.md).
 #
 # Bash 3.2 compatible. Fail-open (exit 0 on any error). jq required; no-op when
 # jq is unavailable.

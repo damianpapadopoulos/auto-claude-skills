@@ -21,9 +21,9 @@ TELEM="${HOME}/.claude/.serena-nudge-telemetry"
 NOW="$(date +%s)"
 i=1
 while [ "${i}" -le 10 ]; do
-    printf '%d\ttok-X\t%d\tnudge\tgrep_extension\tword_boundary\n' "$((NOW - i*60))" "${i}" >>"${TELEM}"
+    printf '%d\ttok-X\t%d\tnudge\tword_boundary\tgrep_extension\n' "$((NOW - i*60))" "${i}" >>"${TELEM}"
     if [ "${i}" -le 5 ]; then
-        printf '%d\ttok-X\t%d\tfollowup\tgrep_extension\tfind_symbol\n' "$((NOW - i*60 + 30))" "${i}" >>"${TELEM}"
+        printf '%d\ttok-X\t%d\tfollowup\tword_boundary\tfind_symbol\n' "$((NOW - i*60 + 30))" "${i}" >>"${TELEM}"
     fi
     i=$((i+1))
 done
@@ -43,8 +43,8 @@ done
 
 out="$(bash "${TOOL}" 14 2>/dev/null)"
 
-assert_contains "report includes grep_extension class" "grep_extension" "${out}"
-assert_contains "grep_extension shows 50% follow-through" "50%" "${out}"
+assert_contains "report includes word_boundary class" "word_boundary" "${out}"
+assert_contains "word_boundary shows 50% follow-through" "50%" "${out}"
 assert_contains "report includes read_large_source class" "read_large_source" "${out}"
 assert_contains "read_large_source shows 25% follow-through" "25%" "${out}"
 assert_contains "report includes glob_definition_hunt class" "glob_definition_hunt" "${out}"
@@ -55,9 +55,9 @@ assert_contains "glob_definition_hunt shows 0% follow-through" "0%" "${out}"
 rm -f "${TELEM}"
 # Two grep_extension nudges in turn=42, one followup. Without dedup this would
 # be 50% (1/2); with dedup it's 100% (1/1).
-printf '%d\ttok-D\t42\tnudge\tgrep_extension\tword_boundary\n' "$((NOW - 100))" >>"${TELEM}"
+printf '%d\ttok-D\t42\tnudge\tword_boundary\tgrep_extension\n' "$((NOW - 100))" >>"${TELEM}"
 printf '%d\ttok-D\t42\tnudge\tgrep_extension\tdotted_qualified\n' "$((NOW - 99))" >>"${TELEM}"
-printf '%d\ttok-D\t42\tfollowup\tgrep_extension\tfind_symbol\n' "$((NOW - 90))" >>"${TELEM}"
+printf '%d\ttok-D\t42\tfollowup\tword_boundary\tfind_symbol\n' "$((NOW - 90))" >>"${TELEM}"
 out_dedup="$(bash "${TOOL}" 14 2>/dev/null)"
 assert_contains "per-turn dedup: 2 same-turn nudges count as 1 firing" "       1" "${out_dedup}"
 assert_contains "per-turn dedup yields 100%" "100%" "${out_dedup}"

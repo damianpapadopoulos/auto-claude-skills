@@ -45,7 +45,7 @@ _SEEN="$(printf '%s\n' "${_RECENT}" | awk -F'\t' '$4=="followup"{print $3"\t"$5}
 
 # Find candidate (turn, matcher) pairs to correlate now.
 # Use a temp file to capture pairs across the awk subshell boundary.
-_TMP="$(mktemp 2>/dev/null || printf '/tmp/serena-ft-%s' "$$")"
+_TMP="$(mktemp 2>/dev/null || printf '%s/serena-ft-%s-%s' "${TMPDIR:-/tmp}" "$$" "${RANDOM}")"
 printf '%s\n' "${_RECENT}" | awk -F'\t' \
     -v cur="${_TURN}" \
     -v seen="${_SEEN}" \
