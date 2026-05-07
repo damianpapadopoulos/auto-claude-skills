@@ -519,13 +519,13 @@ The `serena-nudge.sh` hook MUST classify Grep patterns of the following shapes a
 
 ### Requirement: Serena Telemetry Append-Only Log
 
-When the Grep nudge fires, the hook MUST append a tab-separated record to `~/.claude/.serena-nudge-telemetry` containing six fields: unix timestamp, session token, turn id, kind (`nudge`), matcher name (`grep_extension`), and pattern class. Telemetry writes MUST be opt-out via the `SERENA_TELEMETRY=0` environment variable. A failed write MUST NOT cause the hook to exit non-zero.
+When the Grep nudge fires, the hook MUST append a tab-separated record to `~/.claude/.serena-nudge-telemetry` containing six fields: unix timestamp, session token, turn id, kind (`nudge`), pattern class (in field 5), and matcher source name (`grep_extension`, in field 6). The schema places the class in field 5 consistently across all kinds (`nudge`, `observe`, `followup`) so the follow-through correlator and the rolling-window report can join on a single field and produce per-class follow-through buckets. Telemetry writes MUST be opt-out via the `SERENA_TELEMETRY=0` environment variable. A failed write MUST NOT cause the hook to exit non-zero.
 
 #### Scenario: Telemetry is appended on fire
 
 - **GIVEN** `SERENA_TELEMETRY` is unset and the Grep matcher fires on pattern `\bUserService\b`
 - **WHEN** the hook completes
-- **THEN** `~/.claude/.serena-nudge-telemetry` MUST contain a line with `nudge`, `grep_extension`, and `word_boundary`
+- **THEN** `~/.claude/.serena-nudge-telemetry` MUST contain a line with `nudge`, `word_boundary` in field 5, and `grep_extension` in field 6
 
 #### Scenario: Telemetry is suppressed by env flag
 
@@ -600,17 +600,45 @@ The SessionStart Serena banner MUST instruct the parent context to propagate Ser
 
 ### Requirement: Telemetry Rolling-Window Report
 
-The `scripts/serena-telemetry-report.sh` script MUST summarise per-class follow-through percentages over a rolling window (default 14 days). The report MUST include `firings`, `followups`, and `pct` columns for every observed class. When telemetry is empty or missing, the script MUST emit a recognisable empty-state message rather than fail.
+The `scripts/serena-telemetry-report.sh` script MUST summarise per-class follow-through percentages over a rolling window (default 14 days). The report MUST include `firings`, `followups`, and `pct` columns for every observed class. Firings MUST be deduplicated by `(token, turn, class)` so multiple firings of the same class within a single turn count once — matching the follow-through correlator's `(turn, matcher)` idempotent dedup so the denominator is comparable to the numerator. When telemetry is empty or missing, the script MUST emit a recognisable empty-state message rather than fail.
 
 #### Scenario: Per-class percentages are computed correctly
 
-- **GIVEN** 10 `nudge` records and 5 `followup` records for class `grep_extension` within the window
+- **GIVEN** 10 `nudge` records (each in a distinct turn) and 5 `followup` records for class `word_boundary` within the window
 - **WHEN** the report runs with `days=14`
-- **THEN** the output MUST contain `grep_extension` with `50%` follow-through
+- **THEN** the output MUST contain `word_boundary` with `50%` follow-through
+
+#### Scenario: Per-turn firing dedup matches followthrough idempotency
+
+- **GIVEN** two `nudge` records for class `word_boundary` in the same `(token, turn)` and one `followup`
+- **WHEN** the report runs
+- **THEN** `firings` for `word_boundary` MUST be `1`, not `2`, and `pct` MUST be `100%`
 
 #### Scenario: Empty telemetry produces empty-state output
 
 - **GIVEN** `~/.claude/.serena-nudge-telemetry` does not exist or is empty
 - **WHEN** the report runs
 - **THEN** the output MUST contain `no telemetry`
+
+### Requirement: Glob Sequence-Aware Analysis
+
+The `scripts/serena-glob-sequence-check.sh` script MUST classify each `glob_definition_hunt` observation in the rolling window as one of: `Serena followup` (a Serena MCP call within 3 turns of the same session), `Intervening Grep` (a Grep `nudge` within 3 turns without a Serena follow-up), or `revival signal` (neither). The script MUST emit per-bucket counts. When telemetry is empty or missing, the script MUST emit a recognisable empty-state message rather than fail.
+
+#### Scenario: Glob followed by Serena counts as followup
+
+- **GIVEN** an `observe glob_definition_hunt` at turn 10 in session `T` and a `followup glob_definition_hunt` at turn 11 in `T`
+- **WHEN** the script runs
+- **THEN** the followup bucket MUST count 1 and the revival bucket MUST count 0 for this observation
+
+#### Scenario: Glob followed by Grep without Serena counts as intervening
+
+- **GIVEN** an `observe glob_definition_hunt` at turn 20 in session `T` and a `nudge` at turn 22 in `T` with no follow-up
+- **WHEN** the script runs
+- **THEN** the intervening Grep bucket MUST count 1
+
+#### Scenario: Glob with no follow-up activity counts as revival signal
+
+- **GIVEN** an `observe glob_definition_hunt` at turn 30 in session `T` and no `nudge` or `followup` for it within 3 turns
+- **WHEN** the script runs
+- **THEN** the revival signal bucket MUST count 1
 

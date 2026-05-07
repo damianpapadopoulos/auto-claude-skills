@@ -60,8 +60,12 @@ _invoke_hook '\bUserService\b' >/dev/null
 assert_file_exists "telemetry file is created on nudge fire" "${TELEMETRY}"
 TELEM_LINE="$(tail -1 "${TELEMETRY}" 2>/dev/null || true)"
 assert_contains "telemetry line contains nudge keyword" "nudge" "${TELEM_LINE}"
-assert_contains "telemetry line contains grep_extension matcher" "grep_extension" "${TELEM_LINE}"
 assert_contains "telemetry line records word_boundary class" "word_boundary" "${TELEM_LINE}"
+assert_contains "telemetry line records grep_extension as matcher source" "grep_extension" "${TELEM_LINE}"
+# Class must be in field 5 (after ts, token, turn, kind), so the followthrough
+# correlator's $5-keying produces per-class follow-through buckets.
+TELEM_FIELD5="$(printf '%s' "${TELEM_LINE}" | awk -F'\t' '{print $5}')"
+assert_equals "telemetry field 5 is the class (not the matcher source)" "word_boundary" "${TELEM_FIELD5}"
 
 # --- Telemetry — no log when nudge does not fire ---
 

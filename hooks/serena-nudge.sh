@@ -91,12 +91,22 @@ else
 fi
 
 # Telemetry — append-only TSV. Disabled by SERENA_TELEMETRY=0.
+# Schema: <ts>\t<token>\t<turn>\t<kind>\t<class>\t<detail>
+#   - kind ∈ {nudge, observe, followup}
+#   - class ∈ pattern class for nudge (camelcase, snake_case, word_boundary,
+#     dotted_qualified, definition_prefix), observation class for observe
+#     (read_large_source, glob_definition_hunt, edit_symbol_token), or the
+#     class carried from the original record for followup.
+#   - detail = matcher source name (grep_extension) for nudge, path/pattern
+#     for observe, Serena tool short name for followup.
+# This keeps $5 = class consistently across all kinds, so the followthrough
+# correlator and the rolling-window report can join on a single field.
 if [ "${SERENA_TELEMETRY:-1}" != "0" ]; then
     _TELEM="${HOME}/.claude/.serena-nudge-telemetry"
     _TS="$(date +%s 2>/dev/null || echo 0)"
     _TOKEN="${CLAUDE_SESSION_TOKEN:-unknown}"
     _TURN="${CLAUDE_TURN_ID:-0}"
-    printf '%s\t%s\t%s\tnudge\tgrep_extension\t%s\n' "${_TS}" "${_TOKEN}" "${_TURN}" "${_CLASS}" >>"${_TELEM}" 2>/dev/null || true
+    printf '%s\t%s\t%s\tnudge\t%s\tgrep_extension\n' "${_TS}" "${_TOKEN}" "${_TURN}" "${_CLASS}" >>"${_TELEM}" 2>/dev/null || true
 fi
 
 exit 0
