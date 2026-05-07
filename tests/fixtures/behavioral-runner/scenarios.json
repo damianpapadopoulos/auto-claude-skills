@@ -11,5 +11,21 @@
     "id": "malformed-missing-assertions",
     "prompt": "whatever",
     "expected_behavior": "n/a"
+  },
+  {
+    "id": "variance-self-test",
+    "prompt": "self-test prompt for variance mode",
+    "expected_behavior": "Stub emits all 9 keywords; every assertion classifies stable.",
+    "assertions": [
+      {"text": "alpha",   "description": "matches alpha"},
+      {"text": "bravo",   "description": "matches bravo"},
+      {"text": "charlie", "description": "matches charlie"},
+      {"text": "delta",   "description": "matches delta"},
+      {"text": "echo",    "description": "matches echo"},
+      {"text": "foxtrot", "description": "matches foxtrot"},
+      {"text": "golf",    "description": "matches golf"},
+      {"text": "hotel",   "description": "matches hotel"},
+      {"text": "india",   "description": "matches india"}
+    ]
   }
 ]

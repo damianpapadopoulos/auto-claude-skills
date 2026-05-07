@@ -9,6 +9,12 @@ if [ -z "${MOCK_RESPONSE_FILE:-}" ] || [ ! -f "${MOCK_RESPONSE_FILE}" ]; then
     exit 1
 fi
 
+# Optional argv capture: tests may set MOCK_ARGS_FILE to assert on the
+# flags the runner passed (e.g. --disallowedTools sandbox).
+if [ -n "${MOCK_ARGS_FILE:-}" ]; then
+    printf '%s\n' "$@" > "${MOCK_ARGS_FILE}"
+fi
+
 response_text="$(cat "${MOCK_RESPONSE_FILE}")"
 jq -n \
     --arg result "${response_text}" \
