@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Investigation
+- **Subagent banner propagation reliability — flaky on Haiku 4.5.** PR #28's behavioral fixture (`subagent-propagation`) was run three times against the default `claude -p` model. Pooled across n=25 iterations, the SessionStart Serena banner is propagated into Task spawn prompts at 52% pass rate (13/25). Wide between-run variance: n=5 = 20% broken, n=10 run A = 90% stable, n=10 run B = 30% broken. Reports archived under `docs/plans/archive/2026-05-07-serena-propagation-baseline-haiku-*.md`. Memory entry `project_serena_triggering_redesign` updated with the cross-run finding and Phase-B fix options. Phase-B implementation (banner reword / plugin-owned agent SKILL.md edits / parked-matcher revival) is gated on the 2026-05-21 14-day telemetry evaluation. Known runner limitation surfaced: `claude -p --model <alias>` is silently overridden by Claude Code; cross-model behavioral evals via this runner are not currently feasible. Capability: `skill-routing`.
+
 ### Changed
 - Serena telemetry schema: pattern class moved to field 5, matcher source name (`grep_extension`) moved to field 6 in `nudge` records. `observe` and `followup` records already used field 5 for class. The follow-through correlator and rolling-window report now key on a single field consistently across all kinds, producing per-class follow-through buckets instead of collapsing all `nudge` follow-throughs under `grep_extension`. Telemetry has only existed since 2026-05-07 (PR #25); no migration is needed since no production data has accumulated yet. Capability: `skill-routing`.
 
