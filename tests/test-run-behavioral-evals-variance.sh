@@ -11,7 +11,7 @@ echo "=== test-run-behavioral-evals-variance.sh ==="
 RUNNER="${PROJECT_ROOT}/tests/run-behavioral-evals.sh"
 
 # Build a tmpdir with a stub claude that always returns CAST-matching output
-TMPDIR_TEST="$(mktemp -d -t cast-variance-test.XXXXXX)"
+TMPDIR_TEST="$(mktemp -d -t variance-self-test.XXXXXX)"
 trap 'rm -rf "${TMPDIR_TEST}"' EXIT
 
 # Stub claude — emits a 'result' field that matches every CAST assertion regex
