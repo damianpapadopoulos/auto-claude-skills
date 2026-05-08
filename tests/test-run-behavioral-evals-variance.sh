@@ -11,7 +11,7 @@ echo "=== test-run-behavioral-evals-variance.sh ==="
 RUNNER="${PROJECT_ROOT}/tests/run-behavioral-evals.sh"
 
 # Build a tmpdir with a stub claude that always returns CAST-matching output
-TMPDIR_TEST="$(mktemp -d -t cast-variance-test.XXXXXX)"
+TMPDIR_TEST="$(mktemp -d -t variance-self-test.XXXXXX)"
 trap 'rm -rf "${TMPDIR_TEST}"' EXIT
 
 # Stub claude — emits a 'result' field that matches every CAST assertion regex
@@ -22,7 +22,7 @@ cat <<JSONEOF
   "type": "result",
   "is_error": false,
   "duration_ms": 1000,
-  "result": "Mental model gaps Systemic factors Safety Culture Communication/Coordination Management of Change Safety Information System Environmental Change cast-framing.md believed actual was",
+  "result": "alpha bravo charlie delta echo foxtrot golf hotel india",
   "modelUsage": {
     "claude-test-stub": {"inputTokens": 10, "outputTokens": 20}
   }
@@ -43,7 +43,8 @@ ARTIFACTS_DIR="${ARTIFACTS_DIR_TEST}" \
 BEHAVIORAL_EVALS=1 \
 CLAUDE_BIN="${TMPDIR_TEST}/claude" \
 bash "${RUNNER}" \
-    --scenario cast-systemic-factors-coverage \
+    --scenario variance-self-test \
+    --pack "${PROJECT_ROOT}/tests/fixtures/behavioral-runner/scenarios.json" \
     --variance 3 \
     --variance-report "${REPORT_PATH_TEST}" \
     > "${TMPDIR_TEST}/run.log" 2>&1
@@ -84,7 +85,8 @@ ARTIFACTS_DIR="${ARTIFACTS_DIR_TEST}" \
 BEHAVIORAL_EVALS=1 \
 CLAUDE_BIN="${TMPDIR_TEST}/claude" \
 bash "${RUNNER}" \
-    --scenario cast-systemic-factors-coverage \
+    --scenario variance-self-test \
+    --pack "${PROJECT_ROOT}/tests/fixtures/behavioral-runner/scenarios.json" \
     --variance abc \
     > "${TMPDIR_TEST}/bad.log" 2>&1
 bad_exit=$?
@@ -100,7 +102,8 @@ ARTIFACTS_DIR="${ARTIFACTS_DIR_TEST}" \
 BEHAVIORAL_EVALS=1 \
 CLAUDE_BIN="${TMPDIR_TEST}/claude" \
 bash "${RUNNER}" \
-    --scenario cast-systemic-factors-coverage \
+    --scenario variance-self-test \
+    --pack "${PROJECT_ROOT}/tests/fixtures/behavioral-runner/scenarios.json" \
     --variance 0 \
     > "${TMPDIR_TEST}/zero.log" 2>&1
 zero_exit=$?
@@ -116,7 +119,8 @@ ARTIFACTS_DIR="${ARTIFACTS_DIR_TEST}/single" \
 BEHAVIORAL_EVALS=1 \
 CLAUDE_BIN="${TMPDIR_TEST}/claude" \
 bash "${RUNNER}" \
-    --scenario cast-systemic-factors-coverage \
+    --scenario variance-self-test \
+    --pack "${PROJECT_ROOT}/tests/fixtures/behavioral-runner/scenarios.json" \
     > "${TMPDIR_TEST}/single.log" 2>&1
 single_exit=$?
 

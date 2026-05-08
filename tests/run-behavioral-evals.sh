@@ -15,7 +15,7 @@ Options:
   --variance <N>           run scenario N times and emit per-assertion pass-rate
                            summary (default: 1, single run)
   --variance-report <path> override default variance-report markdown path
-                           (default: docs/plans/<today>-cast-eval-variance-report.md)
+                           (default: docs/plans/<today>-behavioral-eval-variance-report.md)
   -h, --help               show this message
 
 Environment:
@@ -93,7 +93,7 @@ esac
 
 # Default report path when --variance > 1 and no explicit path
 if [ "${VARIANCE_N}" -gt 1 ] && [ -z "${VARIANCE_REPORT}" ]; then
-    VARIANCE_REPORT="docs/plans/$(date +%Y-%m-%d)-cast-eval-variance-report.md"
+    VARIANCE_REPORT="docs/plans/$(date +%Y-%m-%d)-behavioral-eval-variance-report.md"
 fi
 
 # -------- claude binary check --------
@@ -254,7 +254,11 @@ ${SCENARIO_PROMPT}
 
     local start_ts end_ts elapsed claude_exit CLAUDE_JSON
     start_ts="$(date +%s)"
-    CLAUDE_JSON="$("${CLAUDE_BIN}" -p --output-format json "${CONSTRUCTED_PROMPT}" 2>&1)"
+    # Sandbox the inner agent: deny Edit/Write/Bash so a fixture run cannot
+    # mutate committed files on the host (see feedback_inner_claude_p_tool_access.md).
+    CLAUDE_JSON="$("${CLAUDE_BIN}" -p --output-format json \
+        --disallowedTools "Edit Write Bash" \
+        "${CONSTRUCTED_PROMPT}" 2>&1)"
     claude_exit=$?
     end_ts="$(date +%s)"
     elapsed=$((end_ts - start_ts))
@@ -369,7 +373,7 @@ ${SCENARIO_PROMPT}
 # -------- variance counter setup (only when N>1) --------
 COUNTER_FILE=""
 if [ "${VARIANCE_N}" -gt 1 ]; then
-    COUNTER_FILE="$(mktemp -t cast-eval-counter.XXXXXX)"
+    COUNTER_FILE="$(mktemp -t behavioral-eval-counter.XXXXXX)"
     trap 'rm -f "${COUNTER_FILE}"' EXIT
     seed_i=0
     while [ "${seed_i}" -lt "${ASSERTION_COUNT}" ]; do

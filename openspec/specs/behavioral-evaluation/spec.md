@@ -3,7 +3,6 @@
 ## Purpose
 
 Opt-in behavioral evaluation harness for installed skills. Wraps a SKILL.md verbatim in `<skill_guidance>` tags around a fixture-prompt `<user_request>`, invokes `claude -p --output-format json`, and asserts case-insensitive ERE regexes from `assertions[].text` against the captured raw output. Provides regression signal for skill behavior that schema validation and content-grep tests cannot reach (e.g. "does the skill actually emit Step 7 synthesis with the expected sections when invoked"). Per-run JSON artifact under `tests/artifacts/`. Opt-in via `BEHAVIORAL_EVALS=1` so the default test suite stays free of LLM cost; CI gating waits until the runner catches a real regression.
-
 ## Requirements
 ### Requirement: Opt-In Execution Gate
 
@@ -123,4 +122,32 @@ The fixture-set README at `tests/fixtures/incident-analysis/evals/README.md` MUS
 - **WHEN** a contributor reads the README to understand what the corpus covers
 - **THEN** the CAST fixture is named
 - **AND** the provenance note explaining why the prompt is independent of CAST design is present
+
+### Requirement: Sandboxed Inner Invocation
+
+The behavioral-eval runner MUST sandbox the inner `claude -p` invocation by passing `--disallowedTools "Edit Write Bash"`, denying the three tool families that can mutate the host repository or shell during a fixture run. The flag value MUST arrive as a standalone CLI argv element (separate from the wrapped scenario prompt), and the runner MUST NOT rely on prompt-level instructions alone to enforce this constraint.
+
+#### Scenario: Sandbox flag is present in inner argv
+- **WHEN** the runner invokes `claude -p` for a fixture scenario
+- **THEN** the inner argv MUST contain `--disallowedTools` as a standalone element followed by a value containing each of `Edit`, `Write`, and `Bash`
+
+#### Scenario: Hermetic self-test verifies the sandbox
+- **WHEN** the hermetic self-test (`tests/test-run-behavioral-evals.sh`) runs against the mock-claude stub with `MOCK_ARGS_FILE` set
+- **THEN** the captured argv MUST satisfy a `grep -nxF -- '--disallowedTools'` match on a standalone line, and the next line MUST contain `Edit`, `Write`, and `Bash`
+
+#### Scenario: Mock-claude argv capture fails loudly
+- **WHEN** the mock-claude stub is invoked with `MOCK_ARGS_FILE` set to an unwritable path
+- **THEN** the stub MUST exit non-zero with an error to stderr, rather than silently emitting a JSON envelope (so future tests that depend on captured argv cannot pass-by-accident)
+
+### Requirement: Variance-Mode Hermetic Self-Test Decoupling
+
+The variance-mode hermetic self-test (`tests/test-run-behavioral-evals-variance.sh`) MUST NOT depend on any domain-specific fixture id. It MUST target a self-contained scenario in the runner-owned fixture pack (`tests/fixtures/behavioral-runner/scenarios.json`) so that domain fixture packs (e.g. `tests/fixtures/incident-analysis/evals/behavioral.json`) can be edited or removed without breaking runner self-tests.
+
+#### Scenario: Self-test references runner-owned pack
+- **WHEN** the variance-mode self-test invokes the runner
+- **THEN** it MUST pass `--pack tests/fixtures/behavioral-runner/scenarios.json` and reference a scenario id that exists in that pack (the current implementation uses `variance-self-test` with 9 phonetic-alphabet assertions)
+
+#### Scenario: Removing a domain fixture does not break runner self-tests
+- **WHEN** a fixture is removed from any domain pack (e.g. `tests/fixtures/incident-analysis/evals/behavioral.json`)
+- **THEN** the variance-mode self-test MUST continue to pass without modification, because it does not depend on any domain fixture id
 

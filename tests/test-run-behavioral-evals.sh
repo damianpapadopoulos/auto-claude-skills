@@ -175,4 +175,45 @@ fi
 rm -f "${ART_RESPONSE_FILE}"
 rm -rf "${ART_DIR}"
 
+# ---------------------------------------------------------------------------
+# Sandbox: runner passes --disallowedTools to deny Edit/Write/Bash in inner
+# claude -p invocation. Prevents the inner agent from mutating committed
+# files during fixture runs (see feedback_inner_claude_p_tool_access.md).
+# ---------------------------------------------------------------------------
+echo "-- sandbox: --disallowedTools is passed to inner claude -p --"
+
+SANDBOX_RESPONSE_FILE="${TMPDIR:-/tmp}/acs-sandbox-resp-$$.txt"
+SANDBOX_ARGS_FILE="${TMPDIR:-/tmp}/acs-sandbox-args-$$.txt"
+SANDBOX_ART_DIR="${TMPDIR:-/tmp}/acs-sandbox-art-$$"
+# Compose with the earlier trap (line 85) — bash trap-EXIT is single-slot,
+# so the earlier CANNED_RESPONSE_FILE must be re-listed here or it leaks.
+trap 'rm -f "${CANNED_RESPONSE_FILE}" "${SANDBOX_RESPONSE_FILE}" "${SANDBOX_ARGS_FILE}"; rm -rf "${SANDBOX_ART_DIR}"' EXIT
+cat > "${SANDBOX_RESPONSE_FILE}" <<'EOF'
+Exit code 137 indicates OOMKilled termination.
+EOF
+
+MOCK_RESPONSE_FILE="${SANDBOX_RESPONSE_FILE}" \
+    MOCK_ARGS_FILE="${SANDBOX_ARGS_FILE}" \
+    BEHAVIORAL_EVALS=1 \
+    CLAUDE_BIN="${PROJECT_ROOT}/tests/fixtures/behavioral-runner/mock-claude.sh" \
+    ARTIFACTS_DIR="${SANDBOX_ART_DIR}" \
+    SKILL_PATH="${PROJECT_ROOT}/skills/incident-analysis/SKILL.md" \
+    bash "${RUNNER}" \
+        --scenario well-formed-scenario \
+        --pack "${PROJECT_ROOT}/tests/fixtures/behavioral-runner/scenarios.json" >/dev/null 2>&1
+
+# Each argv arrives on its own line in MOCK_ARGS_FILE. Checking the line
+# *immediately after* --disallowedTools avoids matching the prompt body,
+# which contains "Edit"/"Write"/"Bash" as ordinary text from the skill.
+flag_line="$(grep -nxF -- '--disallowedTools' "${SANDBOX_ARGS_FILE}" 2>/dev/null | head -n1 | cut -d: -f1)"
+sandbox_value=""
+if [ -n "${flag_line}" ]; then
+    sandbox_value="$(sed -n "$((flag_line + 1))p" "${SANDBOX_ARGS_FILE}")"
+fi
+
+assert_not_empty "runner passes --disallowedTools flag as standalone argv" "${flag_line}"
+assert_contains "sandbox value denies Edit tool" "Edit" "${sandbox_value}"
+assert_contains "sandbox value denies Write tool" "Write" "${sandbox_value}"
+assert_contains "sandbox value denies Bash tool" "Bash" "${sandbox_value}"
+
 print_summary
