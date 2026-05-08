@@ -10,9 +10,14 @@ if [ -z "${MOCK_RESPONSE_FILE:-}" ] || [ ! -f "${MOCK_RESPONSE_FILE}" ]; then
 fi
 
 # Optional argv capture: tests may set MOCK_ARGS_FILE to assert on the
-# flags the runner passed (e.g. --disallowedTools sandbox).
+# flags the runner passed (e.g. --disallowedTools sandbox). Fail loudly
+# if the contract is advertised but the file can't be written, so a future
+# test that depends on the captured argv can't pass-by-accident.
 if [ -n "${MOCK_ARGS_FILE:-}" ]; then
-    printf '%s\n' "$@" > "${MOCK_ARGS_FILE}"
+    if ! printf '%s\n' "$@" > "${MOCK_ARGS_FILE}" 2>/dev/null; then
+        echo "mock-claude: failed to write MOCK_ARGS_FILE='${MOCK_ARGS_FILE}'" >&2
+        exit 1
+    fi
 fi
 
 response_text="$(cat "${MOCK_RESPONSE_FILE}")"

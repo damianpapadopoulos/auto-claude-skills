@@ -185,7 +185,9 @@ echo "-- sandbox: --disallowedTools is passed to inner claude -p --"
 SANDBOX_RESPONSE_FILE="${TMPDIR:-/tmp}/acs-sandbox-resp-$$.txt"
 SANDBOX_ARGS_FILE="${TMPDIR:-/tmp}/acs-sandbox-args-$$.txt"
 SANDBOX_ART_DIR="${TMPDIR:-/tmp}/acs-sandbox-art-$$"
-trap 'rm -f "${SANDBOX_RESPONSE_FILE}" "${SANDBOX_ARGS_FILE}"; rm -rf "${SANDBOX_ART_DIR}"' EXIT
+# Compose with the earlier trap (line 85) — bash trap-EXIT is single-slot,
+# so the earlier CANNED_RESPONSE_FILE must be re-listed here or it leaks.
+trap 'rm -f "${CANNED_RESPONSE_FILE}" "${SANDBOX_RESPONSE_FILE}" "${SANDBOX_ARGS_FILE}"; rm -rf "${SANDBOX_ART_DIR}"' EXIT
 cat > "${SANDBOX_RESPONSE_FILE}" <<'EOF'
 Exit code 137 indicates OOMKilled termination.
 EOF
