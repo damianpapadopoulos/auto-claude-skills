@@ -1,6 +1,6 @@
 ---
 name: security-scanner
-description: Run Semgrep SAST and Trivy vulnerability scanning during code review with self-healing fix loop
+description: Run Semgrep/Opengrep SAST and Trivy vulnerability scanning during code review with self-healing fix loop
 ---
 
 # Security Scanner
@@ -13,38 +13,42 @@ During REVIEW phase, after code changes are complete. Also invocable on explicit
 
 ## Step 1: Detect Available Tools
 
-Run these checks via Bash to determine what's available:
+Pick the SAST binary (prefer opengrep, fall back to semgrep), then check the rest:
 
 ```bash
-command -v semgrep && echo "semgrep: available" || echo "semgrep: not installed"
+SAST_BIN="$(command -v opengrep || command -v semgrep || true)"
+[ -n "$SAST_BIN" ] && echo "sast: $SAST_BIN" || echo "sast: not installed"
 command -v trivy && echo "trivy: available" || echo "trivy: not installed"
 command -v gitleaks && echo "gitleaks: available" || echo "gitleaks: not installed"
 ```
 
-If **neither** semgrep nor trivy is installed, fall back to LLM-only code review and recommend installation:
-- Semgrep: `brew install semgrep` or `pip install semgrep`
+Why opengrep first: it's a fork of Semgrep v1.100.0 (LGPL 2.1) that produces byte-identical JSON for the fields this skill consumes (`check_id`, `extra.severity`, `path`, `start.line`, `extra.message`), uses the same `--config auto` registry (`semgrep.dev/c/auto`), honors `.semgrepignore`, and ships as a single signed binary with no Python dependency. It also returns real `extra.fingerprint` and `extra.lines` values that semgrep gates behind a login.
+
+If **no SAST binary and no trivy** is installed, fall back to LLM-only code review and recommend installation:
+- Opengrep (preferred): download the signed binary from https://github.com/opengrep/opengrep/releases or run the official install script
+- Semgrep (fallback): `brew install semgrep` or `pip install semgrep`
 - Trivy: `brew install trivy`
 - Gitleaks: `brew install gitleaks`
 
-## Step 2: Run Semgrep (SAST)
+## Step 2: Run SAST (Opengrep or Semgrep)
 
-If semgrep is available, scan for code vulnerabilities.
+If a SAST binary is available, scan for code vulnerabilities. The `$SAST_BIN` var from Step 1 transparently uses opengrep when present, semgrep otherwise — flags and JSON shape are compatible.
 
 **Fast scan (changed files in current branch — prefer this for inner-loop reviews):**
 ```bash
-git diff --name-only -z "$(git merge-base HEAD main)..HEAD" | xargs -0 semgrep scan --json --config auto --severity WARNING 2>/dev/null | jq '{count: (.results | length), results: [.results[] | {rule: .check_id, severity: .extra.severity, file: .path, line: .start.line, message: .extra.message}]}'
+git diff --name-only -z "$(git merge-base HEAD main)..HEAD" | xargs -0 "$SAST_BIN" scan --json --config auto --severity WARNING 2>/dev/null | jq '{count: (.results | length), results: [.results[] | {rule: .check_id, severity: .extra.severity, file: .path, line: .start.line, message: .extra.message}]}'
 ```
 
 Note: If `merge-base` fails (no main branch), fall back to `git diff --name-only -z HEAD~1 | xargs -0 ...` for the last commit only.
 
 **Full project scan (use for thorough reviews or when explicitly asked):**
 ```bash
-semgrep scan --json --config auto --severity WARNING . 2>/dev/null | jq '{count: (.results | length), results: [.results[] | {rule: .check_id, severity: .extra.severity, file: .path, line: .start.line, message: .extra.message}]}'
+"$SAST_BIN" scan --json --config auto --severity WARNING . 2>/dev/null | jq '{count: (.results | length), results: [.results[] | {rule: .check_id, severity: .extra.severity, file: .path, line: .start.line, message: .extra.message}]}'
 ```
 
 **If output is large (count > 20), filter by severity first:**
 ```bash
-semgrep scan --json --config auto --severity ERROR . 2>/dev/null | jq '.results[:20]'
+"$SAST_BIN" scan --json --config auto --severity ERROR . 2>/dev/null | jq '.results[:20]'
 ```
 
 ## Step 3: Run Trivy (Dependency/CVE Scanning)
@@ -76,7 +80,7 @@ Present findings as a structured table:
 ```markdown
 ## Security Scan Results
 
-### Semgrep (SAST) — N findings
+### SAST (Opengrep/Semgrep) — N findings
 | Severity | File | Line | Rule | Message |
 |----------|------|------|------|---------|
 
