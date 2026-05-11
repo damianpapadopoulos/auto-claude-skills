@@ -839,11 +839,12 @@ if printf '%s' "${CONTEXT_CAPS}" | jq -e '.posthog == true' >/dev/null 2>&1; the
 fi
 
 # ── Step 8f: Detect security scanner capabilities ──────────────────
-_SEMGREP=false; _TRIVY=false; _GITLEAKS=false
+_SEMGREP=false; _OPENGREP=false; _TRIVY=false; _GITLEAKS=false
 command -v semgrep  >/dev/null 2>&1 && _SEMGREP=true
+command -v opengrep >/dev/null 2>&1 && _OPENGREP=true
 command -v trivy    >/dev/null 2>&1 && _TRIVY=true
 command -v gitleaks >/dev/null 2>&1 && _GITLEAKS=true
-SECURITY_CAPS="semgrep=${_SEMGREP}, trivy=${_TRIVY}, gitleaks=${_GITLEAKS}"
+SECURITY_CAPS="semgrep=${_SEMGREP}, opengrep=${_OPENGREP}, trivy=${_TRIVY}, gitleaks=${_GITLEAKS}"
 
 # ── Step 8g: Detect observability capabilities ──────────────────────
 _OBS_GCLOUD=false; _OBS_MCP=false; _OBS_KUBECTL=false

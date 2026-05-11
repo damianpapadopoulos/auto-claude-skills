@@ -872,10 +872,10 @@
     {
       "name": "deterministic-security-scan",
       "triggers": [
-        "(security|vulnerabilit|owasp|cve|semgrep|trivy|sast|dast|dependency.audit)"
+        "(security|vulnerabilit|owasp|cve|semgrep|opengrep|trivy|sast|dast|dependency.audit)"
       ],
       "trigger_mode": "regex",
-      "hint": "SECURITY SCAN: If semgrep/trivy are installed, run deterministic scans before LLM review. Invoke Skill(auto-claude-skills:security-scanner).",
+      "hint": "SECURITY SCAN: If opengrep/semgrep/trivy are installed, run deterministic scans before LLM review. Invoke Skill(auto-claude-skills:security-scanner).",
       "phases": [
         "*"
       ]
@@ -1269,7 +1269,7 @@
         {
           "use": "security-scanner -> Skill(auto-claude-skills:security-scanner)",
           "when": "always",
-          "purpose": "Run semgrep/trivy deterministic scans first, then LLM triage. Self-healing loop: scan -> fix -> re-scan -> clean"
+          "purpose": "Run opengrep/semgrep/trivy deterministic scans first, then LLM triage. Self-healing loop: scan -> fix -> re-scan -> clean"
         },
         {
           "use": "runtime-validation -> Skill(auto-claude-skills:runtime-validation)",

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "discovery_path": null,
+  "design_path": "",
+  "plan_path": "",
+  "spec_path": "",
+  "sp_plan_path": "",
+  "sp_spec_path": "",
+  "change_slug": "opengrep-sast-adoption",
+  "capability_slug": "security-scanner",
+  "source_branch": "main",
+  "base_commit": "09d1d2ff3212e1ffb9e244d313cda0311000e35e",
+  "openspec_surface": "none",
+  "archived_at": "2026-05-10T12:39:27Z"
+}
