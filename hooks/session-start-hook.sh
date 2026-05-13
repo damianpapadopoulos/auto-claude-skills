@@ -1141,7 +1141,7 @@ ${_OPENSPEC_LINE}"
 fi
 
 # Append security scanner capabilities (with setup hint if any are missing).
-# Treat semgrep and opengrep as a single SAST alternative — only hint when neither is installed.
+# Hint if no SAST (semgrep+opengrep interchangeable) or if trivy/gitleaks is missing.
 _SEC_HINT=""
 if [ "${_SEMGREP}" = "false" ] && [ "${_OPENGREP}" = "false" ]; then
     _SEC_HINT=" — run /setup to install missing tools"
