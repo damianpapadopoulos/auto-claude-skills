@@ -20,7 +20,7 @@ If the error involves a third-party library:
 ### 3. Internal Truth (Dependency Tracing)
 If the error involves internal code or unclear call chains:
 - **lsp=true** (compile/type errors): Use `mcp__ide__getDiagnostics` FIRST — authoritative compiler output beats grepping for error substrings
-- **serena=true**: Use `find_symbol` to locate the failing function, `find_referencing_symbols` to trace callers and dependencies
+- **serena=true**: Use `find_declaration` to jump straight to the failing function's definition (or `find_symbol` if the name is partial), `find_referencing_symbols` to trace callers and dependencies, and `find_implementations` if the failure involves an interface dispatch
 - **serena=false and lsp=false**: Use Grep to search for the function name and trace references manually
 
 ### 4. Observability Truth (Production State)

@@ -14,7 +14,9 @@ Capability: Understand local file dependencies, inject code safely, and surface 
 
 **Condition:** `serena = true`
 
-- Use `find_symbol` to locate definitions
+- Use `find_symbol` to locate symbols by name (broad, name-match-based)
+- Use `find_declaration` (Serena v1.3.0+) for the precise *definition* of a symbol — preferred over `find_symbol` when you know the symbol exists and want its declaration site
+- Use `find_implementations` (Serena v1.3.0+) to enumerate concrete implementations of an interface or abstract method
 - Use `find_referencing_symbols` to map which files depend on a symbol (blast-radius)
 - Use `insert_after_symbol` / `replace_symbol_body` / `rename_symbol` for safe AST-level edits without breaking formatting
 
@@ -38,7 +40,8 @@ Always verify changes compile/pass after editing without Serena.
 | Question | Preferred tier |
 |---|---|
 | "What type/compile errors exist?" | Tier 0 (LSP) — authoritative |
-| "Where is this function defined?" | Tier 1 (Serena) if available, else Tier 2 Grep |
+| "Where is this function defined?" | Tier 1 (Serena `find_declaration`, falls back to `find_symbol`) — else Tier 2 Grep |
+| "Who implements this interface?" | Tier 1 (Serena `find_implementations`) — else Tier 2 Grep with extra caution |
 | "Who calls this function?" | Tier 1 (Serena `find_referencing_symbols`) |
 | "Rename X to Y across the codebase" | Tier 1 (Serena `rename_symbol`) |
 | "Find this log message / YAML key / config string" | Tier 2 (Grep) — not a symbol |
