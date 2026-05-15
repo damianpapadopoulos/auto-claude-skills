@@ -242,6 +242,19 @@ To upgrade an existing PyPI-based install to the latest version:
 uv tool upgrade serena-agent --prerelease=allow
 ```
 
+**Troubleshooting Serena:**
+
+- *Model ignoring Serena tools.* Recent Opus releases occasionally bias toward built-in tools over Serena. Anthropic's recommended workaround is to start Claude with a Serena-aware system prompt:
+  ```bash
+  claude --system-prompt="$(serena prompts print-cc-system-prompt-override)"
+  ```
+  This is a one-time per-session flag — not a permanent install — and is only needed if you observe the model preferring Grep/Read over `mcp__serena__` tools.
+
+- *Slow MCP startup or timeout errors.* Set a higher MCP timeout before launching Claude:
+  ```bash
+  export MCP_TIMEOUT=60000
+  ```
+
 **Optional: Serena official hooks (recommended for heavy Serena usage)**
 
 Serena v1.1+ provides its own hooks to reduce agent drift. These are separate from the auto-claude-skills plugin's built-in nudge hook (which is lighter-weight and activates automatically). For users who want deeper Serena integration, **ask the user:** "Serena provides official hooks for session management and enhanced tool reminders. Would you like to add them to your settings?"
