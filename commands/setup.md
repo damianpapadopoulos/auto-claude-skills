@@ -216,17 +216,27 @@ serena init
 LANGS="$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/detect-serena-languages.sh" "$(pwd)")"
 ```
 
-If `$LANGS` is non-empty, **ask the user:** "Detected these languages in your project: `$(echo "$LANGS" | paste -sd, -)`. Write them into `.serena/project.yml`?" If they agree, write the `languages:` block (using yq if available, otherwise sed):
+If `$LANGS` is non-empty, **ask the user:** "Detected these languages in your project: `$(echo "$LANGS" | paste -sd, -)`. Write them into `.serena/project.yml`?" If they agree, write the `languages:` block (using yq if available, otherwise a portable awk rewrite):
 
 ```bash
 if command -v yq >/dev/null 2>&1; then
+    # Mike Farah's Go yq (v4) syntax. Python yq users may need to adapt.
     yq -i ".languages = []" .serena/project.yml
     echo "$LANGS" | while read -r lang; do
         [ -n "$lang" ] && yq -i ".languages += [\"$lang\"]" .serena/project.yml
     done
 else
-    LANG_BLOCK="languages:\n$(echo "$LANGS" | awk '{print "- " $0}')"
-    sed -i.bak "s/^languages: *$/${LANG_BLOCK}/" .serena/project.yml && rm .serena/project.yml.bak
+    # Portable awk fallback (works on macOS BSD awk + GNU awk). Replaces the empty
+    # `languages:` line with `languages:` plus one `- <lang>` line per detection.
+    awk -v langs="$LANGS" '
+        /^languages: *$/ {
+            print "languages:"
+            n = split(langs, a, "\n")
+            for (i = 1; i <= n; i++) if (a[i] != "") print "- " a[i]
+            next
+        }
+        { print }
+    ' .serena/project.yml > .serena/project.yml.tmp && mv .serena/project.yml.tmp .serena/project.yml
 fi
 ```
 
