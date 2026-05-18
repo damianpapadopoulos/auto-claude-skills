@@ -216,7 +216,15 @@ serena init
 LANGS="$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/detect-serena-languages.sh" "$(pwd)")"
 ```
 
-If `$LANGS` is non-empty, **ask the user:** "Detected these languages in your project: `$(echo "$LANGS" | paste -sd, -)`. Write them into `.serena/project.yml`?" If they agree, write the `languages:` block (using yq if available, otherwise a portable awk rewrite):
+**Before offering to write, check whether `languages:` is already populated.** If it is (a non-empty list), don't silently overwrite — that would erase the user's existing declaration. Detect via:
+
+```bash
+EXISTING="$(awk '/^languages: *$/{found=1; next} found && /^- /{print; n++} found && !/^- / && !/^[[:space:]]*$/{exit} END{exit (n>0?0:1)}' .serena/project.yml 2>/dev/null)"
+```
+
+If `EXISTING` is non-empty (i.e., `awk` exited 0 and printed at least one `- <lang>` line), inform the user: "`.serena/project.yml` already declares: $(echo "$EXISTING" | tr '\n' ' '). Detector found: $(echo "$LANGS" | tr '\n' ' '). Skipping auto-write to avoid overwriting your existing declaration. Re-run with `--force` (manual: edit `.serena/project.yml` directly) if you intended to replace it." Then skip the write block below.
+
+If `$LANGS` is non-empty AND `languages:` is empty/absent, **ask the user:** "Detected these languages in your project: `$(echo "$LANGS" | paste -sd, -)`. Write them into `.serena/project.yml`?" If they agree, write the `languages:` block (using yq if available, otherwise a portable awk rewrite):
 
 ```bash
 if command -v yq >/dev/null 2>&1; then
