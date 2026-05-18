@@ -269,9 +269,20 @@ ${SCENARIO_PROMPT}
         return 2
     fi
 
-    local RAW_OUTPUT MODEL
+    local RAW_OUTPUT MODEL TOOL_CALLS_JSON
     RAW_OUTPUT="$(printf '%s' "${CLAUDE_JSON}" | jq -r '.result // empty')"
     MODEL="$(printf '%s' "${CLAUDE_JSON}" | jq -r '(.model // (.modelUsage | keys[0]? // empty)) // "unknown"')"
+    # Extract tool_use blocks from the message transcript. Returns a JSON array of
+    # {name, input} objects. Empty array if no tool calls were made or the message
+    # stream is absent. Used by `tool_call` assertions.
+    TOOL_CALLS_JSON="$(printf '%s' "${CLAUDE_JSON}" | jq -c '[
+        (.messages // []) | .[]?
+        | (.content // []) | .[]?
+        | select(.type == "tool_use")
+        | {name: .name, input: (.input // {})}
+    ]' 2>/dev/null || printf '[]')"
+    [ -z "${TOOL_CALLS_JSON}" ] && TOOL_CALLS_JSON="[]"
+
     if [ -z "${RAW_OUTPUT}" ]; then
         echo "error: claude response has no 'result' field on iteration ${iter_idx}" >&2
         echo "${CLAUDE_JSON}" >&2
@@ -291,30 +302,51 @@ ${SCENARIO_PROMPT}
     local ALL_PASSED=1
     local i=0
     while [ "${i}" -lt "${ASSERTION_COUNT}" ]; do
-        local a_text a_desc verdict passed
-        a_text="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${i}].text")"
+        local a_kind a_text a_desc a_tool a_min verdict passed _count
+        a_kind="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${i}].kind // \"text\"")"
         a_desc="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${i}].description")"
 
-        if printf '%s' "${RAW_OUTPUT}" | grep -E -i -q "${a_text}"; then
-            verdict="PASS"
-            passed=true
-        else
-            verdict="FAIL"
-            passed=false
-            ALL_PASSED=0
-        fi
-
-        if [ "${VARIANCE_N}" -eq 1 ]; then
-            printf '  %s [%d]: %s  (regex: %s)\n' "${verdict}" "${i}" "${a_desc}" "${a_text}"
-        fi
+        case "${a_kind}" in
+            text)
+                a_text="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${i}].text")"
+                if printf '%s' "${RAW_OUTPUT}" | grep -E -i -q "${a_text}"; then
+                    verdict="PASS"; passed=true
+                else
+                    verdict="FAIL"; passed=false; ALL_PASSED=0
+                fi
+                if [ "${VARIANCE_N}" -eq 1 ]; then
+                    printf '  %s [%d/text]: %s  (regex: %s)\n' "${verdict}" "${i}" "${a_desc}" "${a_text}"
+                fi
+                ;;
+            tool_call)
+                a_tool="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${i}].tool")"
+                a_min="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${i}].min_count // 1")"
+                _count="$(printf '%s' "${TOOL_CALLS_JSON}" | jq --arg t "${a_tool}" '[.[] | select(.name == $t)] | length')"
+                if [ "${_count}" -ge "${a_min}" ]; then
+                    verdict="PASS"; passed=true
+                else
+                    verdict="FAIL"; passed=false; ALL_PASSED=0
+                fi
+                if [ "${VARIANCE_N}" -eq 1 ]; then
+                    printf '  %s [%d/tool_call]: %s  (tool=%s, observed=%d, min=%d)\n' "${verdict}" "${i}" "${a_desc}" "${a_tool}" "${_count}" "${a_min}"
+                fi
+                # Reuse a_text slot for downstream artifact display.
+                a_text="${a_tool} (min=${a_min}, observed=${_count})"
+                ;;
+            *)
+                echo "error: unknown assertion kind '${a_kind}' at index ${i}" >&2
+                return 2
+                ;;
+        esac
 
         ASSERTION_RESULTS_JSON="$(
             printf '%s' "${ASSERTION_RESULTS_JSON}" | jq \
                 --argjson idx "${i}" \
+                --arg kind "${a_kind}" \
                 --arg desc "${a_desc}" \
-                --arg regex "${a_text}" \
+                --arg detail "${a_text}" \
                 --argjson passed "${passed}" \
-                '. + [{index: $idx, description: $desc, regex: $regex, passed: $passed}]'
+                '. + [{index: $idx, kind: $kind, description: $desc, detail: $detail, passed: $passed}]'
         )"
 
         if [ "${VARIANCE_N}" -gt 1 ] && [ -n "${counter_file}" ]; then
@@ -377,7 +409,12 @@ if [ "${VARIANCE_N}" -gt 1 ]; then
     trap 'rm -f "${COUNTER_FILE}"' EXIT
     seed_i=0
     while [ "${seed_i}" -lt "${ASSERTION_COUNT}" ]; do
-        a_text_init="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${seed_i}].text")"
+        a_kind_init="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${seed_i}].kind // \"text\"")"
+        if [ "${a_kind_init}" = "tool_call" ]; then
+            a_text_init="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${seed_i}].tool")"
+        else
+            a_text_init="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${seed_i}].text")"
+        fi
         a_desc_init="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${seed_i}].description")"
         printf '%d\t0\t0\t%s|%s\n' "${seed_i}" "${a_text_init}" "${a_desc_init}" >> "${COUNTER_FILE}"
         seed_i=$((seed_i + 1))

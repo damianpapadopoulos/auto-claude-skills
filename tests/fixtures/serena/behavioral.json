@@ -2,19 +2,48 @@
   {
     "id": "subagent-propagation",
     "prompt": "I need to find every reference to UserService in this repo's src/ directory. Use the Task tool to spawn an Explore subagent to do this. Before invoking Task, print the full text of the prompt you plan to send to the subagent so I can review it. Format the printed prompt with a clearly delimited block (e.g. fenced code, or 'SPAWN PROMPT:' / 'END SPAWN PROMPT' markers). Then invoke Task.",
-    "expected_behavior": "When serena=true (registry capability), the SessionStart Serena banner instructs the parent to propagate Serena guidance into Task spawn prompts. The model's printed spawn prompt MUST mention Serena and find_symbol (or an equivalent paraphrase such as 'find_referencing_symbols' or 'prefer find_symbol over Grep'), AND MUST carry the user's symbol-search task (UserService / references) into the subagent. If the spawn prompt omits Serena guidance, the propagation strategy is failing in practice and the parked Read/Glob matchers' revival evaluation should not assume subagent inheritance works.",
+    "expected_behavior": "Contract updated 2026-05-18 (PR #34): the SessionStart Serena banner NO LONGER instructs the parent to propagate Serena guidance into Task spawn prompts. Per Serena's client docs (https://oraios.github.io/serena/02-usage/030_clients.html), subagent MCP runs typically cannot use MCP servers, so propagation was wasted tokens. The model's printed spawn prompt MUST carry the user's symbol-search task (UserService / references) into the subagent. The spawn prompt MAY or MAY NOT mention Serena — that decision is now left to the model's own judgment based on phase docs, not banner instruction.",
     "assertions": [
       {
+        "kind": "text",
         "text": "task|explore|subagent|spawn",
         "description": "Mentions spawning a subagent or using the Task tool"
       },
       {
-        "text": "serena|find_symbol|find_referencing_symbols",
-        "description": "Spawn prompt contains a Serena reference (literal banner copy, find_symbol, or find_referencing_symbols paraphrase)"
-      },
-      {
+        "kind": "text",
         "text": "userservice|references|symbol",
         "description": "Spawn prompt carries the user's symbol-search task into the subagent"
+      }
+    ]
+  },
+  {
+    "id": "serena-find-declaration",
+    "prompt": "In the auto-claude-skills repo, where is the bash function `openspec_state_upsert_change` defined? Use the most precise Serena MCP tool available for this lookup.",
+    "expected_behavior": "When serena=true and the model is asked for a precise symbol definition, it should call mcp__serena__find_declaration (Serena v1.3.0+) or mcp__serena__find_symbol as a fallback, rather than reaching for Grep or Read. The function is defined in hooks/lib/openspec-state.sh.",
+    "assertions": [
+      {
+        "kind": "tool_call",
+        "tool": "mcp__serena__find_declaration",
+        "min_count": 1,
+        "description": "Model calls find_declaration (v1.3.0 preferred tool) at least once"
+      },
+      {
+        "kind": "text",
+        "text": "openspec-state\\.sh|openspec_state\\.sh|hooks/lib",
+        "description": "Output references the correct file location"
+      }
+    ]
+  },
+  {
+    "id": "serena-diagnostics-fallback",
+    "prompt": "Are there any compile or type errors in hooks/session-start-hook.sh? No IDE LSP plugin is installed in this session — use Serena's diagnostics tool to check.",
+    "expected_behavior": "When lsp=false and serena=true and the user explicitly asks about compile errors, the model should call mcp__serena__get_diagnostics_for_file (Serena v1.3.0+) rather than grepping for error strings.",
+    "assertions": [
+      {
+        "kind": "tool_call",
+        "tool": "mcp__serena__get_diagnostics_for_file",
+        "min_count": 1,
+        "description": "Model calls get_diagnostics_for_file (v1.3.0 tier-0b fallback) at least once"
       }
     ]
   }

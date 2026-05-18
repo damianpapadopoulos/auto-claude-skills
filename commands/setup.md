@@ -210,6 +210,48 @@ uv tool install -p 3.13 serena-agent@latest --prerelease=allow
 serena init
 ```
 
+**2.5. Detect project languages and write them into `.serena/project.yml`.** A fresh `.serena/project.yml` has an empty `languages:` field — Serena will refuse to start its language servers, giving silent zero results from `find_symbol`/`find_declaration`. Run the bundled detector:
+
+```bash
+LANGS="$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/detect-serena-languages.sh" "$(pwd)")"
+```
+
+**Before offering to write, check whether `languages:` is already populated.** If it is (a non-empty list), don't silently overwrite — that would erase the user's existing declaration. Detect via:
+
+```bash
+EXISTING="$(awk '/^languages: *$/{found=1; next} found && /^- /{print; n++} found && !/^- / && !/^[[:space:]]*$/{exit} END{exit (n>0?0:1)}' .serena/project.yml 2>/dev/null)"
+```
+
+If `EXISTING` is non-empty (i.e., `awk` exited 0 and printed at least one `- <lang>` line), inform the user: "`.serena/project.yml` already declares: $(echo "$EXISTING" | tr '\n' ' '). Detector found: $(echo "$LANGS" | tr '\n' ' '). Skipping auto-write to avoid overwriting your existing declaration. Re-run with `--force` (manual: edit `.serena/project.yml` directly) if you intended to replace it." Then skip the write block below.
+
+If `$LANGS` is non-empty AND `languages:` is empty/absent, **ask the user:** "Detected these languages in your project: `$(echo "$LANGS" | paste -sd, -)`. Write them into `.serena/project.yml`?" If they agree, write the `languages:` block (using yq if available, otherwise a portable awk rewrite):
+
+```bash
+if command -v yq >/dev/null 2>&1; then
+    # Mike Farah's Go yq (v4) syntax. Python yq users may need to adapt.
+    yq -i ".languages = []" .serena/project.yml
+    echo "$LANGS" | while read -r lang; do
+        [ -n "$lang" ] && yq -i ".languages += [\"$lang\"]" .serena/project.yml
+    done
+else
+    # Portable awk fallback (works on macOS BSD awk + GNU awk). Replaces the empty
+    # `languages:` line with `languages:` plus one `- <lang>` line per detection.
+    awk -v langs="$LANGS" '
+        /^languages: *$/ {
+            print "languages:"
+            n = split(langs, a, "\n")
+            for (i = 1; i <= n; i++) if (a[i] != "") print "- " a[i]
+            next
+        }
+        { print }
+    ' .serena/project.yml > .serena/project.yml.tmp && mv .serena/project.yml.tmp .serena/project.yml
+fi
+```
+
+If `$LANGS` is empty, **inform the user:** "No language markers found in this repo's root + 2 levels. Edit `.serena/project.yml`'s `languages:` field manually before continuing — Serena needs at least one language declared. See https://oraios.github.io/serena/01-about/020_programming-languages.html for available languages."
+
+If the user declines to auto-write, give the same manual-edit guidance with the detected list.
+
 3. Register the MCP server — choose one:
 
 Per-project (recommended, captures current working directory):
