@@ -25,7 +25,15 @@ assert_file_exists "session-start hook source exists" "${HOOK_FILE}"
 # Read the source for inspection.
 SRC="$(cat "${HOOK_FILE}")"
 
+# Banner-only slice: the user-visible Serena/LSP hint block (between
+# "# Emit Serena usage hint" and the end-of-banner marker) is what
+# downstream agents render. Capability-flag plumbing above this slice
+# is implementation detail and intentionally excluded from banner-text
+# negative assertions.
+BANNER_SLICE="$(awk '/# Emit Serena usage hint when available/,/# Append OpenSpec capabilities summary/' "${HOOK_FILE}")"
+
 assert_contains "Serena banner mentions mcp__serena__ tools" "mcp__serena__" "${SRC}"
+assert_not_contains "Serena banner does NOT mention serena_connected (separate capability flag, not in banner)" "serena_connected" "${BANNER_SLICE}"
 assert_contains "Serena banner names find_declaration (v1.3.0)" "find_declaration" "${SRC}"
 assert_contains "Serena banner names find_implementations (v1.3.0)" "find_implementations" "${SRC}"
 assert_not_contains "Serena banner does NOT propagate to subagents (Serena MCP often unavailable in subagents)" "Task tool" "${SRC}"

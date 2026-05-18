@@ -1001,6 +1001,7 @@
     "context_hub_cli": false,
     "context_hub_available": false,
     "serena": false,
+    "serena_connected": false,
     "forgetful_memory": false,
     "openspec": false,
     "posthog": false,

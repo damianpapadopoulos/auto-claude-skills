@@ -763,7 +763,7 @@ OPENSPEC_CAPS="$(jq -n \
 # 2. User-config override filter (drops any non-canonical key from skill-config.json)
 # 3. Fallback-registry writer (Step 10c, hardcoded jq — kept in sync via comment)
 # If you add a capability, update this array AND the fallback writer's jq expression.
-_CANONICAL_CAP_KEYS='["context7","context_hub_cli","context_hub_available","serena","forgetful_memory","openspec","posthog","lsp"]'
+_CANONICAL_CAP_KEYS='["context7","context_hub_cli","context_hub_available","serena","serena_connected","forgetful_memory","openspec","posthog","lsp"]'
 
 # Single jq call: detect all plugin capabilities, derive bindings, build CONTEXT_CAPS
 # (Context7 detection checks plugin name, not MCP tool names. Covers the standard
@@ -778,7 +778,7 @@ CONTEXT_CAPS="$(printf '%s' "${PLUGINS_JSON}" | jq \
     ($avail | index("serena") != null) as $ser |
     ($avail | index("forgetful") != null) as $fm |
     ($avail | index("posthog") != null) as $ph |
-    {context7:$c7, context_hub_cli:$chub, context_hub_available:$c7, serena:$ser, forgetful_memory:$fm, openspec:$openspec, posthog:$ph, lsp:$lsp}'
+    {context7:$c7, context_hub_cli:$chub, context_hub_available:$c7, serena:$ser, serena_connected:false, forgetful_memory:$fm, openspec:$openspec, posthog:$ph, lsp:$lsp}'
 )"
 
 # MCP fallback: check ~/.claude.json for servers not detected via plugins
@@ -799,6 +799,16 @@ if [ -f "${_CLAUDE_JSON}" ] && command -v jq >/dev/null 2>&1; then
          if .context7 == false and ($all_mcp | has("context7")) then .context7 = true else . end |
          if .posthog == false and ($all_mcp | has("posthog")) then .posthog = true else . end'
     )" || true
+fi
+
+# Refine `serena_connected` by parsing `claude mcp list` output for the
+# "✓ Connected" marker on the serena entry. Gated on SERENA_CONNECTION_CHECK=1
+# (off by default — registration remains the routing gate). Fail-open: any
+# error leaves serena_connected=false.
+if [ "${SERENA_CONNECTION_CHECK:-0}" = "1" ] && command -v claude >/dev/null 2>&1; then
+    if claude mcp list 2>/dev/null | grep -qE '^serena: .*✓ Connected'; then
+        CONTEXT_CAPS="$(printf '%s' "${CONTEXT_CAPS}" | jq '.serena_connected = true' 2>/dev/null || printf '%s' "${CONTEXT_CAPS}")"
+    fi
 fi
 # Note: no MCP fallback for lsp. Claude Code's LSP family uses the `lspServers` plugin-manifest
 # primitive, not MCP servers, and is detected earlier via the `_has_lsp_plugin` scan with a
