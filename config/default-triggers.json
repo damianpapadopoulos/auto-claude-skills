@@ -724,7 +724,7 @@
         "(ticket|story|epic|acceptance.criter|definition.of.done|requirement|user.story|jira|sprint|backlog|discover|triage|prioriti)"
       ],
       "trigger_mode": "regex",
-      "hint": "ATLASSIAN: If Jira MCP tools are available, pull acceptance criteria and linked context for relevant tickets. Reference any Jira context already discussed in this session.",
+      "hint": "ATLASSIAN ROVO: If Atlassian Rovo MCP is connected, prefer `search(cloudId, query)` for cross-system discovery before targeted JQL. Pull acceptance criteria and linked context. Use `maxResults: 10`.",
       "phases": [
         "DISCOVER",
         "DESIGN",
@@ -737,7 +737,7 @@
         "(confluence|wiki|knowledge.base|design.doc|architecture.doc|adr|decision.record)"
       ],
       "trigger_mode": "regex",
-      "hint": "ATLASSIAN: If Confluence MCP tools are available, search for relevant design docs and references. Keep searches narrow by title or space.",
+      "hint": "ATLASSIAN ROVO: If Atlassian Rovo MCP is connected, prefer `search(cloudId, query)` to scope across Jira+Confluence first; refine with CQL by title or space using `limit: 10`.",
       "phases": [
         "DESIGN",
         "PLAN"
@@ -1036,6 +1036,7 @@
         "agents": [],
         "hooks": [],
         "mcp_tools": [
+          "search",
           "searchJiraIssuesUsingJql",
           "getJiraIssue",
           "getConfluencePage",
@@ -1051,7 +1052,7 @@
         "REVIEW",
         "LEARN"
       ],
-      "description": "Jira and Confluence integration via claude.ai managed MCP. Connect via /mcp in Claude Code. Pull acceptance criteria, search issues, read design docs."
+      "description": "Atlassian Rovo MCP (Jira, Confluence, Compass) via claude.ai managed integration. Connect via /mcp at https://mcp.atlassian.com/v1/mcp/authv2 (legacy /v1/mcp deprecated after 2026-06-30). Exposes Rovo cross-system search plus targeted Jira/Confluence tools."
     },
     {
       "name": "forgetful",

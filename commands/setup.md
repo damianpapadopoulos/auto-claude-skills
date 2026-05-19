@@ -352,7 +352,62 @@ If the user agrees, merge this into the `PreToolUse` array of `.claude/settings.
 
 After installation, verify MCP servers with `claude mcp list` (look for "Connected" status) and CLIs with `command -v`.
 
-### 7. Incident analysis tools (optional)
+### 7. Atlassian Rovo MCP (Jira / Confluence / Compass)
+
+The Atlassian Rovo MCP is a claude.ai-managed integration — no marketplace install. It exposes Jira, Confluence, and Compass via one connection, plus a `search` tool that queries Jira + Confluence simultaneously. `product-discovery` and `outcome-review` skills use it when connected.
+
+**Detection:**
+
+```bash
+claude mcp list 2>/dev/null | grep -iE 'atlassian|rovo'
+```
+
+**Case A — Not connected (no output):**
+
+Ask the user: "Would you like to connect Atlassian Rovo MCP? It provides Jira, Confluence, and Compass access via OAuth, plus a Rovo cross-system `search` tool that lets `product-discovery` find context in one call instead of two."
+
+If yes, instruct them:
+> 1. Run `/mcp` in Claude Code.
+> 2. Add a new server with URL `https://mcp.atlassian.com/v1/mcp/authv2`.
+> 3. Complete the OAuth flow in your browser.
+> 4. Re-run `/setup` and we'll continue from here.
+
+If the user declines, note that `product-discovery` and `outcome-review` skills will fall back to Tier 2 (manual context).
+
+**Case B — Connected at legacy `/v1/mcp` URL:**
+
+Detect with:
+```bash
+claude mcp list 2>/dev/null | grep -E 'atlassian|rovo' | grep -E 'v1/mcp($|[^/])'
+```
+
+If matched, inform the user:
+> "Atlassian is deprecating the `/v1/mcp` endpoint after 2026-06-30. The recommended URL is `https://mcp.atlassian.com/v1/mcp/authv2`. Would you like to update your `/mcp` config now? (Re-run `/mcp`, remove the existing entry, add the new URL.)"
+
+If the user declines, leave it — it still works until the deprecation date.
+
+**Case C — Connected (any version):**
+
+Offer the defaults block for project CLAUDE.md:
+
+> "Atlassian's official guidance is to declare cloudId and default project/space in your project CLAUDE.md to skip discovery calls and bound search-result sizes. Would you like me to show you the block to paste in?"
+
+If yes, present:
+
+````markdown
+## Atlassian Rovo MCP
+
+When connected:
+- cloudId = "https://<your-site>.atlassian.net"
+- Default Jira project key = "<KEY>"
+- Default Confluence spaceId = "<ID>"
+- Use `maxResults: 10` / `limit: 10` for ALL Jira JQL and Confluence CQL searches
+- Prefer `search(cloudId, query)` for cross-system discovery; refine with JQL/CQL only on miss
+````
+
+Do NOT write to project CLAUDE.md autonomously — present as copy-paste only.
+
+### 8. Incident analysis tools (optional)
 
 These tools enhance the incident-analysis skill. Investigation works without them (Tier 2 gcloud CLI or Tier 3 guidance-only), but installing them unlocks faster queries, autonomous trace correlation, and playbook-driven mitigation.
 
@@ -388,7 +443,7 @@ gcloud auth application-default login
 
 **kubectl** is only needed for v1.3 mitigation playbooks (rollback, restart, scale). Investigation works fully without it. If the user declines, note that playbook execution will be unavailable but investigation and postmortem generation will work normally.
 
-### 8. Multi-user mode (spec-driven + CI gate, optional)
+### 9. Multi-user mode (spec-driven + CI gate, optional)
 
 For repos with ≥2 active developers, enable spec-driven mode. Design intent is committed to `openspec/changes/<feature>/` (visible to teammates via `git pull`) instead of gitignored `docs/plans/`. A GitHub Actions workflow validates every active OpenSpec change on every PR.
 
@@ -470,7 +525,7 @@ If the user declines this step, no changes are made. They can enable it later by
 
 ## Execution
 
-Run each step in order. For steps 0 and 1, use AskUserQuestion to get the user's preference before taking action. For steps 2-4, if a skill directory already exists at the target path, skip it. For steps 5, 6, and 8, use AskUserQuestion to get the user's preference before installing, and skip tools that are already installed.
+Run each step in order. For steps 0 and 1, use AskUserQuestion to get the user's preference before taking action. For steps 2-4, if a skill directory already exists at the target path, skip it. For steps 5, 6, 7, and 9, use AskUserQuestion to get the user's preference before installing, and skip tools that are already installed.
 
 After setup, confirm what was configured:
 - Companion plugins: which were installed or skipped
