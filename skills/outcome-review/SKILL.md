@@ -102,14 +102,16 @@ Wait for the user's choice.
 
 ## Step 6: Follow-Up Actions
 
-**If "Create follow-up tickets" (and Atlassian MCP available):**
-1. Draft the ticket(s) — title, description, acceptance criteria, priority
-2. Present each draft to the user for approval
-3. Only after explicit approval: `createJiraIssue` to create the ticket
-4. `addCommentToJiraIssue` on the original ticket with the outcome summary
+**If "Create follow-up tickets" (and Atlassian Rovo MCP available):**
 
-**If Atlassian MCP unavailable:**
-> "I don't have Atlassian MCP access. Here are the recommended follow-up tickets — please create them manually:
+1. If the baseline lacks `jira_ticket` or the feature's parent ticket is unknown, find it first: call `search(cloudId, "<feature name>")` — the Rovo cross-system search returns the original ticket alongside any linked Confluence docs in one call. Fall back to `searchJiraIssuesUsingJql` only if `search` returns no matches.
+2. Draft the ticket(s) — title, description, acceptance criteria, priority.
+3. Present each draft to the user for approval.
+4. Only after explicit approval: `createJiraIssue` to create the ticket.
+5. `addCommentToJiraIssue` on the original ticket with the outcome summary.
+
+**If Atlassian Rovo MCP unavailable:**
+> "I don't have Atlassian Rovo MCP access. Here are the recommended follow-up tickets — please create them manually:
 > [formatted ticket descriptions]"
 
 ## Step 7: Transition
