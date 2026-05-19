@@ -9,10 +9,12 @@ Three changes converged on the same capability surface (`unified-context-stack`)
 The session-start banner emit block (`hooks/session-start-hook.sh:1154-1158`) prints a `Forgetful:` hint when `.forgetful_memory == true`. The previous copy named only `discover_forgetful_tools` and `execute_forgetful_tool`, forcing Claude to round-trip discovery every phase. The new copy specifies the full three-step API:
 
 ```
-mcp__forgetful__how_to_use_forgetful_tool  (once at session start — learn API + dedup semantics)
-mcp__forgetful__discover_forgetful_tools   (once — fetch operation list)
+mcp__forgetful__discover_forgetful_tools   (no args, entry point — fetch operation list)
 mcp__forgetful__execute_forgetful_tool     (per call — read/write)
+mcp__forgetful__how_to_use_forgetful_tool(tool_name)   (per-operation docs when needed)
 ```
+
+Codex review of PR #37 caught an inverted ordering in the initial implementation (`how_to_use` listed first). The corrected ordering above matches the actual `forgetful-ai 0.4.1` server contract (`meta_tools.py:280-283, 409-447`): `how_to_use_forgetful_tool` takes a required `tool_name: str` argument and returns docs for that one operation — it is not a zero-argument session-start API discovery call.
 
 Phase anchors are embedded in the banner string: read in `DESIGN/PLAN/IMPLEMENT/DEBUG/REVIEW`; write in `SHIP`. The same mechanics are mirrored in `skills/unified-context-stack/tiers/historical-truth.md` so the tier doc is the canonical reference; the banner is the at-session reminder.
 

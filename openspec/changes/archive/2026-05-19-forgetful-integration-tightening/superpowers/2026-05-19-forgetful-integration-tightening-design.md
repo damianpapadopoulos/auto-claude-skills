@@ -123,3 +123,15 @@ Proceed with the three-change PR as scoped. Defer gaps #4, #5, and the full tele
 
 **Design decision changes:**
 - Probe block at `hooks/session-start-hook.sh:817-827` is structurally byte-for-byte parallel to the existing `serena_connected` block (env-gate + `command -v claude` + `grep -F` for the Unicode `✓ Connected` literal + fail-open jq update). Code-review feedback (1 minor: phase-anchor assertion precision) applied as a follow-up commit (3fa9767).
+
+## Post-ship correction (PR #37, Codex factual review)
+
+After the initial ship, Codex reviewed external-surface factual claims and caught an inverted banner ordering:
+
+- **Initial implementation:** `how_to_use_forgetful_tool` → `discover_forgetful_tools` → `execute_forgetful_tool`. Banner instructed Claude to "call `how_to_use_forgetful_tool` once at session start to learn the API."
+- **Actual `forgetful-ai 0.4.1` server contract** (`meta_tools.py:280-283, 409-447`): `how_to_use_forgetful_tool` takes a required `tool_name: str` argument and returns docs for that one operation. The zero-argument entry point is `discover_forgetful_tools`.
+- **Corrected ordering** (applied before merge): `discover_forgetful_tools` (no args, entry point) → `execute_forgetful_tool` (act) → `how_to_use_forgetful_tool(tool_name)` (per-operation docs when needed).
+
+Files corrected: `hooks/session-start-hook.sh` banner, `skills/unified-context-stack/tiers/historical-truth.md` Tier 1 Bootstrap section, `tests/test-session-start-banner.sh` ordering assertion, `CHANGELOG.md`, `openspec/changes/archive/2026-05-19-forgetful-integration-tightening/{proposal.md,design.md,specs/.../spec.md}`, `openspec/specs/unified-context-stack/spec.md` (canonical), `~/.claude/projects/.../memory/project_forgetful_integration_tightening.md`.
+
+Lesson reinforced (`[[codex-for-factual-claims]]`): Claude reviewers cross-check prose-against-prose; Codex inspects installed package source. For PRs that name specific tool surfaces, dispatch Codex for external-fact verification before merge.

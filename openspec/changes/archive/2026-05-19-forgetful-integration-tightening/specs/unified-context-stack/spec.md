@@ -2,13 +2,13 @@
 
 ### Requirement: Forgetful three-step API ordering in banner
 
-The session-start banner SHALL name the Forgetful Memory MCP API in the explicit order `mcp__forgetful__how_to_use_forgetful_tool` → `mcp__forgetful__discover_forgetful_tools` → `mcp__forgetful__execute_forgetful_tool` whenever `forgetful_memory=true`. The banner SHALL include the phase anchors `DESIGN/PLAN/IMPLEMENT/DEBUG/REVIEW` (read) and `SHIP` (write).
+The session-start banner SHALL name the Forgetful Memory MCP API in the explicit order `mcp__forgetful__discover_forgetful_tools` (no args, entry point) → `mcp__forgetful__execute_forgetful_tool` (per-call read/write) → `mcp__forgetful__how_to_use_forgetful_tool(tool_name)` (per-operation docs when needed) whenever `forgetful_memory=true`. The banner SHALL include the phase anchors `DESIGN/PLAN/IMPLEMENT/DEBUG/REVIEW` (read) and `SHIP` (write).
 
 #### Scenario: Session starts with Forgetful MCP configured
 
 - **GIVEN** `~/.claude.json` registers a `forgetful` MCP server
 - **WHEN** the session-start hook fires
-- **THEN** the emitted context contains a `Forgetful:` line naming `how_to_use_forgetful_tool` first, then `discover_forgetful_tools`, then `execute_forgetful_tool` in that order
+- **THEN** the emitted context contains a `Forgetful:` line naming `discover_forgetful_tools` first, then `execute_forgetful_tool`, then `how_to_use_forgetful_tool` in that order
 - **AND** the line contains the phrase `DESIGN/PLAN/IMPLEMENT/DEBUG/REVIEW`
 - **AND** the line contains the phrase `store after SHIP`
 

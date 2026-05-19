@@ -7,8 +7,8 @@ Capability: Retrieve and store project-specific rules, decisions, and quirks acr
 **Condition:** `forgetful_memory = true`
 
 ### Bootstrap (once per session, before first use)
-- Call `mcp__forgetful__how_to_use_forgetful_tool` once to learn the API contract — the operations exposed by `execute_forgetful_tool`, their argument shapes, and dedup semantics
-- Call `mcp__forgetful__discover_forgetful_tools` once to retrieve the concrete operation list available in this session
+- Call `mcp__forgetful__discover_forgetful_tools` (no arguments) to retrieve the concrete operation list available in this session — this is the entry point, not `how_to_use_forgetful_tool`
+- Call `mcp__forgetful__how_to_use_forgetful_tool(tool_name=<operation>)` only when you need detailed docs on a specific operation discovered in the previous step — it takes a required `tool_name` argument and returns documentation for that one operation
 
 ### Reading (DESIGN, PLAN, IMPLEMENT, DEBUG, REVIEW)
 - Call `mcp__forgetful__execute_forgetful_tool` with a recall/query operation, keyed by current repo basename + active topic, to surface prior architectural decisions, known constraints, or workaround notes
