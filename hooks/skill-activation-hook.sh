@@ -1331,7 +1331,7 @@ case "${PRIMARY_PHASE}" in
   DISCOVER)
     RED_FLAGS="
 HALT if any Red Flag is true:
-- Skipping Jira/Confluence context pull when Atlassian Rovo MCP is connected (prefer `search` for cross-system scoping)
+- Skipping Jira/Confluence context pull when Atlassian Rovo MCP is connected (prefer 'search' for cross-system scoping)
 - Jumping to design without presenting a discovery brief
 - Writing code during the DISCOVER phase"
     ;;
