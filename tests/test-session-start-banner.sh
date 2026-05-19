@@ -61,8 +61,8 @@ else
     TESTS_RUN=$((TESTS_RUN + 1))
     echo "FAIL: Forgetful banner ordering (how=${HOW_POS} disc=${DISCOVER_POS} exec=${EXECUTE_POS})"
 fi
-assert_contains "Forgetful banner references DESIGN phase" "DESIGN" "${SRC}"
-assert_contains "Forgetful banner references SHIP phase" "SHIP" "${SRC}"
+assert_contains "Forgetful banner names all phase anchors (DESIGN/PLAN/IMPLEMENT/DEBUG/REVIEW)" "DESIGN/PLAN/IMPLEMENT/DEBUG/REVIEW" "${SRC}"
+assert_contains "Forgetful banner anchors SHIP-phase write step" "store after SHIP" "${SRC}"
 
 teardown_test_env
 
