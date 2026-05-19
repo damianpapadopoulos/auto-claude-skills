@@ -345,7 +345,7 @@ install_registry() {
         "(ticket|story|epic|acceptance.criter|definition.of.done|requirement|user.story|jira|sprint|backlog)"
       ],
       "trigger_mode": "regex",
-      "hint": "ATLASSIAN: If Atlassian MCP tools are available, use Jira (searchJiraIssuesUsingJql, getJiraIssue) to pull acceptance criteria.",
+      "hint": "ATLASSIAN ROVO: If Atlassian Rovo MCP is connected, prefer `search(cloudId, query)` for cross-system discovery before targeted JQL. Pull acceptance criteria and linked context. Use `maxResults: 10`.",
       "phases": ["DESIGN", "PLAN"]
     },
     {
