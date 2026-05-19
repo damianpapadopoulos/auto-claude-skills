@@ -115,9 +115,9 @@ Opengrep (recommended — LGPL 2.1 fork, signed binary, no Python dependency, re
 ```bash
 curl -fsSL https://raw.githubusercontent.com/opengrep/opengrep/main/install.sh | bash
 ```
-Then verify and warm the registry (~30s):
+Then verify (registry rules download lazily on first real scan):
 ```bash
-opengrep --version && opengrep scan --config auto --test . 2>/dev/null; echo "Opengrep ready"
+opengrep --version && echo "Opengrep ready"
 ```
 
 Or Semgrep (fallback):
