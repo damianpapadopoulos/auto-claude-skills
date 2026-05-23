@@ -73,6 +73,35 @@ trivy fs --scanners vuln,misconfig --format json --severity HIGH,CRITICAL --igno
 trivy config --format json --severity HIGH,CRITICAL . 2>/dev/null | jq '.Results // []'
 ```
 
+## Step 3.5: Run OSV-Scanner (Registry-Native Advisories)
+
+If `osv-scanner` is available, run a supplementary scan against [OSV.dev](https://osv.dev), which aggregates GHSA, PyPA, RustSec, Go vulnerability DB, and npm/Maven Central security advisories. OSV often surfaces registry-native advisories before they propagate to Trivy's NVD-anchored data.
+
+**Detection:**
+```bash
+command -v osv-scanner >/dev/null 2>&1 && echo "osv-scanner: available" || echo "osv-scanner: not installed (optional)"
+```
+
+If not installed, document the install path and skip:
+
+```bash
+# macOS arm64
+curl -L https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_darwin_arm64 -o ~/.local/bin/osv-scanner
+chmod +x ~/.local/bin/osv-scanner
+```
+
+(Linux: replace `darwin_arm64` with `linux_amd64`. macOS Intel: `darwin_amd64`.)
+
+**Scan (recursive directory mode):**
+
+```bash
+osv-scanner scan -r --format=json . 2>/dev/null | jq '{count: ([.results[]?.packages[]?.vulnerabilities[]?] | length), results: [.results[]?.packages[]? | {pkg: .package.name, ecosystem: .package.ecosystem, version: .package.version, vulns: [.vulnerabilities[]? | {id: .id, aliases: .aliases, severity: (.database_specific.severity // .severity[0].score // "unknown"), summary: .summary}]}]}'
+```
+
+**De-duplicate against Trivy results.** Cross-check the `aliases` field: if a finding's `id` or any alias matches a CVE/GHSA already reported by Trivy in Step 3, treat as duplicate and surface only once. Label OSV-only findings (no Trivy counterpart) under the "Registry-native advisories" subsection of the report.
+
+**Behavior when OSV-Scanner is not installed:** Skip silently with a single-line notice. Steps 4-6 (Gitleaks, triage, report) proceed normally. No regression in non-OSV finding output.
+
 ## Step 4: Run Gitleaks (Secret Detection)
 
 If gitleaks is available, scan for hardcoded secrets.
