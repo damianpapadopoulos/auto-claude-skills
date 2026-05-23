@@ -1,0 +1,48 @@
+[
+  {
+    "id": "axios-npm-advisory",
+    "prompt": "there's a supply chain attack on the axios npm package — versions 1.14.1 and 0.30.4 were compromised with a RAT dropper. can you check if myorg is affected? here's the advisory: https://example.com/ghsa-fake",
+    "expected_behavior": "Run the full supply-chain-investigation workflow: parse the advisory, scan myorg via gh search code for repos using axios in package.json + lockfiles, download lockfiles via gh api, classify pin tightness, check CI install commands (npm ci vs npm install), scan CI logs since the compromise timestamp, deliver a verdict per repo (COMPROMISED / AT RISK / SAFE WITH CAVEATS / SAFE).",
+    "assertions": [
+      {"text": "gh search code", "description": "Uses gh search code to scan the org for affected manifests"},
+      {"text": "package.json|package-lock|yarn.lock|pnpm-lock", "description": "Targets npm-ecosystem manifests/lockfiles"},
+      {"text": "npm ci|frozen-lockfile|--ignore-scripts", "description": "Assesses CI install command safety (pin-respecting vs risky)"},
+      {"text": "gh run|workflow run|CI log", "description": "Scans past CI workflow runs since the compromise timestamp"},
+      {"text": "COMPROMISED|AT RISK|SAFE WITH CAVEATS|SAFE", "description": "Delivers a structured verdict on the documented scale"}
+    ]
+  },
+  {
+    "id": "commons-text-maven-advisory",
+    "prompt": "a Maven artifact commons-text was compromised on Maven Central. malicious versions are 1.11.1 and 1.12.0 — they contain a reverse shell payload. investigate if myorg is exposed.",
+    "expected_behavior": "Maven-specific investigation: search pom.xml across the org, examine dependencyManagement / BOM imports / property-driven versions, consider transitive dependency exposure via shared BOMs, scan CI logs for Maven-specific resolution patterns (Downloading from central).",
+    "assertions": [
+      {"text": "pom.xml", "description": "Targets Maven pom.xml manifests"},
+      {"text": "dependencyManagement|BOM|property|\\$\\{.*version\\}", "description": "Examines Maven version-resolution mechanisms (depMgmt, BOMs, properties)"},
+      {"text": "transitive|dependency:tree", "description": "Considers transitive exposure via shared BOMs / parent POMs"},
+      {"text": "Downloading|BUILD SUCCESS|dependency.tree", "description": "Scans CI logs for Maven resolution evidence"}
+    ]
+  },
+  {
+    "id": "requests-pypi-hijack",
+    "prompt": "the requests PyPI package was hijacked — version 2.33.0 contains a cryptominer, published 2 hours ago. check all myorg Python repos immediately.",
+    "expected_behavior": "Python-specific investigation: search requirements.txt / pyproject.toml / Pipfile / setup.py / setup.cfg across the org; distinguish between exact (==) pins and ranges (>=, ~=); read lockfiles (Pipfile.lock / poetry.lock / uv.lock) for resolved versions; assess pip CI install safety (pinned requirements vs unpinned install).",
+    "assertions": [
+      {"text": "requirements.txt|pyproject.toml|Pipfile|setup\\.py|setup\\.cfg", "description": "Targets Python manifests"},
+      {"text": "==|range|pinned|specifier", "description": "Distinguishes pinned (==) from range specifiers"},
+      {"text": "Pipfile.lock|poetry.lock|uv.lock", "description": "Reads Python lockfiles for resolved versions"},
+      {"text": "pip install.*-r|--require-hashes|poetry install.*--no-update|pipenv install.*--deploy", "description": "Assesses pip / poetry / pipenv CI install safety"}
+    ]
+  },
+  {
+    "id": "generic-cve-not-supply-chain",
+    "prompt": "we use lodash across several repos and just saw CVE-2025-12345 with a critical CVSS score. can you check if we're vulnerable and help us patch it?",
+    "expected_behavior": "Recognize this is a regular CVE / vulnerability question, NOT a published supply-chain compromise. Do not run the full 6-step supply-chain workflow. Route to security-scanner / OSV-Scanner / npm audit or recommend the user invoke routine vulnerability tooling. The discriminator: no published-attack language present, just a CVE ID and CVSS score.",
+    "assertions": [
+      {"text": "security-scanner|OSV-Scanner|npm audit|Trivy", "description": "Recommends routine vulnerability tooling, not the supply-chain workflow"},
+      {"text": "CVE|vulnerability|vulnerable", "description": "Recognizes the CVE / vulnerability framing rather than supply-chain framing"}
+    ],
+    "negative_assertions": [
+      {"text": "Step 1.*PARSE|Step 2.*ORG SCAN|Step 5.*LOG FORENSICS|COMPROMISED.*AT RISK", "description": "Does NOT execute the full supply-chain workflow (no Step labels, no verdict-scale output)"}
+    ]
+  }
+]
