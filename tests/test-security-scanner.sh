@@ -31,6 +31,7 @@ test_security_capabilities_in_output() {
   assert_contains "session-start emits security tools" "Security tools:" "$output"
   assert_contains "session-start emits semgrep capability" "semgrep=" "$output"
   assert_contains "session-start emits trivy capability" "trivy=" "$output"
+  assert_contains "session-start emits osv_scanner capability" "osv_scanner=" "$output"
 }
 
 # ── Test: security-scanner removed from missing external skills ──
