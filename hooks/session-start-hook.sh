@@ -864,12 +864,13 @@ if printf '%s' "${CONTEXT_CAPS}" | jq -e '.posthog == true' >/dev/null 2>&1; the
 fi
 
 # ── Step 8f: Detect security scanner capabilities ──────────────────
-_SEMGREP=false; _OPENGREP=false; _TRIVY=false; _GITLEAKS=false
-command -v semgrep  >/dev/null 2>&1 && _SEMGREP=true
-command -v opengrep >/dev/null 2>&1 && _OPENGREP=true
-command -v trivy    >/dev/null 2>&1 && _TRIVY=true
-command -v gitleaks >/dev/null 2>&1 && _GITLEAKS=true
-SECURITY_CAPS="semgrep=${_SEMGREP}, opengrep=${_OPENGREP}, trivy=${_TRIVY}, gitleaks=${_GITLEAKS}"
+_SEMGREP=false; _OPENGREP=false; _TRIVY=false; _GITLEAKS=false; _OSV_SCANNER=false
+command -v semgrep     >/dev/null 2>&1 && _SEMGREP=true
+command -v opengrep    >/dev/null 2>&1 && _OPENGREP=true
+command -v trivy       >/dev/null 2>&1 && _TRIVY=true
+command -v gitleaks    >/dev/null 2>&1 && _GITLEAKS=true
+command -v osv-scanner >/dev/null 2>&1 && _OSV_SCANNER=true
+SECURITY_CAPS="semgrep=${_SEMGREP}, opengrep=${_OPENGREP}, trivy=${_TRIVY}, gitleaks=${_GITLEAKS}, osv_scanner=${_OSV_SCANNER}"
 
 # ── Step 8g: Detect observability capabilities ──────────────────────
 _OBS_GCLOUD=false; _OBS_MCP=false; _OBS_KUBECTL=false

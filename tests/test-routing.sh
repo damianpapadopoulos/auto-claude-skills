@@ -299,6 +299,20 @@ install_registry() {
       "invoke": "Skill(auto-claude-skills:outcome-review)",
       "available": true,
       "enabled": true
+    },
+    {
+      "name": "supply-chain-investigation",
+      "role": "domain",
+      "phase": "REVIEW",
+      "triggers": [
+        "(supply.?chain|compromised|malicious|hijack|backdoor|typosquat).*(package|dependency|version|publish|registry)",
+        "(npm|maven|pypi|pip|gradle).*(attack|compromise|backdoor|malicious|hijack)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 40,
+      "invoke": "Skill(auto-claude-skills:supply-chain-investigation)",
+      "available": true,
+      "enabled": true
     }
   ],
   "phase_guide": {
@@ -5652,5 +5666,55 @@ EOF
     teardown_test_env
 }
 test_max_iterations_role_allowlist
+
+test_supply_chain_investigation_fires_on_attack_language() {
+    echo ""
+    echo "Test: test_supply_chain_investigation_fires_on_attack_language"
+    setup_test_env
+    install_registry
+
+    local prompt="there's a supply chain attack on axios 1.14.1, can you check if myorg is affected? advisory: https://example.com/ghsa"
+    local input
+    input=$(jq -nc --arg p "$prompt" '{"prompt": $p}')
+    local output
+    output="$(printf '%s' "$input" | bash "${PROJECT_ROOT}/hooks/skill-activation-hook.sh" 2>/dev/null)"
+
+    if printf '%s' "$output" | grep -q "supply-chain-investigation"; then
+        echo "  PASS: supply-chain-investigation fires on attack-language prompt"
+        TESTS_PASSED=$((${TESTS_PASSED:-0} + 1))
+    else
+        echo "  FAIL: supply-chain-investigation did not fire"
+        echo "  Output: $output"
+        TESTS_FAILED=$((${TESTS_FAILED:-0} + 1))
+    fi
+
+    teardown_test_env
+}
+test_supply_chain_investigation_fires_on_attack_language
+
+test_generic_cve_does_not_fire_supply_chain() {
+    echo ""
+    echo "Test: test_generic_cve_does_not_fire_supply_chain"
+    setup_test_env
+    install_registry
+
+    local prompt="we use lodash and just saw CVE-2025-12345 with a critical CVSS score, can you check if we're vulnerable?"
+    local input
+    input=$(jq -nc --arg p "$prompt" '{"prompt": $p}')
+    local output
+    output="$(printf '%s' "$input" | bash "${PROJECT_ROOT}/hooks/skill-activation-hook.sh" 2>/dev/null)"
+
+    if printf '%s' "$output" | grep -q "supply-chain-investigation"; then
+        echo "  FAIL: supply-chain-investigation fired on generic CVE prompt"
+        echo "  Output: $output"
+        TESTS_FAILED=$((${TESTS_FAILED:-0} + 1))
+    else
+        echo "  PASS: supply-chain-investigation correctly did NOT fire on generic CVE language"
+        TESTS_PASSED=$((${TESTS_PASSED:-0} + 1))
+    fi
+
+    teardown_test_env
+}
+test_generic_cve_does_not_fire_supply_chain
 
 print_summary

@@ -3,9 +3,10 @@
 set -u
 PASS=0; FAIL=0; ERRORS=""
 
+# Note: grep -qF -- "$needle" prevents needles starting with '--' (e.g., '--format=json') from being interpreted as grep flags
 assert_contains() {
   local label="$1" needle="$2" haystack="$3"
-  if printf '%s' "$haystack" | grep -qF "$needle"; then
+  if printf '%s' "$haystack" | grep -qF -- "$needle"; then
     PASS=$((PASS + 1))
   else
     FAIL=$((FAIL + 1))
@@ -15,7 +16,7 @@ assert_contains() {
 
 assert_not_contains() {
   local label="$1" needle="$2" haystack="$3"
-  if printf '%s' "$haystack" | grep -qF "$needle"; then
+  if printf '%s' "$haystack" | grep -qF -- "$needle"; then
     FAIL=$((FAIL + 1))
     ERRORS="${ERRORS}\n  FAIL: ${label}\n    expected NOT to contain: ${needle}"
   else
@@ -31,6 +32,7 @@ test_security_capabilities_in_output() {
   assert_contains "session-start emits security tools" "Security tools:" "$output"
   assert_contains "session-start emits semgrep capability" "semgrep=" "$output"
   assert_contains "session-start emits trivy capability" "trivy=" "$output"
+  assert_contains "session-start emits osv_scanner capability" "osv_scanner=" "$output"
 }
 
 # ── Test: security-scanner removed from missing external skills ──
@@ -84,6 +86,18 @@ test_fallback_registry_parity() {
   assert_not_contains "fallback has no stale invoke path" '"Skill(security-scanner)"' "$fallback"
 }
 
+# ── Test: SKILL.md documents OSV-Scanner step ──
+test_skill_md_documents_osv_scanner_step() {
+  echo "--- test_skill_md_documents_osv_scanner_step ---"
+  local skill_md
+  skill_md="$(cat skills/security-scanner/SKILL.md)"
+  assert_contains "SKILL.md mentions OSV-Scanner step" "OSV-Scanner" "$skill_md"
+  assert_contains "SKILL.md documents osv-scanner scan command" "osv-scanner scan" "$skill_md"
+  assert_contains "SKILL.md mentions GHSA/registry-native advisories" "registry-native" "$skill_md"
+  assert_contains "SKILL.md documents JSON output flag" "--format=json" "$skill_md"
+  assert_contains "SKILL.md mentions install fallback" "github.com/google/osv-scanner" "$skill_md"
+}
+
 # ══════════════════════════════════════════════════════════════════
 # Run tests
 # ══════════════════════════════════════════════════════════════════
@@ -93,6 +107,7 @@ test_methodology_hint_in_registry
 test_methodology_hint_phase_scoped
 test_review_composition_invoke_path
 test_fallback_registry_parity
+test_skill_md_documents_osv_scanner_step
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
