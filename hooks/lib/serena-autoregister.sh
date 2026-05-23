@@ -9,9 +9,12 @@
 #   3. Skip if `claude` CLI is not on PATH
 #   4. If `claude mcp list` already contains a `serena:` entry → skip add, write marker
 #   5. Otherwise: run `claude mcp add --scope user serena -- serena start-mcp-server
-#      --context claude-code --project-from-cwd`. Write marker on either outcome
-#      (success or failure). On failure also write an error breadcrumb that
-#      /setup can surface.
+#      --context claude-code --project-from-cwd --open-web-dashboard false`.
+#      The `--open-web-dashboard false` flag suppresses the browser tab Serena
+#      would otherwise open on every Claude Code session start (the dashboard
+#      itself remains accessible at http://localhost:24282/dashboard/ for users
+#      who want it). Write marker on either outcome (success or failure). On
+#      failure also write an error breadcrumb that /setup can surface.
 #
 # Bash 3.2 compatible. jq NOT required on this path.
 # Design: docs/plans/2026-05-23-serena-auto-register-design.md
@@ -40,8 +43,11 @@ serena_maybe_autoregister() {
 
     # 5. Auto-register. --project-from-cwd lets Serena pick the active project
     #    per-session without binding the user-scoped registration to one path.
+    #    --open-web-dashboard false suppresses the per-session browser tab that
+    #    Serena opens by default; the dashboard remains reachable at
+    #    http://localhost:24282/dashboard/ for users who want it.
     local add_output add_rc
-    add_output="$(claude mcp add --scope user serena -- serena start-mcp-server --context claude-code --project-from-cwd 2>&1)"
+    add_output="$(claude mcp add --scope user serena -- serena start-mcp-server --context claude-code --project-from-cwd --open-web-dashboard false 2>&1)"
     add_rc=$?
 
     if [ "${add_rc}" -eq 0 ]; then
