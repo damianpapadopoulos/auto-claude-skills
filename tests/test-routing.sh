@@ -5692,4 +5692,29 @@ test_supply_chain_investigation_fires_on_attack_language() {
 }
 test_supply_chain_investigation_fires_on_attack_language
 
+test_generic_cve_does_not_fire_supply_chain() {
+    echo ""
+    echo "Test: test_generic_cve_does_not_fire_supply_chain"
+    setup_test_env
+    install_registry
+
+    local prompt="we use lodash and just saw CVE-2025-12345 with a critical CVSS score, can you check if we're vulnerable?"
+    local input
+    input=$(jq -nc --arg p "$prompt" '{"prompt": $p}')
+    local output
+    output="$(printf '%s' "$input" | bash "${PROJECT_ROOT}/hooks/skill-activation-hook.sh" 2>/dev/null)"
+
+    if printf '%s' "$output" | grep -q "supply-chain-investigation"; then
+        echo "  FAIL: supply-chain-investigation fired on generic CVE prompt"
+        echo "  Output: $output"
+        TESTS_FAILED=$((${TESTS_FAILED:-0} + 1))
+    else
+        echo "  PASS: supply-chain-investigation correctly did NOT fire on generic CVE language"
+        TESTS_PASSED=$((${TESTS_PASSED:-0} + 1))
+    fi
+
+    teardown_test_env
+}
+test_generic_cve_does_not_fire_supply_chain
+
 print_summary
