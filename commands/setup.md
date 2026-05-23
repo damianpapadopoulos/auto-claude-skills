@@ -264,6 +264,24 @@ Global (uses working directory at runtime):
 claude mcp add --scope user serena -- serena start-mcp-server --context claude-code --project-from-cwd
 ```
 
+**Auto-registration and recovery:**
+
+If the user has `serena` on PATH and no existing `serena` MCP registration, the plugin's session-start hook auto-registers Serena once via the global form above **plus** `--open-web-dashboard false`. The dashboard flag prevents Serena from opening a browser tab on every Claude Code session start; the dashboard itself remains reachable at `http://localhost:24282/dashboard/` for users who want it.
+
+After auto-registration, the plugin writes a marker at `~/.claude/.auto-claude-skills-serena-registered` and never re-attempts registration. Recovery / re-trigger:
+
+```bash
+# Re-attempt auto-registration on the next session (e.g., after manually
+# removing Serena to fix a broken venv and wanting it auto-added again):
+rm -f ~/.claude/.auto-claude-skills-serena-registered
+
+# Inspect a previous failed attempt (only present if auto-register's `claude
+# mcp add` exited non-zero on a prior session):
+cat ~/.claude/.auto-claude-skills-serena-register-error 2>/dev/null
+```
+
+**If you WANT the Serena browser tab back:** edit `~/.claude.json` and remove `--open-web-dashboard false` from the `mcpServers.serena.args` array (or change it to `true`). This is a per-MCP-server override; the plugin does NOT modify your global `~/.serena/serena_config.yml`.
+
 **Upgrading from the old git-based install:**
 
 If the user already has Serena registered via the old `uvx --from git+https://github.com/oraios/serena` method, upgrade as follows:
