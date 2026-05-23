@@ -572,7 +572,7 @@ exit 0
 EOF
     chmod +x "${mock_bin}/claude"
 
-    PATH="${mock_bin}:${PATH}" _SKILL_TEST_MODE=1 CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+    PATH="${mock_bin}:${PATH}" _SKILL_TEST_MODE=1 _SKILL_TEST_AUTOREG=1 CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
         bash "${PROJECT_ROOT}/hooks/session-start-hook.sh" >/dev/null 2>&1 < /dev/null
 
     local marker="${HOME}/.claude/.auto-claude-skills-serena-registered"

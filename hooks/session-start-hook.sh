@@ -763,8 +763,15 @@ OPENSPEC_CAPS="$(jq -n \
 # silently with --scope user + --open-web-dashboard false. Idempotent and
 # fail-open. See hooks/lib/serena-autoregister.sh for the full contract and
 # docs/plans/2026-05-23-serena-auto-register-design.md for the design rationale.
-# shellcheck source=lib/serena-autoregister.sh
-. "$(dirname "$0")/lib/serena-autoregister.sh" 2>/dev/null && serena_maybe_autoregister || true
+#
+# Skipped under _SKILL_TEST_MODE=1 because the real `claude mcp add` it invokes
+# would mutate the test's tmpdir HOME's .claude.json, contaminating sibling
+# tests (e.g., test_context_capabilities_detection). The integration test that
+# DOES exercise this path sets _SKILL_TEST_AUTOREG=1 to opt back in.
+if [ "${_SKILL_TEST_MODE:-0}" != "1" ] || [ "${_SKILL_TEST_AUTOREG:-0}" = "1" ]; then
+    # shellcheck source=lib/serena-autoregister.sh
+    . "$(dirname "$0")/lib/serena-autoregister.sh" 2>/dev/null && serena_maybe_autoregister || true
+fi
 
 # Canonical context_capabilities keys. Single source of truth consumed by:
 # 1. CONTEXT_CAPS producer below (initial detection object)
