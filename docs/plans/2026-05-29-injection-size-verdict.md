@@ -20,19 +20,16 @@ Pre-committed threshold (set before running): proceed to Phase 1 only if savings
 
 This contradicts the design-debate's prediction (~130–170 tokens, estimated from source). The real registry's full tier is larger than agents estimated, so the trim clears the gate.
 
-## Decision
+## Decision — Option 2 (ship lean directly)
 
-The pre-committed gate cleared, so Phase 1 (model-in-loop A/B to confirm the lean tier does not hurt skill-invocation compliance) is **justified on size grounds** and is the honest next step IF pursued.
+The gate cleared (PROCEED-eligible), but **Phase 1 was deliberately NOT built**: 217 tokens fire only on the first prompt of a session that selects 3+ skills, and Phase 1's cost (a new injection-aware harness + cross-phase `tool_call` corpus + variance runs ≈ ~2 days + millions of model tokens) is disproportionate to that once-per-session prize. The deterministic test already proves the lean variant retains every compliance-carrying element (`MUST INVOKE`, `Skill(...)`, the eval directive), so the residual compliance risk is small and bounded to one prompt per session.
 
-**However — absolute-impact caveat for the human decision:** 217 tokens fire only on the *first* prompt of a session that selects 3+ skills, once per session. That is a small absolute saving. Phase 1's cost (per the pragmatist: a new injection-aware harness + cross-phase `tool_call` corpus + variance runs ≈ ~2 days build + millions of model tokens) is large relative to a 217-token-per-session prize. The gate measured *whether the prize is non-trivial*; it did not measure *whether Phase 1's cost is worth that prize*. That ROI call is the user's.
+**Shipped:** the lean rendering is now the **production default** for the prompt-1 / 3+-skill tier. `SKILL_VERBOSE=1` restores the full scaffold + phase-guide table (rollback hatch / opt-in). This is a behavior change (the session-opening injection drops the Step-1/2/3 scaffold + 8-row phase guide) — guarded by updated tests in `tests/test-routing.sh` and `tests/test-context.sh`.
 
-Three honest options now on the table:
-1. **Build Phase 1** — the gate cleared; confirm compliance holds before shipping the trim.
-2. **Ship the lean tier directly behind the existing depth-graded safety net** — the deterministic test already proves the lean variant retains all compliance-carrying text (`MUST INVOKE`, `Skill(`, eval format); accept the small risk without the expensive behavioral experiment, since the full tier is only one prompt per session.
-3. **Stop here** — record that the prize (217 tokens/session-opening) is real but too small to justify either Phase 1's cost or a behavior change; keep `SKILL_LEAN_TIER` as a default-OFF measurement artifact.
+**Rollback:** if invocation compliance regresses in real use, set `SKILL_VERBOSE=1` (or revert the `_format_output` default-branch swap) to restore the verbose tier instantly.
 
 ## Notes
 
 - Token estimate is bytes/4 (directional).
-- Savings vary by prompt: the phase-guide table is fixed (~8 rows), but skill-line content scales with how many skills route. Prompts selecting more skills will save a similar absolute amount on the scaffold/guide.
-- The lean tier is shipped as an env-gated (`SKILL_LEAN_TIER=1`) branch, **default-OFF** — current production behavior is byte-identical to before (regression-guarded by the unchanged `test_depth_full_format_first_prompt`).
+- Savings vary by prompt: the phase-guide table is fixed (~8 rows), but skill-line content scales with how many skills route. Prompts selecting more skills save a similar absolute amount on the scaffold/guide.
+- `tests/measure-injection-size.sh` measures verbose (`SKILL_VERBOSE=1`) vs lean (default) and re-asserts the savings + gate at any time.

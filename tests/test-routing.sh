@@ -2812,53 +2812,58 @@ _setup_depth_counter() {
     fi
 }
 
-test_depth_full_format_first_prompt() {
+test_depth_lean_default_first_prompt() {
     setup_test_env
     install_registry
 
-    # No counter file exists → treated as prompt 1 → full format for 3+ skills
+    # No counter file exists → treated as prompt 1 → LEAN default for 3+ skills
     _setup_depth_counter
     local output
     output="$(run_hook "build a secure frontend component")"
     local ctx
     ctx="$(extract_context "${output}")"
 
-    assert_contains "depth1: full format has ASSESS PHASE" "ASSESS PHASE" "${ctx}"
-    assert_contains "depth1: full format has EVALUATE skills" "EVALUATE skills" "${ctx}"
-    assert_contains "depth1: full format has Step 3" "INVOKE the process skill" "${ctx}"
+    # Lean default drops the verbose scaffold + phase guide ...
+    assert_not_contains "depth1: lean default has no ASSESS PHASE" "ASSESS PHASE" "${ctx}"
+    assert_not_contains "depth1: lean default has no Step 3 scaffold" "INVOKE the process skill" "${ctx}"
+    # ... while keeping every compliance-carrying element
+    assert_contains "depth1: lean keeps MUST INVOKE" "MUST INVOKE" "${ctx}"
+    assert_contains "depth1: lean keeps Skill( marker" "Skill(" "${ctx}"
+    assert_contains "depth1: lean keeps eval directive" "You MUST print a brief evaluation" "${ctx}"
 
     teardown_test_env
 }
 
-test_lean_tier_env_override() {
+test_lean_default_smaller_than_verbose() {
     setup_test_env
     install_registry
 
-    # Fresh session = prompt 1; "build a secure frontend component" selects 3+ skills => full tier
+    # Fresh session = prompt 1; "build a secure frontend component" selects 3+ skills.
+    # Default rendering is lean; SKILL_VERBOSE=1 restores the verbose scaffold.
     _setup_depth_counter
-    local full_ctx lean_ctx
-    full_ctx="$(extract_context "$(run_hook "build a secure frontend component")")"
+    local lean_ctx
+    lean_ctx="$(extract_context "$(run_hook "build a secure frontend component")")"
 
     _setup_depth_counter
-    lean_ctx="$(extract_context "$(SKILL_LEAN_TIER=1 run_hook "build a secure frontend component")")"
+    local verbose_ctx
+    verbose_ctx="$(extract_context "$(SKILL_VERBOSE=1 run_hook "build a secure frontend component")")"
 
-    # Lean drops the verbose scaffold + phase-guide table
-    assert_not_contains "lean: no ASSESS PHASE" "ASSESS PHASE" "${lean_ctx}"
-    assert_not_contains "lean: no Step 1 label" "Step 1 --" "${lean_ctx}"
+    # Default is lean: no scaffold, but keeps compliance-carrying text
+    assert_not_contains "default: lean has no ASSESS PHASE" "ASSESS PHASE" "${lean_ctx}"
+    assert_contains "default: lean keeps MUST INVOKE" "MUST INVOKE" "${lean_ctx}"
+    assert_contains "default: lean keeps Skill( marker" "Skill(" "${lean_ctx}"
 
-    # Lean RETAINS compliance-carrying text
-    assert_contains "lean: keeps MUST INVOKE" "MUST INVOKE" "${lean_ctx}"
-    assert_contains "lean: keeps Skill( marker" "Skill(" "${lean_ctx}"
-    assert_contains "lean: keeps eval Phase line" "**Phase:" "${lean_ctx}"
+    # SKILL_VERBOSE=1 is the rollback hatch: restores the full scaffold + guide
+    assert_contains "verbose hatch: restores ASSESS PHASE" "ASSESS PHASE" "${verbose_ctx}"
 
-    # Lean is strictly smaller than full
-    local full_len lean_len
-    full_len="$(printf '%s' "${full_ctx}" | wc -c | tr -d ' ')"
+    # Lean default is strictly smaller than the verbose hatch
+    local lean_len verbose_len
     lean_len="$(printf '%s' "${lean_ctx}" | wc -c | tr -d ' ')"
-    if [[ "${lean_len}" -lt "${full_len}" ]]; then
-        _record_pass "lean tier smaller than full (${lean_len} < ${full_len})"
+    verbose_len="$(printf '%s' "${verbose_ctx}" | wc -c | tr -d ' ')"
+    if [[ "${lean_len}" -lt "${verbose_len}" ]]; then
+        _record_pass "lean default smaller than verbose (${lean_len} < ${verbose_len})"
     else
-        _record_fail "lean tier smaller than full" "lean=${lean_len} full=${full_len}"
+        _record_fail "lean default smaller than verbose" "lean=${lean_len} verbose=${verbose_len}"
     fi
 
     teardown_test_env
@@ -2939,8 +2944,9 @@ test_depth_counter_missing_treated_as_1() {
     local ctx
     ctx="$(extract_context "${output}")"
 
-    # Same as prompt 1: full format for 3+ skills
-    assert_contains "missing counter: full format has ASSESS PHASE" "ASSESS PHASE" "${ctx}"
+    # Same as prompt 1: lean default for 3+ skills (no verbose scaffold)
+    assert_not_contains "missing counter: lean default has no ASSESS PHASE" "ASSESS PHASE" "${ctx}"
+    assert_contains "missing counter: lean default keeps eval directive" "You MUST print a brief evaluation" "${ctx}"
 
     # Verify a counter file was created with value 1
     local count_val
@@ -3036,8 +3042,8 @@ test_idle_guard_non_numeric_cooldown
 test_skill_explain_with_matches
 test_skill_explain_no_matches
 test_skill_explain_off_by_default
-test_depth_full_format_first_prompt
-test_lean_tier_env_override
+test_depth_lean_default_first_prompt
+test_lean_default_smaller_than_verbose
 test_depth_compact_format_after_5
 test_depth_minimal_format_after_10
 test_depth_verbose_override
@@ -3444,13 +3450,13 @@ test_zero_match_emits_nothing() {
 test_zero_match_emits_nothing
 
 # ---------------------------------------------------------------------------
-# Full format only on prompt 1 (3+ skills)
+# Lean default on prompt 1, terser compact on prompt 3 (3+ skills)
 # ---------------------------------------------------------------------------
-test_full_format_only_prompt_1() {
-    echo "-- test: full format only on prompt 1 --"
+test_lean_vs_compact_by_depth() {
+    echo "-- test: lean default on prompt 1, compact on prompt 3 --"
     local prompt="build a new component and review the design for security"
 
-    # --- Sub-test A: prompt 1 (no prior counter) SHOULD show full format ---
+    # --- Sub-test A: prompt 1 (no prior counter) → lean default (no verbose scaffold) ---
     setup_test_env
     install_registry
 
@@ -3462,15 +3468,15 @@ test_full_format_only_prompt_1() {
     output="$(run_hook "$prompt")"
     ctx="$(extract_context "$output")"
 
-    if printf '%s' "$ctx" | grep -q "Step 1 -- ASSESS"; then
-        _record_pass "full format shown on prompt 1"
+    if printf '%s' "$ctx" | grep -q "You MUST print a brief evaluation" && ! printf '%s' "$ctx" | grep -q "Step 1 -- ASSESS"; then
+        _record_pass "lean default shown on prompt 1 (eval directive, no verbose scaffold)"
     else
-        _record_fail "full format shown on prompt 1" "output missing 'Step 1 -- ASSESS': ${ctx}"
+        _record_fail "lean default shown on prompt 1" "expected lean eval directive without 'Step 1 -- ASSESS': ${ctx}"
     fi
 
     teardown_test_env
 
-    # --- Sub-test B: prompt 3 (counter at 2) should NOT show full format ---
+    # --- Sub-test B: prompt 3 (counter at 2) → compact (terser than prompt-1 lean) ---
     setup_test_env
     install_registry
 
@@ -3483,9 +3489,16 @@ test_full_format_only_prompt_1() {
     ctx="$(extract_context "$output")"
 
     if printf '%s' "$ctx" | grep -q "Step 1 -- ASSESS"; then
-        _record_fail "no full format on prompt 3" "output contains 'Step 1 -- ASSESS': ${ctx}"
+        _record_fail "no verbose scaffold on prompt 3" "output contains 'Step 1 -- ASSESS': ${ctx}"
     else
-        _record_pass "no full format on prompt 3"
+        _record_pass "no verbose scaffold on prompt 3"
+    fi
+
+    # Compact (prompt 3) is terser than the prompt-1 lean: lacks the lean eval directive
+    if printf '%s' "$ctx" | grep -q "You MUST print a brief evaluation"; then
+        _record_fail "prompt 3 is compact (terser than lean)" "compact unexpectedly has lean eval directive: ${ctx}"
+    else
+        _record_pass "prompt 3 is compact (terser than prompt-1 lean)"
     fi
 
     # Verify we still got output (compact format, not empty)
@@ -3497,7 +3510,7 @@ test_full_format_only_prompt_1() {
 
     teardown_test_env
 }
-test_full_format_only_prompt_1
+test_lean_vs_compact_by_depth
 
 # --- Test: name_boost segment reduced from 40 to 20 ---
 test_name_boost_segment_reduced() {

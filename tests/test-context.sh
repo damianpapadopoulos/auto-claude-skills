@@ -359,25 +359,28 @@ test_process_domain_informed_by() {
 }
 
 # ---------------------------------------------------------------------------
-# 4. 3+ skills -> full format with phase map
+# 4. 3+ skills -> lean default (verbose scaffold/phase map only under SKILL_VERBOSE)
 # ---------------------------------------------------------------------------
-test_many_skills_full_format() {
-    echo "-- test: 3+ skills -> full format with phase map --"
+test_many_skills_lean_default() {
+    echo "-- test: 3+ skills -> lean default --"
     setup_test_env
     install_context_registry
 
     # "build a secure frontend dashboard" triggers:
     #   brainstorming (process, prio 30),
     #   security-scanner (domain, prio 102), frontend-design (domain, prio 101)
-    # After role caps: 1 process + 2 domain = 3 selected -> full format
+    # After role caps: 1 process + 2 domain = 3 selected -> lean default (prompt 1)
     local output
     output="$(run_hook "build a secure frontend dashboard component with csrf protection")"
     local context
     context="$(extract_context "${output}")"
 
-    assert_contains "3+ skills has Step 1" "Step 1" "${context}"
-    assert_contains "3+ skills has MANDATORY" "MANDATORY" "${context}"
-    assert_contains "3+ skills has DESIGN phase" "DESIGN" "${context}"
+    # Lean default: no verbose Step-1/2/3 scaffold or phase-guide table ...
+    assert_not_contains "3+ skills lean has no Step 1 scaffold" "Step 1" "${context}"
+    # ... but keeps every compliance-carrying element
+    assert_contains "3+ skills lean keeps eval directive" "You MUST print a brief evaluation" "${context}"
+    assert_contains "3+ skills lean keeps MUST INVOKE" "MUST INVOKE" "${context}"
+    assert_contains "3+ skills lean keeps Skill( invocation" "Skill(" "${context}"
 
     teardown_test_env
 }
@@ -729,7 +732,7 @@ test_consolidation_marker_fresh() {
 test_zero_skills_minimal_output
 test_single_skill_compact_format
 test_process_domain_informed_by
-test_many_skills_full_format
+test_many_skills_lean_default
 test_invocation_hints_present
 test_output_valid_json_zero_match
 test_output_valid_json_single_match

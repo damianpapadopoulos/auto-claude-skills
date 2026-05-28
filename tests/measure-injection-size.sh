@@ -18,7 +18,7 @@ mkdir -p "${TMP_HOME}/.claude"
 HOME="${TMP_HOME}" CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
     bash "${SESSION_START}" >/dev/null 2>&1 || true
 
-run() {  # $1 = extra env assignment ("" or "SKILL_LEAN_TIER=1")
+run() {  # $1 = extra env assignment ("" for lean default, "SKILL_VERBOSE=1" for verbose)
     local extra="$1"
     rm -f "${TMP_HOME}/.claude/.skill-prompt-count-"* "${TMP_HOME}/.claude/.skill-session-token" 2>/dev/null
     jq -n --arg p "${PROMPT}" '{"prompt":$p}' | \
@@ -27,8 +27,9 @@ run() {  # $1 = extra env assignment ("" or "SKILL_LEAN_TIER=1")
         jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null
 }
 
-FULL="$(run "")"
-LEAN="$(run "SKILL_LEAN_TIER=1")"
+# Lean is now the production default; SKILL_VERBOSE=1 restores the verbose tier.
+FULL="$(run "SKILL_VERBOSE=1")"
+LEAN="$(run "")"
 
 full_b="$(printf '%s' "${FULL}" | wc -c | tr -d ' ')"
 lean_b="$(printf '%s' "${LEAN}" | wc -c | tr -d ' ')"

@@ -967,16 +967,13 @@ ${SKILL_LINES}${COMPOSITION_CHAIN}${COMPOSITION_LINES}
 Evaluate: **Phase: [${EVAL_PHASE}]** | ${EVAL_SKILLS}${DOMAIN_HINT}${COMPOSITION_DIRECTIVE}"
 
   elif [[ "$_PROMPT_COUNT" -le 1 ]] && [[ "$TOTAL_COUNT" -ge 3 ]]; then
-    # --- full format (3+ skills, prompt 1 only) ---
-    if [[ "${SKILL_LEAN_TIER:-0}" == "1" ]]; then
-      # Lean variant (Phase 0 measurement / candidate trim): drop the Step 1/2/3
-      # scaffold + phase-guide table; KEEP skill lines, MUST INVOKE, eval format.
-      OUT="SKILL ACTIVATION (${TOTAL_COUNT} skills | ${PLABEL})
-${SKILL_LINES}${COMPOSITION_CHAIN}${COMPOSITION_LINES}
-You MUST print a brief evaluation for each skill above:
-  **Phase: [PHASE]** | ${EVAL_SKILLS}
-Process skills marked MUST INVOKE are mandatory — invoke them. Domain/workflow skills marked YES/NO are optional.${DOMAIN_HINT}${COMPOSITION_DIRECTIVE}"
-    else
+    # --- prompt 1, 3+ skills ---
+    # Default is the LEAN rendering: drop the Step 1/2/3 scaffold + phase-guide
+    # table (signal-to-noise win, ~217 tokens saved) while KEEPING every
+    # compliance-carrying element — skill lines, MUST INVOKE, Skill(...) markers,
+    # and the mandatory eval-format line. SKILL_VERBOSE=1 restores the full
+    # scaffold + phase guide (opt-in / rollback hatch).
+    if [[ "${SKILL_VERBOSE:-0}" == "1" ]]; then
       # Build phase guide from registry (falls back to a minimal default)
       _PHASE_GUIDE="$(printf '%s' "$REGISTRY" | jq -r '
         .phase_guide // empty | to_entries | sort_by(.key) |
@@ -996,6 +993,12 @@ Process skills marked MUST INVOKE are mandatory — invoke them. Domain/workflow
 This line is MANDATORY -- do not skip it.
 
 Step 3 -- INVOKE the process skill. Do not skip to a later phase.${DOMAIN_HINT}${COMPOSITION_DIRECTIVE}"
+    else
+      OUT="SKILL ACTIVATION (${TOTAL_COUNT} skills | ${PLABEL})
+${SKILL_LINES}${COMPOSITION_CHAIN}${COMPOSITION_LINES}
+You MUST print a brief evaluation for each skill above:
+  **Phase: [PHASE]** | ${EVAL_SKILLS}
+Process skills marked MUST INVOKE are mandatory — invoke them. Domain/workflow skills marked YES/NO are optional.${DOMAIN_HINT}${COMPOSITION_DIRECTIVE}"
     fi
 
   else
