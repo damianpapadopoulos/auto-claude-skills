@@ -148,6 +148,25 @@ not the exact `agent-team-review` reviewer instructions. It measures whether a
 competent reviewer prompt on Haiku catches the bug — not end-to-end fidelity of
 any one shipping skill's dispatch.
 
+### Results to date (2026-05-29)
+
+The pack carries five scenarios spanning obvious → very-subtle, all undocumented
+in `CLAUDE.md` (reasoning, not recall). At variance ×5, Haiku 4.5 and Sonnet 4.6
+**both scored 5/5 `stable` on every scenario** (unquoted-test, local-masks,
+pipeline-subshell, octal-arithmetic, duplicate-trap).
+
+Read this two ways. (1) On single, well-defined, localized bugs, Haiku matches
+the baseline across the whole subtlety range — supports the dollar-cost case for
+discrete-bug review. (2) **The subtlety ladder is non-discriminating: both models
+saturate at 100%, so it cannot separate reviewers.** The dimension that has
+separated models (an in-session race where the strong model alone flagged an
+*unplanted, systemic* fail-open issue, 3/3 vs 0/3) is emergent/systemic insight,
+which these single-bug scenarios do not probe. A real criterion-2 gate needs a
+*discriminating* scenario — multi-bug interaction, an emergent property, or a
+"what's missing / what's the systemic risk" prompt — not more localized bugs.
+This expansion confirms breadth of competence; it does not establish general
+review parity.
+
 ## What `MAX_MCP_OUTPUT_TOKENS=10000` costs you
 
 Anthropic's default is 25000 with a warning floor at 10000. Setting the floor
