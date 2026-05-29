@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# test-model-routing-regex.sh — Calibration guard for the model-routing
-# probation fixture's catch-detector regex.
+# test-model-routing-regex.sh — Calibration guard for the model-routing probation
+# fixture's per-scenario catch-detector regexes.
 #
-# The single assertion in tests/fixtures/model-routing/review-pack.json is the
-# load-bearing discriminator for criterion 2 of the model-routing probation
-# (docs/observability.md): it decides whether a code review "caught" the planted
-# local-masks-exit-code bug. A regex that false-positives inflates a weak
-# model's catch rate; one that false-negatives understates the baseline. This
-# test pins the discriminator against an adversarial sample of real-catch vs
-# missed-the-bug review texts so it cannot rot silently (cf. CLAUDE.md gotcha on
-# grepping runtime output). Hermetic — no model calls.
-# Bash 3.2 compatible.
+# Each scenario in tests/fixtures/model-routing/review-pack.json carries a single
+# `text` assertion that decides whether a code review "caught" that scenario's
+# planted bug (probation criterion 2, docs/observability.md). A regex that
+# false-positives inflates a weak model's catch rate; one that false-negatives
+# understates the baseline. This test extracts each shipped detector from the
+# pack and pins it against an adversarial strong/weak sample set so it cannot rot
+# silently. Samples are markdown-formatted because real model output is markdown
+# (`**bold**`, `code`) — a proximity regex once scored a genuine catch as a miss.
+# Hermetic — no model calls. Bash 3.2 compatible.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -21,58 +21,65 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 echo "=== test-model-routing-regex.sh ==="
 
 PACK="${PROJECT_ROOT}/tests/fixtures/model-routing/review-pack.json"
-RE="$(jq -r '.[0].assertions[0].text' "${PACK}")"
-assert_not_empty "extracted catch-detector regex from pack" "${RE}"
 
-# Classify a review text exactly as the runner does (grep -E -i against .result).
-classify() {
-    if printf '%s\n' "$1" | grep -E -i -q "${RE}"; then
-        echo "CATCH"
-    else
-        echo "MISS"
-    fi
+# det <scenario-id> — echo the shipped catch-detector regex for a scenario.
+det() { jq -r --arg id "$1" '.[] | select(.id==$id) | .assertions[0].text' "${PACK}"; }
+# expect <CATCH|MISS> <regex> <text> — assert the runner's grep verdict.
+expect() {
+    local want="$1" re="$2" txt="$3" got
+    if printf '%s\n' "${txt}" | grep -E -i -q "${re}"; then got="CATCH"; else got="MISS"; fi
+    assert_equals "[${want}] ${txt}" "${want}" "${got}"
 }
 
-# Real catches — MUST classify CATCH. A false negative here understates the
-# baseline model and could fail an otherwise-passing probation. Samples include
-# markdown formatting (**bold**, `code`) because real model output is markdown,
-# and the verbatim phrasing a real Haiku run used (line 1) — an earlier
-# proximity-based regex missed it because markdown inflates token distance.
-echo "-- real catches (expect CATCH) --"
-i=0
-while IFS= read -r line; do
-    [ -z "${line}" ] && continue
-    assert_equals "catch[$i] detected" "CATCH" "$(classify "${line}")"
-    i=$((i + 1))
-done <<'STRONG'
-captures the exit code of the **`local` command itself**, not the exit code of `jq`.
-The `local` **builtin** returns 0 on successful assignment, regardless of whether jq failed.
-`local parsed=$(jq ...)` **masks** jq's exit status; $? reflects local.
-command substitution on one line **discards** the inner command's status
-$? holds the status of the local assignment, **not jq**
-assigning with local **resets** $? to 0
-the exit status is that of the assignment, which always returns success
-STRONG
+# --- local-masks-exit-code (medium) ---
+echo "-- local-masks-exit-code --"
+RE="$(det local-masks-exit-code)"; assert_not_empty "detector present: local-masks" "${RE}"
+expect CATCH "${RE}" "captures the exit code of the **\`local\` command itself**, not the exit code of \`jq\`."
+expect CATCH "${RE}" "The \`local\` **builtin** returns 0 on successful assignment, regardless of whether jq failed."
+expect CATCH "${RE}" "\`local parsed=\$(jq ...)\` **masks** jq's exit status; \$? reflects local."
+expect CATCH "${RE}" "\$? holds the status of the local assignment, **not jq**"
+expect MISS  "${RE}" "declares a \`local\` variable \`parsed\`. Later it returns exit code 0 on success."
+expect MISS  "${RE}" "The function returns proper exit status when the file is fresh."
+expect MISS  "${RE}" "You should validate the JSON schema, not just that it parses."
 
-# Missed-the-bug reviews — MUST classify MISS. A false positive here inflates a
-# weak model's apparent catch rate and could pass a failing probation. Includes
-# adversarial cases that name `local`/exit-status or use risky keywords
-# ("instead of") yet never explain the masking.
-echo "-- missed-the-bug reviews (expect MISS) --"
-i=0
-while IFS= read -r line; do
-    [ -z "${line}" ] && continue
-    assert_equals "miss[$i] rejected" "MISS" "$(classify "${line}")"
-    i=$((i + 1))
-done <<'WEAK'
-declares a `local` variable `parsed`. Later it returns exit code 0 on success.
-The function returns proper exit status when the file is fresh.
-Consider using `[[ ]]` instead of `[ ]`.
-`stat -f %m` is not portable to Linux which uses `stat -c %Y`.
-Looks good overall, just add quotes around $cache_path.
-The function returns 1 when missing and 0 when fresh.
-You should validate the JSON schema, not just that it parses.
-Add a comment explaining the max_age_secs parameter.
-WEAK
+# --- unquoted-test-wordsplit (obvious) ---
+echo "-- unquoted-test-wordsplit --"
+RE="$(det unquoted-test-wordsplit)"; assert_not_empty "detector present: unquoted" "${RE}"
+expect CATCH "${RE}" "\`\$name\` is **unquoted** in the test; if empty or containing spaces \`[ ]\` breaks. Quote it."
+expect CATCH "${RE}" "**word splitting**: an unquoted variable in \`[ ]\` errors when the value has spaces or is empty."
+expect CATCH "${RE}" "\`[ \$name = admin ]\` becomes \`[ = admin ]\` (unary operator expected) when name is empty — missing quotes."
+expect MISS  "${RE}" "The function returns 0 for admin and 1 otherwise; looks correct."
+expect MISS  "${RE}" "The comparison is case-sensitive; 'Admin' won't match."
+expect MISS  "${RE}" "Add a docstring explaining the admin check."
+
+# --- pipeline-subshell-lost (subtle) ---
+echo "-- pipeline-subshell-lost --"
+RE="$(det pipeline-subshell-lost)"; assert_not_empty "detector present: subshell" "${RE}"
+expect CATCH "${RE}" "the \`while\` loop runs in a **subshell** because it's right of a pipe, so \`total\` is lost — prints 0."
+expect CATCH "${RE}" "piping into \`while read\` spawns a subshell; updates to \`total\` don't propagate to the parent, always 0."
+expect CATCH "${RE}" "the accumulator never survives the pipeline — the loop body executes in a child shell."
+expect MISS  "${RE}" "the function sums byte counts of each path; looks fine."
+expect MISS  "${RE}" "consider checking each path exists before reading."
+expect MISS  "${RE}" "use \`\$(stat ...)\` instead of \`wc -c\`."
+
+# --- octal-arithmetic (very subtle) ---
+echo "-- octal-arithmetic --"
+RE="$(det octal-arithmetic)"; assert_not_empty "detector present: octal" "${RE}"
+expect CATCH "${RE}" "\`\$((minutes + 0))\` treats \`08\`/\`09\` as **octal** — invalid octal digits, errors 'value too great for base'. Use \`10#\`."
+expect CATCH "${RE}" "a leading-zero value like \`09\` is parsed in base 8; 8 and 9 aren't valid octal digits."
+expect CATCH "${RE}" "zero-padded minutes break \`\$(( ))\`; force base 10 with \`10#\`."
+expect MISS  "${RE}" "the function flags minutes >= 30 as 'late'; logic is fine."
+expect MISS  "${RE}" "consider validating that minutes is numeric."
+expect MISS  "${RE}" "\`-ge\` is the right comparison operator here."
+
+# --- duplicate-trap-exit (very subtle) ---
+echo "-- duplicate-trap-exit --"
+RE="$(det duplicate-trap-exit)"; assert_not_empty "detector present: trap" "${RE}"
+expect CATCH "${RE}" "the **second** \`trap ... EXIT\` **overwrites** the first — \`tmp_raw\` is never cleaned up."
+expect CATCH "${RE}" "EXIT trap is single-slot; re-registering it replaces the earlier handler, leaking \`tmp_raw\`."
+expect CATCH "${RE}" "you set two EXIT traps; only the last one runs, so the first cleanup is lost."
+expect MISS  "${RE}" "both temp files are created with mktemp; looks fine."
+expect MISS  "${RE}" "consider using a single temp dir instead of two files."
+expect MISS  "${RE}" "the cleanup removes temp files on exit."
 
 print_summary
