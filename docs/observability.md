@@ -86,6 +86,68 @@ summary (sample size, model-mix breakdown, fixture pass rate).
 If any of the three fail, the preset stays opt-in indefinitely. The cost
 savings are real but not worth a silent reviewer-quality regression.
 
+### Running criterion 2 (the known-regression fixture)
+
+The fixture lives at `tests/fixtures/model-routing/`: a self-contained reviewer
+prompt (`reviewer-guidance.md`) plus a review pack (`review-pack.json`) whose
+scenario embeds one deliberate, subtle bug — a `local var=$(cmd)` that masks the
+command's exit code, so a `$?` check tests `local` (always 0) instead. The bug
+is **not** documented in `CLAUDE.md`, so the test measures model reasoning, not
+recall of a known gotcha.
+
+The probation is comparative. Run the same scenario under Haiku and under the
+baseline model with `--variance N` and compare the per-assertion pass-rate
+tables the runner emits:
+
+```bash
+# Haiku-tier review
+BEHAVIORAL_EVALS=1 SKILL_PATH=tests/fixtures/model-routing/reviewer-guidance.md \
+  tests/run-behavioral-evals.sh \
+  --scenario local-masks-exit-code \
+  --pack tests/fixtures/model-routing/review-pack.json \
+  --model haiku --variance 10 \
+  --variance-report docs/plans/model-routing-haiku.md
+
+# Baseline review (e.g. sonnet) — same command, --model sonnet
+BEHAVIORAL_EVALS=1 SKILL_PATH=tests/fixtures/model-routing/reviewer-guidance.md \
+  tests/run-behavioral-evals.sh \
+  --scenario local-masks-exit-code \
+  --pack tests/fixtures/model-routing/review-pack.json \
+  --model sonnet --variance 10 \
+  --variance-report docs/plans/model-routing-sonnet.md
+```
+
+**On `--bare` and the inner agent's environment:** the inner `claude -p`
+inherits this plugin's own skill-activation hooks, so its review is prefixed
+with the skill banner ("N skills active... Phase: ..."). The `--bare` flag
+strips that, but it also disables OAuth credential loading — under a normal
+OAuth login it fails with "Not logged in" and only works when
+`ANTHROPIC_API_KEY` (or `apiKeyHelper` via `--settings`) is set. So: use
+`--bare` only in an API-key/sandbox context; under OAuth, **omit it**. Omitting
+it is measurement-safe here because the catch-detector keys on masking-insight
+words the banner never contains — verified, the banner does not move the
+catch/miss verdict.
+
+**Pass criterion:** Haiku's catch-rate classification must be `stable` (≥90%)
+AND not materially below the baseline's. If Haiku lands `flaky`/`broken` while
+the baseline is `stable`, criterion 2 fails and reviewers stay on the strong
+model. Note the `--model` flag pins the *inner* `claude -p` model; it is
+independent of `CLAUDE_CODE_SUBAGENT_MODEL`.
+
+The catch-detector is a keyword-presence regex (the single `text` assertion in
+`review-pack.json`) that fires on the masking insight — that the checked exit
+status belongs to `local`/the assignment, not jq. It is **not** a proximity
+regex: real model output is markdown, and `**bold**`/`` `code` `` inflate token
+distances enough to break `.{0,N}` windows (learned the hard way — an early
+proximity regex scored a correct Haiku review as a miss). The discriminator is
+pinned against an adversarial sample in `tests/test-model-routing-regex.sh`;
+update that test in lockstep if you touch the assertion.
+
+Caveat: the fixture isolates model capability with a generic reviewer prompt,
+not the exact `agent-team-review` reviewer instructions. It measures whether a
+competent reviewer prompt on Haiku catches the bug — not end-to-end fidelity of
+any one shipping skill's dispatch.
+
 ## What `MAX_MCP_OUTPUT_TOKENS=10000` costs you
 
 Anthropic's default is 25000 with a warning floor at 10000. Setting the floor

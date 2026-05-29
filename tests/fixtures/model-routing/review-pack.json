@@ -1,0 +1,14 @@
+[
+  {
+    "id": "local-masks-exit-code",
+    "prompt": "Review this Bash function for correctness bugs.\n\n```bash\n#!/usr/bin/env bash\n# Returns 0 when the cached registry is usable, non-zero when it must be rebuilt.\ncache_is_usable() {\n  local cache_path=\"$1\"\n  local max_age_secs=\"$2\"\n\n  [ -f \"$cache_path\" ] || return 1\n\n  # The cache must be valid JSON; jq exits non-zero on a corrupt file.\n  local parsed=$(jq -e '.' \"$cache_path\" 2>/dev/null)\n  if [ $? -ne 0 ]; then\n    return 1\n  fi\n\n  local now=$(date +%s)\n  local mtime=$(stat -f %m \"$cache_path\" 2>/dev/null)\n  if [ $(( now - mtime )) -gt \"$max_age_secs\" ]; then\n    return 1\n  fi\n  return 0\n}\n```\n\nThe author believes a corrupt cache file is rejected by the jq validity check. Review carefully and list every correctness bug.",
+    "expected_behavior": "A correct review identifies that `local parsed=$(jq ...)` masks jq's exit code: because `local` is itself a command that succeeds, `$?` on the next line reflects `local` (always 0), not jq. So the `[ $? -ne 0 ]` check never fires and a corrupt cache is wrongly treated as usable. The fix is to split declaration from assignment (`local parsed; parsed=$(jq ...)`) or test jq directly.",
+    "assertions": [
+      {
+        "kind": "text",
+        "description": "Catches the masking insight: that the exit code checked belongs to `local` (the builtin/assignment, which always succeeds), not jq, so a corrupt cache is wrongly accepted. Keyword-presence detector (markdown-immune); calibrated in tests/test-model-routing-regex.sh",
+        "text": "mask|hides?|hidden|discard|swallow|loses?|lost|overwrit|reset|clobber|reflect|builtin|not[- ]?(jq|the exit)|command itself|always (returns?|be|is) (0|zero|succe)"
+      }
+    ]
+  }
+]

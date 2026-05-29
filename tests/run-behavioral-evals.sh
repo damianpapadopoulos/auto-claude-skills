@@ -16,6 +16,15 @@ Options:
                            summary (default: 1, single run)
   --variance-report <path> override default variance-report markdown path
                            (default: docs/plans/<today>-behavioral-eval-variance-report.md)
+  --model <name>           pin the inner 'claude -p' model (e.g. haiku, sonnet,
+                           opus). When omitted, the session's configured model
+                           is used. Enables comparative catch-rate runs for the
+                           model-routing probation (see docs/observability.md).
+  --bare                   run the inner 'claude -p' in --bare mode (skip hooks,
+                           LSP, plugin). Strips ambient noise — e.g. this
+                           plugin's own skill-activation banner — from the
+                           measured output. Recommended for the model-routing
+                           probation so the only injected guidance is SKILL_PATH.
   -h, --help               show this message
 
 Environment:
@@ -42,6 +51,8 @@ SCENARIO_ID=""
 PACK_PATH="tests/fixtures/incident-analysis/evals/behavioral.json"
 VARIANCE_N=1
 VARIANCE_REPORT=""
+MODEL_FLAG=""
+BARE=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -60,6 +71,14 @@ while [ $# -gt 0 ]; do
         --variance-report)
             VARIANCE_REPORT="${2:-}"
             shift 2
+            ;;
+        --model)
+            MODEL_FLAG="${2:-}"
+            shift 2
+            ;;
+        --bare)
+            BARE=1
+            shift
             ;;
         -h|--help)
             usage
@@ -256,8 +275,17 @@ ${SCENARIO_PROMPT}
     start_ts="$(date +%s)"
     # Sandbox the inner agent: deny Edit/Write/Bash so a fixture run cannot
     # mutate committed files on the host (see feedback_inner_claude_p_tool_access.md).
+    # Optional flags (--model pin, --bare) accumulate in an indexed array. The
+    # `${arr[@]+"${arr[@]}"}` guard is required because expanding an empty array
+    # as `"${arr[@]}"` under `set -u` errors in Bash 3.2 (indexed arrays only —
+    # no associative arrays).
+    local -a EXTRA_ARGS
+    EXTRA_ARGS=()
+    [ -n "${MODEL_FLAG}" ] && EXTRA_ARGS+=(--model "${MODEL_FLAG}")
+    [ "${BARE}" = "1" ] && EXTRA_ARGS+=(--bare)
     CLAUDE_JSON="$("${CLAUDE_BIN}" -p --output-format json \
         --disallowedTools "Edit Write Bash" \
+        ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"} \
         "${CONSTRUCTED_PROMPT}" 2>&1)"
     claude_exit=$?
     end_ts="$(date +%s)"
