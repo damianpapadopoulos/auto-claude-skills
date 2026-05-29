@@ -100,10 +100,19 @@ expect CATCH "${RE}" "there's **no \`return 1\`** anywhere; an unhealthy depende
 expect CATCH "${RE}" "this **defeats the purpose** of the gate: \`check_one\` failure just logs, and control falls through to \`return 0\`."
 expect CATCH "${RE}" "the gate is **vacuous** — every path leads to \`return 0\`; it can never block."
 expect CATCH "${RE}" "\`check_one\` failure does not affect the return value, so an unhealthy dep never blocks the deploy."
+expect CATCH "${RE}" "it logs the failure but should return 1 to block the deploy."
 expect MISS  "${RE}" "the loop correctly skips blank lines and checks each dependency."
 expect MISS  "${RE}" "consider logging the healthy dependencies too for visibility."
 expect MISS  "${RE}" "\`check_one\` should probably have a timeout to avoid hanging."
 expect MISS  "${RE}" "you might want to quote \`\$deps_file\` in the redirect."
 expect MISS  "${RE}" "the comment says it blocks on unhealthy deps, which is a sensible gate design."
+# Adversarial (code-review #3): NEUTRAL descriptions that restate the control
+# flow — even approvingly — must NOT score as catching the fail-open. These
+# matched the original 'only logs'/'just logs'/'logs but'/'does not block'
+# branches, which were removed.
+expect MISS  "${RE}" "The function only logs unhealthy dependencies and then returns 0 to allow the deploy."
+expect MISS  "${RE}" "it just logs a message and returns 0 as designed"
+expect MISS  "${RE}" "it logs it but continues to the next dependency"
+expect MISS  "${RE}" "If a dep is unhealthy it logs but does not crash, which is good"
 
 print_summary

@@ -180,7 +180,12 @@ emergent reasoning: a deploy gate that logs unhealthy dependencies but has no
 `return 1` anywhere, so it unconditionally returns 0 and can never block. Both
 models again scored **5/5 `stable`**, and a verbatim Haiku review confirms the
 result is genuine ("always returns 0… never blocks the deploy… the opposite of
-the stated intent"), not a detector artifact.
+the stated intent"), not a detector artifact. A subsequent code review flagged
+that the systemic detector's bare `only logs`/`just logs`/`does not block`
+branches could match a *neutral* control-flow restatement ("it just logs and
+returns 0 as designed") without the reviewer grasping the defect; those branches
+were removed, adversarial neutral-description samples added to the calibration
+test, and both models **re-measured at 5/5** — confirming the catch was earned.
 
 **Refined conclusion — what actually discriminates.** A *primary* systemic bug
 (the only/main defect, framed by an explicit contract) does NOT separate the

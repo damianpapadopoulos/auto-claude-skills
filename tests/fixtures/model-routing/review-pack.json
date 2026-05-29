@@ -73,7 +73,7 @@
       {
         "kind": "text",
         "description": "Systemic fail-open: gate only logs unhealthy deps and always returns 0 (no failure path) — it can never block",
-        "text": "always (returns?|allows?|permits?|passes) (0|zero|the deploy|success|true)|never (returns?|blocks?|rejects?|fails?|prevents?) (1|non-?zero|the deploy|a deploy|anything)|no (path|branch|case|code path|where).{0,25}return(s)? (1|non-?zero)|return 1 (is )?(missing|never|absent|nowhere)|only logs|just logs|logs (it )?but|does(n.t| not) (block|prevent|stop|reject|affect|change|return 1|return non)|fails? open|gate (is )?(vacuous|ineffective|useless|a no-?op|toothless)|never (actually )?blocks|always passes|unconditional|defeats? the (gate|purpose|point)|every (code )?path.{0,20}(return|leads).{0,10}(0|zero)|falls through to (the )?return 0"
+        "text": "always (returns?|allows?|permits?|passes) (0|zero|the deploy|success|true)|never (returns?|blocks?|rejects?|fails?|prevents?) (1|non-?zero|the deploy|a deploy|anything)|no (path|branch|case|code path|where).{0,25}return(s)? (1|non-?zero)|return 1 (is )?(missing|never|absent|nowhere)|should (have )?return(ed)? (1|non-?zero)|fails? open|gate (is )?(vacuous|ineffective|useless|a no-?op|toothless)|never (actually )?blocks|always passes|unconditional|defeats? the (gate|purpose|point)|every (code )?path.{0,20}(return|leads).{0,10}(0|zero)|falls through to (the )?return 0"
       }
     ]
   }
