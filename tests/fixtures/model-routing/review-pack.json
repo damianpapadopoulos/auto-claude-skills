@@ -63,5 +63,18 @@
         "text": "trap.*(replace|overwrit|overrid|clobber|only.*last|single.?slot)|re-?register|reassign.*trap|overwrites the (first|earlier|previous)|only the last (trap|handler)|second.*(replace|overwrit|overrid|clobber|wins|takes over)"
       }
     ]
+  },
+  {
+    "id": "systemic-gate-fail-open",
+    "subtlety": "systemic",
+    "prompt": "Review this Bash function for correctness bugs.\n\n```bash\n#!/usr/bin/env bash\n# Deploy gate: return 1 to BLOCK the rollout if ANY dependency is unhealthy,\n# return 0 to ALLOW it otherwise. `check_one` returns 0 when a dep is healthy.\ndeploy_gate() {\n  local deps_file=\"$1\"\n  local dep\n  while read -r dep; do\n    [ -z \"$dep\" ] && continue\n    if ! check_one \"$dep\"; then\n      log \"dependency $dep is unhealthy\"\n    fi\n  done < \"$deps_file\"\n  return 0\n}\n```\n\nThe author believes this blocks the deploy when a dependency is unhealthy. List every correctness bug.",
+    "expected_behavior": "Catches the EMERGENT defect: the unhealthy branch only logs and there is no return 1 anywhere, so deploy_gate unconditionally returns 0 — it can never block a deploy and fails open. Requires reasoning about whole-function behavior, not a localized token.",
+    "assertions": [
+      {
+        "kind": "text",
+        "description": "Systemic fail-open: gate only logs unhealthy deps and always returns 0 (no failure path) — it can never block",
+        "text": "always (returns?|allows?|permits?|passes) (0|zero|the deploy|success|true)|never (returns?|blocks?|rejects?|fails?|prevents?) (1|non-?zero|the deploy|a deploy|anything)|no (path|branch|case|code path|where).{0,25}return(s)? (1|non-?zero)|return 1 (is )?(missing|never|absent|nowhere)|only logs|just logs|logs (it )?but|does(n.t| not) (block|prevent|stop|reject|affect|change|return 1|return non)|fails? open|gate (is )?(vacuous|ineffective|useless|a no-?op|toothless)|never (actually )?blocks|always passes|unconditional|defeats? the (gate|purpose|point)|every (code )?path.{0,20}(return|leads).{0,10}(0|zero)|falls through to (the )?return 0"
+      }
+    ]
   }
 ]

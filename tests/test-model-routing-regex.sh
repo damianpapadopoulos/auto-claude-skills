@@ -89,4 +89,21 @@ expect MISS  "${RE}" "the cleanup removes temp files on exit."
 expect MISS  "${RE}" "There are two trap statements; the second is on the EXIT signal."
 expect MISS  "${RE}" "Should use a trap to clean up but the first attempt is incomplete."
 
+# --- systemic-gate-fail-open (systemic / emergent) ---
+# The catch requires reasoning about whole-function behavior (no failure path
+# exists), not spotting a localized token. Weak samples include description,
+# localized nits, and the comment-rationalization trap.
+echo "-- systemic-gate-fail-open --"
+RE="$(det systemic-gate-fail-open)"; assert_not_empty "detector present: systemic" "${RE}"
+expect CATCH "${RE}" "the unhealthy branch **only logs** — the function **always returns 0**, so the gate never blocks a deploy even when a dependency is down."
+expect CATCH "${RE}" "there's **no \`return 1\`** anywhere; an unhealthy dependency is logged but the deploy proceeds — the gate **fails open**."
+expect CATCH "${RE}" "this **defeats the purpose** of the gate: \`check_one\` failure just logs, and control falls through to \`return 0\`."
+expect CATCH "${RE}" "the gate is **vacuous** — every path leads to \`return 0\`; it can never block."
+expect CATCH "${RE}" "\`check_one\` failure does not affect the return value, so an unhealthy dep never blocks the deploy."
+expect MISS  "${RE}" "the loop correctly skips blank lines and checks each dependency."
+expect MISS  "${RE}" "consider logging the healthy dependencies too for visibility."
+expect MISS  "${RE}" "\`check_one\` should probably have a timeout to avoid hanging."
+expect MISS  "${RE}" "you might want to quote \`\$deps_file\` in the redirect."
+expect MISS  "${RE}" "the comment says it blocks on unhealthy deps, which is a sensible gate design."
+
 print_summary
