@@ -175,6 +175,26 @@ replacement/subshell insight, the calibration test gained those adversarial weak
 samples, and the two scenarios were **re-measured** — both models held 5/5
 `stable`, confirming the result was genuine, not a loose-regex artifact.
 
+A sixth `systemic` scenario (`systemic-gate-fail-open`) was then added to probe
+emergent reasoning: a deploy gate that logs unhealthy dependencies but has no
+`return 1` anywhere, so it unconditionally returns 0 and can never block. Both
+models again scored **5/5 `stable`**, and a verbatim Haiku review confirms the
+result is genuine ("always returns 0… never blocks the deploy… the opposite of
+the stated intent"), not a detector artifact.
+
+**Refined conclusion — what actually discriminates.** A *primary* systemic bug
+(the only/main defect, framed by an explicit contract) does NOT separate the
+models: both catch it. This appears to contradict an earlier in-session race
+where the strong model alone flagged a systemic issue (3/3 vs 0/3) — but the
+difference is **primary vs secondary**. In the race the systemic issue was
+*unplanted and secondary*, competing with obvious planted bugs that the weaker
+model grabbed onto and then stopped. So the discriminating axis is not "systemic
+reasoning" but **depth beyond the first finding** — surfacing a non-obvious,
+unplanted systemic issue when easier findings are present. A truly
+discriminating fixture must therefore layer an *obvious* bug OVER a deeper
+*unplanted* systemic one and score whether the deeper one is surfaced — a
+standalone systemic bug saturates like everything else.
+
 ## What `MAX_MCP_OUTPUT_TOKENS=10000` costs you
 
 Anthropic's default is 25000 with a warning floor at 10000. Setting the floor
