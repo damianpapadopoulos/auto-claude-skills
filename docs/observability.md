@@ -167,6 +167,14 @@ which these single-bug scenarios do not probe. A real criterion-2 gate needs a
 This expansion confirms breadth of competence; it does not establish general
 review parity.
 
+A code review of the expansion flagged that the `duplicate-trap-exit` and
+`pipeline-subshell-lost` detectors were loose enough to score a *description-only*
+or *collateral* observation as a catch (e.g. "there are two trap statements" or a
+missing-path "the sum is lost"). Both detectors were hardened to require the
+replacement/subshell insight, the calibration test gained those adversarial weak
+samples, and the two scenarios were **re-measured** — both models held 5/5
+`stable`, confirming the result was genuine, not a loose-regex artifact.
+
 ## What `MAX_MCP_OUTPUT_TOKENS=10000` costs you
 
 Anthropic's default is 25000 with a warning floor at 10000. Setting the floor

@@ -61,6 +61,9 @@ expect CATCH "${RE}" "the accumulator never survives the pipeline — the loop b
 expect MISS  "${RE}" "the function sums byte counts of each path; looks fine."
 expect MISS  "${RE}" "consider checking each path exists before reading."
 expect MISS  "${RE}" "use \`\$(stat ...)\` instead of \`wc -c\`."
+# Adversarial (code-review #2): collateral 'sum is lost' for a missing path must
+# not score as catching the subshell bug.
+expect MISS  "${RE}" "If a path does not exist \`wc\` emits an error and the sum is lost for that file."
 
 # --- octal-arithmetic (very subtle) ---
 echo "-- octal-arithmetic --"
@@ -81,5 +84,9 @@ expect CATCH "${RE}" "you set two EXIT traps; only the last one runs, so the fir
 expect MISS  "${RE}" "both temp files are created with mktemp; looks fine."
 expect MISS  "${RE}" "consider using a single temp dir instead of two files."
 expect MISS  "${RE}" "the cleanup removes temp files on exit."
+# Adversarial (code-review #2): merely *enumerating* the two traps, without
+# grasping that the second replaces the first, must NOT score as a catch.
+expect MISS  "${RE}" "There are two trap statements; the second is on the EXIT signal."
+expect MISS  "${RE}" "Should use a trap to clean up but the first attempt is incomplete."
 
 print_summary

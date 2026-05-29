@@ -34,7 +34,7 @@
       {
         "kind": "text",
         "description": "Pipeline `while read` runs in a subshell; accumulator updates are lost so output is always 0",
-        "text": "subshell|sub-shell|in a (sub)?shell|child (process|shell)|(variable|total|count|sum|accumulat).*(lost|not (persist|propagat|surviv|retain))|modifications? (are )?lost|does(n.t| not) (propagat|persist|surviv)"
+        "text": "subshell|sub-shell|in a (sub)?shell|child (process|shell)|separate (process|shell)|forked|does(n.t| not) (propagat|persist|surviv)|never (propagat|persist|surviv)|not (propagat|persist|surviv)e?d?|modifications? (are )?lost"
       }
     ]
   },
@@ -60,7 +60,7 @@
       {
         "kind": "text",
         "description": "Second EXIT trap overwrites the first (single-slot); earlier cleanup is lost",
-        "text": "trap.*(replace|overwrit|overrid|clobber|second|first|earlier|previous|single|only.*last)|re-?register|reassign.*trap|overwrites the (first|earlier|previous)|only the last (trap|handler)"
+        "text": "trap.*(replace|overwrit|overrid|clobber|only.*last|single.?slot)|re-?register|reassign.*trap|overwrites the (first|earlier|previous)|only the last (trap|handler)|second.*(replace|overwrit|overrid|clobber|wins|takes over)"
       }
     ]
   }
