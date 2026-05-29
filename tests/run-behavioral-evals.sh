@@ -165,7 +165,9 @@ ARTIFACTS_DIR="${ARTIFACTS_DIR:-tests/artifacts}"
 # -------- helper: update_counter --------
 # Increment pass or fail count for assertion idx in counter file.
 # Counter file format: tab-separated, one line per assertion:
-#   <idx>\t<pass_count>\t<fail_count>\t<assertion_text>|<description>
+#   <idx>\t<pass_count>\t<fail_count>\t<assertion_text>\t<description>
+# text and desc are SEPARATE tab fields (not `|`-joined): a `text` regex may
+# itself contain `|`, which would otherwise bleed into the report's Description.
 # Args: $1 cfile, $2 idx (0-based), $3 "true"|"false"
 update_counter() {
     local cfile="$1"
@@ -178,14 +180,14 @@ update_counter() {
         $1 == idx {
             found=1
             if (passed == "true") { $2 = $2 + 1 } else { $3 = $3 + 1 }
-            printf "%s\t%s\t%s\t%s\n", $1, $2, $3, $4
+            printf "%s\t%s\t%s\t%s\t%s\n", $1, $2, $3, $4, $5
             next
         }
         { print }
         END {
             if (!found) {
-                if (passed == "true") { printf "%s\t1\t0\t\n", idx }
-                else { printf "%s\t0\t1\t\n", idx }
+                if (passed == "true") { printf "%s\t1\t0\t\t\n", idx }
+                else { printf "%s\t0\t1\t\t\n", idx }
             }
         }
     ' "${cfile}" > "${tmp}"
@@ -219,10 +221,8 @@ write_variance_report() {
         stable_threshold="$(awk -v n="${n}" 'BEGIN { print int(n*0.9) }')"
         flaky_threshold="$(awk -v n="${n}" 'BEGIN { print int(n*0.5) }')"
 
-        sort -n "${cfile}" | while IFS=$'\t' read -r idx p f rest; do
-            local desc text classification rate
-            text="${rest%%|*}"
-            desc="${rest#*|}"
+        sort -n "${cfile}" | while IFS=$'\t' read -r idx p f text desc; do
+            local classification rate
             if [ "${n}" -eq 0 ]; then
                 rate="—"
                 classification="—"
@@ -444,7 +444,7 @@ if [ "${VARIANCE_N}" -gt 1 ]; then
             a_text_init="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${seed_i}].text")"
         fi
         a_desc_init="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${seed_i}].description")"
-        printf '%d\t0\t0\t%s|%s\n' "${seed_i}" "${a_text_init}" "${a_desc_init}" >> "${COUNTER_FILE}"
+        printf '%d\t0\t0\t%s\t%s\n' "${seed_i}" "${a_text_init}" "${a_desc_init}" >> "${COUNTER_FILE}"
         seed_i=$((seed_i + 1))
     done
 fi
