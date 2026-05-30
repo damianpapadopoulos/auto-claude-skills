@@ -16,6 +16,15 @@ Options:
                            summary (default: 1, single run)
   --variance-report <path> override default variance-report markdown path
                            (default: docs/plans/<today>-behavioral-eval-variance-report.md)
+  --model <name>           pin the inner 'claude -p' model (e.g. haiku, sonnet,
+                           opus). When omitted, the session's configured model
+                           is used. Enables comparative catch-rate runs for the
+                           model-routing probation (see docs/observability.md).
+  --bare                   run the inner 'claude -p' in --bare mode (skip hooks,
+                           LSP, plugin). Strips ambient noise — e.g. this
+                           plugin's own skill-activation banner — from the
+                           measured output. Recommended for the model-routing
+                           probation so the only injected guidance is SKILL_PATH.
   -h, --help               show this message
 
 Environment:
@@ -42,6 +51,8 @@ SCENARIO_ID=""
 PACK_PATH="tests/fixtures/incident-analysis/evals/behavioral.json"
 VARIANCE_N=1
 VARIANCE_REPORT=""
+MODEL_FLAG=""
+BARE=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -60,6 +71,14 @@ while [ $# -gt 0 ]; do
         --variance-report)
             VARIANCE_REPORT="${2:-}"
             shift 2
+            ;;
+        --model)
+            MODEL_FLAG="${2:-}"
+            shift 2
+            ;;
+        --bare)
+            BARE=1
+            shift
             ;;
         -h|--help)
             usage
@@ -146,7 +165,9 @@ ARTIFACTS_DIR="${ARTIFACTS_DIR:-tests/artifacts}"
 # -------- helper: update_counter --------
 # Increment pass or fail count for assertion idx in counter file.
 # Counter file format: tab-separated, one line per assertion:
-#   <idx>\t<pass_count>\t<fail_count>\t<assertion_text>|<description>
+#   <idx>\t<pass_count>\t<fail_count>\t<assertion_text>\t<description>
+# text and desc are SEPARATE tab fields (not `|`-joined): a `text` regex may
+# itself contain `|`, which would otherwise bleed into the report's Description.
 # Args: $1 cfile, $2 idx (0-based), $3 "true"|"false"
 update_counter() {
     local cfile="$1"
@@ -159,14 +180,14 @@ update_counter() {
         $1 == idx {
             found=1
             if (passed == "true") { $2 = $2 + 1 } else { $3 = $3 + 1 }
-            printf "%s\t%s\t%s\t%s\n", $1, $2, $3, $4
+            printf "%s\t%s\t%s\t%s\t%s\n", $1, $2, $3, $4, $5
             next
         }
         { print }
         END {
             if (!found) {
-                if (passed == "true") { printf "%s\t1\t0\t\n", idx }
-                else { printf "%s\t0\t1\t\n", idx }
+                if (passed == "true") { printf "%s\t1\t0\t\t\n", idx }
+                else { printf "%s\t0\t1\t\t\n", idx }
             }
         }
     ' "${cfile}" > "${tmp}"
@@ -200,10 +221,8 @@ write_variance_report() {
         stable_threshold="$(awk -v n="${n}" 'BEGIN { print int(n*0.9) }')"
         flaky_threshold="$(awk -v n="${n}" 'BEGIN { print int(n*0.5) }')"
 
-        sort -n "${cfile}" | while IFS=$'\t' read -r idx p f rest; do
-            local desc text classification rate
-            text="${rest%%|*}"
-            desc="${rest#*|}"
+        sort -n "${cfile}" | while IFS=$'\t' read -r idx p f text desc; do
+            local classification rate
             if [ "${n}" -eq 0 ]; then
                 rate="—"
                 classification="—"
@@ -256,8 +275,17 @@ ${SCENARIO_PROMPT}
     start_ts="$(date +%s)"
     # Sandbox the inner agent: deny Edit/Write/Bash so a fixture run cannot
     # mutate committed files on the host (see feedback_inner_claude_p_tool_access.md).
+    # Optional flags (--model pin, --bare) accumulate in an indexed array. The
+    # `${arr[@]+"${arr[@]}"}` guard is required because expanding an empty array
+    # as `"${arr[@]}"` under `set -u` errors in Bash 3.2 (indexed arrays only —
+    # no associative arrays).
+    local -a EXTRA_ARGS
+    EXTRA_ARGS=()
+    [ -n "${MODEL_FLAG}" ] && EXTRA_ARGS+=(--model "${MODEL_FLAG}")
+    [ "${BARE}" = "1" ] && EXTRA_ARGS+=(--bare)
     CLAUDE_JSON="$("${CLAUDE_BIN}" -p --output-format json \
         --disallowedTools "Edit Write Bash" \
+        ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"} \
         "${CONSTRUCTED_PROMPT}" 2>&1)"
     claude_exit=$?
     end_ts="$(date +%s)"
@@ -416,7 +444,7 @@ if [ "${VARIANCE_N}" -gt 1 ]; then
             a_text_init="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${seed_i}].text")"
         fi
         a_desc_init="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${seed_i}].description")"
-        printf '%d\t0\t0\t%s|%s\n' "${seed_i}" "${a_text_init}" "${a_desc_init}" >> "${COUNTER_FILE}"
+        printf '%d\t0\t0\t%s\t%s\n' "${seed_i}" "${a_text_init}" "${a_desc_init}" >> "${COUNTER_FILE}"
         seed_i=$((seed_i + 1))
     done
 fi

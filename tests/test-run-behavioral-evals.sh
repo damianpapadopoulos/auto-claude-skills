@@ -216,4 +216,101 @@ assert_contains "sandbox value denies Edit tool" "Edit" "${sandbox_value}"
 assert_contains "sandbox value denies Write tool" "Write" "${sandbox_value}"
 assert_contains "sandbox value denies Bash tool" "Bash" "${sandbox_value}"
 
+# ---------------------------------------------------------------------------
+# Model pin: --model <name> is threaded to the inner claude -p invocation so
+# the probation fixture can pin Haiku vs a baseline model for a comparative
+# catch-rate run (see docs/observability.md probation contract).
+# ---------------------------------------------------------------------------
+echo "-- model pin: --model is passed to inner claude -p --"
+
+MODEL_RESPONSE_FILE="${TMPDIR:-/tmp}/acs-model-resp-$$.txt"
+MODEL_ARGS_FILE="${TMPDIR:-/tmp}/acs-model-args-$$.txt"
+MODEL_ART_DIR="${TMPDIR:-/tmp}/acs-model-art-$$"
+# Compose with the earlier trap (single-slot bash trap-EXIT): re-list all
+# prior temp paths so none leak.
+trap 'rm -f "${CANNED_RESPONSE_FILE}" "${SANDBOX_RESPONSE_FILE}" "${SANDBOX_ARGS_FILE}" "${MODEL_RESPONSE_FILE}" "${MODEL_ARGS_FILE}"; rm -rf "${SANDBOX_ART_DIR}" "${MODEL_ART_DIR}"' EXIT
+cat > "${MODEL_RESPONSE_FILE}" <<'EOF'
+Exit code 137 indicates OOMKilled termination.
+EOF
+
+MOCK_RESPONSE_FILE="${MODEL_RESPONSE_FILE}" \
+    MOCK_ARGS_FILE="${MODEL_ARGS_FILE}" \
+    BEHAVIORAL_EVALS=1 \
+    CLAUDE_BIN="${PROJECT_ROOT}/tests/fixtures/behavioral-runner/mock-claude.sh" \
+    ARTIFACTS_DIR="${MODEL_ART_DIR}" \
+    SKILL_PATH="${PROJECT_ROOT}/skills/incident-analysis/SKILL.md" \
+    bash "${RUNNER}" \
+        --scenario well-formed-scenario \
+        --model haiku \
+        --pack "${PROJECT_ROOT}/tests/fixtures/behavioral-runner/scenarios.json" >/dev/null 2>&1
+
+model_flag_line="$(grep -nxF -- '--model' "${MODEL_ARGS_FILE}" 2>/dev/null | head -n1 | cut -d: -f1)"
+model_value=""
+if [ -n "${model_flag_line}" ]; then
+    model_value="$(sed -n "$((model_flag_line + 1))p" "${MODEL_ARGS_FILE}")"
+fi
+
+assert_not_empty "runner passes --model as standalone argv when set" "${model_flag_line}"
+assert_equals "the pinned model value is forwarded verbatim" "haiku" "${model_value}"
+
+# ---------------------------------------------------------------------------
+# Model pin (default): without --model, no --model flag is forwarded, so the
+# session's configured model is used unchanged.
+# ---------------------------------------------------------------------------
+echo "-- model pin: --model absent forwards no model flag --"
+
+NOMODEL_ARGS_FILE="${TMPDIR:-/tmp}/acs-nomodel-args-$$.txt"
+trap 'rm -f "${CANNED_RESPONSE_FILE}" "${SANDBOX_RESPONSE_FILE}" "${SANDBOX_ARGS_FILE}" "${MODEL_RESPONSE_FILE}" "${MODEL_ARGS_FILE}" "${NOMODEL_ARGS_FILE}"; rm -rf "${SANDBOX_ART_DIR}" "${MODEL_ART_DIR}"' EXIT
+
+MOCK_RESPONSE_FILE="${MODEL_RESPONSE_FILE}" \
+    MOCK_ARGS_FILE="${NOMODEL_ARGS_FILE}" \
+    BEHAVIORAL_EVALS=1 \
+    CLAUDE_BIN="${PROJECT_ROOT}/tests/fixtures/behavioral-runner/mock-claude.sh" \
+    ARTIFACTS_DIR="${MODEL_ART_DIR}" \
+    SKILL_PATH="${PROJECT_ROOT}/skills/incident-analysis/SKILL.md" \
+    bash "${RUNNER}" \
+        --scenario well-formed-scenario \
+        --pack "${PROJECT_ROOT}/tests/fixtures/behavioral-runner/scenarios.json" >/dev/null 2>&1
+
+nomodel_flag_line="$(grep -nxF -- '--model' "${NOMODEL_ARGS_FILE}" 2>/dev/null | head -n1 | cut -d: -f1)"
+assert_equals "no --model flag forwarded when unset" "" "${nomodel_flag_line}"
+
+# ---------------------------------------------------------------------------
+# Bare mode: --bare is forwarded to the inner claude -p so the probation can
+# strip ambient hooks/LSP/plugin noise (e.g. this plugin's own skill-activation
+# banner) from the measured review. Boolean flag — present or absent.
+# ---------------------------------------------------------------------------
+echo "-- bare mode: --bare is forwarded when set, absent otherwise --"
+
+BARE_ARGS_FILE="${TMPDIR:-/tmp}/acs-bare-args-$$.txt"
+NOBARE_ARGS_FILE="${TMPDIR:-/tmp}/acs-nobare-args-$$.txt"
+trap 'rm -f "${CANNED_RESPONSE_FILE}" "${SANDBOX_RESPONSE_FILE}" "${SANDBOX_ARGS_FILE}" "${MODEL_RESPONSE_FILE}" "${MODEL_ARGS_FILE}" "${NOMODEL_ARGS_FILE}" "${BARE_ARGS_FILE}" "${NOBARE_ARGS_FILE}"; rm -rf "${SANDBOX_ART_DIR}" "${MODEL_ART_DIR}"' EXIT
+
+MOCK_RESPONSE_FILE="${MODEL_RESPONSE_FILE}" \
+    MOCK_ARGS_FILE="${BARE_ARGS_FILE}" \
+    BEHAVIORAL_EVALS=1 \
+    CLAUDE_BIN="${PROJECT_ROOT}/tests/fixtures/behavioral-runner/mock-claude.sh" \
+    ARTIFACTS_DIR="${MODEL_ART_DIR}" \
+    SKILL_PATH="${PROJECT_ROOT}/skills/incident-analysis/SKILL.md" \
+    bash "${RUNNER}" \
+        --scenario well-formed-scenario \
+        --bare \
+        --pack "${PROJECT_ROOT}/tests/fixtures/behavioral-runner/scenarios.json" >/dev/null 2>&1
+
+bare_flag_line="$(grep -nxF -- '--bare' "${BARE_ARGS_FILE}" 2>/dev/null | head -n1 | cut -d: -f1)"
+assert_not_empty "runner forwards --bare when set" "${bare_flag_line}"
+
+MOCK_RESPONSE_FILE="${MODEL_RESPONSE_FILE}" \
+    MOCK_ARGS_FILE="${NOBARE_ARGS_FILE}" \
+    BEHAVIORAL_EVALS=1 \
+    CLAUDE_BIN="${PROJECT_ROOT}/tests/fixtures/behavioral-runner/mock-claude.sh" \
+    ARTIFACTS_DIR="${MODEL_ART_DIR}" \
+    SKILL_PATH="${PROJECT_ROOT}/skills/incident-analysis/SKILL.md" \
+    bash "${RUNNER}" \
+        --scenario well-formed-scenario \
+        --pack "${PROJECT_ROOT}/tests/fixtures/behavioral-runner/scenarios.json" >/dev/null 2>&1
+
+nobare_flag_line="$(grep -nxF -- '--bare' "${NOBARE_ARGS_FILE}" 2>/dev/null | head -n1 | cut -d: -f1)"
+assert_equals "no --bare flag forwarded when unset" "" "${nobare_flag_line}"
+
 print_summary

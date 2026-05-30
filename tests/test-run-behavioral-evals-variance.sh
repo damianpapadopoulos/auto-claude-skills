@@ -126,4 +126,50 @@ single_exit=$?
 
 assert_equals "single-run mode exits 0 on all-pass output" "0" "${single_exit}"
 
+# ---------------------------------------------------------------------------
+# Report rendering: an assertion whose `text` regex contains `|` must not bleed
+# the regex into the Description column. The counter field is tab-delimited, so
+# a regex like "alpha|bravo|charlie" must not be split on `|`. Regression for
+# the model-routing catch-detector (a `|`-heavy alternation).
+# ---------------------------------------------------------------------------
+echo "-- report: pipe in assertion regex renders description cleanly --"
+
+PIPE_PACK="${TMPDIR_TEST}/pipe-pack.json"
+cat > "${PIPE_PACK}" <<'PACKEOF'
+[
+  {
+    "id": "pipe-regex-scenario",
+    "prompt": "noop",
+    "expected_behavior": "n/a",
+    "assertions": [
+      { "kind": "text", "description": "UNIQUEDESC masking insight detector", "text": "alpha|bravo|charlie" }
+    ]
+  }
+]
+PACKEOF
+PIPE_REPORT="${TMPDIR_TEST}/pipe-report.md"
+
+ARTIFACTS_DIR="${ARTIFACTS_DIR_TEST}/pipe" \
+BEHAVIORAL_EVALS=1 \
+CLAUDE_BIN="${TMPDIR_TEST}/claude" \
+bash "${RUNNER}" \
+    --scenario pipe-regex-scenario \
+    --pack "${PIPE_PACK}" \
+    --variance 2 \
+    --variance-report "${PIPE_REPORT}" \
+    > "${TMPDIR_TEST}/pipe.log" 2>&1
+
+assert_file_exists "pipe-regex variance report written" "${PIPE_REPORT}"
+if [ -f "${PIPE_REPORT}" ]; then
+    pipe_report="$(cat "${PIPE_REPORT}")"
+    assert_contains "Description column shows the full description" \
+        "UNIQUEDESC masking insight detector" "${pipe_report}"
+    # The regex alternatives must NOT appear in the report — if they do, the
+    # counter field was split on `|` and the regex bled into Description.
+    assert_not_contains "regex alternative 'bravo' did not bleed into report" \
+        "bravo" "${pipe_report}"
+    assert_not_contains "regex alternative 'charlie' did not bleed into report" \
+        "charlie" "${pipe_report}"
+fi
+
 print_summary

@@ -1,0 +1,93 @@
+[
+  {
+    "id": "local-masks-exit-code",
+    "subtlety": "medium",
+    "prompt": "Review this Bash function for correctness bugs.\n\n```bash\n#!/usr/bin/env bash\n# Returns 0 when the cached registry is usable, non-zero when it must be rebuilt.\ncache_is_usable() {\n  local cache_path=\"$1\"\n  local max_age_secs=\"$2\"\n\n  [ -f \"$cache_path\" ] || return 1\n\n  # The cache must be valid JSON; jq exits non-zero on a corrupt file.\n  local parsed=$(jq -e '.' \"$cache_path\" 2>/dev/null)\n  if [ $? -ne 0 ]; then\n    return 1\n  fi\n\n  local now=$(date +%s)\n  local mtime=$(stat -f %m \"$cache_path\" 2>/dev/null)\n  if [ $(( now - mtime )) -gt \"$max_age_secs\" ]; then\n    return 1\n  fi\n  return 0\n}\n```\n\nThe author believes a corrupt cache file is rejected by the jq validity check. Review carefully and list every correctness bug.",
+    "expected_behavior": "Catches that `local var=$(jq ...)` masks the command exit code: $? reflects `local` (always 0), not jq, so a corrupt cache is wrongly accepted.",
+    "assertions": [
+      {
+        "kind": "text",
+        "description": "Masking insight: checked exit status belongs to `local`/builtin (always succeeds), not jq",
+        "text": "mask|hides?|hidden|discard|swallow|loses?|lost|overwrit|reset|clobber|reflect|builtin|not[- ]?(jq|the exit)|command itself|always (returns?|be|is) (0|zero|succe)"
+      }
+    ]
+  },
+  {
+    "id": "unquoted-test-wordsplit",
+    "subtlety": "obvious",
+    "prompt": "Review this Bash function for correctness bugs.\n\n```bash\n#!/usr/bin/env bash\n# Returns 0 if the given role name is the admin role, 1 otherwise.\nis_admin_role() {\n  local name=\"$1\"\n  if [ $name = \"admin\" ]; then\n    return 0\n  fi\n  return 1\n}\n```\n\nThe author believes this correctly matches the admin role for any input. List every correctness bug.",
+    "expected_behavior": "Catches that `$name` is unquoted in `[ $name = admin ]`: empty or space-containing input causes a syntax/argument error. Fix: quote the variable.",
+    "assertions": [
+      {
+        "kind": "text",
+        "description": "Unquoted variable in test causes word-splitting / empty-operand error; should be quoted",
+        "text": "quote|unquoted|word.?split|word splitting|globbing|empty.*(argument|operand|string)|too many arguments|unary operator"
+      }
+    ]
+  },
+  {
+    "id": "pipeline-subshell-lost",
+    "subtlety": "subtle",
+    "prompt": "Review this Bash function for correctness bugs.\n\n```bash\n#!/usr/bin/env bash\n# Prints the total byte size of every path listed in the manifest file.\ntotal_manifest_bytes() {\n  local manifest=\"$1\"\n  local total=0\n  cat \"$manifest\" | while read -r path; do\n    total=$(( total + $(wc -c < \"$path\") ))\n  done\n  echo \"$total\"\n}\n```\n\nThe author believes this prints the sum of all file sizes. List every correctness bug.",
+    "expected_behavior": "Catches that the `while` loop on the right of the pipe runs in a subshell, so `total` updates do not propagate to the parent and the function always prints 0.",
+    "assertions": [
+      {
+        "kind": "text",
+        "description": "Pipeline `while read` runs in a subshell; accumulator updates are lost so output is always 0",
+        "text": "subshell|sub-shell|in a (sub)?shell|child (process|shell)|separate (process|shell)|forked|does(n.t| not) (propagat|persist|surviv)|never (propagat|persist|surviv)|not (propagat|persist|surviv)e?d?|modifications? (are )?lost"
+      }
+    ]
+  },
+  {
+    "id": "octal-arithmetic",
+    "subtlety": "very-subtle",
+    "prompt": "Review this Bash function for correctness bugs.\n\n```bash\n#!/usr/bin/env bash\n# Given a zero-padded minute field (e.g. \"08\", \"30\", \"45\"), echo \"late\" for >= 30.\nclassify_minute() {\n  local minutes=\"$1\"\n  if [ $(( minutes + 0 )) -ge 30 ]; then\n    echo \"late\"\n  else\n    echo \"early\"\n  fi\n}\n```\n\nThe author believes this correctly classifies any zero-padded minute value. List every correctness bug.",
+    "expected_behavior": "Catches that `$(( minutes + 0 ))` parses zero-padded `08`/`09` as octal (invalid digits) → arithmetic error. Fix: force base 10 with `10#`.",
+    "assertions": [
+      {
+        "kind": "text",
+        "description": "Leading-zero value in $(( )) is parsed as octal; 08/09 error; needs 10#",
+        "text": "octal|base ?8|base-?8|leading zero|10#|value too great for base|invalid (octal|number|digit)|parsed in base"
+      }
+    ]
+  },
+  {
+    "id": "duplicate-trap-exit",
+    "subtlety": "very-subtle",
+    "prompt": "Review this Bash function for correctness bugs.\n\n```bash\n#!/usr/bin/env bash\n# Builds a report from two intermediate temp files, cleaning both up on exit.\nbuild_report() {\n  local tmp_raw tmp_fmt\n  tmp_raw=\"$(mktemp)\"\n  trap 'rm -f \"$tmp_raw\"' EXIT\n\n  collect_raw > \"$tmp_raw\"\n\n  tmp_fmt=\"$(mktemp)\"\n  trap 'rm -f \"$tmp_fmt\"' EXIT\n\n  format < \"$tmp_raw\" > \"$tmp_fmt\"\n  cat \"$tmp_fmt\"\n}\n```\n\nThe author believes both temp files are removed when the function exits. List every correctness bug.",
+    "expected_behavior": "Catches that the second `trap ... EXIT` replaces the first (EXIT trap is single-slot), so `tmp_raw` is never cleaned up.",
+    "assertions": [
+      {
+        "kind": "text",
+        "description": "Second EXIT trap overwrites the first (single-slot); earlier cleanup is lost",
+        "text": "trap.*(replace|overwrit|overrid|clobber|only.*last|single.?slot)|re-?register|reassign.*trap|overwrites the (first|earlier|previous)|only the last (trap|handler)|second.*(replace|overwrit|overrid|clobber|wins|takes over)"
+      }
+    ]
+  },
+  {
+    "id": "systemic-gate-fail-open",
+    "subtlety": "systemic",
+    "prompt": "Review this Bash function for correctness bugs.\n\n```bash\n#!/usr/bin/env bash\n# Deploy gate: return 1 to BLOCK the rollout if ANY dependency is unhealthy,\n# return 0 to ALLOW it otherwise. `check_one` returns 0 when a dep is healthy.\ndeploy_gate() {\n  local deps_file=\"$1\"\n  local dep\n  while read -r dep; do\n    [ -z \"$dep\" ] && continue\n    if ! check_one \"$dep\"; then\n      log \"dependency $dep is unhealthy\"\n    fi\n  done < \"$deps_file\"\n  return 0\n}\n```\n\nThe author believes this blocks the deploy when a dependency is unhealthy. List every correctness bug.",
+    "expected_behavior": "Catches the EMERGENT defect: the unhealthy branch only logs and there is no return 1 anywhere, so deploy_gate unconditionally returns 0 — it can never block a deploy and fails open. Requires reasoning about whole-function behavior, not a localized token.",
+    "assertions": [
+      {
+        "kind": "text",
+        "description": "Systemic fail-open: gate only logs unhealthy deps and always returns 0 (no failure path) — it can never block",
+        "text": "always (returns?|allows?|permits?|passes) (0|zero|the deploy|success|true)|never (returns?|blocks?|rejects?|fails?|prevents?) (1|non-?zero|the deploy|a deploy|anything)|no (path|branch|case|code path|where).{0,25}return(s)? (1|non-?zero)|return 1 (is )?(missing|never|absent|nowhere)|should (have )?return(ed)? (1|non-?zero)|fails? open|gate (is )?(vacuous|ineffective|useless|a no-?op|toothless)|never (actually )?blocks|always passes|unconditional|defeats? the (gate|purpose|point)|every (code )?path.{0,20}(return|leads).{0,10}(0|zero)|falls through to (the )?return 0"
+      }
+    ]
+  },
+  {
+    "id": "layered-depth-promote-fail-open",
+    "subtlety": "layered-depth",
+    "prompt": "Review this Bash function for correctness bugs.\n\n```bash\n#!/usr/bin/env bash\n# Returns 0 if the artifact passed smoke tests (safe to promote), 1 if it failed.\nsmoke_passed() {\n  local artifact=$1\n  if [ -z $artifact ]; then\n    echo \"no artifact\" >&2\n    return 1\n  fi\n\n  run_smoke_tests $artifact > /tmp/smoke.log 2>&1\n  if grep -q \"FAIL\" /tmp/smoke.log; then\n    return 1\n  fi\n  return 0\n}\n```\n\nThe author believes this returns 0 only when the smoke tests actually pass. List every correctness bug.",
+    "expected_behavior": "Obvious decoy: $artifact is unquoted. DEEP measured catch: the function returns 0 unless the log literally contains FAIL, so if run_smoke_tests crashes or writes nothing the empty log has no FAIL and it returns 0 (passed) for a broken/untested build — it trusts the ABSENCE of FAIL as success. Single deep bug (no deploy_to_prod confound). Detector requires tying the symptom to being-treated-as-success.",
+    "assertions": [
+      {
+        "kind": "text",
+        "description": "DEEP catch (not the unquoted decoy): function trusts absence of FAIL, so an empty/crashed smoke log returns 0 (passed) for a broken build — fails open; needs exit-code/explicit-PASS check",
+        "text": "fails? open on (the )?(smoke|test|harness|log|run)|absence of (a )?(fail|.?FAIL).{0,40}(promot|pass|success|deploy|treated|mean|guarantee)|(no|missing|without|absent) .?(fail|FAIL).?.{0,40}(promot|pass|success|deploy|treated|mean|guarantee|tests? (ran|passed))|no (output|fail|.?FAIL.?).{0,30}(mean|impl|guarantee|promot|pass|success|tests? (ran|passed))|(empty|crashed|missing|partial) (log|output|smoke).{0,40}(promot|pass|success|deploy|grep|treated|return)|(crash|error|die|fail|hang)(es|s|ed|s out)?.{0,40}(still |and )?(promot|pass|deploy|return 0|success|grep returns|treated as)|(relies?|depends?|trusts?|gated) (on|upon)?.{0,25}(absence|the (fail|FAIL)|missing|no (fail|FAIL)|the log)|(check|verify|require|inspect|use).{0,25}(exit (code|status)|\\$\\?|explicit (pass|success)|a PASS)|promot.{0,30}(broken|crash|empty|unvalidated|untested|without (running|test|verify))|(indistinguishable|same) (from|as) (passing|success)|green by default|(did|does)(n.t| not) (actually )?(run|pass)"
+      }
+    ]
+  }
+]
