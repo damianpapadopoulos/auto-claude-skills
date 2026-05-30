@@ -115,4 +115,24 @@ expect MISS  "${RE}" "it just logs a message and returns 0 as designed"
 expect MISS  "${RE}" "it logs it but continues to the next dependency"
 expect MISS  "${RE}" "If a dep is unhealthy it logs but does not crash, which is good"
 
+# --- layered-depth-promote-fail-open (depth beyond the first finding) ---
+# The snippet has OBVIOUS decoys (unquoted $artifact) plus a DEEP fail-open (the
+# gate trusts the absence of "FAIL", so a crashed/empty smoke log promotes a
+# broken build). The detector measures ONLY the deep catch. Critically, a review
+# that flags ONLY the decoys must MISS — that rejection is the discriminator.
+echo "-- layered-depth-promote-fail-open --"
+RE="$(det layered-depth-promote-fail-open)"; assert_not_empty "detector present: layered-depth" "${RE}"
+expect CATCH "${RE}" "if \`run_smoke_tests\` crashes or writes no output, the log has no \`FAIL\`, so grep fails and the artifact is promoted — the gate fails open on a broken test run."
+expect CATCH "${RE}" "this relies on the absence of a FAIL string; an empty or partial log (suite errored before running) passes the gate. Check the exit code instead."
+expect CATCH "${RE}" "no FAIL doesn't mean the tests passed — if the smoke run never ran, the log is empty and \`grep -q FAIL\` returns false, so a broken build is promoted."
+expect CATCH "${RE}" "the gate trusts that a missing FAIL means success; it should require an explicit PASS or check \`\$?\`."
+expect CATCH "${RE}" "an empty log promotes the build; the smoke suite crashing is indistinguishable from passing."
+# Decoy-only / description / different-issue — MUST MISS (this is the discriminator):
+expect MISS  "${RE}" "you should quote \`\$artifact\` — it's unquoted in three places and will break on spaces."
+expect MISS  "${RE}" "the unquoted variable in \`[ -z \$artifact ]\` will error on empty input."
+expect MISS  "${RE}" "the function runs smoke tests and promotes if there's no FAIL line."
+expect MISS  "${RE}" "consider adding a timeout to run_smoke_tests."
+expect MISS  "${RE}" "\`/tmp/smoke.log\` is a fixed path; a concurrent run could clobber it."
+expect MISS  "${RE}" "add a comment explaining what deploy_to_prod does."
+
 print_summary

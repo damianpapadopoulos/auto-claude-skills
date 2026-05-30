@@ -76,5 +76,18 @@
         "text": "always (returns?|allows?|permits?|passes) (0|zero|the deploy|success|true)|never (returns?|blocks?|rejects?|fails?|prevents?) (1|non-?zero|the deploy|a deploy|anything)|no (path|branch|case|code path|where).{0,25}return(s)? (1|non-?zero)|return 1 (is )?(missing|never|absent|nowhere)|should (have )?return(ed)? (1|non-?zero)|fails? open|gate (is )?(vacuous|ineffective|useless|a no-?op|toothless)|never (actually )?blocks|always passes|unconditional|defeats? the (gate|purpose|point)|every (code )?path.{0,20}(return|leads).{0,10}(0|zero)|falls through to (the )?return 0"
       }
     ]
+  },
+  {
+    "id": "layered-depth-promote-fail-open",
+    "subtlety": "layered-depth",
+    "prompt": "Review this Bash function for correctness bugs.\n\n```bash\n#!/usr/bin/env bash\n# Promote the build artifact to production only if all smoke tests pass.\npromote() {\n  local artifact=$1\n  if [ -z $artifact ]; then\n    echo \"no artifact\"\n    return 1\n  fi\n\n  run_smoke_tests $artifact > /tmp/smoke.log 2>&1\n  if grep -q \"FAIL\" /tmp/smoke.log; then\n    echo \"smoke tests failed\"\n    return 1\n  fi\n\n  deploy_to_prod $artifact\n  echo \"promoted $artifact\"\n  return 0\n}\n```\n\nThe author believes this promotes to production only when the smoke tests pass. List every correctness bug.",
+    "expected_behavior": "Obvious decoys: $artifact is unquoted in several places. The DEEP, measured defect: promotion is gated only on the literal string FAIL appearing in the log, so if run_smoke_tests crashes or writes nothing, the empty log has no FAIL, grep -q returns false, and a broken/untested build is promoted — the gate fails open on the test harness itself. A shallow review flags only the quoting; surfacing the fail-open requires depth beyond the first finding. Detector measures ONLY the deep catch.",
+    "assertions": [
+      {
+        "kind": "text",
+        "description": "DEEP catch (not the unquoted decoys): gate trusts absence of FAIL, so an empty/crashed smoke log promotes a broken build — fails open; should check exit code / explicit PASS",
+        "text": "fails? open|absence of (a )?(fail|.?FAIL)|no (output|fail|.?FAIL.?).{0,30}(mean|impl|guarantee|promot|pass|success|tests? (ran|passed))|empty (log|output|file)|crash|errors? (out|before)|never (ran|wrote|produced|reach)|(check|verify|require|inspect|use).{0,20}(exit (code|status)|\\$\\?|explicit (pass|success)|a PASS)|relies? on.{0,25}(absence|the (fail|FAIL)|missing|no (fail|FAIL))|trusts? .{0,25}(absence|no (fail|FAIL)|missing (fail|FAIL)|the log)|promot.{0,30}(broken|crash|empty|unvalidated|without (running|test|verify))|(did|does)(n.t| not) (actually )?(run|pass)"
+      }
+    ]
   }
 ]
