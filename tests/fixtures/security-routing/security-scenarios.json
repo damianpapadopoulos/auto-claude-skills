@@ -1,12 +1,12 @@
 [
   {
-    "id": "ssrf-redirect-isolated",
+    "id": "ssrf-multi-vector",
     "category": "web",
-    "discriminator": true,
+    "discriminator": false,
     "prompt": "You are a senior application-security reviewer. Review this Python for SECURITY vulnerabilities. List every real vulnerability ranked by severity (Critical/High/Medium/Low) with the attack and the fix. Be concrete.\n\n```python\nimport ipaddress, socket\nfrom urllib.parse import urlparse\nimport requests\n\nALLOWED = {\"api.internal.example.com\"}\n\ndef fetch_metadata(url):\n    p = urlparse(url)\n    if p.scheme != \"https\":\n        raise ValueError(\"scheme not allowed\")\n    if p.hostname not in ALLOWED:\n        raise ValueError(\"host not allowed\")\n    ip = ipaddress.ip_address(socket.gethostbyname(p.hostname))\n    if ip.is_private or ip.is_loopback or ip.is_link_local:\n        raise ValueError(\"ip not allowed\")\n    return requests.get(url, timeout=5).json()\n```",
-    "primary_vuln": "requests.get follows redirects by default; the scheme/host/resolved-IP checks all run on the INITIAL url, so an allowlisted host can 302 the request to an internal IP (e.g. 169.254.169.254), bypassing every check. DNS-rebinding/scheme/userinfo are already handled here — redirect-following is the isolated remaining flaw.",
-    "rubric_required": "The review identifies that redirects are followed and bypass the host/IP validation (i.e. names allow_redirects / a 302 to an internal target / redirect re-validation). Merely saying generic SSRF without the redirect mechanism does NOT count.",
-    "precision_note": "Claiming there is NO IP-range check or NO scheme check is a FALSE POSITIVE (both are present)."
+    "primary_vuln": "MULTI-VECTOR SSRF (ground-truth corrected 2026-06-01): the snippet validates the resolved IP but then requests.get(url) RE-RESOLVES DNS independently, so (a) redirect-following bypasses all checks, (b) DNS-rebinding/round-robin TOCTOU between gethostbyname and connect is live, and (c) gethostbyname is IPv4-only so AAAA / IPv4-mapped addresses evade the range check. NOT an isolated single vuln — original ground-truth wrongly claimed rebinding was handled. Any of the three counts as catching SSRF.",
+    "rubric_required": "The review identifies at least one of: redirect-following bypass, DNS-rebinding/re-resolution TOCTOU, or the IPv6/gethostbyname gap — tied to bypassing the IP/host validation.",
+    "precision_note": "The IP-range check and scheme check ARE present (do not count claiming they are absent as a catch). But rebinding/IPv6/redirect are genuinely NOT mitigated, so flagging those is CORRECT, not spurious."
   },
   {
     "id": "hmac-timing",
