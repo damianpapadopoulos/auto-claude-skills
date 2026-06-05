@@ -41,25 +41,40 @@ fi
 # -----------------------------------------------------------------
 # Step 1c: Reset depth counter for new session
 # -----------------------------------------------------------------
-# Token strategy: prefer Claude Code's session_id from hook stdin (stable across
-# every SessionStart fire within the same conversation — IDE reloads, panel
-# restarts, etc.) so composition-state files keyed off the token survive
-# session-start re-fires. Without this, every SessionStart rotated the token
-# and orphaned in-flight composition state, blowing up the openspec-guard push
-# gate's REVIEW/VERIFY/SHIP checks (see #14, #15).
+# Token strategy: derive a CONVERSATION-stable token so composition/openspec
+# state keyed off it survives every SessionStart re-fire for the whole life of
+# the conversation. Priority:
 #
-# Falls back to <epoch>-<pid>-<rand> when stdin is unavailable, contains no
-# session_id, or jq is missing — preserving the original collision-defense
-# guarantees for environments that don't deliver session_id.
+#   1. transcript_path basename — the conversation log file persists across
+#      resume AND compact, so its id is stable for the entire conversation. This
+#      is the correct key: session_id is NOT conversation-stable — resume and
+#      compact regenerate it while the same conversation continues (this hook
+#      fires on resume/compact via its empty matcher), which rotated the token
+#      and orphaned in-flight state, producing false-negative openspec-guard
+#      push-gate and consolidation-guard blocks. (#14/#15 keyed off session_id
+#      to fix intra-session re-fires; this supersedes that for resume/compact.)
+#   2. session_id — used when the payload omits transcript_path.
+#   3. reuse-window, then <epoch>-<pid>-<rand> — when stdin carries neither field
+#      or jq is missing. Preserves the original collision-defense guarantees and
+#      the ScheduleWakeup reuse fix (#43).
 _HOOK_STDIN=""
 if [ ! -t 0 ]; then
     _HOOK_STDIN="$(cat 2>/dev/null)" || _HOOK_STDIN=""
 fi
 _HOOK_SESSION_ID=""
+_HOOK_TRANSCRIPT=""
 if [ -n "${_HOOK_STDIN}" ] && command -v jq >/dev/null 2>&1; then
     _HOOK_SESSION_ID="$(printf '%s' "${_HOOK_STDIN}" | jq -r '.session_id // empty' 2>/dev/null)" || _HOOK_SESSION_ID=""
+    _HOOK_TRANSCRIPT="$(printf '%s' "${_HOOK_STDIN}" | jq -r '.transcript_path // empty' 2>/dev/null)" || _HOOK_TRANSCRIPT=""
 fi
-if [ -n "${_HOOK_SESSION_ID}" ]; then
+# Conversation-stable id: the transcript filename persists across resume/compact.
+_CONV_ID=""
+if [ -n "${_HOOK_TRANSCRIPT}" ]; then
+    _CONV_ID="$(basename "${_HOOK_TRANSCRIPT}" .jsonl 2>/dev/null)" || _CONV_ID=""
+fi
+if [ -n "${_CONV_ID}" ]; then
+    _SESSION_TOKEN="session-${_CONV_ID}"
+elif [ -n "${_HOOK_SESSION_ID}" ]; then
     _SESSION_TOKEN="session-${_HOOK_SESSION_ID}"
 else
     # Fallback for environments without session_id (TTY stdin, missing jq,
