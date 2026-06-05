@@ -472,6 +472,17 @@ assert_contains "evidence-links ref: has label normalization rule" \
     "stable, human-readable" "${EVIDENCE_LINKS_REF_CONTENT}"
 
 # ---------------------------------------------------------------------------
+# references/command-risk.md — destructive-command risk labels (#2-lite)
+# ---------------------------------------------------------------------------
+COMMAND_RISK_REF="${PROJECT_ROOT}/skills/incident-analysis/references/command-risk.md"
+assert_file_exists "references/command-risk.md exists" "${COMMAND_RISK_REF}"
+assert_file_contains "command-risk: ASCII RISK token" "RISK:" "${COMMAND_RISK_REF}"
+assert_file_contains "command-risk: HIGH level" "RISK: HIGH" "${COMMAND_RISK_REF}"
+assert_file_contains "command-risk: MEDIUM level" "RISK: MEDIUM" "${COMMAND_RISK_REF}"
+assert_file_contains "command-risk: read-only exclusion rule" "[Rr]ead-only" "${COMMAND_RISK_REF}"
+assert_file_contains "command-risk: ASCII-not-emoji rule" "[Aa]SCII" "${COMMAND_RISK_REF}"
+
+# ---------------------------------------------------------------------------
 # references/investigation-schema.md — existence and key fields
 # ---------------------------------------------------------------------------
 assert_file_exists "references/investigation-schema.md exists" "${SCHEMA_FILE}"
