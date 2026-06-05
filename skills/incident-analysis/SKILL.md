@@ -51,7 +51,7 @@ Key re-entry paths:
 
 ### 1. HITL Gate — No Autonomous Mutations
 
-If a mutating action is identified (restart service, rollback deployment, scale pods, modify config), you MUST present the exact command you intend to run and HALT completely. Wait for explicit user confirmation before executing. You are a copilot, not an autopilot.
+If a mutating action is identified (restart service, rollback deployment, scale pods, modify config), you MUST present the exact command you intend to run and HALT completely. Wait for explicit user confirmation before executing. Prefix any such command with a `RISK:` label (`references/command-risk.md`); read-only queries are never labeled.
 
 ### 2. Scope Restriction — No Global Searches During Incidents
 
@@ -799,13 +799,13 @@ Generate using the format in the Investigation Notes template (question → deci
 
 ## EXECUTE
 
-Entered after the user approves a high-confidence CLASSIFY decision at the HITL gate. This stage applies the mitigation command with a fingerprint safety check.
+Entered after the user approves a high-confidence CLASSIFY decision. This stage applies the mitigation command after a fingerprint recheck.
 
 **Tool availability check:** Before proceeding, verify that the playbook's required tools are available. If a playbook requires `kubectl` and it is not installed:
 
 > "This playbook requires `kubectl` for execution, but it is not available. You can install it with `brew install kubectl` or `gcloud components install kubectl`. Alternatively, you can run the command manually in a terminal with cluster access, or skip to INVESTIGATE."
 
-Do not attempt to execute kubectl commands without kubectl installed. Present the command for the user to run externally if needed.
+Never run kubectl commands without kubectl installed; present the command for the user to run externally instead.
 
 ### Step 1: Fingerprint Recheck
 

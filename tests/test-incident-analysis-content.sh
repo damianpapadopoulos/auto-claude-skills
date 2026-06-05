@@ -482,6 +482,10 @@ assert_file_contains "command-risk: MEDIUM level" "RISK: MEDIUM" "${COMMAND_RISK
 assert_file_contains "command-risk: read-only exclusion rule" "[Rr]ead-only" "${COMMAND_RISK_REF}"
 assert_file_contains "command-risk: ASCII-not-emoji rule" "[Aa]SCII" "${COMMAND_RISK_REF}"
 
+# SKILL.md — HITL gate emits the RISK label and points to the reference (#2-lite)
+assert_file_contains "SKILL.md: HITL gate emits RISK label" "RISK:" "${SKILL_FILE}"
+assert_file_contains "SKILL.md: HITL gate references command-risk ref" "command-risk" "${SKILL_FILE}"
+
 # ---------------------------------------------------------------------------
 # references/investigation-schema.md — existence and key fields
 # ---------------------------------------------------------------------------
