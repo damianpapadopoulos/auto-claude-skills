@@ -5419,6 +5419,22 @@ test_plan_completeness_tolerates_heading_variants() {
     assert_contains "variant headings all recognized" "all sections present" "${context}"
     assert_not_contains "no section flagged missing" "(missing" "${context}"
 
+    # Second fixture rotates the variant dimensions across sections so a
+    # drift in any single regex is caught regardless of which variant it
+    # was paired with above.
+    local design2="${HOME}/design-variants-2.md"
+    _write_design_fixture_raw "${design2}" \
+        '## 🚫 Capabilities Affected & Constraints' \
+        '### out of scope' \
+        '## Acceptance-Scenarios'
+    _seed_plan_state "${token}" "fixture-slug" "${design2}"
+
+    output="$(run_hook "let us plan this out")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "rotated variants all recognized" "all sections present" "${context}"
+    assert_not_contains "no section flagged missing (rotated)" "(missing" "${context}"
+
     teardown_test_env
 }
 test_plan_completeness_tolerates_heading_variants

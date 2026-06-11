@@ -1459,7 +1459,8 @@ Action: confirm the design_path or re-run the design step before invoking Skill(
       # Tolerant match: h2/h3 only, case-insensitive, space-or-hyphen
       # word joins, prefix/suffix text allowed (e.g. "## Out of Scope",
       # "### Capabilities affected", "## 🚫 Acceptance Scenarios").
-      # h4+ and body-text mentions intentionally do not count.
+      # h4+, body-text mentions, and leading whitespace before ##
+      # intentionally do not count.
       _DC_CAPS=0; _DC_OOS=0; _DC_ACC=0
       grep -Eiq '^#{2,3} .*capabilities[- ]affected' "$_DP_DESIGN" 2>/dev/null && _DC_CAPS=1
       grep -Eiq '^#{2,3} .*out[- ]of[- ]scope'       "$_DP_DESIGN" 2>/dev/null && _DC_OOS=1
