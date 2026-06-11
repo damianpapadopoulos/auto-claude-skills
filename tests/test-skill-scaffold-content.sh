@@ -15,6 +15,7 @@ SCAFFOLD_CONTENT="$(cat "${SCAFFOLD_SKILL}")"
 assert_not_empty "skill-scaffold SKILL.md exists and is non-empty" "${SCAFFOLD_CONTENT}"
 assert_contains "skill-scaffold: description rule present" "not summarize the workflow" "${SCAFFOLD_CONTENT}"
 assert_contains "skill-scaffold: description rule rationale" "follow the summary instead of reading the full skill" "${SCAFFOLD_CONTENT}"
+assert_contains "skill-scaffold: routing entry description rule" "never workflow steps" "${SCAFFOLD_CONTENT}"
 
 # Summary
 echo ""

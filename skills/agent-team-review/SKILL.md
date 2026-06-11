@@ -9,7 +9,7 @@ description: Multi-perspective parallel code review with specialist reviewers fo
 
 Parallel code review using agent teams. The lead spawns 2-4 reviewer teammates, each with a different review lens. Reviewers investigate independently, then the lead synthesizes findings into a unified review report.
 
-**Prerequisite:** Implementation must be complete (all tasks marked done). Activates for larger implementations (5+ files changed).
+**Prerequisite:** Implementation must be complete (all tasks marked done). Activates for larger implementations (5+ files changed, or any change touching sensitive paths — see Sizing Rule).
 
 ## Sizing Rule
 
@@ -71,8 +71,8 @@ After all reviewers report findings:
 | Verdict | Action |
 |---------|--------|
 | `blocking_issues` | TeamDelete → return to IMPLEMENT → fix issues → re-review |
-| `suggestions_only` | TeamDelete → cross-model offer → proceed to SHIP |
-| `clean` | TeamDelete → cross-model offer → proceed to SHIP |
+| `suggestions_only` | TeamDelete → cross-model offer (§6, when applicable) → proceed to SHIP |
+| `clean` | TeamDelete → cross-model offer (§6, when applicable) → proceed to SHIP |
 
 ### 6. Cross-Model Offer
 
@@ -246,7 +246,7 @@ Task tool (general-purpose):
 
 ## Integration
 
-- **Falls back to:** requesting-code-review for < 5 files
+- **Falls back to:** requesting-code-review for < 5 files on non-sensitive paths
 - **Protected by:** cozempic (auto-installed at SessionStart)
 - **Heartbeat:** teammate-idle-guard.sh prevents false idle nudges
 - **Follows:** agent-team-execution or single-agent implementation
