@@ -1,0 +1,43 @@
+# Design: Adversarial trigger fixtures + measurable-bar [info] nudge
+
+## Capabilities Affected
+
+- `skill-routing` — per-skill trigger-regex fixture coverage (data only; harness unchanged) and the PLAN-phase design-guard advisory surface.
+
+## Architecture
+
+**Part 1 — fixture content (no code).** `tests/test-regex-fixtures.sh` already reads every `tests/fixtures/routing/<skill>.txt`, resolves the skill's triggers from `config/default-triggers.json`, and asserts `MATCH:`/`NO_MATCH:` directives with the same lowercased `[[ =~ ]]` ERE evaluation the activation hook uses. We add six fixture files for the skills all three debate perspectives flagged as collision-prone (shared `ship|merge|release`, `review|pr`, attack-lexicon, and broad build-verb alternations): `incident-analysis`, `brainstorming`, `requesting-code-review`, `supply-chain-investigation`, `verification-before-completion`, `outcome-review` — the last two substituting the debate's `security-scanner` and `finishing-a-development-branch`, which turned out to be composition-routed with no trigger regexes. Fixture authoring already surfaced three real false positives (preview→`review`, relationship→`ship`, staging→`tag`), fixed via leading word-boundary anchors in both registry files. Fixture quality rule: every NO_MATCH must be a near-miss — a prompt containing at least one token adjacent to the skill's alternation that the regex must nonetheless reject. Scope boundary (explicit, from the debate): fixtures prove **regex fidelity** only; role-cap **displacement** remains covered by `tests/test-routing.sh` (`*_does_not_displace_*` and false-positive functions).
+
+**Part 2 — [info] bar nudge (~8 LOC).** Inside the existing design-guard block in `hooks/skill-activation-hook.sh` (the PR #49 tolerant-heading region), after the three heading checks and only when the design file is readable: grep the body once with a numeric-threshold ERE (digits + unit/percent, `p50/p90/p95/p99`, `threshold`, comparison operators). If no hit, append one line to the DESIGN COMPLETENESS output:
+`  [i]  No numeric bar found — if success is measurable (latency, %, tokens, pass-rate), state the threshold (advisory only)`.
+It is informational: it never contributes to the pass/fail verdict, never produces an [X], and any grep failure leaves output unchanged (fail-open). `SKILL_EXPLAIN=1` emits a `[design-guard] bar=<0|1>` breadcrumb. The exact ERE is tuned against the 14-doc corpus measured in the debate: the 10 organically-numeric docs MUST NOT trigger the line.
+
+## Trade-offs
+
+- An [info] line that cannot fail cannot enforce — accepted deliberately; the debate showed the norm is 71% organic and the cultural guard (eval-baseline memory) is the real enforcement. We buy visibility at zero nag cost instead of theater at ceremony cost.
+- The line will appear on legitimately non-numeric designs (4/14 in the corpus). Accepted: it is one informational line, not a failure, and those authors already weighed the choice.
+- Fixture files rot when triggers change — but they rot loudly (suite fails), which is their purpose; the harness is config-sourced so there is no second copy to drift.
+
+## Dissenting views
+
+- **Critic (C3):** the [info] line is "a no-op nudge" — the norm needs no guard at 71% organic adoption; 8 LOC + tests to nudge an existing habit fails match-scope-to-fix-size. Recorded; overruled by user decision adopting the architect's variant.
+- **Critic (C1 residual):** even fixture population may be marginal given case-by-case displacement coverage exists. Mitigated by restricting to the six demonstrably collision-prone skills and the adversarial NO_MATCH rule.
+- **Debate-wide correction:** the consensus "wire the harness" task was based on a false premise (glob discovery already runs it). Removed from scope; recorded so it is not re-proposed.
+
+## Out-of-Scope
+
+- No CI workflow for the bash test suite (separate suite-wide question; enforcement point today is the verification-before-completion chain gate).
+- No required opt-out line at SHIP (C2 — dropped; revival: second active dev or ≥2 logged regrets).
+- No new design-doc headings, no [X]-level bar enforcement, no LLM-judged scoring changes to skill-eval.yml.
+- No fixture files for narrow-trigger skills (incident-trend-analyzer etc.) — low collision risk, rot for nothing.
+- No changes to role-cap selection or displacement testing.
+
+## Decisions
+
+1. Adopt fixture content for exactly six skills; defer the rest until a collision is observed.
+2. Adopt the [info] bar nudge as content-grep, never heading-grep, never blocking (user decision 2026-06-11, architect's dissent variant).
+3. Architect's reliability condition is binding: if the numeric ERE cannot cleanly split the 14-doc corpus (10 quiet / 4 flagged), drop the nudge rather than tune toward a heading requirement.
+
+## Acceptance Scenarios
+
+See `specs/skill-routing/spec.md` in this change.
