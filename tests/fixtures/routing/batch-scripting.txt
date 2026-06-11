@@ -1,0 +1,15 @@
+# Regex fixtures for skill: batch-scripting
+# Format: one directive per non-empty, non-comment line.
+#   MATCH: <prompt>     — regex from config/default-triggers.json for this skill must match
+#   NO_MATCH: <prompt>  — regex must NOT match
+# Tested deterministically by tests/test-regex-fixtures.sh (zero LLM cost).
+# NO_MATCH lines pin the both-side mass anchor: MASSive must not fire
+# (mass is the one prefix-contaminated word in the registry).
+
+MATCH: mass rename the fixtures
+MATCH: do a mass-update of the imports
+MATCH: batch process the log files
+MATCH: refactor all the call sites
+
+NO_MATCH: this test file is massive can we split it
+NO_MATCH: the massive refactor we discussed

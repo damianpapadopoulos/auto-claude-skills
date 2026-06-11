@@ -1,0 +1,15 @@
+# Regex fixtures for skill: openspec-ship
+# Format: one directive per non-empty, non-comment line.
+#   MATCH: <prompt>     — regex from config/default-triggers.json for this skill must match
+#   NO_MATCH: <prompt>  — regex must NOT match
+# Tested deterministically by tests/test-regex-fixtures.sh (zero LLM cost).
+# NO_MATCH lines pin the as.?built word boundary: wAS BUILT / hAS BUILT
+# prose must not fire the SHIP-phase workflow skill.
+
+MATCH: create the as-built record
+MATCH: document the as built state
+MATCH: archive the feature change
+MATCH: run the openspec validation
+
+NO_MATCH: explain how this hook was built
+NO_MATCH: the session has built the parser
