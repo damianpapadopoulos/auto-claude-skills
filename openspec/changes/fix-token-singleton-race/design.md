@@ -39,7 +39,16 @@ None new. jq remains optional (singleton/grep fallbacks preserved). Bash 3.2.
   candidate token has a state file — that reintroduces the race (a foreign
   session's state would capture resolution). Payload always wins when
   derivable; a payload-derived token with no state simply no-ops the gates
-  (fail-open, no false denies).
+  (fail-open, no false denies). Adversarial review proposed the narrower
+  fail-closed variant "derived token has no state AND singleton differs →
+  evaluate the singleton's state"; rejected deliberately: an ad-hoc push
+  (legitimately no chain for this conversation) would then be gated against a
+  foreign session's incomplete chain — exactly the issue #51 false-deny this
+  change removes. The residual false-allow it would defend against requires
+  the harness to deliver `transcript_path` to PreToolUse while withholding it
+  from UserPromptSubmit/PostToolUse in the same session (the state writers);
+  when the writers have it, state converges to the transcript-derived token
+  and the guard agrees. No such asymmetric delivery has been observed.
 - **jq fork budget (~50ms activation hook):** transcript extraction is batched
   into existing jq calls using the repo's `\x1f` field separator, transcript
   field FIRST because the prompt may contain arbitrary bytes while a path

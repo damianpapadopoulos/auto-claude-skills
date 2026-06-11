@@ -17,7 +17,7 @@
 session_token_from_transcript() {
     local _tp="${1:-}" _conv=""
     [ -z "${_tp}" ] && return 0
-    _conv="$(basename "${_tp}" .jsonl 2>/dev/null)" || _conv=""
+    _conv="$(basename -- "${_tp}" .jsonl 2>/dev/null)" || _conv=""
     [ -z "${_conv}" ] && return 0
     printf 'session-%s' "${_conv}"
 }

@@ -84,7 +84,13 @@ present.
   *its* payload lacked transcript_path, but in-turn payloads carry it): hook
   reads a payload-derived token with no state → gates no-op. Fail-open and
   correct-leaning (no false denies); accepted, documented. Resolution must NOT
-  prefer "whichever token has state" — that reintroduces the race.
+  prefer "whichever token has state" — that reintroduces the race. The
+  narrower fail-closed variant raised in adversarial review ("no state under
+  derived token + singleton differs → use singleton state") is rejected for
+  the same reason: it re-gates ad-hoc pushes against foreign sessions'
+  chains — the original #51 false-deny. The asymmetry it defends against
+  (PreToolUse has transcript_path while the state-writing hooks don't) has
+  not been observed; when the writers have it, state and guard converge.
 
 ## Capabilities Affected
 

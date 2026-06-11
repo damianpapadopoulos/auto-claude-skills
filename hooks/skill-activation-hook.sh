@@ -44,8 +44,14 @@ fi
 # consumers later in this turn read this conversation's token (narrows the
 # residual no-payload race to one prompt-width; see issue #51). Only when the
 # token came from the payload — re-stamping a singleton-fallback token is churn.
+# tmp+mv: a plain `>` truncate-then-write exposes concurrent readers to empty
+# reads; rename is atomic on the same filesystem (same shape as the
+# composition-state write in skill-completion-hook.sh).
 if [[ -n "${_SESSION_TOKEN}" && -n "${_TRANSCRIPT}" ]]; then
-  printf '%s' "${_SESSION_TOKEN}" > "${HOME}/.claude/.skill-session-token" 2>/dev/null || true
+  _TOKEN_FILE="${HOME}/.claude/.skill-session-token"
+  if printf '%s' "${_SESSION_TOKEN}" > "${_TOKEN_FILE}.tmp.$$" 2>/dev/null; then
+    mv "${_TOKEN_FILE}.tmp.$$" "${_TOKEN_FILE}" 2>/dev/null || rm -f "${_TOKEN_FILE}.tmp.$$" 2>/dev/null || true
+  fi
 fi
 
 # _comp_active: returns 0 (true) if composition state is live for this session,

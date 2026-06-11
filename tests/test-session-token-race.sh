@@ -52,6 +52,10 @@ if [ -f "${LIB}" ]; then
     assert_equals "U3: payload beats singleton" "session-conv-ALPHA" "${U3}"
     U4="$(resolve_session_token '{"session_id":"no-transcript-here"}')"
     assert_equals "U4: no transcript_path -> singleton fallback" "singleton-token" "${U4}"
+    # Dash-leading basenames must not be parsed as basename options (BSD errors,
+    # GNU prints help text) — `--` pins identical fail-safe output on both.
+    U5="$(session_token_from_transcript "-A.jsonl")"
+    assert_equals "U5: dash-leading transcript basename handled via --" "session--A" "${U5}"
 else
     _record_fail "U1: hooks/lib/session-token.sh exists" "missing ${LIB}"
 fi
@@ -161,6 +165,34 @@ if [ -f "${HOME}/.claude/.skill-prompt-count-session-conv-A" ]; then
     _record_pass "S1: compact-recovery keyed to payload token"
 else
     _record_fail "S1: compact-recovery keyed to payload token" \
+        "$(ls -a "${HOME}/.claude" 2>/dev/null | tr '\n' ' ')"
+fi
+teardown_test_env
+
+# ---------------------------------------------------------------------------
+# ST1: consolidation-stop writes the learn baseline under the PAYLOAD token
+# ---------------------------------------------------------------------------
+echo "--- ST: consolidation-stop payload keying ---"
+setup_test_env
+mkdir -p "${HOME}/.claude"
+# shellcheck source=../hooks/lib/openspec-state.sh
+. "${PROJECT_ROOT}/hooks/lib/openspec-state.sh"
+# Openspec state with hypotheses lives under A (the payload token); the
+# singleton points at B. The baseline write must key off A.
+ST_HYPS='[{"id":"H1","description":"x","metric":"m","baseline":null,"target":null,"window":null}]'
+openspec_state_set_hypotheses "session-conv-A" "shipped-feature" "${ST_HYPS}"
+printf '%s' "session-conv-B" > "${HOME}/.claude/.skill-session-token"
+ST_PROJ="${TEST_TMPDIR}/repo"
+mkdir -p "${ST_PROJ}/openspec/changes/archive/shipped-feature"
+( cd "${ST_PROJ}" && git init -q && git commit --allow-empty -q -m init 2>/dev/null
+  _proj_hash="$(printf '%s' "$(git rev-parse --show-toplevel)" | shasum | cut -d' ' -f1)"
+  touch "${HOME}/.claude/.context-stack-consolidated-${_proj_hash}"
+  printf '%s' '{"transcript_path":"/tmp/proj/conv-A.jsonl"}' | \
+      CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "${PROJECT_ROOT}/hooks/consolidation-stop.sh" >/dev/null 2>&1 || true )
+if [ -f "${HOME}/.claude/.skill-learn-baselines/shipped-feature.json" ]; then
+    _record_pass "ST1: consolidation-stop keyed to payload token"
+else
+    _record_fail "ST1: consolidation-stop keyed to payload token" \
         "$(ls -a "${HOME}/.claude" 2>/dev/null | tr '\n' ' ')"
 fi
 teardown_test_env
