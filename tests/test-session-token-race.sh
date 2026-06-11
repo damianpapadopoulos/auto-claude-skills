@@ -110,4 +110,25 @@ G3_OUT="$(run_guard_with '{"tool_input":{"command":"git push origin main"}}')"
 assert_contains "G3: no transcript_path -> singleton fallback still denies" '"permissionDecision": "deny"' "${G3_OUT}"
 teardown_test_env
 
+# ---------------------------------------------------------------------------
+# A1–A2: activation hook keys state to payload token and re-stamps singleton
+# ---------------------------------------------------------------------------
+echo "--- A: activation hook payload keying + re-stamp ---"
+setup_test_env
+mkdir -p "${HOME}/.claude"
+# Registry must exist for routing; the repo fallback registry is sufficient.
+cp "${PROJECT_ROOT}/config/fallback-registry.json" "${HOME}/.claude/.skill-registry-cache.json"
+printf '%s' "session-conv-B" > "${HOME}/.claude/.skill-session-token"
+printf '%s' '{"transcript_path":"/tmp/proj/conv-A.jsonl","prompt":"let us brainstorm a new feature design"}' | \
+    CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" SKILL_PROJECT_ROOT="${TEST_TMPDIR}" /bin/bash "${ACTIVATION}" >/dev/null 2>&1 || true
+A1_TOKEN="$(cat "${HOME}/.claude/.skill-session-token" 2>/dev/null)"
+assert_equals "A1: singleton re-stamped to payload-derived token" "session-conv-A" "${A1_TOKEN}"
+if [ -f "${HOME}/.claude/.skill-prompt-count-session-conv-A" ]; then
+    _record_pass "A2: per-prompt state keyed to payload token, not foreign singleton"
+else
+    _record_fail "A2: per-prompt state keyed to payload token, not foreign singleton" \
+        "$(ls "${HOME}/.claude" 2>/dev/null | tr '\n' ' ')"
+fi
+teardown_test_env
+
 print_summary
