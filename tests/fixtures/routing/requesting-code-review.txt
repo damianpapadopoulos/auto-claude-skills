@@ -1,0 +1,17 @@
+# Regex fixtures for skill: requesting-code-review
+# Format: one directive per non-empty, non-comment line.
+#   MATCH: <prompt>     — regex from config/default-triggers.json for this skill must match
+#   NO_MATCH: <prompt>  — regex must NOT match
+# Tested deterministically by tests/test-regex-fixtures.sh (zero LLM cost).
+# NO_MATCH lines pin word boundaries: embedded review (pREVIEW) and embedded
+# pr (imPRove, sPRint) must not fire a process-role skill.
+
+MATCH: review this diff before i merge
+MATCH: open a pull request for the auth fix
+MATCH: can you check the changes in the auth module
+MATCH: is this pr ready
+MATCH: please re-review the fix
+
+NO_MATCH: preview the deployment in staging
+NO_MATCH: improve the sprint velocity for the team
+NO_MATCH: merge the approved branch to main

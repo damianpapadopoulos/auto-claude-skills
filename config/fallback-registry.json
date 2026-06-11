@@ -138,7 +138,7 @@
       "role": "process",
       "phase": "REVIEW",
       "triggers": [
-        "(review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|smell|tech.?debt|(^|[^a-z])pr($|[^a-z]))"
+        "((^|[^a-z])review|pull.?request|code.?review|check.*(code|changes|diff)|code.?quality|lint|smell|tech.?debt|(^|[^a-z])pr($|[^a-z]))"
       ],
       "keywords": [],
       "trigger_mode": "regex",
