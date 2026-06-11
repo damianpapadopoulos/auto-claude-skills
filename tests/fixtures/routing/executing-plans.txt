@@ -1,0 +1,16 @@
+# Regex fixtures for skill: executing-plans
+# Format: one directive per non-empty, non-comment line.
+#   MATCH: <prompt>     — regex from config/default-triggers.json for this skill must match
+#   NO_MATCH: <prompt>  — regex must NOT match
+# Tested deterministically by tests/test-regex-fixtures.sh (zero LLM cost).
+# NO_MATCH lines pin the continue word boundary (disCONTINUEd must not fire)
+# and the single-char gap in pick.up (no match across "picks up").
+
+MATCH: execute the plan
+MATCH: continue with the next task
+MATCH: lets resume where we left off
+MATCH: pick up the remaining tasks
+
+NO_MATCH: remove the discontinued feature flag
+NO_MATCH: discontinuation of the legacy api
+NO_MATCH: the queue picks up speed

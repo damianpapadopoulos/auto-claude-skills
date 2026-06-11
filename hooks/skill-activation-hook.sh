@@ -1517,9 +1517,20 @@ Action: confirm the design_path or re-run the design step before invoking Skill(
       grep -Eiq '^#{2,3} .*out[- ]of[- ]scope'       "$_DP_DESIGN" 2>/dev/null && _DC_OOS=1
       grep -Eiq '^#{2,3} .*acceptance[- ]scenarios'  "$_DP_DESIGN" 2>/dev/null && _DC_ACC=1
 
+      # [i]-only numeric-bar nudge: advisory, never affects the verdict.
+      # ERE avoids \b (BSD grep) and PCRE (Bash 3.2 gotcha); grep failure
+      # degrades to the advisory line, never a block.
+      _DC_BAR=0
+      grep -Eiq '[0-9]+(\.[0-9]+)? ?(%|ms|sec|tokens?)|[0-9]+s($|[^a-z])|p(50|90|95|99)|threshold|>=|<=' "$_DP_DESIGN" 2>/dev/null && _DC_BAR=1
+      _DC_LINE_BAR=""
+      if [[ $_DC_BAR -eq 0 ]]; then
+        _DC_LINE_BAR='
+  [i]  No numeric bar found — if success is measurable (latency, %, tokens, pass-rate), state the threshold (advisory only)'
+      fi
+
       if [[ $_DC_CAPS -eq 1 ]] && [[ $_DC_OOS -eq 1 ]] && [[ $_DC_ACC -eq 1 ]]; then
         DESIGN_COMPLETENESS="
-DESIGN COMPLETENESS: all sections present (${_DP_DESIGN})"
+DESIGN COMPLETENESS: all sections present (${_DP_DESIGN})${_DC_LINE_BAR}"
       else
         if [[ $_DC_CAPS -eq 1 ]]; then
           _DC_LINE_CAPS='  [OK] Capabilities Affected'
@@ -1540,11 +1551,11 @@ DESIGN COMPLETENESS: all sections present (${_DP_DESIGN})"
 DESIGN COMPLETENESS (${_DP_DESIGN}):
 ${_DC_LINE_CAPS}
 ${_DC_LINE_OOS}
-${_DC_LINE_ACC}
+${_DC_LINE_ACC}${_DC_LINE_BAR}
 Action: complete the missing section(s) before invoking Skill(superpowers:writing-plans)."
       fi
       [[ -n "${SKILL_EXPLAIN:-}" ]] && \
-        echo "[skill-hook]   [design-guard] caps=${_DC_CAPS} oos=${_DC_OOS} acc=${_DC_ACC} path=${_DP_DESIGN}" >&2
+        echo "[skill-hook]   [design-guard] caps=${_DC_CAPS} oos=${_DC_OOS} acc=${_DC_ACC} bar=${_DC_BAR} path=${_DP_DESIGN}" >&2
     fi
 
     SKILL_LINES="${SKILL_LINES}${DESIGN_COMPLETENESS}"

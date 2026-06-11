@@ -5602,6 +5602,56 @@ test_plan_completeness_ignores_non_heading_mentions() {
 }
 test_plan_completeness_ignores_non_heading_mentions
 
+test_plan_completeness_bar_info_when_no_numerics() {
+    echo "-- test: DESIGN COMPLETENESS adds [i] numeric-bar line when doc has no thresholds --"
+    setup_test_env
+    install_registry
+
+    local token="plan-guard-bar-info-$$"
+    local design="${HOME}/design-no-numerics.md"
+    _write_design_fixture "${design}" "Capabilities Affected" "Out-of-Scope" "Acceptance Scenarios"
+    _seed_plan_state "${token}" "fixture-slug" "${design}"
+
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output context
+    output="$(run_hook "let us plan this out")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "all-present verdict unchanged" "all sections present" "${context}"
+    assert_contains "bar info line present" "No numeric bar found" "${context}"
+    assert_not_contains "bar line is not an X failure" "[X]  No numeric bar" "${context}"
+
+    teardown_test_env
+}
+test_plan_completeness_bar_info_when_no_numerics
+
+test_plan_completeness_bar_silent_when_numerics_present() {
+    echo "-- test: DESIGN COMPLETENESS omits [i] bar line when doc states thresholds --"
+    setup_test_env
+    install_registry
+
+    local token="plan-guard-bar-quiet-$$"
+    local design="${HOME}/design-with-numerics.md"
+    _write_design_fixture "${design}" "Capabilities Affected" "Out-of-Scope" "Acceptance Scenarios"
+    printf 'The bar: p95 < 200ms and pass rate >= 80%%.\n' >> "${design}"
+    _seed_plan_state "${token}" "fixture-slug" "${design}"
+
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output context
+    output="$(run_hook "let us plan this out")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "all-present verdict unchanged" "all sections present" "${context}"
+    assert_not_contains "bar info line absent" "No numeric bar found" "${context}"
+
+    teardown_test_env
+}
+test_plan_completeness_bar_silent_when_numerics_present
+
 # ---------------------------------------------------------------------------
 # Skill-completion PostToolUse hook — advances composition state .completed
 # when a chain-member Skill tool returns successfully.
