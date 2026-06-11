@@ -1,0 +1,17 @@
+# Regex fixtures for skill: verification-before-completion
+# Format: one directive per non-empty, non-comment line.
+#   MATCH: <prompt>     — regex from config/default-triggers.json for this skill must match
+#   NO_MATCH: <prompt>  — regex must NOT match
+# Tested deterministically by tests/test-regex-fixtures.sh (zero LLM cost).
+# NO_MATCH lines pin word boundaries on the SHIP alternation: embedded ship
+# (relationSHIP) and embedded tag (sTAGing, unTAGged) must not fire.
+
+MATCH: ready to merge this branch
+MATCH: ship it
+MATCH: all tests green lets wrap up
+MATCH: tag the release and publish the plugin
+MATCH: we shipped the fix
+
+NO_MATCH: the relationship between hooks and registry is unclear
+NO_MATCH: the staging environment is flaky today
+NO_MATCH: untagged resources in gcp
