@@ -1,0 +1,18 @@
+# Regex fixtures for skill: brainstorming
+# Format: one directive per non-empty, non-comment line.
+#   MATCH: <prompt>     — regex from config/default-triggers.json for this skill must match
+#   NO_MATCH: <prompt>  — regex must NOT match
+# Tested deterministically by tests/test-regex-fixtures.sh (zero LLM cost).
+# NO_MATCH lines pin the word-boundary guards on the build-verb alternation:
+# embedded tokens (reNEWed, BUILDing, STARTing) must not fire.
+
+MATCH: lets brainstorm the caching layer
+MATCH: design the retry strategy for the worker
+MATCH: build a webhook receiver for stripe events
+MATCH: how should we structure the config
+MATCH: add rate limiting to the api
+
+NO_MATCH: debug the failing login test
+NO_MATCH: renewed the tls certificate on the gateway
+NO_MATCH: the building permit example in the docs is outdated
+NO_MATCH: starting the server takes 30 seconds
