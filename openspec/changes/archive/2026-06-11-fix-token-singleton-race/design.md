@@ -64,3 +64,16 @@ None new. jq remains optional (singleton/grep fallbacks preserved). Bash 3.2.
   transcript_path (token = session_id/random) but in-turn payloads carry it,
   payload-derived tokens won't match the state files; gates no-op. Fail-open
   and lean-correct; rare enough not to warrant the state-sniffing hazard above.
+
+## Implementation Notes (synced at ship time)
+
+- Review round added two hardenings beyond the upfront design: the activation
+  hook's singleton re-stamp uses tmp+`mv` (adversarial review demonstrated
+  torn empty reads under a 60-writer hammer against the plain `>` write), and
+  the lib's `basename` call gained `--` (BSD errors / GNU prints help text on
+  dash-leading basenames; pinned by U5). Both consistent with the spec's
+  scenarios; no requirement text changed.
+- The fail-closed singleton-fallback variant proposed in adversarial review
+  was rejected with rationale recorded under Decisions & Trade-offs.
+- Test count grew from the planned 12 to 14 assertions (U5 + ST1, the
+  consolidation-stop regression pin the standard review requested).

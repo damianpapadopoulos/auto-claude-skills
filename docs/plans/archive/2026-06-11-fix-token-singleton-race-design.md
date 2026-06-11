@@ -136,3 +136,24 @@ checks (`session_token_from_transcript` format, `resolve_session_token`
 precedence). Every edited hook: `/bin/bash -n` + exercised under `/bin/bash`
 3.2 (quoted-arithmetic / ERE gotchas). Full suite via
 `bash tests/run-tests.sh </dev/null`.
+
+## Divergences (auto-generated at ship time)
+
+**Acceptance Scenarios:**
+- [x] 1. Foreign-singleton + own incomplete chain → guard DENIES from own state — implemented as designed (G1)
+- [x] 2. Own chain complete + foreign incomplete singleton → push ALLOWED — implemented as designed (G2)
+- [x] 3. Payload without transcript_path → singleton fallback — implemented as designed (G3, U4)
+- [x] 4. jq unavailable → fail-open — implemented as designed (jq-gated skip + grep fallback preserved; not separately fixtured, consistent with repo convention)
+- [x] 5. Activation hook keys state to payload token + re-stamps singleton — implemented with hardening: re-stamp is tmp+mv atomic (review finding), guarded to payload-derived tokens only (A1, A2)
+- [x] 6. Completion hook advances own conversation's .completed — implemented as designed (C1 dual assertion)
+
+**Scope changes:**
+- Added: `basename --` option-terminator guard in the lib (U5) and ST1 consolidation-stop regression pin — review-driven, within capability scope
+- Removed: none
+- Modified: none
+
+**Design decision changes:**
+- Adversarial review proposed a fail-closed singleton fallback for the
+  derived-token-without-state case; rejected (re-introduces the #51 false-deny
+  on ad-hoc pushes) — rationale recorded in Decisions & Trade-offs of the
+  archived change design.md.

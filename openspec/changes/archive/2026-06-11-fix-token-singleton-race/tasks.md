@@ -23,4 +23,4 @@
 ## 3. Ship
 
 - [x] 3.1 CHANGELOG entry under [Unreleased]
-- [ ] 3.2 Review → verification → openspec-ship sync → PR referencing #51
+- [x] 3.2 Review → verification → openspec-ship sync → PR referencing #51
