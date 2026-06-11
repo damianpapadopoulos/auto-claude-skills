@@ -57,4 +57,57 @@ else
 fi
 teardown_test_env
 
+# ---------------------------------------------------------------------------
+# G1–G3: openspec-guard keys to the payload token, not the singleton
+# ---------------------------------------------------------------------------
+echo "--- G: push gate vs foreign singleton ---"
+
+# write_comp_state <token> <completed-json-array>
+write_comp_state() {
+    jq -n --argjson done "$2" '{
+        chain: ["requesting-code-review","verification-before-completion"],
+        completed: $done, current_index: 0
+    }' > "${HOME}/.claude/.skill-composition-state-$1"
+}
+
+# run_guard_with <payload-json> — echoes guard stdout
+run_guard_with() {
+    printf '%s' "$1" | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "${GUARD}" 2>/dev/null
+}
+
+PUSH_A='{"transcript_path":"/tmp/proj/conv-A.jsonl","tool_input":{"command":"git push origin main"}}'
+
+# G1: A incomplete, singleton points at B (complete) -> must DENY from A state
+setup_test_env
+mkdir -p "${HOME}/.claude"
+write_comp_state "session-conv-A" '[]'
+write_comp_state "session-conv-B" '["requesting-code-review","verification-before-completion"]'
+printf '%s' "session-conv-B" > "${HOME}/.claude/.skill-session-token"
+G1_OUT="$(run_guard_with "${PUSH_A}")"
+assert_contains "G1: guard denies from OWN (payload) state despite foreign singleton" '"permissionDecision": "deny"' "${G1_OUT}"
+teardown_test_env
+
+# G2: A complete, singleton points at B (incomplete) -> must ALLOW (no deny)
+setup_test_env
+mkdir -p "${HOME}/.claude"
+write_comp_state "session-conv-A" '["requesting-code-review","verification-before-completion"]'
+write_comp_state "session-conv-B" '[]'
+printf '%s' "session-conv-B" > "${HOME}/.claude/.skill-session-token"
+G2_OUT="$(run_guard_with "${PUSH_A}")"
+if printf '%s' "${G2_OUT}" | grep -q '"permissionDecision": "deny"'; then
+    _record_fail "G2: guard allows when OWN chain complete (foreign singleton incomplete)" "got deny: ${G2_OUT}"
+else
+    _record_pass "G2: guard allows when OWN chain complete (foreign singleton incomplete)"
+fi
+teardown_test_env
+
+# G3: payload without transcript_path -> singleton fallback still gates
+setup_test_env
+mkdir -p "${HOME}/.claude"
+write_comp_state "session-conv-B" '[]'
+printf '%s' "session-conv-B" > "${HOME}/.claude/.skill-session-token"
+G3_OUT="$(run_guard_with '{"tool_input":{"command":"git push origin main"}}')"
+assert_contains "G3: no transcript_path -> singleton fallback still denies" '"permissionDecision": "deny"' "${G3_OUT}"
+teardown_test_env
+
 print_summary
