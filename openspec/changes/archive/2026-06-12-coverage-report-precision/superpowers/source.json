@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "discovery_path": null,
+  "design_path": null,
+  "plan_path": null,
+  "spec_path": null,
+  "sp_plan_path": null,
+  "sp_spec_path": null,
+  "change_slug": "coverage-report-precision",
+  "capability_slug": null,
+  "source_branch": "feat/coverage-report-precision",
+  "base_commit": "01f05e1c300de771228b83d14366114c8e5ae705",
+  "openspec_surface": "none",
+  "archived_at": "2026-06-12T10:11:22Z"
+}
