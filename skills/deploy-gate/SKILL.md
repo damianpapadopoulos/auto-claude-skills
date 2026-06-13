@@ -39,7 +39,7 @@ Run each check. Report pass/fail with evidence. Do not block on warnings — rep
      echo "CI conclusion: $_concl"
    fi
    ```
-   Gate: distinguish three states — **green** (`$_concl` = PASS/success), **red** (any failure conclusion), **absent-or-broken** (empty `$_concl`, or a run that concluded with zero completed steps). Absent-or-broken is a **FAIL**, never a pass. Do not read an empty `statusCheckRollup` as "nothing blocking → ship".
+   Gate: distinguish three states — **green** (`$_concl` = PASS/success), **red** (any failure conclusion), **absent-or-broken** (empty `$_concl`, or a run that concluded with zero completed steps). Absent-or-broken is a **FAIL**, never a pass. Do not read an empty `statusCheckRollup` as "nothing blocking → ship". If `gh pr checks` itself reports failing checks, that is **red** regardless of what `gh run list` returns — do not let a stale prior run's `success` conclusion mask currently-red PR checks.
 
    **Local verification of record:** when hosted CI is absent, you MAY accept a fresh `~/.claude/.skill-project-verified-<token>` evidence file with an empty `failed` list as verification performed on substrate `local` — but still surface that hosted CI was absent rather than claiming hosted-CI green. This evidence is advisory provenance, not a non-bypassable gate.
 

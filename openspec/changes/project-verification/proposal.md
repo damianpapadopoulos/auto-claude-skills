@@ -40,7 +40,7 @@ Ship ONE well-scoped verification primitive plus two cheap, model-independent re
 **Files added:**
 - `skills/project-verification/SKILL.md` — discovery ladder, in-skill disambiguation, local run, evidence emission
 - `skills/project-verification/references/discovery-ladder.md` — the ordered ladder + `.verify.yml` schema (kept out of SKILL.md per the word-count-guard precedent)
-- `tests/fixtures/evals/project-verification.behavioral.json` — behavioral pack (required so `scripts/scenario-coverage.sh` does not flag the skill)
+- `tests/fixtures/project-verification/evals/behavioral.json` — behavioral pack (matches the repo's `tests/fixtures/<cap>/evals/behavioral.json` convention; `scripts/scenario-coverage.sh` tracks it once the spec is archived to `openspec/specs/` at SHIP)
 - `tests/test-project-verification.sh` — discovery-ladder + evidence-shape unit tests
 - `.verify.yml` (this repo, dogfood) — `bash tests/run-tests.sh`
 

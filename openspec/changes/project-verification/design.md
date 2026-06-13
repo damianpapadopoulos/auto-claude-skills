@@ -19,7 +19,7 @@ A **model-invoked skill** can read freeform prose, disambiguate, and ask the use
 | `frontend-playwright` anchoring (Gap 4) | config | both trigger files |
 | `deploy-gate` fail-closed CI + accept local evidence (Gap 2) | skill | `skills/deploy-gate/SKILL.md` |
 | Tests | tests | `tests/test-project-verification.sh`, `tests/test-routing.sh` |
-| Behavioral pack | evals | `tests/fixtures/evals/project-verification.behavioral.json` |
+| Behavioral pack | evals | `tests/fixtures/project-verification/evals/behavioral.json` |
 
 One new skill, edits to files that already own each concern. No new hook file, no new state-token scheme.
 
