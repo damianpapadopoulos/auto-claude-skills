@@ -745,6 +745,23 @@
       "enabled": true
     },
     {
+      "name": "project-verification",
+      "role": "domain",
+      "phase": "REVIEW",
+      "triggers": [
+        "(run.*(the )?tests?|run.*(lint|typecheck|type.?check)|project.*(gate|checks?)|verify.*(locally|the build)|does.*(it )?build|declared.*(gate|commands?))"
+      ],
+      "keywords": [],
+      "trigger_mode": "regex",
+      "priority": 16,
+      "precedes": [],
+      "requires": [],
+      "description": "Discover the repo's declared test/lint/type gate and run it locally, emitting structured pass/fail evidence.",
+      "invoke": "Skill(auto-claude-skills:project-verification)",
+      "available": false,
+      "enabled": true
+    },
+    {
       "name": "supply-chain-investigation",
       "role": "domain",
       "phase": "REVIEW",
