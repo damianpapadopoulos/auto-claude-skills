@@ -1562,6 +1562,31 @@ Action: complete the missing section(s) before invoking Skill(superpowers:writin
   fi
 fi
 
+# --- PHASE REALITY: advisory-only reconciliation of claimed SHIP vs repo state.
+# Advisory only (never blocks); fail-open on every sub-check. SHIP-only: at
+# REVIEW, requesting-code-review is the current step and a clean tree is usually
+# benign recap, so both rules would false-fire there.
+if [[ "${PRIMARY_PHASE}" == "SHIP" ]]; then
+  _PR_MSG=""
+
+  # Rule B (no committed work): 0 commits ahead of origin/main AND clean tree.
+  # origin/main literal (matches openspec-guard.sh; robust on un-pushed branches).
+  _PR_AHEAD="$(git -C "$_PROJECT_ROOT" rev-list --count origin/main..HEAD 2>/dev/null)"
+  [[ "$_PR_AHEAD" =~ ^[0-9]+$ ]] || _PR_AHEAD=-1   # detached/no-origin/error => silent
+  _PR_DIRTY="$(git -C "$_PROJECT_ROOT" status --porcelain 2>/dev/null)"
+  if [[ "$_PR_AHEAD" -eq 0 ]] && [[ -z "$_PR_DIRTY" ]]; then
+    _PR_MSG="${_PR_MSG}
+  [i]  No committed work on this branch (0 commits ahead of origin/main, clean tree) — SHIP phase may be premature."
+  fi
+
+  if [[ -n "$_PR_MSG" ]]; then
+    SKILL_LINES="${SKILL_LINES}
+PHASE REALITY:${_PR_MSG}"
+  fi
+  [[ -n "${SKILL_EXPLAIN:-}" ]] && \
+    echo "[skill-hook]   [phase-reality] ahead=${_PR_AHEAD:-na} dirty=${_PR_DIRTY:+1} phase=${PRIMARY_PHASE}" >&2
+fi
+
 # Domain invocation instruction (composition-aware)
 DOMAIN_HINT=""
 if [[ "$DOMAIN_COUNT" -gt 0 ]] || [[ -n "$OVERFLOW_DOMAIN" ]]; then

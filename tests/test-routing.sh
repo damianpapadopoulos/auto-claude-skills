@@ -29,6 +29,26 @@ extract_context() {
     printf '%s' "${output}" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null
 }
 
+# Run the activation hook with SKILL_PROJECT_ROOT pinned to a fixture repo,
+# so the hook's line-107 _PROJECT_ROOT resolution targets it.
+run_hook_in_repo() {
+    local prompt="$1" repo="$2"
+    jq -n --arg p "${prompt}" '{"prompt":$p}' | \
+        CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" SKILL_PROJECT_ROOT="${repo}" \
+        bash "${HOOK}" 2>/dev/null
+}
+
+# Create a throwaway git repo whose origin/main == HEAD (0 commits ahead, clean tree).
+_make_phase_git_repo() {
+    local d="$1"
+    mkdir -p "${d}"
+    git -C "${d}" init -q
+    git -C "${d}" config user.email t@example.com
+    git -C "${d}" config user.name tester
+    git -C "${d}" commit -q --allow-empty -m base
+    git -C "${d}" update-ref refs/remotes/origin/main HEAD
+}
+
 # Helper: install a minimal skill registry cache for testing
 install_registry() {
     local cache_file="${HOME}/.claude/.skill-registry-cache.json"
@@ -5664,6 +5684,63 @@ test_plan_completeness_bar_silent_when_numerics_present() {
     teardown_test_env
 }
 test_plan_completeness_bar_silent_when_numerics_present
+
+# ---------------------------------------------------------------------------
+# PHASE REALITY — advisory-only reconciliation of claimed SHIP vs repo state.
+# ---------------------------------------------------------------------------
+test_phase_reality_flags_ship_with_no_work() {
+    echo "-- test: PHASE REALITY fires at SHIP with 0 commits ahead and clean tree --"
+    setup_test_env
+    install_registry
+    local repo="${HOME}/pr-norepo-work"
+    _make_phase_git_repo "${repo}"
+
+    local context
+    context="$(extract_context "$(run_hook_in_repo "let's ship this and merge the branch to main" "${repo}")")"
+
+    assert_contains "no-work advisory fires" "PHASE REALITY" "${context}"
+    assert_contains "no-work wording present" "No committed work" "${context}"
+
+    teardown_test_env
+}
+test_phase_reality_flags_ship_with_no_work
+
+test_phase_reality_silent_when_commits_exist() {
+    echo "-- test: PHASE REALITY silent at SHIP when commits are ahead of origin/main --"
+    setup_test_env
+    install_registry
+    local repo="${HOME}/pr-has-work"
+    _make_phase_git_repo "${repo}"
+    git -C "${repo}" commit -q --allow-empty -m work   # now 1 ahead of origin/main
+
+    local context
+    context="$(extract_context "$(run_hook_in_repo "let's ship this and merge the branch to main" "${repo}")")"
+
+    assert_not_contains "no advisory when work exists" "PHASE REALITY" "${context}"
+
+    teardown_test_env
+}
+test_phase_reality_silent_when_commits_exist
+
+test_phase_reality_failopen_no_origin() {
+    echo "-- test: PHASE REALITY silent at SHIP when origin/main is absent (fail-open) --"
+    setup_test_env
+    install_registry
+    local repo="${HOME}/pr-no-origin"
+    mkdir -p "${repo}"
+    git -C "${repo}" init -q
+    git -C "${repo}" config user.email t@example.com
+    git -C "${repo}" config user.name tester
+    git -C "${repo}" commit -q --allow-empty -m base   # no refs/remotes/origin/main created
+
+    local context
+    context="$(extract_context "$(run_hook_in_repo "let's ship this and merge the branch to main" "${repo}")")"
+
+    assert_not_contains "no advisory when origin/main unresolved" "PHASE REALITY" "${context}"
+
+    teardown_test_env
+}
+test_phase_reality_failopen_no_origin
 
 # ---------------------------------------------------------------------------
 # Skill-completion PostToolUse hook — advances composition state .completed
