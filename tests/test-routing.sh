@@ -5793,6 +5793,23 @@ test_phase_reality_silent_no_chain() {
 }
 test_phase_reality_silent_no_chain
 
+test_phase_reality_silent_non_ship_phase() {
+    echo "-- test: PHASE REALITY silent at non-SHIP phases (no git/jq cost path) --"
+    setup_test_env
+    install_registry
+    local repo="${HOME}/pr-nonship"
+    _make_phase_git_repo "${repo}"   # 0 ahead + clean: would fire IF phase were SHIP
+
+    # A design/build prompt routes to a non-SHIP phase (brainstorming = DESIGN).
+    local context
+    context="$(extract_context "$(run_hook_in_repo "let's design a brand new authentication system from scratch" "${repo}")")"
+
+    assert_not_contains "no phase-reality block off SHIP" "PHASE REALITY" "${context}"
+
+    teardown_test_env
+}
+test_phase_reality_silent_non_ship_phase
+
 # ---------------------------------------------------------------------------
 # Skill-completion PostToolUse hook — advances composition state .completed
 # when a chain-member Skill tool returns successfully.
