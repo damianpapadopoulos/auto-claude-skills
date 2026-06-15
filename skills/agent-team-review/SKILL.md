@@ -1,6 +1,6 @@
 ---
 name: agent-team-review
-description: Multi-perspective parallel code review with specialist reviewers for security, quality, and spec compliance.
+description: Use when a code change touches 5+ files or modifies auth/secrets/hooks/CI paths and needs multi-lens parallel review (security, quality, spec, governance) before merge.
 ---
 
 # Agent Team Review
