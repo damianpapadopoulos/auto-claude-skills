@@ -64,7 +64,10 @@ After all reviewers report findings:
 
 1. Group findings by severity (blocking → warning → suggestion)
 2. Deduplicate overlapping findings
-3. Present unified report to user
+3. **Severity floor.** Drop `quality`- and `spec`-category `suggestion`-severity findings that do not map to a capability named in the design doc, and demote any `blocking` finding whose `Evidence` lacks an observable failure path to `warning`. **Never drop `security` or `governance` findings on the capability-mapping basis** — those catch unplanned risks no design doc anticipated. This curbs the bot-asymptote nit accretion (advisory findings that accumulate every round without ever being actionable).
+4. Present unified report to user
+
+**Dropped findings stay visible.** Never silently discard a floored finding — the count and one-line reason for each is reported under "Dropped (below severity floor)" in the summary, so the user can audit the filter and the `doubt theater` signal (systematic non-actioning) remains detectable.
 
 ### 5. Verdict Routing
 
@@ -88,9 +91,13 @@ All messages use plain text via SendMessage. No structured JSON.
 FINDING: [blocking | warning | suggestion]
 File: src/auth.ts:42
 Category: security | quality | spec | governance
+Confidence: high | medium | low
+Evidence: observable failure path or concrete reproduction — what input/call triggers it and what breaks
 Issue: SQL injection via unsanitized input
 Suggestion: Use parameterized queries
 ```
+
+**Evidence is mandatory.** A finding may be classified `blocking` only if its `Evidence` describes an **observable failure path** — a concrete input, call, or sequence that produces the failure. A theoretical or stylistic concern with no demonstrable failure path is at most a `warning` (or a `suggestion`). This is the cheapest false-positive control: a real defect can name how it breaks; a nit cannot.
 
 ### Lead → User: Review Summary
 
@@ -105,6 +112,9 @@ Warnings:
 
 Suggestions:
 - (list issues or "none")
+
+Dropped (below severity floor):
+- (count + one-line reason per dropped finding, or "none")
 
 Verdict: blocking_issues | clean | suggestions_only
 ```
@@ -138,7 +148,7 @@ Task tool (general-purpose):
 
     ## Rules
     - Read-only: do NOT modify any files
-    - Report each finding using the plain-text FINDING format
+    - Report each finding using the plain-text FINDING format, including the Confidence and Evidence fields
     - Send all findings to the lead via SendMessage
     - Be specific: include file path, line number, and remediation
 ```
@@ -171,7 +181,7 @@ Task tool (general-purpose):
 
     ## Rules
     - Read-only: do NOT modify any files
-    - Report each finding using the plain-text FINDING format
+    - Report each finding using the plain-text FINDING format, including the Confidence and Evidence fields
     - Send all findings to the lead via SendMessage
     - Distinguish between blocking issues and suggestions
 ```
@@ -202,7 +212,7 @@ Task tool (general-purpose):
 
     ## Rules
     - Read-only: do NOT modify any files
-    - Report each finding using the plain-text FINDING format
+    - Report each finding using the plain-text FINDING format, including the Confidence and Evidence fields
     - Send all findings to the lead via SendMessage
     - Flag both missing features AND unplanned additions
 ```
@@ -233,7 +243,7 @@ Task tool (general-purpose):
 
     ## Rules
     - Read-only: do NOT modify any files
-    - Report each finding using the plain-text FINDING format
+    - Report each finding using the plain-text FINDING format, including the Confidence and Evidence fields
     - Send all findings to the lead via SendMessage
     - A finding is blocking if it removes or weakens an existing safety constraint
     - A finding is warning if it adds new autonomous capability without explicit safety design
