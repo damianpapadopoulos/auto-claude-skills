@@ -1579,6 +1579,21 @@ if [[ "${PRIMARY_PHASE}" == "SHIP" ]]; then
   [i]  No committed work on this branch (0 commits ahead of origin/main, clean tree) — SHIP phase may be premature."
   fi
 
+  # Rule A (chain skipped REVIEW): chain contains requesting-code-review but
+  # .completed does not. Self-scoping (checks .chain membership). Token-rotation
+  # safe: stale/foreign/empty state lacks the .chain member => silent.
+  # NOTE: SILENT by design when no composition-state file exists (single/zero-skill
+  # prompt, e.g. the no-chain "debugging an API key" case) — Rule B covers that.
+  # Do not "fix" this silence.
+  _PR_COMP="${HOME}/.claude/.skill-composition-state-${_SESSION_TOKEN:-default}"
+  if [[ -f "$_PR_COMP" ]] && \
+     jq -e '((.chain // []) | index("requesting-code-review")) != null
+            and ((.completed // []) | index("requesting-code-review")) == null' \
+        "$_PR_COMP" >/dev/null 2>&1; then
+    _PR_MSG="${_PR_MSG}
+  [i]  Chain has not completed REVIEW (requesting-code-review not in .completed) — run it before SHIP."
+  fi
+
   if [[ -n "$_PR_MSG" ]]; then
     SKILL_LINES="${SKILL_LINES}
 PHASE REALITY:${_PR_MSG}"

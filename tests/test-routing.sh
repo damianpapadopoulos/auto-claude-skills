@@ -5688,6 +5688,19 @@ test_plan_completeness_bar_silent_when_numerics_present
 # ---------------------------------------------------------------------------
 # PHASE REALITY — advisory-only reconciliation of claimed SHIP vs repo state.
 # ---------------------------------------------------------------------------
+
+# Seed composition state: chain contains requesting-code-review, completed lacks it.
+_seed_comp_chain_missing_review() {
+    local token="$1"
+    printf '%s' "${token}" > "${HOME}/.claude/.skill-session-token"
+    jq -n '{
+        chain: ["brainstorming","writing-plans","executing-plans","requesting-code-review","verification-before-completion"],
+        completed: ["brainstorming","writing-plans","executing-plans"],
+        current_index: 3,
+        updated_at: "2026-06-14T00:00:00Z"
+    }' > "${HOME}/.claude/.skill-composition-state-${token}"
+}
+
 test_phase_reality_flags_ship_with_no_work() {
     echo "-- test: PHASE REALITY fires at SHIP with 0 commits ahead and clean tree --"
     setup_test_env
@@ -5741,6 +5754,44 @@ test_phase_reality_failopen_no_origin() {
     teardown_test_env
 }
 test_phase_reality_failopen_no_origin
+
+test_phase_reality_flags_ship_chain_skipped_review() {
+    echo "-- test: PHASE REALITY fires at SHIP when chain has but completed lacks requesting-code-review --"
+    setup_test_env
+    install_registry
+    _seed_comp_chain_missing_review "comp-token-1"
+    local repo="${HOME}/pr-a-no-origin"
+    mkdir -p "${repo}"; git -C "${repo}" init -q
+    git -C "${repo}" config user.email t@example.com; git -C "${repo}" config user.name tester
+    git -C "${repo}" commit -q --allow-empty -m base   # no origin/main => Rule B silent
+
+    local context
+    context="$(extract_context "$(run_hook_in_repo "let's ship this and merge the branch to main" "${repo}")")"
+
+    assert_contains "review-skip advisory fires" "PHASE REALITY" "${context}"
+    assert_contains "review-skip wording present" "has not completed REVIEW" "${context}"
+
+    teardown_test_env
+}
+test_phase_reality_flags_ship_chain_skipped_review
+
+test_phase_reality_silent_no_chain() {
+    echo "-- test: PHASE REALITY review-rule silent at SHIP when no composition chain exists --"
+    setup_test_env
+    install_registry
+    # No composition-state file seeded. Use a repo with commits ahead so Rule B is also silent.
+    local repo="${HOME}/pr-a-has-work"
+    _make_phase_git_repo "${repo}"
+    git -C "${repo}" commit -q --allow-empty -m work
+
+    local context
+    context="$(extract_context "$(run_hook_in_repo "let's ship this and merge the branch to main" "${repo}")")"
+
+    assert_not_contains "no review-skip advisory without a chain" "has not completed REVIEW" "${context}"
+
+    teardown_test_env
+}
+test_phase_reality_silent_no_chain
 
 # ---------------------------------------------------------------------------
 # Skill-completion PostToolUse hook — advances composition state .completed
