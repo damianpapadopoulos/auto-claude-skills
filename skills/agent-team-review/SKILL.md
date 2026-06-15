@@ -1,6 +1,6 @@
 ---
 name: agent-team-review
-description: Use when a code change touches 5+ files or modifies auth/secrets/hooks/CI paths and needs multi-lens parallel review (security, quality, spec, governance) before merge.
+description: Use when a code change touches 5+ files or modifies auth/secrets/permissions/hooks/CI paths and needs multi-lens parallel review (security, quality, spec, governance) before merge.
 ---
 
 # Agent Team Review
@@ -64,7 +64,7 @@ After all reviewers report findings:
 
 1. Group findings by severity (blocking → warning → suggestion)
 2. Deduplicate overlapping findings
-3. **Severity floor.** Drop `quality`- and `spec`-category `suggestion`-severity findings that do not map to a capability named in the design doc, and demote any `blocking` finding whose `Evidence` lacks an observable failure path to `warning`. **Never drop `security` or `governance` findings on the capability-mapping basis** — those catch unplanned risks no design doc anticipated. This curbs the bot-asymptote nit accretion (advisory findings that accumulate every round without ever being actionable).
+3. **Severity floor.** Drop `quality`- and `spec`-category `suggestion`-severity findings that do not map to a capability named in the design doc, and demote any `quality`/`spec` `blocking` finding whose `Evidence` lacks an observable failure path to `warning`. **Never drop or demote `security` or `governance` findings on these bases** — those catch unplanned risks no design doc anticipated, and may rest on structural criteria (e.g. removing or weakening a safety constraint) rather than a runnable failure path. This curbs the bot-asymptote nit accretion (advisory findings that accumulate every round without ever being actionable).
 4. Present unified report to user
 
 **Dropped findings stay visible.** Never silently discard a floored finding — the count and one-line reason for each is reported under "Dropped (below severity floor)" in the summary, so the user can audit the filter and the `doubt theater` signal (systematic non-actioning) remains detectable.
@@ -98,6 +98,10 @@ Suggestion: Use parameterized queries
 ```
 
 **Evidence is mandatory.** A finding may be classified `blocking` only if its `Evidence` describes an **observable failure path** — a concrete input, call, or sequence that produces the failure. A theoretical or stylistic concern with no demonstrable failure path is at most a `warning` (or a `suggestion`). This is the cheapest false-positive control: a real defect can name how it breaks; a nit cannot.
+
+**Exception — `security` and `governance` findings may be `blocking` on structural grounds** (per the adversarial-reviewer's criterion: a finding is blocking if it removes or weakens an existing safety constraint) even without a runnable proof-of-concept. Do not demote them for lacking an observable failure path.
+
+**Confidence is advisory only.** The `Confidence` field is context for the user's judgment — it is **not** a filter or demotion input, and the synthesis step never gates on it. The evidence / observable-failure-path rule, not self-rated confidence, is the discriminator: self-rated confidence is exactly the self-preferential-bias signal this design avoids, so do not add confidence-weighted drop/demote rules.
 
 ### Lead → User: Review Summary
 
