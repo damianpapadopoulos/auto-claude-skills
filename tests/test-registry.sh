@@ -806,6 +806,51 @@ EOF
     teardown_test_env
 }
 
+test_atlassian_mcp_enables_plugin_available() {
+    echo "-- test: atlassian MCP server in ~/.claude.json flips atlassian plugin available=true --"
+    setup_test_env
+    rm -rf "${HOME}/.claude/plugins"
+
+    cat > "${HOME}/.claude.json" <<'EOF'
+{
+  "mcpServers": {
+    "atlassian": {
+      "command": "some-mcp-server",
+      "args": []
+    }
+  }
+}
+EOF
+
+    run_hook >/dev/null
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    local avail
+    avail="$(jq -r '.plugins[] | select(.name=="atlassian") | .available' "${cache_file}" 2>/dev/null)"
+    assert_equals "atlassian MCP server enables atlassian plugin availability" "true" "${avail}"
+
+    teardown_test_env
+}
+
+test_no_atlassian_mcp_keeps_plugin_unavailable() {
+    echo "-- test: absent atlassian MCP server keeps atlassian plugin available=false --"
+    setup_test_env
+    rm -rf "${HOME}/.claude/plugins"
+
+    cat > "${HOME}/.claude.json" <<'EOF'
+{ "mcpServers": { "other-server": { "command": "node", "args": [] } } }
+EOF
+
+    run_hook >/dev/null
+
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    local avail
+    avail="$(jq -r '.plugins[] | select(.name=="atlassian") | .available' "${cache_file}" 2>/dev/null)"
+    assert_equals "no atlassian MCP server keeps atlassian unavailable" "false" "${avail}"
+
+    teardown_test_env
+}
+
 test_lsp_false_positive_guard_when_binary_missing() {
     echo "-- test: lsp=false + partial-install diagnostic when binary missing --"
     setup_test_env
@@ -1402,6 +1447,8 @@ test_context_capabilities_all_false
 test_context_capabilities_in_health_output
 test_lsp_guidance_in_output_when_present
 test_lsp_ide_mcp_does_not_enable_lsp
+test_atlassian_mcp_enables_plugin_available
+test_no_atlassian_mcp_keeps_plugin_unavailable
 test_lsp_false_positive_guard_when_binary_missing
 test_lsp_nudge_fires_on_error_hunt_pattern
 test_lsp_nudge_silent_on_non_error_pattern
