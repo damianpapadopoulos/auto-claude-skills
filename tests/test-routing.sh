@@ -6168,4 +6168,58 @@ test_project_verification_routes_review() {
 }
 test_project_verification_routes_review
 
+# ---------------------------------------------------------------------------
+# Helper: v4 registry (has all SHIP skills) + atlassian plugin with chosen
+# availability + SHIP hints loaded from config/default-triggers.json so the
+# test reads the real config source and fails when the hint is absent.
+# install_registry_v4_with_atlassian_from_config <true|false>
+# ---------------------------------------------------------------------------
+install_registry_v4_with_atlassian_from_config() {
+    local available="${1:-true}"
+    install_registry_v4
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    local tmp_file
+    tmp_file="$(mktemp)"
+    # Read SHIP hints from the real config, then overlay the registry:
+    # 1. Replace SHIP hints with those from config/default-triggers.json
+    # 2. Inject atlassian plugin with chosen availability
+    jq --arg avail "${available}" \
+       --slurpfile cfg "${PROJECT_ROOT}/config/default-triggers.json" '
+      .plugins += [{"name":"atlassian","available":($avail == "true")}] |
+      .phase_compositions.SHIP.hints = ($cfg[0].phase_compositions.SHIP.hints // [])
+    ' "${cache_file}" > "${tmp_file}" && mv "${tmp_file}" "${cache_file}"
+}
+
+# ---------------------------------------------------------------------------
+# SHIP-phase Jira PR-title hint: gated on atlassian plugin availability.
+# Uses the real SHIP hints from config/default-triggers.json so the test
+# fails when the hint is absent from config and passes when it is present.
+# Harness helper reused: install_registry_v4 (v4 base with SHIP skills) +
+# jq overlay of config SHIP hints + atlassian availability injection.
+# ---------------------------------------------------------------------------
+test_jira_pr_title_hint_emits_at_ship_when_atlassian_available() {
+    echo "-- test: SHIP PR-title hint emits when atlassian available, suppressed otherwise --"
+
+    # --- available: hint should be present ---
+    setup_test_env
+    install_registry_v4_with_atlassian_from_config "true"
+
+    local ctx_available
+    ctx_available="$(extract_context "$(run_hook "ship the feature and merge to main")")"
+    assert_contains "PR-title hint present when atlassian available" "JIRA PR TITLE" "${ctx_available}"
+
+    teardown_test_env
+
+    # --- unavailable: hint must be suppressed ---
+    setup_test_env
+    install_registry_v4_with_atlassian_from_config "false"
+
+    local ctx_unavailable
+    ctx_unavailable="$(extract_context "$(run_hook "ship the feature and merge to main")")"
+    assert_not_contains "PR-title hint suppressed when atlassian unavailable" "JIRA PR TITLE" "${ctx_unavailable}"
+
+    teardown_test_env
+}
+test_jira_pr_title_hint_emits_at_ship_when_atlassian_available
+
 print_summary

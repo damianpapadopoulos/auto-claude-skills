@@ -1459,6 +1459,11 @@
         {
           "text": "LEARN REMINDER: After shipping, use 'how did [feature] perform' to review outcomes with the outcome-review skill.",
           "when": "always"
+        },
+        {
+          "plugin": "atlassian",
+          "text": "JIRA PR TITLE: If the branch name carries a Jira ID (feature/PROJ-123 -> PROJ-123), fetch the ticket's exact subject via the Atlassian MCP (getJiraIssue) and title the PR '<JIRA-ID>: <subject>'. If no Jira ID is present, skip — don't fabricate one.",
+          "when": "installed"
         }
       ]
     },

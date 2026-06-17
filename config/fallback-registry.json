@@ -1336,6 +1336,11 @@
         {
           "text": "LEARN REMINDER: After shipping, use 'how did [feature] perform' to review outcomes with the outcome-review skill.",
           "when": "always"
+        },
+        {
+          "plugin": "atlassian",
+          "text": "JIRA PR TITLE: If the branch name carries a Jira ID (feature/PROJ-123 -> PROJ-123), fetch the ticket's exact subject via the Atlassian MCP (getJiraIssue) and title the PR '<JIRA-ID>: <subject>'. If no Jira ID is present, skip — don't fabricate one.",
+          "when": "installed"
         }
       ]
     },
@@ -1593,6 +1598,15 @@
       "phases": [
         "*"
       ]
+    },
+    {
+      "name": "jira-branch-convention",
+      "triggers": [
+        "(^|[^a-z0-9])[a-z][a-z0-9]+-[0-9]+($|[^a-z0-9])"
+      ],
+      "trigger_mode": "regex",
+      "hint": "JIRA CONVENTION: This work references a Jira ticket (e.g. PROJ-123). Name the working branch <type>/<JIRA-ID> using the ticket's exact uppercase ID — feature/PROJ-123 by default; bugfix/ or chore/ where the work isn't a feature.",
+      "plugin": "atlassian"
     }
   ],
   "warnings": []
