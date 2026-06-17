@@ -178,13 +178,26 @@ done
 # --help smoke
 ./${BINARY} --help >/dev/null 2>&1 && echo "help: pass (exit 0)" || echo "help: fail (exit $?)"
 
-# Scenario execution from eval packs
+# Scenario execution from eval packs.
+# SECURITY: scenario commands are run as code. Treat eval packs as TRUSTED committed fixtures
+# only — never execute scenario commands sourced from untrusted/attacker-influenced input.
+# Do NOT `eval` the command string (eval runs in THIS shell and re-parses, so a crafted
+# fixture could mutate the validation environment). Prefer the structured argv form, which
+# runs with NO shell; fall back to a child subshell (bash -c) for the legacy string form.
 for scenario in "${CLI_SCENARIOS[@]}"; do
-  cmd=$(echo "$scenario" | jq -r '.inputs.command')
   expected=$(echo "$scenario" | jq -r '.expected.exit_code // 0')
-  eval "${cmd}" >/dev/null 2>&1
-  actual=$?
-  echo "${cmd}: expected_exit=${expected} actual_exit=${actual}"
+  if echo "$scenario" | jq -e '.inputs.argv | type == "array"' >/dev/null 2>&1; then
+    # Preferred: argv array executed directly — no shell, no injection surface.
+    argv=(); while IFS= read -r _a; do argv+=("$_a"); done < <(echo "$scenario" | jq -r '.inputs.argv[]')
+    "${argv[@]}" >/dev/null 2>&1; actual=$?
+    label="${argv[*]}"
+  else
+    # Legacy string form (trusted fixtures only): run in a child subshell, never `eval`.
+    cmd=$(echo "$scenario" | jq -r '.inputs.command')
+    bash -c "${cmd}" >/dev/null 2>&1; actual=$?
+    label="${cmd}"
+  fi
+  echo "${label}: expected_exit=${expected} actual_exit=${actual}"
 done
 ```
 

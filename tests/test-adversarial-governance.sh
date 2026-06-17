@@ -81,6 +81,9 @@ RTV_CONTENT="$(cat "${RTV_SKILL}")"
 assert_contains "runtime-validation: safety-relevant paths section" "Safety-Relevant Paths" "${RTV_CONTENT}"
 assert_contains "runtime-validation: safety paths must be exercised" "MUST be exercised" "${RTV_CONTENT}"
 assert_contains "runtime-validation: eval scenarios append-only" "append-only" "${RTV_CONTENT}"
+# CLI scenario execution must not `eval` eval-pack-sourced command strings (shell-injection vector).
+assert_not_contains "runtime-validation: no eval of eval-pack command (injection)" 'eval "${cmd}"' "${RTV_CONTENT}"
+assert_contains "runtime-validation: eval-pack trust-boundary note" "TRUSTED committed fixtures" "${RTV_CONTENT}"
 
 # agent-safety-review: safety eval cases red before code (TDD-for-evals).
 assert_contains "agent-safety-review: safety eval red before code" "before the behavior is implemented" "${SAFETY_CONTENT}"
