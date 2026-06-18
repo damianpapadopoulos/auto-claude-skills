@@ -346,6 +346,23 @@ install_registry() {
       "invoke": "Skill(auto-claude-skills:project-verification)",
       "available": true,
       "enabled": true
+    },
+    {
+      "name": "capture-knowledge",
+      "role": "workflow",
+      "phase": "LEARN",
+      "triggers": [
+        "(^|[^a-z])(capture|save|remember).{0,20}(learning|knowledge|gotcha|decision)($|[^a-z])",
+        "team knowledge base"
+      ],
+      "keywords": [],
+      "trigger_mode": "regex",
+      "priority": 17,
+      "precedes": [],
+      "requires": [],
+      "invoke": "Skill(auto-claude-skills:capture-knowledge)",
+      "available": true,
+      "enabled": true
     }
   ],
   "phase_guide": {
@@ -6167,5 +6184,19 @@ test_project_verification_routes_review() {
     teardown_test_env
 }
 test_project_verification_routes_review
+
+# ---------------------------------------------------------------------------
+# capture-knowledge routes on learning/knowledge capture prompts
+# ---------------------------------------------------------------------------
+test_capture_knowledge_routes() {
+    setup_test_env
+    install_registry
+
+    local ctx; ctx="$(extract_context "$(run_hook "capture this learning for the team knowledge base")")"
+    assert_contains "capture-knowledge routed" "capture-knowledge" "${ctx}"
+
+    teardown_test_env
+}
+test_capture_knowledge_routes
 
 print_summary

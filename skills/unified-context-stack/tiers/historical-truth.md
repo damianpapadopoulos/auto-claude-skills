@@ -40,3 +40,17 @@ Forgetful and Claude Code auto-memory are orthogonal, not redundant:
 - **Claude Code auto-memory** at `~/.claude/projects/<project>/memory/` = per-project conversation memory (built-in, slug-indexed with typed frontmatter). Use for: user preferences, feedback corrections, project-specific facts, reference pointers.
 
 Do not dual-write. Pick one per learning based on scope: cross-project → Forgetful; project-local → auto-memory.
+
+### Three storage scopes (no dual-write within a scope)
+
+| Scope | Location | Visibility | Gate |
+|-------|----------|------------|------|
+| machine | `~/.claude/projects/<project>/memory/` (Claude Code auto-memory) | private, per-machine | built-in |
+| repo canonical | `.claude/knowledge/` (committed OKF files) | shared via git, PR-gated | human + PR review |
+| repo derived-optional | each user's LOCAL Forgetful instance, synced from `.claude/knowledge/` | local only, rebuildable | opt-in |
+
+**Retrieval tiers:**
+- **Base tier (zero dependencies):** `session-start-hook.sh` injects `index.md` at session start (capped at 8192 bytes, fail-open, framed as untrusted reference data). Works with no MCP, no Forgetful.
+- **Accelerator tier (semantic retrieval):** where a user has Forgetful connected locally, `scripts/knowledge-forgetful-map.sh` mirrors committed facts into it for `query_memory`-style lookup. Never required — absent Forgetful, the base tier works unchanged.
+
+**Serena boundary:** Serena indexes **code symbols** (functions, classes, variables) — it does not provide semantic retrieval over prose in `.claude/knowledge/`. Semantic-at-scale comes from local Forgetful, not Serena.
