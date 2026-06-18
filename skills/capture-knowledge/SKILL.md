@@ -42,9 +42,9 @@ Run this block only when explicitly requested by the human, never on session-sta
 2. Determine the map file path:
    ```
    REPOHASH=$(printf '%s' "$(pwd)" | shasum | cut -d' ' -f1)
-   MAPFILE="${HOME}/.claude/.knowledge-forgetful-map-${REPOHASH}.json"
+   MAPFILE="${HOME}/.claude/.knowledge-forgetful-map-${REPOHASH}"
    ```
-   If `MAPFILE` does not exist, initialise it with `{}`.
+   If `MAPFILE` does not exist, it will be created automatically on first `put`.
 
 3. Look up existing memory_id:
    ```
@@ -72,6 +72,6 @@ Run this block only when explicitly requested by the human, never on session-sta
 
 7. **If a fact file has been deleted** (slug in map but file absent):
    - Call `delete_memory` (or equivalent) via MCP with the stored `memory_id`.
-   - Remove the slug line from the map by overwriting it via `put` with an empty id, or by reinitialising the map entry. (The model may also remove the line manually from the JSON map file.)
+   - Remove the slug entry from the local slug→memory_id map sidecar by running `put` with an empty id, or by deleting its line from the map file directly.
 
 **Error handling:** Any MCP call failure is logged to stderr and skipped — never abort the full reconcile. The map is only updated on confirmed MCP success.

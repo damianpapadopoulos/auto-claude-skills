@@ -92,12 +92,32 @@ test_validate_flags_dangling_link
 test_validate_noop_when_absent
 
 test_forgetful_map_roundtrip() {
-    local tmp; tmp="$(mktemp -d)"; local m="${tmp}/map.json"; printf '{}' > "${m}"
+    local tmp; tmp="$(mktemp -d)"; local m="${tmp}/map.tsv"; : > "${m}"
     bash "${PROJECT_ROOT}/scripts/knowledge-forgetful-map.sh" put "${m}" my-slug 42 abc123
     local id; id="$(bash "${PROJECT_ROOT}/scripts/knowledge-forgetful-map.sh" get "${m}" my-slug)"
     assert_equals "map returns stored memory_id" "42" "${id}"
     rm -rf "${tmp}"
 }
 test_forgetful_map_roundtrip
+
+test_forgetful_map_multi_slug_no_clobber() {
+    local tmp; tmp="$(mktemp -d)"; local m="${tmp}/map.tsv"
+    # put two different slugs
+    bash "${PROJECT_ROOT}/scripts/knowledge-forgetful-map.sh" put "${m}" slug-a 1 hash-a
+    bash "${PROJECT_ROOT}/scripts/knowledge-forgetful-map.sh" put "${m}" slug-b 2 hash-b
+    local id_a id_b
+    id_a="$(bash "${PROJECT_ROOT}/scripts/knowledge-forgetful-map.sh" get "${m}" slug-a)"
+    id_b="$(bash "${PROJECT_ROOT}/scripts/knowledge-forgetful-map.sh" get "${m}" slug-b)"
+    assert_equals "slug-a not clobbered by slug-b put" "1" "${id_a}"
+    assert_equals "slug-b stored correctly" "2" "${id_b}"
+    # update slug-a in place; slug-b must remain
+    bash "${PROJECT_ROOT}/scripts/knowledge-forgetful-map.sh" put "${m}" slug-a 9 hash-a2
+    id_a="$(bash "${PROJECT_ROOT}/scripts/knowledge-forgetful-map.sh" get "${m}" slug-a)"
+    id_b="$(bash "${PROJECT_ROOT}/scripts/knowledge-forgetful-map.sh" get "${m}" slug-b)"
+    assert_equals "slug-a updated to new id" "9" "${id_a}"
+    assert_equals "slug-b unchanged after slug-a update" "2" "${id_b}"
+    rm -rf "${tmp}"
+}
+test_forgetful_map_multi_slug_no_clobber
 
 print_summary
