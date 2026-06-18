@@ -20,6 +20,8 @@ for f in "${DIR}"/*.md; do
     [ "${base}" = "index.md" ] && continue
     title="$(_frontmatter_field "${f}" title)"
     desc="$(_frontmatter_field "${f}" description)"
+    printf '%s\t%s\t%s\n' "${base}" "${title}" "${desc}"
+done | sort | while IFS="$(printf '\t')" read -r base title desc; do
     printf -- '- [%s](%s) — %s\n' "${title}" "${base}" "${desc}"
-done | sort >> "${TMP}"
+done >> "${TMP}"
 mv "${TMP}" "${DIR}/index.md"
