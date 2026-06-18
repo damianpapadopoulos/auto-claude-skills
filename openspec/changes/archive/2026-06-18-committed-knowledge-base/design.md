@@ -156,3 +156,24 @@ agent is read and acted on by every other agent. Mitigations are *requirements*,
 - **Skipped:** static-HTML visualizer (revival: large bundle / human browse) and multi-bundle
   composition/inheritance (irrelevant at our scale). Producer/consumer separation already honored
   (Forgetful + hook are independent consumers; the file format is the only contract).
+
+## Implementation Notes (synced at ship time)
+
+Deviations from the upfront design, all surfaced by the per-task / final reviews:
+
+- **Forgetful map format: JSON → line-based TSV.** The design described a JSON `slug→{id,hash}`
+  sidecar. As-built it is a tab-separated `slug\tid\thash` map (`scripts/knowledge-forgetful-map.sh`).
+  Reason: the no-jq JSON `put` clobbered the whole file (jq is optional at runtime); TSV makes the
+  jq and no-jq paths identical and the merge trivial. A `del` subcommand was added (the design's
+  "delete the memory + drop map line" needed an explicit deterministic op).
+- **Index sorts by slug, not title.** The first implementation sorted formatted lines (by title);
+  fixed to sort by slug per the stated intent, with a 2-fact regression test.
+- **Behavioral pack location.** Authored at `tests/fixtures/capture-knowledge/evals/behavioral.json`
+  (the repo's real discovery path), not under `skills/`.
+- **Validator CWD anchoring.** `scripts/validate-knowledge-bundle.sh` `cd`s to the repo root before
+  validating so repo-relative `source:` checks resolve regardless of caller CWD.
+- **Seed fact.** The dogfood seed dropped its `[[session-start-budget]]` link (no second fact authored);
+  the validator caught the dangling link at ship time — the consistency gate working as designed.
+- **Enforcement reality.** Write-side gates (human approval, secret scan, source-verify) are
+  procedural (SKILL.md guidance), not hook-enforced — consistent with the repo's position that the
+  real boundary is the human + PR review. The read path is inert string data (no eval/exec).
