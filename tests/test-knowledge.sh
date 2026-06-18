@@ -67,4 +67,28 @@ EOF
 }
 test_rebuild_index_sorts_by_slug_not_title
 
+test_validate_passes_on_valid_fixture() {
+    if bash "${PROJECT_ROOT}/scripts/knowledge-validate.sh" tests/fixtures/knowledge/valid >/dev/null 2>&1; then
+        _record_pass "validate passes on valid fixture"
+    else
+        _record_fail "validate passes on valid fixture" "exit 0" "non-zero"
+    fi
+}
+test_validate_flags_dangling_link() {
+    local out rc
+    out="$(bash "${PROJECT_ROOT}/scripts/knowledge-validate.sh" tests/fixtures/knowledge/dangling 2>&1)"; rc=$?
+    assert_contains "dangling reported" "does-not-exist" "${out}"
+    assert_equals "dangling exits non-zero" "1" "${rc}"
+}
+test_validate_noop_when_absent() {
+    if bash "${PROJECT_ROOT}/scripts/knowledge-validate.sh" /no/such/dir >/dev/null 2>&1; then
+        _record_pass "validate no-ops when dir absent"
+    else
+        _record_fail "validate no-ops when dir absent" "exit 0" "non-zero"
+    fi
+}
+test_validate_passes_on_valid_fixture
+test_validate_flags_dangling_link
+test_validate_noop_when_absent
+
 print_summary
