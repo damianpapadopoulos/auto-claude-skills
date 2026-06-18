@@ -91,4 +91,13 @@ test_validate_passes_on_valid_fixture
 test_validate_flags_dangling_link
 test_validate_noop_when_absent
 
+test_forgetful_map_roundtrip() {
+    local tmp; tmp="$(mktemp -d)"; local m="${tmp}/map.json"; printf '{}' > "${m}"
+    bash "${PROJECT_ROOT}/scripts/knowledge-forgetful-map.sh" put "${m}" my-slug 42 abc123
+    local id; id="$(bash "${PROJECT_ROOT}/scripts/knowledge-forgetful-map.sh" get "${m}" my-slug)"
+    assert_equals "map returns stored memory_id" "42" "${id}"
+    rm -rf "${tmp}"
+}
+test_forgetful_map_roundtrip
+
 print_summary
