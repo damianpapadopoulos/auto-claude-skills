@@ -28,7 +28,6 @@ for f in "${DIR}"/*.md; do
     esac
     # dangling [[slug]] links
     for ref in $(grep -oE '\[\[[a-z0-9-]+\]\]' "${f}" | sed 's/\[\[//;s/\]\]//'); do
-        case " ${SLUGS} ${ref} " in *" ${ref} "*) : ;; esac
         [ -e "${DIR}/${ref}.md" ] || _err "${base}: dangling link [[${ref}]]"
     done
 done

@@ -129,4 +129,18 @@ test_ci_entry_validates_repo_bundle() {
 }
 test_ci_entry_validates_repo_bundle
 
+test_forgetful_map_del() {
+    local tmp; tmp="$(mktemp -d)"; local m="${tmp}/map.tsv"
+    bash "${PROJECT_ROOT}/scripts/knowledge-forgetful-map.sh" put "${m}" slug-a 1 hash-a
+    bash "${PROJECT_ROOT}/scripts/knowledge-forgetful-map.sh" put "${m}" slug-b 2 hash-b
+    bash "${PROJECT_ROOT}/scripts/knowledge-forgetful-map.sh" del "${m}" slug-a
+    local id_a id_b
+    id_a="$(bash "${PROJECT_ROOT}/scripts/knowledge-forgetful-map.sh" get "${m}" slug-a)"
+    id_b="$(bash "${PROJECT_ROOT}/scripts/knowledge-forgetful-map.sh" get "${m}" slug-b)"
+    assert_equals "del slug-a: get returns empty" "" "${id_a}"
+    assert_equals "del slug-a: slug-b still returns 2" "2" "${id_b}"
+    rm -rf "${tmp}"
+}
+test_forgetful_map_del
+
 print_summary
