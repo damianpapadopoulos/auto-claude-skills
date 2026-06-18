@@ -1072,4 +1072,27 @@ assert_not_contains "plugin hint dropped when unavailable" "PLUGINLESS-HINT-TEXT
 assert_contains "global hint not dropped" "GLOBAL-HINT-TEXT" "${_hint_ctx}"
 rm -rf "${_hint_tmpdir}"
 
+# ---------------------------------------------------------------------------
+# Knowledge index injection tests (session-start-hook.sh)
+# ---------------------------------------------------------------------------
+test_knowledge_index_injected() {
+    local tmp; tmp="$(mktemp -d)"; mkdir -p "${tmp}/.claude/knowledge"
+    printf '<!-- schema_version: okf-0.1 -->\n# Knowledge Index\n\n- [X](x.md) — hook gotcha\n' \
+        > "${tmp}/.claude/knowledge/index.md"
+    local out
+    out="$(cd "${tmp}" && echo '{}' | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" bash "${PROJECT_ROOT}/hooks/session-start-hook.sh" 2>/dev/null)"
+    local ctx; ctx="$(extract_context "${out}")"
+    assert_contains "knowledge header present" "reference data" "${ctx}"
+    assert_contains "knowledge index content present" "hook gotcha" "${ctx}"
+    rm -rf "${tmp}"
+}
+test_knowledge_absent_no_block() {
+    local tmp; tmp="$(mktemp -d)"
+    local out; out="$(cd "${tmp}" && echo '{}' | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" bash "${PROJECT_ROOT}/hooks/session-start-hook.sh" 2>/dev/null)"
+    assert_not_contains "no knowledge block when absent" "Project Knowledge" "$(extract_context "${out}")"
+    rm -rf "${tmp}"
+}
+test_knowledge_index_injected
+test_knowledge_absent_no_block
+
 print_summary
