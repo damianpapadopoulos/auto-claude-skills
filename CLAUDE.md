@@ -22,7 +22,7 @@ Claude Code plugin for automatic skill routing based on prompt intent and SDLC p
 
 ## Doc locations
 
-Five canonical homes for project context. Read this before guessing where docs live.
+Six canonical homes for project context. Read this before guessing where docs live.
 
 - `CLAUDE.md` (repo root) — project instructions, always auto-loaded into every session.
 - `docs/plans/` — design docs (`*-design.md`) and task plans (`*-plan.md`). Gitignored; per-session scratch. Default mode persists design intent here.
