@@ -1280,6 +1280,10 @@
         {
           "text": "EVAL STRATEGY: Before leaving DESIGN, classify how this feature is verified — ask the user if it is unclear. If it has probabilistic/AI/LLM/agent behavior (outputs cannot be exact-matched): plan an eval SET, not just unit tests — smoke + adversarial/safety subsets (jailbreak, injection, safety-routing-suppression), a pinned judge model+version, never-delete cases (deprecate with a dated rationale), and a pre-registered safety-stop (halt condition + who can call it); author the safety subset and have it failing (red) before implementation. If it is deterministic: standard test-driven-development plus the acceptance scenarios above are the bar. Safety dimensions are hard pass/fail gates, never averaged into a quality blend. See Skill(auto-claude-skills:runtime-validation) for running eval packs.",
           "when": "always"
+        },
+        {
+          "text": "TRIFECTA CHECK: During DESIGN, classify private_data (secrets/PII/private repos/tokens), untrusted_input (external content: emails, web pages, uploads, third-party API responses, webhooks), and outbound_action (acts outside the sandbox: email, Slack, git push, API calls, PRs) from the proposed data flow as Present/Absent/Unknown. If 2 or more are Present, or Unknowns could make the count >=2, invoke Skill(auto-claude-skills:agent-safety-review) after brainstorming has a candidate design and before transitioning to PLAN. Judge from the actual data flow — do not wait for a keyword trigger.",
+          "when": "always"
         }
       ]
     },
@@ -1392,7 +1396,7 @@
           "when": "installed"
         },
         {
-          "text": "ADVERSARIAL REVIEW: In addition to standard code review, evaluate these governance checks: (1) Does any change weaken or remove an existing safety gate, HITL requirement, or approval step? (2) Does any change expand autonomous action scope (new outbound actions, broader permissions, reduced human oversight)? (3) Does any change modify hook behavior, permission settings, or composition routing in ways that reduce guardrails? (4) Does any change add `dangerouslyDisableSandbox`, `--no-verify`, `force`, or equivalent bypass patterns? (5) Does any change touch files in `hooks/` or `config/` that govern skill routing or phase enforcement? (6) If any answer is YES: flag as a blocking governance finding with specific file:line evidence.",
+          "text": "ADVERSARIAL REVIEW: In addition to standard code review, evaluate these governance checks: (1) Does any change weaken or remove an existing safety gate, HITL requirement, or approval step? (2) Does any change expand autonomous action scope (new outbound actions, broader permissions, reduced human oversight)? (3) Does any change modify hook behavior, permission settings, or composition routing in ways that reduce guardrails? (4) Does any change add `dangerouslyDisableSandbox`, `--no-verify`, `force`, or equivalent bypass patterns? (5) Does any change touch files in `hooks/` or `config/` that govern skill routing or phase enforcement? (6) If any answer is YES: flag as a blocking governance finding with specific file:line evidence. (7) Does the resulting change have >=2 lethal-trifecta fields (private_data, untrusted_input, outbound_action), or add a missing leg to an existing >=2-field flow? If so, invoke Skill(auto-claude-skills:agent-safety-review) and treat unresolved lethal-trifecta mitigation as a blocking governance finding.",
           "when": "always"
         }
       ],
