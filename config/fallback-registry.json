@@ -256,6 +256,24 @@
       "enabled": true
     },
     {
+      "name": "capture-knowledge",
+      "role": "workflow",
+      "phase": "LEARN",
+      "triggers": [
+        "(^|[^a-z])(capture|save|remember).{0,20}(learning|knowledge|gotcha|decision)($|[^a-z])",
+        "team knowledge base"
+      ],
+      "keywords": [],
+      "trigger_mode": "regex",
+      "priority": 17,
+      "precedes": [],
+      "requires": [],
+      "description": "Human-gated capture of a durable team fact into .claude/knowledge/ with source-verify and secret-scan.",
+      "invoke": "Skill(auto-claude-skills:capture-knowledge)",
+      "available": false,
+      "enabled": true
+    },
+    {
       "name": "dispatching-parallel-agents",
       "role": "workflow",
       "phase": "IMPLEMENT",

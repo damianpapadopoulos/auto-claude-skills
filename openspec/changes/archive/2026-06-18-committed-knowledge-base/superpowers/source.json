@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "discovery_path": null,
+  "design_path": null,
+  "plan_path": null,
+  "spec_path": null,
+  "sp_plan_path": null,
+  "sp_spec_path": null,
+  "change_slug": "committed-knowledge-base",
+  "capability_slug": null,
+  "source_branch": "worktree-committed-knowledge-base",
+  "base_commit": "ef76f510fa290ea03ae568f86e6aa89930a0d8c9",
+  "openspec_surface": "none",
+  "archived_at": "2026-06-18T15:04:52Z"
+}
