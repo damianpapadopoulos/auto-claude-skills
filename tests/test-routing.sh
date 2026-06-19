@@ -4763,11 +4763,12 @@ test_capture_knowledge_auto_surfaces() {
     # Use the production fallback registry (carries phase_compositions hints)
     local cache="${HOME}/.claude/.skill-registry-cache.json"
     cp "${PROJECT_ROOT}/config/fallback-registry.json" "${cache}"
-    # Enable the LEARN/SHIP/DEBUG driver skills (positive cases) plus a non-learning
-    # driver (requesting-code-review -> REVIEW) for the negative case below.
+    # Enable the LEARN/SHIP/DEBUG driver skills (positive cases) plus two non-learning
+    # drivers (requesting-code-review -> REVIEW, executing-plans -> IMPLEMENT) for the
+    # negative cases below.
     local tmp="${cache}.tmp"
     jq '.skills |= map(
-        if (.name == "outcome-review" or .name == "verification-before-completion" or .name == "systematic-debugging" or .name == "requesting-code-review")
+        if (.name == "outcome-review" or .name == "verification-before-completion" or .name == "systematic-debugging" or .name == "requesting-code-review" or .name == "executing-plans")
         then . + {available:true, enabled:true}
         else . end
     )' "${cache}" > "${tmp}" && mv "${tmp}" "${cache}"
@@ -4800,6 +4801,17 @@ test_capture_knowledge_auto_surfaces() {
     assert_contains "REVIEW routes (keeps negative case non-vacuous)" \
         "requesting-code-review" "${context}"
     assert_not_contains "REVIEW does NOT surface capture-knowledge" \
+        "Skill(auto-claude-skills:capture-knowledge)" "${context}"
+
+    # IMPLEMENT — the highest-traffic excluded phase; guards against a future change
+    # that widens the hint to IMPLEMENT specifically (which the REVIEW case above
+    # would miss). The IMPLEMENT composition emits a test-driven-development line,
+    # used here to prove the prompt actually routed to IMPLEMENT (non-vacuous).
+    output="$(run_hook "implement the remaining tasks")"
+    context="$(extract_context "${output}")"
+    assert_contains "IMPLEMENT routes (keeps negative case non-vacuous)" \
+        "test-driven-development" "${context}"
+    assert_not_contains "IMPLEMENT does NOT surface capture-knowledge" \
         "Skill(auto-claude-skills:capture-knowledge)" "${context}"
 
     teardown_test_env
