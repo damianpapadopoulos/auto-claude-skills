@@ -1383,7 +1383,8 @@
       ],
       "hints": [
         {
-          "text": "DEBUG ESCALATION: If the fix touches multiple files, changes behavior, or affects a public API, enter REVIEW → SHIP after debugging. Use Skill(superpowers:requesting-code-review) to transition."
+          "text": "DEBUG ESCALATION: If the fix touches multiple files, changes behavior, or affects a public API, enter REVIEW → SHIP after debugging. Use Skill(superpowers:requesting-code-review) to transition.",
+          "when": "always"
         },
         {
           "text": "CAPTURE KNOWLEDGE: After resolving the bug, if the root cause or fix is a non-obvious gotcha worth sharing with teammates' agents, consider Skill(auto-claude-skills:capture-knowledge) to record it into the committed .claude/knowledge/ base (human-gated at write). Skip for routine fixes.",

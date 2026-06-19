@@ -4752,9 +4752,10 @@ test_review_sequence_visible
 
 # capture-knowledge must AUTO-surface at the phases where durable learnings emerge
 # (LEARN / SHIP / post-DEBUG) via phase composition, NOT only on capture keywords.
-# This proves the shipped wiring, not a synthetic registry. See memory
-# project-capture-knowledge-autorouting: the skill previously fired only on
-# "capture/save/remember a learning", violating the auto-invocation thesis.
+# This proves the shipped wiring, not a synthetic registry. The skill previously
+# fired only on "capture/save/remember a learning", violating the auto-invocation
+# thesis. See CHANGELOG.md and
+# openspec/changes/archive/2026-06-19-capture-knowledge-autorouting/ for rationale.
 test_capture_knowledge_auto_surfaces() {
     echo "-- test: capture-knowledge auto-surfaces at LEARN/SHIP/DEBUG without capture keywords --"
     setup_test_env
@@ -4762,10 +4763,11 @@ test_capture_knowledge_auto_surfaces() {
     # Use the production fallback registry (carries phase_compositions hints)
     local cache="${HOME}/.claude/.skill-registry-cache.json"
     cp "${PROJECT_ROOT}/config/fallback-registry.json" "${cache}"
-    # Enable the LEARN/SHIP/DEBUG driver skills so each phase is selected
+    # Enable the LEARN/SHIP/DEBUG driver skills (positive cases) plus a non-learning
+    # driver (requesting-code-review -> REVIEW) for the negative case below.
     local tmp="${cache}.tmp"
     jq '.skills |= map(
-        if (.name == "outcome-review" or .name == "verification-before-completion" or .name == "systematic-debugging")
+        if (.name == "outcome-review" or .name == "verification-before-completion" or .name == "systematic-debugging" or .name == "requesting-code-review")
         then . + {available:true, enabled:true}
         else . end
     )' "${cache}" > "${tmp}" && mv "${tmp}" "${cache}"
@@ -4788,6 +4790,16 @@ test_capture_knowledge_auto_surfaces() {
     output="$(run_hook "debug the broken auth login error")"
     context="$(extract_context "${output}")"
     assert_contains "DEBUG auto-surfaces capture-knowledge" \
+        "Skill(auto-claude-skills:capture-knowledge)" "${context}"
+
+    # Negative case (spec scenario "Not an unconditional banner"): a non-learning
+    # phase MUST NOT surface the hint. REVIEW is named in the spec's exclusion list.
+    # Assert the prompt genuinely routes to REVIEW first, so the absence is not vacuous.
+    output="$(run_hook "review the auth pull request for code quality")"
+    context="$(extract_context "${output}")"
+    assert_contains "REVIEW routes (keeps negative case non-vacuous)" \
+        "requesting-code-review" "${context}"
+    assert_not_contains "REVIEW does NOT surface capture-knowledge" \
         "Skill(auto-claude-skills:capture-knowledge)" "${context}"
 
     teardown_test_env
