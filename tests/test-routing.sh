@@ -6282,6 +6282,20 @@ test_trifecta_hint_present_at_design() {
 }
 test_trifecta_hint_present_at_design
 
+# TRIFECTA CHECK is always-on at DESIGN even on a generic, keyword-free build prompt
+test_trifecta_hint_present_on_generic_design() {
+    echo "-- test: TRIFECTA CHECK hint present on generic DESIGN prompt --"
+    setup_test_env
+    install_registry_v4_with_real_phase_hints
+
+    local ctx
+    ctx="$(extract_context "$(run_hook "let's add a new feature to the app")")"
+    assert_contains "generic DESIGN still carries TRIFECTA CHECK" "TRIFECTA CHECK" "${ctx}"
+
+    teardown_test_env
+}
+test_trifecta_hint_present_on_generic_design
+
 # TRIFECTA CHECK absent outside its gate phases (SHIP)
 test_trifecta_hint_absent_at_ship() {
     echo "-- test: TRIFECTA CHECK hint absent at SHIP --"
