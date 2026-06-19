@@ -941,6 +941,22 @@ if printf '%s' "${CONTEXT_CAPS}" | jq -e '.posthog == true' >/dev/null 2>&1; the
     ')"
 fi
 
+# Set Atlassian plugin available flag when its MCP server is detected in ~/.claude.json.
+# Atlassian is a claude.ai-managed integration: it has no plugin-cache entry and is not a
+# context_capability, so it is detected directly here rather than via CONTEXT_CAPS.
+# Mirrors the serena/posthog MCP-fallback pattern (exact server-key match). Fail-open:
+# any jq error leaves availability false. Server key is `atlassian` by managed-integration
+# convention; users who rename it can force availability via skill-config.json if needed.
+if [ -f "${_CLAUDE_JSON}" ] && command -v jq >/dev/null 2>&1; then
+    if jq -e --arg proj "${_WORKSPACE_ROOT}" \
+        '(((.mcpServers // {}) + (.projects[$proj].mcpServers // {})) | has("atlassian"))' \
+        "${_CLAUDE_JSON}" >/dev/null 2>&1; then
+        PLUGINS_JSON="$(printf '%s' "${PLUGINS_JSON}" | jq '
+            map(if .name == "atlassian" then .available = true else . end)
+        ' 2>/dev/null || printf '%s' "${PLUGINS_JSON}")"
+    fi
+fi
+
 # ── Step 8f: Detect security scanner capabilities ──────────────────
 _SEMGREP=false; _OPENGREP=false; _TRIVY=false; _GITLEAKS=false; _OSV_SCANNER=false
 command -v semgrep     >/dev/null 2>&1 && _SEMGREP=true

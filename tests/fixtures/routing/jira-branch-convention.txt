@@ -1,0 +1,16 @@
+# Regex fixtures for methodology hint: jira-branch-convention
+# The trigger matches a lowercased Jira-ID-shaped token: <letters/digits>-<digits>.
+# Runtime emission is ALSO gated on the Atlassian plugin (not visible here — this test
+# only exercises the regex). ID-like tokens such as utf-8 / sha-256 DO match the regex by
+# design; the Atlassian plugin-gate suppresses them for non-Jira repos, so they are not
+# listed as NO_MATCH (that would contradict the regex).
+
+MATCH: work on PROJ-123
+MATCH: let's start ABC-4567 today
+MATCH: implement the fix for proj-1
+MATCH: PROJ-123: add the new endpoint
+
+NO_MATCH: fix the login bug
+NO_MATCH: update the readme
+NO_MATCH: PROJ123 needs attention
+NO_MATCH: ship the release
