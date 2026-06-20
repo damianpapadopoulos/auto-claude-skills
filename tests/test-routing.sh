@@ -6332,9 +6332,19 @@ install_registry_v4_with_real_phase_hints() {
     install_registry_v4
     local cache_file="${HOME}/.claude/.skill-registry-cache.json"
     local tmp_file; tmp_file="$(mktemp)"
-    jq --slurpfile cfg "${PROJECT_ROOT}/config/default-triggers.json" '
+    # Surface jq failures explicitly: a broken config/default-triggers.json would
+    # otherwise leave the cache without phase hints, and the downstream assertion
+    # would fail with a misleading "expected to contain 'TRIFECTA CHECK'" message
+    # instead of pointing at the real (parse-error) root cause.
+    if jq --slurpfile cfg "${PROJECT_ROOT}/config/default-triggers.json" '
       .phase_compositions = ($cfg[0].phase_compositions // {})
-    ' "${cache_file}" > "${tmp_file}" && mv "${tmp_file}" "${cache_file}"
+    ' "${cache_file}" > "${tmp_file}"; then
+        mv "${tmp_file}" "${cache_file}"
+    else
+        echo "[install_registry_v4_with_real_phase_hints] jq failed — cache not updated (is config/default-triggers.json valid JSON?)" >&2
+        rm -f "${tmp_file}"
+        return 1
+    fi
 }
 
 # TRIFECTA CHECK present at DESIGN with the agent-safety-review invocation
