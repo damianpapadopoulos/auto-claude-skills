@@ -4750,6 +4750,76 @@ test_review_sequence_visible() {
 }
 test_review_sequence_visible
 
+# capture-knowledge must AUTO-surface at the phases where durable learnings emerge
+# (LEARN / SHIP / post-DEBUG) via phase composition, NOT only on capture keywords.
+# This proves the shipped wiring, not a synthetic registry. The skill previously
+# fired only on "capture/save/remember a learning", violating the auto-invocation
+# thesis. See CHANGELOG.md and
+# openspec/changes/archive/2026-06-19-capture-knowledge-autorouting/ for rationale.
+test_capture_knowledge_auto_surfaces() {
+    echo "-- test: capture-knowledge auto-surfaces at LEARN/SHIP/DEBUG without capture keywords --"
+    setup_test_env
+
+    # Use the production fallback registry (carries phase_compositions hints)
+    local cache="${HOME}/.claude/.skill-registry-cache.json"
+    cp "${PROJECT_ROOT}/config/fallback-registry.json" "${cache}"
+    # Enable the LEARN/SHIP/DEBUG driver skills (positive cases) plus two non-learning
+    # drivers (requesting-code-review -> REVIEW, executing-plans -> IMPLEMENT) for the
+    # negative cases below.
+    local tmp="${cache}.tmp"
+    jq '.skills |= map(
+        if (.name == "outcome-review" or .name == "verification-before-completion" or .name == "systematic-debugging" or .name == "requesting-code-review" or .name == "executing-plans")
+        then . + {available:true, enabled:true}
+        else . end
+    )' "${cache}" > "${tmp}" && mv "${tmp}" "${cache}"
+
+    local output context
+
+    # LEARN — prompt has NO capture/save/remember keyword
+    output="$(run_hook "how did the auth feature perform after launch")"
+    context="$(extract_context "${output}")"
+    assert_contains "LEARN auto-surfaces capture-knowledge" \
+        "Skill(auto-claude-skills:capture-knowledge)" "${context}"
+
+    # SHIP — prompt has NO capture keyword
+    output="$(run_hook "wrap up the auth module and ship the release")"
+    context="$(extract_context "${output}")"
+    assert_contains "SHIP auto-surfaces capture-knowledge" \
+        "Skill(auto-claude-skills:capture-knowledge)" "${context}"
+
+    # DEBUG — prompt has NO capture keyword
+    output="$(run_hook "debug the broken auth login error")"
+    context="$(extract_context "${output}")"
+    assert_contains "DEBUG auto-surfaces capture-knowledge" \
+        "Skill(auto-claude-skills:capture-knowledge)" "${context}"
+
+    # Negative case (spec scenario "Not an unconditional banner"): a non-learning
+    # phase MUST NOT surface the hint. REVIEW is named in the spec's exclusion list.
+    # Assert the prompt genuinely routes to REVIEW first, so the absence is not vacuous.
+    output="$(run_hook "review the auth pull request for code quality")"
+    context="$(extract_context "${output}")"
+    assert_contains "REVIEW routes (keeps negative case non-vacuous)" \
+        "requesting-code-review" "${context}"
+    assert_not_contains "REVIEW does NOT surface capture-knowledge" \
+        "Skill(auto-claude-skills:capture-knowledge)" "${context}"
+
+    # IMPLEMENT — the highest-traffic excluded phase; guards against a future change
+    # that widens the hint to IMPLEMENT specifically (which the REVIEW case above
+    # would miss). Routing proof is anchored on the IMPLEMENT composition's
+    # test-driven-development line (see phase_compositions.IMPLEMENT.parallel in
+    # config/default-triggers.json); if that composition is refactored, update this
+    # anchor. Used here to prove the prompt actually routed to IMPLEMENT (non-vacuous).
+    output="$(run_hook "implement the remaining tasks")"
+    context="$(extract_context "${output}")"
+    assert_contains "IMPLEMENT routes (keeps negative case non-vacuous)" \
+        "test-driven-development" "${context}"
+    assert_not_contains "IMPLEMENT does NOT surface capture-knowledge" \
+        "Skill(auto-claude-skills:capture-knowledge)" "${context}"
+
+    teardown_test_env
+}
+test_capture_knowledge_auto_surfaces
+
 test_frontmatter_overrides_default_triggers() {
     echo "-- test: frontmatter triggers override default-triggers.json --"
     setup_test_env
