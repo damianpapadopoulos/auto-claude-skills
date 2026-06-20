@@ -4805,8 +4805,10 @@ test_capture_knowledge_auto_surfaces() {
 
     # IMPLEMENT — the highest-traffic excluded phase; guards against a future change
     # that widens the hint to IMPLEMENT specifically (which the REVIEW case above
-    # would miss). The IMPLEMENT composition emits a test-driven-development line,
-    # used here to prove the prompt actually routed to IMPLEMENT (non-vacuous).
+    # would miss). Routing proof is anchored on the IMPLEMENT composition's
+    # test-driven-development line (see phase_compositions.IMPLEMENT.parallel in
+    # config/default-triggers.json); if that composition is refactored, update this
+    # anchor. Used here to prove the prompt actually routed to IMPLEMENT (non-vacuous).
     output="$(run_hook "implement the remaining tasks")"
     context="$(extract_context "${output}")"
     assert_contains "IMPLEMENT routes (keeps negative case non-vacuous)" \

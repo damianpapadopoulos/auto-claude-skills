@@ -1387,7 +1387,7 @@
           "when": "always"
         },
         {
-          "text": "CAPTURE KNOWLEDGE: After resolving the bug, if the root cause or fix is a non-obvious gotcha worth sharing with teammates' agents, consider Skill(auto-claude-skills:capture-knowledge) to record it into the committed .claude/knowledge/ base (human-gated at write). Skip for routine fixes.",
+          "text": "CAPTURE KNOWLEDGE: If this debug session surfaced a non-obvious root-cause gotcha worth sharing with teammates' agents, consider Skill(auto-claude-skills:capture-knowledge) to record it into the committed .claude/knowledge/ base (human-gated at write). Skip for routine fixes.",
           "when": "always"
         }
       ]
