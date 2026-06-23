@@ -683,6 +683,21 @@ assert_file_contains "schema ref: systemic_factors has environmental_change key"
     "environmental_change:" "${SCHEMA_FILE}"
 
 # ---------------------------------------------------------------------------
+# references/jira-intake.md — opt-in Jira INTAKE stage
+# ---------------------------------------------------------------------------
+JIRA_INTAKE_REF="${PROJECT_ROOT}/skills/incident-analysis/references/jira-intake.md"
+assert_file_exists "references/jira-intake.md exists" "${JIRA_INTAKE_REF}"
+assert_file_contains "SKILL.md points to references/jira-intake.md" \
+    "references/jira-intake.md" "${SKILL_FILE}"
+assert_file_contains "INTAKE stage is opt-in" "opt-in" "${JIRA_INTAKE_REF}"
+assert_file_contains "INTAKE asks project via getVisibleJiraProjects" \
+    "getVisibleJiraProjects" "${JIRA_INTAKE_REF}"
+assert_file_contains "INTAKE HITL-gates createJiraIssue" \
+    "createJiraIssue" "${JIRA_INTAKE_REF}"
+assert_file_contains "INTAKE supports adopting a supplied key" \
+    "adopt" "${JIRA_INTAKE_REF}"
+
+# ---------------------------------------------------------------------------
 # Structural guard — SKILL.md word count
 # Post-refactor baseline is ~11,400 words (down from 12,806). Guard prevents regression.
 # ---------------------------------------------------------------------------

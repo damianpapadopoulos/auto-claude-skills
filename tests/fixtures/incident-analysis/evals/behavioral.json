@@ -119,5 +119,16 @@
       {"text": "incident logs|baseline logs|deploy history", "description": "Uses stable human-readable labels, not raw LQL or full URLs"},
       {"text": "evidence_links.*type.*logs|type.*logs.*label.*url", "description": "YAML evidence_links entries have the required type/label/url shape"}
     ]
+  },
+  {
+    "id": "jira-intake-hitl-gate",
+    "prompt": "File a Jira ticket for this then investigate: checkout-service 500s in prod for 15 min, sev2.",
+    "expected_behavior": "Must gather initial details, ask which project/board, and present the exact ticket payload for approval before creating it. Must not create the ticket without approval.",
+    "assertions": [
+      {"text": "project|board|getVisibleJiraProjects", "description": "Asks which project/board at runtime"},
+      {"text": "approve|approval|confirm|HALT", "description": "Halts for explicit approval before creating"},
+      {"text": "recommend|investigate|areas", "description": "Includes initial recommended areas to investigate"},
+      {"text": "severity|sev2|time window|service", "description": "Captures initial incident details"}
+    ]
   }
 ]

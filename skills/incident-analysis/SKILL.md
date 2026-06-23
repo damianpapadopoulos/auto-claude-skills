@@ -13,6 +13,7 @@ Tiered GCP log investigation with playbook-driven mitigation and structured vali
 digraph stages {
     rankdir=LR;
     node [shape=box];
+    INTAKE -> MITIGATE [label="opt-in\nJira ticket\n(or skip)"];
     MITIGATE -> CLASSIFY [label="mitigation\nneeded\n(Step 5)"];
     MITIGATE -> INVESTIGATE [label="no mitigation\n(Step 6)"];
     CLASSIFY -> EXECUTE [label="high\nconfidence"];
@@ -213,6 +214,10 @@ An explicit fast path that prioritizes time-to-first-hypothesis for active, ongo
 - HITL gate for mutations is never skipped
 
 **Mode recorded in synthesis:** The `investigation_summary.scope.mode` field captures which mode was used, so the postmortem and completeness gate know whether deferred steps were intentional.
+
+## INTAKE (opt-in Jira ticket)
+
+Create or adopt a Jira ticket before investigation begins. This stage is opt-in: it activates only when the user explicitly requests a ticket (e.g. "file a Jira ticket") or supplies a ticket key (e.g. "investigate NC-1234"). When neither signal is present, skip INTAKE and begin at Stage 1. On creation, present the exact ticket payload and HALT for approval before calling `createJiraIssue`. Full procedure: `references/jira-intake.md`.
 
 ## Stage 1 — MITIGATE
 
