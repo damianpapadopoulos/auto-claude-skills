@@ -5,7 +5,7 @@ description: Use when investigating production symptoms — connection failures,
 
 # Incident Analysis
 
-Tiered GCP log investigation with playbook-driven mitigation and structured validation. Stages: MITIGATE, CLASSIFY, INVESTIGATE, EXECUTE, VALIDATE, POSTMORTEM. Detects available tools at runtime and uses the best tier. Playbook YAML files define mitigation commands, safety invariants, and validation criteria.
+Tiered GCP log investigation with playbook-driven mitigation and structured validation. Stages: (opt-in) INTAKE → MITIGATE → CLASSIFY → INVESTIGATE → EXECUTE → VALIDATE → POSTMORTEM → (opt-in) REPORT-BACK. Detects available tools at runtime and uses the best tier. Playbook YAML files define mitigation commands, safety invariants, and validation criteria.
 
 ## Stage Flow
 
