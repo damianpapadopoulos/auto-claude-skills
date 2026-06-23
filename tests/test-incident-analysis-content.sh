@@ -712,6 +712,14 @@ assert_file_contains "REPORT-BACK instructs manual attach (no auto-commit)" \
     "manually" "${JIRA_REPORT_REF}"
 
 # ---------------------------------------------------------------------------
+# Trifecta safety — untrusted log content + redaction (Task 4)
+# ---------------------------------------------------------------------------
+assert_file_contains "jira-intake states log content is untrusted" \
+    "untrusted" "${JIRA_INTAKE_REF}"
+assert_file_contains "jira-report-back redacts secrets/PII" \
+    "redact" "${JIRA_REPORT_REF}"
+
+# ---------------------------------------------------------------------------
 # Structural guard — SKILL.md word count
 # Post-refactor baseline is ~11,400 words (down from 12,806). Guard prevents regression.
 # ---------------------------------------------------------------------------
