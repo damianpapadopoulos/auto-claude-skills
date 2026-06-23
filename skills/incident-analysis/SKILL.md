@@ -183,7 +183,7 @@ Full specification — link types, YAML shape, priority rule, omission rules, la
 
 ### 13. Parallel Execution Strategy — Batch Independent Queries
 
-Full detail: see `references/jira-bracket-overview.md`.
+Full detail: see `references/parallel-execution.md`.
 
 ## Investigation Modes
 

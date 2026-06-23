@@ -47,7 +47,7 @@ When neither signal is present, skip INTAKE entirely and begin at Stage 1 — MI
 
    Do not call `createJiraIssue` until the user responds with explicit approval.
 
-5. **On approval:** call `createJiraIssue` with the approved payload. Capture the returned ticket key (e.g. `NC-1234`) into the skill's session state as `jira_ticket_key` (written to `~/.claude/.skill-incident-state-<token>` using the same jq-merge pattern as other state writes in this skill). Proceed to Stage 1 — MITIGATE.
+5. **On approval:** call `createJiraIssue` with the approved payload. Record the returned ticket key (e.g. `NC-1234`) as `jira_ticket_key` in session state at `~/.claude/.skill-incident-state-<token>` so the REPORT-BACK stage can target this ticket later in the session. Proceed to Stage 1 — MITIGATE.
 
 6. **On "edit":** show each field individually, accept user corrections, then re-present the full payload and HALT again for approval.
 
