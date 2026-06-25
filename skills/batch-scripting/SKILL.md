@@ -14,6 +14,14 @@ Structured protocol for bulk file operations using `claude -p`. Teaches a safe, 
 - Batch code generation (add tests, docs, or boilerplate to many files)
 - Codebase-wide migrations (CommonJS to ESM, API version bumps, framework upgrades)
 
+**Rule of 500 (reach-for-a-script threshold):** when an operation spans more than
+~500 of something — lines to change, files to touch, or repetitive edits to make —
+stop hand-editing and reach for this scripted, manifest-driven protocol. Below that,
+direct edits are usually faster and safer; above it, the per-file error rate and
+context cost of doing it by hand outweigh the setup cost of a manifest + dry-run +
+log-based retry. The number is a heuristic, not a gate — a smaller but highly
+repetitive or mechanical change is also a fit.
+
 ## Protocol
 
 ### Step 1: Enumerate targets (manifest)
