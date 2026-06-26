@@ -16,7 +16,7 @@ READINESS_CLAIM_SKILLS="deploy-gate openspec-ship runtime-validation agent-team-
 
 for s in ${READINESS_CLAIM_SKILLS}; do
     f="${PROJECT_ROOT}/skills/${s}/SKILL.md"
-    if grep -qE '^## Verification' "${f}" 2>/dev/null; then
+    if grep -qE '^## Verification[[:space:]]*$' "${f}" 2>/dev/null; then
         _record_pass "${s}: has '## Verification' section"
     else
         _record_fail "${s}: has '## Verification' section" "no '^## Verification' heading in ${f}"
