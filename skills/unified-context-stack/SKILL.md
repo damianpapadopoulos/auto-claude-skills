@@ -1,6 +1,6 @@
 ---
 name: unified-context-stack
-description: Tiered context retrieval across External Truth (docs), Internal Truth (dependencies), Historical Truth (memory), and Intent Truth (feature specs) with graceful degradation based on installed tools.
+description: Use when any SDLC phase needs external docs, dependency internals, cross-session memory, or feature specs — provides tiered context retrieval across External Truth (docs), Internal Truth (dependencies), Historical Truth (memory), and Intent Truth (feature specs) with graceful degradation based on installed tools.
 ---
 
 # Unified Context Stack

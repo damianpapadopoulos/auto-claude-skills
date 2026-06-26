@@ -1,6 +1,6 @@
 ---
 name: security-scanner
-description: Use when reviewing code changes for security issues — during REVIEW phase or on explicit security, vulnerability, SAST, or secret-scan requests — running available Semgrep/Opengrep, Trivy, and Gitleaks scanners with a self-healing fix loop
+description: Use when reviewing code changes for security issues — during REVIEW phase or on explicit security, vulnerability, SAST, or secret-scan requests — running a STRIDE threat-model pre-pass, then available Semgrep/Opengrep, Trivy, and Gitleaks scanners with a self-healing fix loop
 ---
 
 # Security Scanner
