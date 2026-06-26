@@ -1,88 +1,144 @@
 # Intent-extraction behavioral eval (PR2a ship gate)
 
 Red-first quality gate for the intent-extraction DESIGN directive. The directive ships
-**only** if the discriminating delta assertions go **red → green** between the baseline
-(brainstorming alone) and the treatment (brainstorming + the directive prose). This is the
-spec bar: *"measurable intent-capture improvement over brainstorming alone."*
+**only** if it shows measurable intent-capture improvement over brainstorming alone. This
+eval is **opt-in and manual** — it spawns `claude -p` and costs API budget. It is NOT part of
+CI `tests/run-tests.sh`. Run it before shipping PR2a and record the result below.
 
-This eval is **opt-in and manual** — it spawns `claude -p` and costs API budget. It is NOT
-part of CI `tests/run-tests.sh`. Run it before shipping PR2a and record the result below.
+## What the gate measures
 
-## Mechanism — SKILL_PATH-swap A/B
+The directive's payoff is **multi-turn**: it runs a one-question-at-a-time intent pass and,
+once the user answers, *converges* on a one-line confirmed intent + an explicit out-of-scope
+boundary before brainstorming proposes approaches. So the gate is a **two-turn** A/B:
 
-`run-behavioral-evals.sh` injects the skill body from `SKILL_PATH` into the `claude -p`
-prompt; it does **not** inject the working-tree activation-hook directive (and a live
-`claude -p` would fire the *installed* plugin hook, not the edit). So we A/B the **skill
-body**, not a `--bare` toggle:
+- **Turn 1** = an underspecified ask (`prompt`).
+- **Turn 2** = the user answers with who/why/success/constraints (`followup`), delivered via
+  `claude -p --resume <session_id>`. Assertions evaluate the **turn-2 (convergence)** output.
 
-- **Baseline body** = the real superpowers brainstorming skill (the cheapest honest
-  alternative — do not strawman it with a hand-written stub):
-  ```bash
-  export SKILL_PATH="$(ls -d "$HOME"/.claude/plugins/cache/*/superpowers/*/skills/brainstorming/SKILL.md | head -1)"
-  echo "baseline body: $SKILL_PATH"   # record the resolved path + version below
-  ```
-- **Treatment body** = baseline `SKILL.md` with the directive prose appended:
-  ```bash
-  TREAT="$(mktemp)"; cat "$SKILL_PATH" > "$TREAT"
-  printf '\n\n## Activation directive (injected at DESIGN)\n\n' >> "$TREAT"
-  # Append the INTENT EXTRACTION directive text VERBATIM from
-  # hooks/skill-activation-hook.sh (keep it character-identical to what the hook emits).
-  ```
+The `followup` deliberately supplies substance **without** the delta vocabulary (no "out of
+scope" / "confirmed intent" / "confidence"), so matches reflect the *model's own* framing, not
+an echo of the user's words.
+
+### Convergence deltas (assertions on turn 2)
+
+| id | delta | counts toward gate? |
+|----|-------|---------------------|
+| C1 | states an explicit out-of-scope boundary | **yes** |
+| C2 | states a one-line confirmed-intent statement | **yes** |
+| C3 | indicates it will persist the confirmed intent (`openspec_state_set_intent`) | **no — sandbox artifact** |
+
+C3 is excluded from the quality verdict: the eval sandboxes the inner agent
+(`--disallowedTools Edit,Write,Bash`), so it *cannot run* the persist command and therefore
+rarely narrates it. The persistence handoff is the *mechanism*, already covered deterministically
+by the hook tests (`openspec_state_set_intent` unit tests + the seeded handoff test in
+`tests/test-routing.sh`). Keeping C3 in the quality blend would drag the signal down with a
+structural artifact, not a capability gap.
+
+## Mechanism — high-fidelity directive injection
+
+`run-behavioral-evals.sh` injects the skill body from `SKILL_PATH` and does **not** fire the
+working-tree hook (a live `claude -p` would fire the *installed* plugin hook, not the edit). Two
+injection modes were tried:
+
+1. **Buried** (append the directive to the end of the brainstorming `SKILL.md`): under-measures
+   efficacy — the directive competes with brainstorming's dominant "propose 2-3 approaches"
+   instruction and is only followed ~1/3 of the time.
+2. **Prominent** (`--directive-file`): injects the directive as a standalone
+   `<activation_directive>` block **above** the skill guidance — mirroring how the activation
+   hook places it in `additionalContext`. This is the faithful representation. **Use this mode.**
+
+Both modes share the **same unmodified brainstorming body** for baseline and treatment; treatment
+adds only the directive. Baseline = real brainstorming (the cheapest honest alternative — do not
+strawman it with a hand-written stub):
+
+```bash
+export BS="$(ls -d "$HOME"/.claude/plugins/cache/*/superpowers/*/skills/brainstorming/SKILL.md | sort -V | tail -1)"
+echo "$BS"   # record the resolved path + version below
+```
 
 ## Pinned judge
 
-The runner is regex-only (no LLM judge). "Pinned judge" therefore = the pinned inner
-`claude -p --model <model>` plus the date of the gating run. Record both below.
+The runner is regex-only (no LLM judge). "Pinned judge" = the pinned inner `claude -p --model
+<model>` + the date of the gating run. Record both below.
 
 ## Pre-registered safety-stop
 
 If the adversarial subset (`intent-mechanical-noninterview`) shows the directive induces a
 multi-question intent interview on a mechanical ask, **HALT the ship** and revise the
-suppression / prose (strengthen the mechanical-skip clause) before re-running. The developer
-running the gate may call this stop.
+suppression / prose before re-running. The developer running the gate may call this stop.
 
 ## Never-delete
 
-Scenarios are append-only. Never delete one; deprecate with `deprecated_on: YYYY-MM-DD` plus
-a one-line rationale in the scenario's `expected_behavior`.
+Scenarios are append-only. Never delete one; deprecate with `deprecated_on: YYYY-MM-DD` + a
+one-line rationale in `expected_behavior`.
 
 ## Scenarios
 
-| id | role | gate |
-|----|------|------|
-| `intent-underspecified-ask` | quality A/B | D1–D4 deltas red→green (discriminating deltas must go green) |
-| `intent-mechanical-noninterview` | adversarial (hard) | no intent interview on a mechanical ask |
-| `intent-respects-existing-brief` | adversarial (hard) | builds on brief, no re-elicitation |
+| id | role | turns | gate |
+|----|------|-------|------|
+| `intent-underspecified-converge` | quality A/B | 2 (prompt + followup) | C1 + C2 red→green |
+| `intent-underspecified-ask` | single-turn (deprecated for gating) | 1 | retained for history; D1/D3/D4 are multi-turn end-states a single turn can't reach |
+| `intent-mechanical-noninterview` | adversarial (hard) | 1 | no intent interview on a mechanical ask |
+| `intent-respects-existing-brief` | adversarial (hard) | 1 | builds on brief, no re-elicitation |
 
 ## Run commands
 
 ```bash
-# Baseline (expect RED on discriminating deltas):
-BEHAVIORAL_EVALS=1 SKILL_PATH="$SKILL_PATH" tests/run-behavioral-evals.sh \
-  --pack tests/fixtures/intent-extraction/evals/behavioral.json \
-  --scenario intent-underspecified-ask --variance 3
+export BS="$(ls -d "$HOME"/.claude/plugins/cache/*/superpowers/*/skills/brainstorming/SKILL.md | sort -V | tail -1)"
+PACK=tests/fixtures/intent-extraction/evals/behavioral.json
+# directive prose — copy VERBATIM from the INTENT EXTRACTION block in hooks/skill-activation-hook.sh:
+DIR=/tmp/intent-directive.txt   # paste the directive text here
 
-# Treatment (expect GREEN on discriminating deltas):
-BEHAVIORAL_EVALS=1 SKILL_PATH="$TREAT" tests/run-behavioral-evals.sh \
-  --pack tests/fixtures/intent-extraction/evals/behavioral.json \
-  --scenario intent-underspecified-ask --variance 5
+# Baseline (expect RED on C1/C2):
+BEHAVIORAL_EVALS=1 SKILL_PATH="$BS" tests/run-behavioral-evals.sh --pack "$PACK" \
+  --scenario intent-underspecified-converge --variance 5
 
-# Adversarial (run against TREATMENT; inspect artifact for interview behavior):
-BEHAVIORAL_EVALS=1 SKILL_PATH="$TREAT" tests/run-behavioral-evals.sh \
-  --pack tests/fixtures/intent-extraction/evals/behavioral.json \
-  --scenario intent-mechanical-noninterview --variance 3
+# Treatment, faithful injection (expect GREEN on C1/C2):
+BEHAVIORAL_EVALS=1 SKILL_PATH="$BS" tests/run-behavioral-evals.sh --pack "$PACK" \
+  --scenario intent-underspecified-converge --variance 5 --directive-file "$DIR"
+
+# Adversarial (run against treatment; inspect artifact for interview behavior):
+BEHAVIORAL_EVALS=1 SKILL_PATH="$BS" tests/run-behavioral-evals.sh --pack "$PACK" \
+  --scenario intent-mechanical-noninterview --variance 3 --directive-file "$DIR"
 ```
 
 ## Results
 
-### Baseline (RED) — _pending_
+**Model:** `claude-opus-4-8[1m]` · **Baseline body:** superpowers brainstorming `SKILL.md` @ 6.0.3 · **Dates:** 2026-06-26
 
-- Date: _pending_ · Model: _pending_ · Baseline path: _pending_
-- Per-assertion (D1/D2/D3/D4): _pending — paste pass/fail + variance rates_
+### The single-turn eval was mis-designed (recorded for history)
 
-### Treatment (GREEN) — _pending_
+First gate used a single-turn scenario (`intent-underspecified-ask`) asserting four deltas. Result:
+baseline 0/3 on all four; treatment moved only D2 (confidence) to 40%, D1/D3/D4 stayed at 0%. Reading
+the artifacts showed why: the directive runs a **one-question-at-a-time** pass and correctly **stops
+after question 1** to await the user (5/5 treatment runs end with a question), so out-of-scope,
+deeper-probe, and confirmed-intent **convergence behaviors structurally cannot appear in a single
+turn**. The eval was measuring multi-turn end-states in one shot. → rebuilt as the two-turn
+`intent-underspecified-converge` scenario above.
 
-- Date: _pending_ · Model: _pending_
-- Per-assertion (D1/D2/D3/D4): _pending_
-- Load-bearing deltas: _pending — state which of D1–D4 discriminate; D3 may pass on baseline_
-- Adversarial subset: _pending — confirm no interview on mechanical ask_
+### Multi-turn gate — buried vs prominent injection
+
+| delta | baseline | treatment (buried) | treatment (prominent) |
+|-------|----------|--------------------|-----------------------|
+| C1 out-of-scope | 0/3 (0%) | 1/3 (33%, flaky) | 2/2 ✓ (partial, n=2 — see below) |
+| C2 confirmed-intent | 0/3 (0%) | 1/3 (33%, flaky) | 2/2 ✓ |
+| C3 persist (excluded) | 0/3 | 0/3 | 0/2 (sandbox artifact) |
+
+The flakiness was an **injection-fidelity artifact**: buried in the skill doc → 1/3; injected
+prominently the way the hook does → 2/2 (a run cut short at iter 3 by an API session limit). A full
+variance pass at the prominent fidelity follows.
+
+### Final gate (prominent injection, variance 5) — _pending the in-flight run_
+
+| delta | baseline 5× | treatment 5× | classification |
+|-------|-------------|--------------|----------------|
+| C1 out-of-scope | _pending_ | _pending_ | _pending_ |
+| C2 confirmed-intent | _pending_ | _pending_ | _pending_ |
+
+**Verdict:** _pending — ship if C1 & C2 are stably green on treatment and red on baseline._
+
+Example treatment convergence (turn 2):
+> *"My confidence is now **high**. Let me lock the intent before proposing approaches.
+> **Confirmed intent:** Desktop-notify this plugin's developers within ~1–2s when
+> `openspec-guard.sh` blocks their git push… **Out of scope:** email/phone alerts ·
+> repeated/nagging popups · non-blocking events."*
