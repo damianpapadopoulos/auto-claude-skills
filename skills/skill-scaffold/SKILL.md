@@ -1,6 +1,6 @@
 ---
 name: skill-scaffold
-description: Emit repo-native seed files (SKILL.md skeleton, routing entry, test snippets) when creating new skills, commands, or plugins
+description: Use when creating new skills, commands, or plugins — emits repo-native seed files (SKILL.md skeleton, routing entry, test snippets)
 ---
 
 # Skill Scaffold

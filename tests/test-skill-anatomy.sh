@@ -12,6 +12,8 @@ echo "=== test-skill-anatomy.sh ==="
 # '## Verification' anatomy section. Extend this list when a new readiness-claim
 # skill is added. Tool/domain/investigation skills are intentionally excluded
 # (filler anatomy on them is the anti-goal).
+# NOTE: space-separated string, NOT a Bash array — keep the unquoted word-split
+# `for s in ${VAR}` below; do not "fix" to "${VAR[@]}" (breaks Bash 3.2 / macOS CI).
 READINESS_CLAIM_SKILLS="deploy-gate openspec-ship runtime-validation agent-team-review implementation-drift-check project-verification"
 
 for s in ${READINESS_CLAIM_SKILLS}; do
