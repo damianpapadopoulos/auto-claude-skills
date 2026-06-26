@@ -118,7 +118,7 @@ confirm the human has these defined (surface them; do not enforce):
 **Progressive canary stages.** Ship to a small slice first, bake, then widen.
 A typical ladder — adjust to traffic and risk:
 
-| Stage | Traffic | Bake (min soak) | Advance when |
+| Stage | Traffic | Bake (target soak) | Advance when |
 |-------|---------|-----------------|--------------|
 | Canary | ~5% | long enough to cover peak + one full request mix | no trigger tripped |
 | Early | ~25% | shorter soak | no trigger tripped |
@@ -138,8 +138,5 @@ baseline — not against zero):**
 **Rollback is the default, not the exception.** If a trigger trips, revert first and
 diagnose after — do not "wait and see" while widening. Prefer a fast revert path
 (redeploy previous image / flip the flag) over a forward-fix under load.
-
-This section is the consumer contract for a future instrumentation/observability
-skill: it produces the canary signal; this plan says what to do with it.
 
 If any required check FAILS, report the failure clearly and stop. Do not proceed to openspec-ship.
