@@ -121,8 +121,8 @@ A typical ladder — adjust to traffic and risk:
 | Stage | Traffic | Bake (target soak) | Advance when |
 |-------|---------|-----------------|--------------|
 | Canary | ~5% | long enough to cover peak + one full request mix | no trigger tripped |
-| Early | ~25% | shorter soak | no trigger tripped |
-| Half | ~50% | shorter soak | no trigger tripped |
+| Early | ~25% | shorter than canary — request mix already characterized | no trigger tripped |
+| Half | ~50% | shorter still | no trigger tripped |
 | Full | 100% | monitor | stable |
 
 **Rollback triggers (define BEFORE rollout, measured against the pre-deploy
