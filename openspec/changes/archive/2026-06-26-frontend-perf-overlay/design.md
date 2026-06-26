@@ -127,3 +127,22 @@ Added terms: `lighthouse`, `web.vitals`, `core.web.vitals`, `page.?speed`, `lcp`
 - Bundling Lighthouse or auto-installing Chrome.
 - Wiring `critical` (or any build transform) as an executable step.
 - Perf checks for non-web (CLI/API) paths.
+
+## Implementation Notes (synced at ship time)
+
+- **PERF_URL wiring:** the original design assumed the Step 1 port-probe exported a
+  URL; it did not. As-built, the overlay is self-contained — it re-probes ports
+  `3000 5173 8000 8080` inside the Step 3 block and sets `PERF_URL` to the first that
+  responds, running Lighthouse only when non-empty.
+- **Self-gating in the embedded bash (review M2):** the overlay's `npx lighthouse`
+  invocation is additionally guarded by `command -v lighthouse` / `npx --no-install`
+  so the design's "only repos that already installed Lighthouse invoke it" guarantee
+  holds even under mechanical execution, not just prose.
+- **Content guard tightened (review M1):** the lab-honesty regression test asserts the
+  verbatim phrase "INP is not measured" (not the substring "INP", which matched
+  "inputs").
+- **Spec delta format:** the acceptance spec was reformatted at ship time to openspec's
+  delta grammar (`## ADDED Requirements` → `### Requirement:` → `#### Scenario:`); no
+  semantic change.
+- No other divergence from the approved design. `critical` remains rejected-as-gate;
+  perf remains report-only.
