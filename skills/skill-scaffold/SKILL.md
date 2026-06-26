@@ -58,6 +58,36 @@ description: <one-line description>
 <What the skill produces -- artifacts, reports, structured data.>
 ```
 
+### Optional anatomy sections (discipline / readiness-claim skills)
+
+Add these ONLY where they earn their place. A skill that enforces a discipline, is commonly skipped or shortcut under pressure, or makes a completion/readiness claim should carry the matching section. **Keep a section only if it earns its place -- delete the rest. Filler anatomy on tool/domain skills is the anti-goal.**
+
+| Section | Keep when | Shape |
+|---------|-----------|-------|
+| `## Rationalizations` | the skill is commonly skipped or shortcut under pressure | table of excuse -> reality |
+| `## Red Flags` | the skill enforces a discipline with known failure modes | bulleted anti-patterns / "thought -> STOP" list |
+| `## Verification` | the skill makes a completion or readiness claim | "Before claiming `<X>`, confirm: ..." evidence-before-assertions checklist |
+
+Template (paste, then keep-or-delete per the table above):
+
+```
+## Rationalizations
+
+| Excuse | Reality |
+|--------|---------|
+| "<excuse the agent makes to skip this>" | "<why that's wrong>" |
+
+## Red Flags
+
+- **<anti-pattern>** -- <why it means stop>
+
+## Verification
+
+Before claiming <the skill's specific completion claim>, confirm -- with evidence, not inference:
+
+- <observable check tied to the claim>
+```
+
 ## Step 3: Emit Routing Entry Snippet
 
 Generate a JSON snippet for `config/default-triggers.json`:

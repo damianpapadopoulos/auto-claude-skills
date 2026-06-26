@@ -17,6 +17,14 @@ assert_contains "skill-scaffold: description rule present" "not summarize the wo
 assert_contains "skill-scaffold: description rule rationale" "follow the summary instead of reading the full skill" "${SCAFFOLD_CONTENT}"
 assert_contains "skill-scaffold: routing entry description rule" "never workflow steps" "${SCAFFOLD_CONTENT}"
 
+# --- PR-T4: optional anatomy sections standard ---
+assert_contains "skill-scaffold: documents optional anatomy sections" "Optional anatomy sections" "${SCAFFOLD_CONTENT}"
+assert_contains "skill-scaffold: anatomy lists Rationalizations" "## Rationalizations" "${SCAFFOLD_CONTENT}"
+assert_contains "skill-scaffold: anatomy lists Red Flags" "## Red Flags" "${SCAFFOLD_CONTENT}"
+assert_contains "skill-scaffold: anatomy lists Verification" "## Verification" "${SCAFFOLD_CONTENT}"
+assert_contains "skill-scaffold: keep-or-delete criterion" "earns its place" "${SCAFFOLD_CONTENT}"
+assert_contains "skill-scaffold: filler anti-goal stated" "anti-goal" "${SCAFFOLD_CONTENT}"
+
 # Summary
 echo ""
 echo "=============================="
