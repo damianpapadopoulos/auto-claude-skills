@@ -250,3 +250,12 @@ touch ~/.claude/.skill-drift-check-ran-$(cat ~/.claude/.skill-session-token 2>/d
 ```
 
 This marker is checked by the SHIP phase session-marker gate. If the marker exists, the SHIP fallback entry is suppressed.
+
+## Verification
+
+Before reporting "no drift", confirm:
+
+- The comparison ran against the highest-authority source available (active OpenSpec change > canonical live intent > archived), and which source was used is stated.
+- Each spec/plan requirement was checked against the actual implementation -- not assumed aligned.
+- Assumptions and untested paths are listed explicitly; an empty list means "verified none", not "did not look".
+- The session marker is written only after the analysis actually ran.

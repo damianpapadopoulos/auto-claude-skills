@@ -140,3 +140,12 @@ diagnose after — do not "wait and see" while widening. Prefer a fast revert pa
 (redeploy previous image / flip the flag) over a forward-fix under load.
 
 If any required check FAILS, report the failure clearly and stop. Do not proceed to openspec-ship.
+
+## Verification
+
+Before reporting GO, confirm -- with evidence, not assumption:
+
+- Every Required Check ran and its result was observed this session (CI status fetched, not presumed green).
+- No required check sits in an unknown or skipped state being treated as a pass.
+- Version and design-artifact checks reference the actual files, not memory.
+- On any required-check FAIL, the verdict is STOP -- openspec-ship is not invoked.

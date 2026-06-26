@@ -374,3 +374,12 @@ rm -rf "${VALIDATION_TMPDIR}"
 ```
 
 Ad-hoc test scripts are ephemeral and never committed. Screenshots and validation artifacts persist in `tests/artifacts/validation/` for post-review inspection but are gitignored.
+
+## Verification
+
+Before claiming the change works, confirm -- from observed output, not inference:
+
+- Each declared path (browser / API / CLI) either ran with its result captured in `tests/artifacts/validation/`, or was explicitly reported as skipped with the missing tool named -- announce-then-skip is a failure.
+- Safety-relevant paths were exercised, not deferred.
+- A passing run shows real interface output (HTTP status, exit code, screenshot) -- not a stubbed or assumed success.
+- Lab-only signals (e.g. Lighthouse perf) are reported as lab, never field, and never gate the result.
