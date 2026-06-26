@@ -1565,8 +1565,8 @@ fi
 # =================================================================
 # INTENT EXTRACTION: DESIGN-phase pre-brainstorming directive.
 # Hook-resident (not a config hint) because emission is state-gated:
-#   confirmed-intent marker present -> inject handoff, suppress directive (Scenario 3 / 2)
-#   discovery brief in openspec state -> suppress directive (Scenario 2)
+#   confirmed-intent marker present -> handoff (Scenario 3) + suppress (Scenario 2, intent case)
+#   discovery brief in openspec state -> suppress directive (Scenario 2, brief case)
 #   otherwise -> emit directive (Scenario 1)
 # Advisory-only; fail-open on every sub-check. Mechanical asks do not
 # reach DESIGN phase, and the directive prose tells the model to skip
