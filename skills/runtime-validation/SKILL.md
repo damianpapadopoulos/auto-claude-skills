@@ -1,6 +1,6 @@
 ---
 name: runtime-validation
-description: Use when you need to prove a change actually works through its real interfaces — during REVIEW or on requests like validate the feature, does it work, run e2e, or smoke test — covering browser E2E, API smoke, CLI checks, and a11y audits with graceful tool-degradation
+description: Use when you need to prove a change actually works through its real interfaces — during REVIEW or on requests like validate the feature, does it work, run e2e, or smoke test — covering browser E2E, API smoke, CLI checks, and a11y and perf (Lighthouse) audits with graceful tool-degradation
 ---
 
 # Runtime Validation
@@ -181,9 +181,10 @@ for _port in 3000 5173 8000 8080; do
   fi
 done
 
-# npx arm requires lighthouse already in node_modules — `--no-install` never triggers an
-# install, so a package.json-listed-but-uninstalled lighthouse correctly skips (self-gating).
-if [ -n "${PERF_URL}" ] && { command -v lighthouse >/dev/null 2>&1 || npx --no-install lighthouse --version >/dev/null 2>&1; }; then
+# Self-gate: global lighthouse OR a local install in node_modules/.bin (checked directly,
+# no npx — so it never triggers a network download and is portable across npm versions).
+# A package.json-listed-but-uninstalled lighthouse correctly skips here.
+if [ -n "${PERF_URL}" ] && { command -v lighthouse >/dev/null 2>&1 || node_modules/.bin/lighthouse --version >/dev/null 2>&1; }; then
   mkdir -p tests/artifacts/validation/
   npx lighthouse "${PERF_URL}" --quiet --chrome-flags="--headless" \
     --only-categories=performance --output=json --output-path=stdout 2>/dev/null \
