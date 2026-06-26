@@ -37,10 +37,13 @@ command -v axe && echo "axe: available" || {
   fi
 }
 
-# Lighthouse (perf overlay) — self-gating: only runs if already present
+# Lighthouse (perf overlay) — self-gating: only runs if already present.
+# Detect ONLY the `lighthouse` CLI (what the overlay actually invokes) so detection
+# matches execution. @lhci/cli and unlighthouse have different invocations and are
+# NOT run by this overlay — reporting them "available" would announce-then-skip.
 command -v lighthouse >/dev/null 2>&1 && echo "lighthouse: available" || {
   if [ -f package.json ]; then
-    jq -e '.dependencies.lighthouse // .devDependencies.lighthouse // .dependencies["@lhci/cli"] // .devDependencies["@lhci/cli"] // .dependencies.unlighthouse // .devDependencies.unlighthouse' package.json >/dev/null 2>&1 \
+    jq -e '.dependencies.lighthouse // .devDependencies.lighthouse' package.json >/dev/null 2>&1 \
       && echo "lighthouse: available via npx" || echo "lighthouse: not detected"
   else
     echo "lighthouse: not detected"

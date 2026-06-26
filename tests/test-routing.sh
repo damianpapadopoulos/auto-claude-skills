@@ -6449,6 +6449,11 @@ test_perf_overlay_routing() {
 
     ctx=$(extract_context "$(run_hook "the database performance is slow today")")
     assert_not_contains "bare performance does NOT route to runtime-validation" "runtime-validation" "${ctx}"
+
+    # Regression guard: short trigrams lcp/cls were removed (substring-prone, e.g. "bcls").
+    # If someone re-adds bare lcp/cls, this catches the false-positive substring match.
+    ctx=$(extract_context "$(run_hook "the bcls counter incremented again")")
+    assert_not_contains "substring 'bcls' does NOT route (no bare cls trigger)" "runtime-validation" "${ctx}"
     teardown_test_env
 }
 test_perf_overlay_routing

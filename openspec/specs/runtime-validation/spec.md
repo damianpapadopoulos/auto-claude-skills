@@ -14,8 +14,8 @@ MUST NOT present its results as field Core Web Vitals.
 
 #### Scenario: Lighthouse present and server reachable
 
-- **GIVEN** a `lighthouse` binary on PATH (or `lighthouse`/`@lhci/cli`/`unlighthouse`
-  in `package.json`) AND a dev server reachable on a probed port
+- **GIVEN** a `lighthouse` binary on PATH (or a `lighthouse` entry in `package.json`)
+  AND a dev server reachable on a probed port
 - **WHEN** runtime-validation runs the perf overlay
 - **THEN** it SHALL run Lighthouse against the discovered URL and emit a "Perf Results
   (Lighthouse — lab)" report section containing the performance score and LCP, CLS, and
