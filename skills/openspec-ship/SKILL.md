@@ -348,3 +348,12 @@ If `design_path` exists in session state and the design file is readable:
 |-------------|----------|
 | Available | `openspec new change` → `openspec validate` → `openspec archive` |
 | Not available | Claude-native templates → skip validation → manual archive. Same artifact contract (paths, filenames, section headings). |
+
+## Verification
+
+Before declaring the ship documented, confirm:
+
+- The change folder exists on disk with proposal / design / specs (or the Claude-native fallback produced the same artifact contract) -- verified by listing it, not assumed.
+- `openspec validate` ran and passed when the CLI is available; when absent, the skip is stated explicitly.
+- The changelog entry was written and the archive step completed (or its absence is reported).
+- Hypotheses and the ship timestamp were recorded to session state where applicable.

@@ -48,6 +48,15 @@ TOKEN="$(cat ~/.claude/.skill-session-token 2>/dev/null || echo default)"
 
 `passed`/`failed` are the command *names*. Then print a short human summary table (name, command, PASS/FAIL, excerpt) so the result is visible in-session. This evidence is advisory; `deploy-gate` may read it as local verification of record when hosted CI is absent.
 
+## Verification
+
+Before emitting a PASS verdict, confirm -- do not infer:
+
+- The gate command(s) actually ran this session via a Bash tool call -- not assumed from a prior run or read from config.
+- Each command's exit code was captured; PASS is keyed to exit 0, FAIL to non-zero.
+- The evidence file was written to `~/.claude/.skill-project-verified-${TOKEN}` and the in-session summary table is shown.
+- If no gate was discovered, the verdict is "no gate found" -- never a silent PASS.
+
 ## Output
 
 A `## Project Verification Results` table plus the written evidence file path. If no gate was discovered, say so plainly and ask the user to add `.verify.yml`.
