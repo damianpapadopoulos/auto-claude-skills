@@ -8,8 +8,9 @@ _diff="$(cat 2>/dev/null || true)"
 _hits=""
 
 # Removed assertion lines (deletions of common assert idioms across py/js/ts/java/go).
+# Use ^-[^-] to exclude unified-diff header lines (--- a/path) from the match.
 _removed="$(printf '%s\n' "$_diff" \
-  | grep -E '^-.*\b(assert|assertEquals|assertThat|assertTrue|assertEqual|expect|require\.|t\.Error|t\.Fatal)\b' \
+  | grep -E '^-[^-].*\b(assert|assertEquals|assertThat|assertTrue|assertEqual|expect|require\.|t\.Error|t\.Fatal)\b' \
   2>/dev/null || true)"
 
 # Added skip / disable / ignore markers.

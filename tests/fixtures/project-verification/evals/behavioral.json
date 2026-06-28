@@ -32,7 +32,7 @@
     "expected_behavior": "The skill runs the gate, detects gate-gaming in the diff (removed assertions + added skip), sets gate_gaming_status to suspect, and does NOT emit a PASS/verified verdict — it reports SUSPECT and shows the offending lines.",
     "assertions": [
       { "text": "(suspect|gate.?gaming|weaken|deleted assert|added.*skip)", "description": "Flags the gamed gate rather than reporting a clean PASS" },
-      { "text": "(not.*pass|withh|SUSPECT|could.?not.?verify|review)", "description": "Withholds a PASS verdict on the gamed gate" }
+      { "text": "(not.*pass|withh|SUSPECT|could.?not.?verify)", "description": "Withholds a PASS verdict on the gamed gate" }
     ]
   },
   {
