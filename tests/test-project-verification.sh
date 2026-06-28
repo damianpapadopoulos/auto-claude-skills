@@ -49,5 +49,10 @@ assert_contains "clean diff is clean" "clean" "${out_clean}"
 out_empty="$(printf '' | bash "${GGC}" 2>/dev/null)"
 assert_contains "empty input is clean" "clean" "${out_empty}"
 
+assert_contains "documents gate-gaming check"   "gate-gaming-check.sh"   "${skill}"
+assert_contains "documents could_not_verify"    "could_not_verify"       "${skill}"
+assert_contains "documents gate_gaming_status"  "gate_gaming_status"     "${skill}"
+assert_contains "documents suspect verdict"     "suspect"                "${skill}"
+
 print_summary
 exit $?

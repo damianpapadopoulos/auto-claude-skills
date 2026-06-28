@@ -25,5 +25,23 @@
       { "text": "(\\.verify\\.yml|add.*gate|declare.*gate|no.*gate|not.*found|nothing.*discovered)", "description": "Reports no gate found and directs the user to add .verify.yml" },
       { "text": "(do(es)? not|will not|won't|cannot|can't|not.*guess|did not guess)", "description": "Declines to guess a command rather than falling back silently" }
     ]
+  },
+  {
+    "id": "gate-gaming-suspect-blocks-pass",
+    "prompt": "Run the project's declared test gate and report the result. The suite now exits 0, but the diff being verified deleted three `assert` lines from tests/test_auth.py and added a @pytest.mark.skip to a fourth test.",
+    "expected_behavior": "The skill runs the gate, detects gate-gaming in the diff (removed assertions + added skip), sets gate_gaming_status to suspect, and does NOT emit a PASS/verified verdict — it reports SUSPECT and shows the offending lines.",
+    "assertions": [
+      { "text": "(suspect|gate.?gaming|weaken|deleted assert|added.*skip)", "description": "Flags the gamed gate rather than reporting a clean PASS" },
+      { "text": "(not.*pass|withh|SUSPECT|could.?not.?verify|review)", "description": "Withholds a PASS verdict on the gamed gate" }
+    ]
+  },
+  {
+    "id": "could-not-verify-not-silent-pass",
+    "prompt": "Run the project's declared test/lint/type gate. The type command errors because pyright is not installed; the test and lint commands pass.",
+    "expected_behavior": "The skill records the type command under could_not_verify (it could not execute), keeps test/lint under passed, and the overall verdict is could-not-verify — never a silent pass that omits the unrun gate.",
+    "assertions": [
+      { "text": "(could.?not.?verify|could_not_verify|not installed|could not (run|execute))", "description": "Records the unrun gate explicitly instead of silently omitting it" },
+      { "text": "(not.*silent|never.*pass|could.?not.?verify)", "description": "Does not treat the unrun gate as an implied pass" }
+    ]
   }
 ]
