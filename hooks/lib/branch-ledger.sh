@@ -17,7 +17,9 @@ branch_ledger_key() {
         [ -z "$sha" ] && return 1
         branch="detached-${sha}"
     fi
-    hash="$(printf '%s\x1f%s' "$key" "$branch" | shasum 2>/dev/null | cut -d' ' -f1)"
+    # shasum (macOS/Perl) may be absent on minimal Linux (Alpine/distroless); fall back to
+    # sha1sum — both emit SHA-1, so the key is identical regardless of which tool ran.
+    hash="$(printf '%s\x1f%s' "$key" "$branch" | { shasum 2>/dev/null || sha1sum 2>/dev/null; } | cut -d' ' -f1)"
     [ -z "$hash" ] && return 1
     printf '%s' "$hash"
 }

@@ -96,13 +96,10 @@ case "${_COMMAND}" in
                 exit 0
             fi
 
-            # Soft staleness warning (advisory only — never denies): emitted when the
-            # gate was satisfied via a stale ledger entry (recorded SHA != HEAD).
-            if [ -n "${_STALE_MSG}" ]; then
-                jq -n --arg msg "PUSH GATE (advisory): ${_STALE_MSG}" \
-                    '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"},"systemMessage":$msg}' 2>/dev/null
-                exit 0
-            fi
+            # Soft staleness is NOT emitted here (no early exit, no permissionDecision):
+            # doing so would auto-approve the lower-confidence path and suppress the
+            # SHIP-phase advisories below. Instead _STALE_MSG is folded into _WARNINGS in
+            # the SHIP-phase block so all advisories emit together as one additionalContext.
         fi
         ;;
 esac
@@ -213,6 +210,15 @@ if [ "${_review_ok}" = "false" ]; then
     [ -n "${_WARNINGS}" ] && _WARNINGS="${_WARNINGS}
 "
     _WARNINGS="${_WARNINGS}REVIEW GUARD: requesting-code-review is in the composition chain but was not completed. Invoke Skill(superpowers:requesting-code-review) before shipping, or proceed if review is not needed for this change."
+fi
+
+# Fold in the push-gate's soft staleness advisory (set during the git-push case above),
+# so it emits together with the other SHIP advisories instead of via an early-exit
+# permissionDecision that would auto-approve and suppress them.
+if [ -n "${_STALE_MSG:-}" ]; then
+    [ -n "${_WARNINGS}" ] && _WARNINGS="${_WARNINGS}
+"
+    _WARNINGS="${_WARNINGS}PUSH GATE (advisory): ${_STALE_MSG}"
 fi
 
 # --- Emit combined warnings ---

@@ -56,16 +56,21 @@ branch_ledger_record "verification-before-completion"  "${PROJECT_ROOT}"
 out="$(run_guard)"
 assert_not_contains "ledger satisfies => no deny" '"deny"' "${out:-}"
 
-# (c) Ledger satisfies but stale SHA -> WARNING (stale) + no deny
-# Overwrite ledger files with a fake SHA to simulate stale entries.
+# (c) Ledger satisfies but stale SHA -> staleness advisory (no deny, no auto-approve).
+# Staleness is folded into the SHIP-phase _WARNINGS (additionalContext), NOT a standalone
+# permissionDecision:allow, so the session must be in SHIP phase for it to surface.
 _LEDGER_DIR="$(branch_ledger_dir "${PROJECT_ROOT}")"
 printf 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef 2000-01-01T00:00:00Z\n' \
     > "${_LEDGER_DIR}/requesting-code-review"
 printf 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef 2000-01-01T00:00:00Z\n' \
     > "${_LEDGER_DIR}/verification-before-completion"
+printf '%s' '{"skill":"verification-before-completion","phase":"SHIP"}' \
+    > "$HOME/.claude/.skill-last-invoked-${_TOK}"
 out="$(run_guard)"
-assert_contains     "stale ledger => staleness warning" "stale"   "${out:-<empty>}"
-assert_not_contains "stale ledger => no deny"           '"deny"'   "${out:-}"
+assert_contains     "stale ledger => staleness advisory" "stale"        "${out:-<empty>}"
+assert_contains     "staleness emitted as additionalContext" "additionalContext" "${out:-<empty>}"
+assert_not_contains "stale ledger => no deny"            '"deny"'        "${out:-}"
+assert_not_contains "stale path no longer auto-approves" '"permissionDecision"' "${out:-}"
 
 export HOME="$_OLDHOME"
 print_summary
