@@ -58,14 +58,20 @@ If the dry run does not look right, adjust the prompt and re-run. Do NOT proceed
 
 Loop over the manifest. Log pass/fail per file. Use atomic writes (write to .tmp, then move).
 
+**A zero exit code is not proof of a good transformation** — `claude -p` can exit 0 while writing empty, truncated, or unchanged output ("returns 200 and is wrong"). Gate the `OK` on a cheap per-file **postcondition**, not on the exit code alone: the output is **non-empty**, **differs** from the original, and **passes a cheap sanity/parse check** for the file type (e.g. `python -m py_compile`, `node --check`, `jq . `, `yq`, or at minimum "still contains an expected structural token"). This is the batch counterpart of `project-verification`'s gate-gaming guard, and it matters most for targets the test suite never exercises (config, docs, generated code) — Step 5's suite cannot catch a silently-mangled YAML file.
+
 ```bash
 while IFS= read -r file; do
-  if claude -p "Transform $file as follows: [PROMPT]. Output ONLY the file content." > "${file}.tmp" 2>/dev/null; then
-    mv "${file}.tmp" "$file"
+  cp "$file" "${file}.bak"
+  if claude -p "Transform $file as follows: [PROMPT]. Output ONLY the file content." > "${file}.tmp" 2>/dev/null \
+     && [ -s "${file}.tmp" ] \
+     && ! cmp -s "${file}.tmp" "${file}.bak" \
+     && sanity_check "${file}.tmp"; then          # sanity_check: parse/compile/structural probe for this file type
+    mv "${file}.tmp" "$file"; rm -f "${file}.bak"
     echo "OK: $file" >> "$BATCH_DIR/results.log"
   else
-    rm -f "${file}.tmp"
-    echo "FAIL: $file" >> "$BATCH_DIR/results.log"
+    rm -f "${file}.tmp" "${file}.bak"
+    echo "FAIL: $file" >> "$BATCH_DIR/results.log"   # empty / unchanged / unparseable => FAIL, enters retry; never a silent OK
   fi
 done < "$BATCH_DIR/manifest.txt"
 ```
