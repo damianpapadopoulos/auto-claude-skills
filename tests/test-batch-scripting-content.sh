@@ -17,6 +17,7 @@ assert_contains "non-empty check"                "non-empty"              "${ski
 assert_contains "differs-from-original check"    "cmp -s"                 "${skill}"
 assert_contains "sanity/parse check"             "sanity_check"           "${skill}"
 assert_contains "failed postcondition -> FAIL (no silent OK)" "silent OK" "${skill}"
+assert_contains "unchanged output is SKIP not FAIL (no infinite retry)" "SKIP" "${skill}"
 
 print_summary
 exit $?
