@@ -85,13 +85,15 @@ done < "$BATCH_DIR/manifest.txt"
 After the batch, check the log. Re-run only the failures.
 
 ```bash
-# Check results
+# Check results (SKIP = already in target state; not a failure)
 echo "Results:"
-grep -c "^OK:" "$BATCH_DIR/results.log"
-grep -c "^FAIL:" "$BATCH_DIR/results.log"
+echo "  OK:   $(grep -c '^OK:'   "$BATCH_DIR/results.log")"
+echo "  SKIP: $(grep -c '^SKIP:' "$BATCH_DIR/results.log")"
+echo "  FAIL: $(grep -c '^FAIL:' "$BATCH_DIR/results.log")"
 
-# Retry failures
-grep "^FAIL:" "$BATCH_DIR/results.log" | cut -d' ' -f2 > "$BATCH_DIR/retry.txt"
+# Retry failures only (SKIP/OK are not retried). Strip the "FAIL: " prefix with sed,
+# not cut -d' ' — cut would truncate paths containing spaces.
+grep "^FAIL:" "$BATCH_DIR/results.log" | sed 's/^FAIL: //' > "$BATCH_DIR/retry.txt"
 # Re-run step 3 with $BATCH_DIR/retry.txt as input
 ```
 

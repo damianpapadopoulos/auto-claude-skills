@@ -18,6 +18,8 @@ assert_contains "differs-from-original check"    "cmp -s"                 "${ski
 assert_contains "sanity/parse check"             "sanity_check"           "${skill}"
 assert_contains "failed postcondition -> FAIL (no silent OK)" "silent OK" "${skill}"
 assert_contains "unchanged output is SKIP not FAIL (no infinite retry)" "SKIP" "${skill}"
+assert_contains "result summary counts SKIP" "grep -c '^SKIP:'" "${skill}"
+assert_contains "retry strips prefix with sed (space-safe), not cut" "sed 's/^FAIL: //'" "${skill}"
 
 print_summary
 exit $?
