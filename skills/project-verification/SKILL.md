@@ -61,6 +61,8 @@ TOKEN="$(cat ~/.claude/.skill-session-token 2>/dev/null || echo default)"
 }
 ```
 
+The example above is a **field-shape illustration**, not an accepted-evidence sample: because its `could_not_verify` is non-empty (the `types` gate could not run), `deploy-gate` correctly does **not** accept it as local verification of record. A fully-accepted evidence file has `failed` and `could_not_verify` both empty and `gate_gaming_status: "clean"`.
+
 `passed`/`failed` are the command *names*. A command that could not execute (missing tool, runner error — distinct from a test failure) goes in `could_not_verify`, never silently omitted. `gate_gaming_status` is one of `clean` | `suspect` | `unverified` (the check could not run); if `suspect`, the verdict is SUSPECT, not PASS; if `unverified`, the gate-gaming check is also added to `could_not_verify`. The field is always written — `deploy-gate` accepts local evidence only when it is exactly `clean`. Then print a short human summary table (name, command, PASS/FAIL, excerpt) so the result is visible in-session. This evidence is advisory; `deploy-gate` may read it as local verification of record when hosted CI is absent.
 
 ## Verification

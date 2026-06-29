@@ -8,6 +8,10 @@
 # Portability: the \b word boundaries below rely on a grep that supports them. GNU grep
 # and macOS's GNU-compatible BSD grep (/usr/bin/grep, "BSD grep, GNU compatible") both do;
 # a strictly POSIX-only grep would silently under-match (acceptable for an advisory tripwire).
+# Known coverage gaps (extend the patterns, don't assume completeness): skip dialects not
+# yet matched include RSpec xit/pending, Rust #[ignore], and PHPUnit markTestSkipped(); and
+# the caller's `-- '*test*' '*spec*'` pathspec misses non-canonical test files (conftest.py,
+# __mocks__/, fixtures/). All acceptable for an advisory tripwire — see the SKILL.md Limits note.
 set -u
 
 _diff="$(cat 2>/dev/null || true)"

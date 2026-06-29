@@ -79,6 +79,7 @@ assert_contains "documents could_not_verify"    "could_not_verify"       "${skil
 assert_contains "documents gate_gaming_status"  "gate_gaming_status"     "${skill}"
 assert_contains "documents suspect verdict"     "suspect"                "${skill}"
 assert_contains "evidence accepted only when exactly clean" "exactly"     "${skill}"
+assert_contains "example JSON annotated as field-shape (not accepted)" "field-shape illustration" "${skill}"
 
 print_summary
 exit $?
