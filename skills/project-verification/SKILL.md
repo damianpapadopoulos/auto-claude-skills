@@ -29,8 +29,11 @@ After running the gates, capture the diff under verification and classify gate-g
 
 ```bash
 GGC="${CLAUDE_PLUGIN_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null)}/skills/project-verification/scripts/gate-gaming-check.sh"
+# BASE: upstream merge-base → main merge-base → HEAD~1. The HEAD~1 last resort (no upstream and
+# no detectable main fork point) scopes the check to the most recent commit only, so it may miss
+# earlier changes on a long-lived branch — widen BASE manually if reviewing more than the last commit.
 BASE="$(git merge-base HEAD @{u} 2>/dev/null || git merge-base HEAD main 2>/dev/null || echo HEAD~1)"
-GG="$(git diff "$BASE"...HEAD -- '*test*' '*spec*' 2>/dev/null | bash "$GGC")"
+GG="$(git diff "$BASE"...HEAD -- '*test*' '*spec*' 2>/dev/null | bash "$GGC" 2>/dev/null)"
 ```
 
 `GG` is `clean`, or `suspect` followed by the offending diff lines. A `suspect` result means the gate may be passing because the test was weakened (deleted assertions, added skip/xfail/disabled markers), not because the code is correct. If `GG` is **empty** (the script was not found, or the pipe failed), the gate-gaming check **could not run** — treat that as *unverified*, the same class as a gate that could not execute: surface that the check did not run and do NOT record `gate_gaming_status: clean`.

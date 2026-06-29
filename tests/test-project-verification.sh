@@ -67,6 +67,12 @@ assert_contains "require.resolve deletion is not suspect" "clean" "${out_reqreso
 out_reqmain="$(printf '%s\n' '-if (require.main === module) run();' | bash "${GGC}" 2>/dev/null)"
 assert_contains "require.main deletion is not suspect" "clean" "${out_reqmain}"
 
+# "expect" as prose (no call paren) is NOT an assertion => clean; a real expect(...) call => suspect
+out_expectprose="$(printf '%s\n' '-    # we expect the server to return 200' | bash "${GGC}" 2>/dev/null)"
+assert_contains "prose 'expect' (no paren) is not suspect" "clean" "${out_expectprose}"
+out_expectcall="$(printf '%s\n' '-    expect(add(2,2)).toBe(4)' | bash "${GGC}" 2>/dev/null)"
+assert_contains "real expect(...) deletion is suspect" "suspect" "${out_expectcall}"
+
 assert_contains "documents gate-gaming check"   "gate-gaming-check.sh"   "${skill}"
 assert_contains "documents empty-GG as unverified" "unverified"          "${skill}"
 assert_contains "documents could_not_verify"    "could_not_verify"       "${skill}"
