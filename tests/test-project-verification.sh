@@ -80,6 +80,8 @@ assert_contains "documents gate_gaming_status"  "gate_gaming_status"     "${skil
 assert_contains "documents suspect verdict"     "suspect"                "${skill}"
 assert_contains "evidence accepted only when exactly clean" "exactly"     "${skill}"
 assert_contains "example JSON annotated as field-shape (not accepted)" "field-shape illustration" "${skill}"
+assert_contains "states detector limits (clean != proof)" "Limits"        "${skill}"
+assert_contains "limits name structural blind spots"      "subject-under-test" "${skill}"
 
 print_summary
 exit $?
