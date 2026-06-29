@@ -68,6 +68,21 @@ printf '%s\n' "${_TMP}" > "${_STATE}.tmp.$$" 2>/dev/null && \
 [ -n "${SKILL_EXPLAIN:-}" ] && \
     printf '[skill-hook]   [completion] %s → completed\n' "${_BARE}" >&2
 
+# ---- Durable gating-milestone ledger (push-gate readiness, branch-scoped) ----
+# Record review/verify completion to a per-(repo+branch) ledger so the push gate
+# survives composition chain re-anchors that reset .completed. Fail-open.
+case "${_BARE}" in
+    requesting-code-review|verification-before-completion)
+        if [ -f "${_PLUGIN_ROOT}/hooks/lib/branch-ledger.sh" ]; then
+            # shellcheck source=lib/branch-ledger.sh
+            # `|| true` so a non-zero source cannot trip `trap 'exit 0' ERR` and skip
+            # the telemetry block below (the [ -f ] guard only covers a missing file).
+            . "${_PLUGIN_ROOT}/hooks/lib/branch-ledger.sh" 2>/dev/null || true
+            branch_ledger_record "${_BARE}" 2>/dev/null || true
+        fi
+        ;;
+esac
+
 # ---- C1: passive advisory-lens telemetry ----
 # Append one JSONL line per Skill completion. Fail-open: any error is silently
 # dropped. Schema is intentionally minimal — no labels, no counterfactual
