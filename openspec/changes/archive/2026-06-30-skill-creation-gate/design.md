@@ -89,3 +89,10 @@ still have fixtures; coverage only *requires* them for owned skills.)
 Standard TDD + the acceptance scenarios below. Each component gets a failing test
 first. No probabilistic behavior in the owned floor, so no eval set is required
 for Phase A itself (the LLM trigger-eval is the *subject*, not the *verifier*).
+
+## Implementation Notes (synced at ship time)
+
+- Built as-designed across 6 commits. No deviation from the 5 ADDED requirements.
+- Tasks 2 and 3 were executed as ONE commit (coverage gate + 11-fixture backfill) to avoid an intermediate red-test commit — deliberate, keeps every committed state green.
+- The gate validated itself during the build: it caught a non-matching MATCH line in the plan's worked example, a `deploy-gate.txt` fixture that was passing the borrowed-decoy check only via a NO_MATCH-substring loophole (which the Task-5 hardening then closed), and the independent task reviewer caught a Task-4 implementer false "suite green" claim.
+- Deferred non-blocking minors (opus whole-branch review, READY): M1 `writing-skills` over-fires on the bare `skill`/`skills` substring in DESIGN prompts (advisory noise only); M2 borrowed-decoy check matches substring-prefix rather than full-line verbatim; M3 8 fixtures share one donor line (fails closed). Out-of-scope deferrals: held-out LLM eval as a hard gate, Phase B (status≠verdict), Phase C (correction-ergonomics).
