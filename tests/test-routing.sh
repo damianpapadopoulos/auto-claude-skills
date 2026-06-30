@@ -5420,7 +5420,7 @@ test_starter_template_content_contract() {
     assert_contains "skill-scaffold has Constraints section" "Constraints" "${content}"
     assert_contains "skill-scaffold has SKILL.md skeleton" "SKILL.md skeleton" "${content}"
     assert_contains "skill-scaffold has routing entry snippet" "default-triggers.json" "${content}"
-    assert_contains "skill-scaffold has test snippet" "test-routing.sh" "${content}"
+    assert_contains "skill-scaffold emits routing fixture" "tests/fixtures/routing/" "${content}"
     assert_contains "skill-scaffold warns about process skill restriction" "superpowers-owned phase" "${content}"
 }
 
