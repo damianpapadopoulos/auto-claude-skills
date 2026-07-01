@@ -19,11 +19,24 @@ _changed_lines() {
   '
 }
 
+# _lcov_hits <file>: emit "sourcepath<TAB>line<TAB>hits" for each DA record.
+_lcov_hits() {
+  awk -F'[:,]' '
+    /^SF:/ { sf=substr($0,4); next }
+    /^DA:/ { print sf "\t" $2 "\t" $3 }
+  ' "$1" 2>/dev/null
+}
+
 _mode="${COVERAGE_ADEQUACY_MODE:-verdict}"
 _diff="$(cat 2>/dev/null || true)"
 
 if [ "$_mode" = "changed-lines" ]; then
   printf '%s\n' "$_diff" | _changed_lines
+  exit 0
+fi
+
+if [ "$_mode" = "lcov-hits" ]; then
+  [ -f "${COVERAGE_ADEQUACY_LCOV:-}" ] && _lcov_hits "${COVERAGE_ADEQUACY_LCOV}"
   exit 0
 fi
 
