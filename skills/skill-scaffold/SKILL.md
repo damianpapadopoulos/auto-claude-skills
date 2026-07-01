@@ -144,6 +144,8 @@ test_<skill_name>_content_contract() {
     echo "-- test: <skill-name> SKILL.md has required sections --"
     local skill_file="${PROJECT_ROOT}/skills/<skill-name>/SKILL.md"
 
+    # Bash 3.2: declare `local` and assign on SEPARATE lines. `local x=$(...)`
+    # swallows the command's exit code (local always returns 0), masking failures.
     local content
     content="$(cat "${skill_file}" 2>/dev/null || echo "")"
     assert_not_empty "<skill-name> SKILL.md exists and is non-empty" "${content}"
