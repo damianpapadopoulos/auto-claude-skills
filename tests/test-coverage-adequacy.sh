@@ -74,5 +74,40 @@ out_del="$(printf '%s' "${diff_del}" | COVERAGE_ADEQUACY_MODE=changed-lines bash
 assert_contains "added line after deletion is line 2" "src/foo.py	2" "${out_del}"
 assert_not_contains "deletion did not inflate to line 3" "src/foo.py	3" "${out_del}"
 
+# --- cobertura/coverage.py XML support (Task 4) ---
+cat > "${PROJECT_ROOT}/tests/fixtures/coverage/sample-cobertura.xml" <<'XML'
+<coverage><packages><package><classes>
+<class filename="src/foo.py"><lines>
+<line number="2" hits="0"/><line number="3" hits="4"/>
+</lines></class></classes></package></packages></coverage>
+XML
+xh="$(COVERAGE_ADEQUACY_MODE=cobertura-hits COVERAGE_ADEQUACY_LCOV="${PROJECT_ROOT}/tests/fixtures/coverage/sample-cobertura.xml" bash "${CAC}" </dev/null 2>/dev/null)"
+assert_contains "cobertura line 2 hits 0" "src/foo.py	2	0" "${xh}"
+assert_contains "cobertura line 3 hits 4" "src/foo.py	3	4" "${xh}"
+
+# end-to-end: xml artifact drives verdict
+v_xml="$(printf '%s' "${diff3}" | COVERAGE_ADEQUACY_LCOV="${PROJECT_ROOT}/tests/fixtures/coverage/sample-cobertura.xml" bash "${CAC}" 2>/dev/null)"
+assert_contains "xml uncovered line 2 is suspect" "suspect" "${v_xml}"
+
+# --- absolute SF path must suffix-match a relative diff path (load-bearing join branch) ---
+cat > "${PROJECT_ROOT}/tests/fixtures/coverage/foo-abs.lcov" <<'LCOV'
+SF:/repo/src/foo.py
+DA:2,3
+DA:3,3
+end_of_record
+LCOV
+v_abs="$(printf '%s' "${diff3}" | COVERAGE_ADEQUACY_LCOV="${PROJECT_ROOT}/tests/fixtures/coverage/foo-abs.lcov" bash "${CAC}" 2>/dev/null)"
+assert_contains "absolute SF path suffix-matches relative diff path" "clean" "${v_abs}"
+
+# --- unrelated path must NOT spuriously suffix-match => unverified ---
+cat > "${PROJECT_ROOT}/tests/fixtures/coverage/other.lcov" <<'LCOV'
+SF:other/notsrc/foo.py
+DA:2,3
+DA:3,3
+end_of_record
+LCOV
+v_nomatch="$(printf '%s' "${diff3}" | COVERAGE_ADEQUACY_LCOV="${PROJECT_ROOT}/tests/fixtures/coverage/other.lcov" bash "${CAC}" 2>/dev/null)"
+assert_contains "non-suffix path does not match (unverified)" "unverified" "${v_nomatch}"
+
 print_summary
 exit $?

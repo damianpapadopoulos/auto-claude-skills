@@ -27,6 +27,23 @@ _lcov_hits() {
   ' "$1" 2>/dev/null
 }
 
+# _cobertura_hits <xml>: one <line number= hits=> per output row as path<TAB>line<TAB>hits.
+_cobertura_hits() {
+  awk '
+    match($0, /filename="[^"]*"/) { fn=substr($0,RSTART+10,RLENGTH-11) }
+    {
+      s=$0
+      while (match(s, /<line number="[0-9]+" hits="[0-9]+"/)) {
+        seg=substr(s,RSTART,RLENGTH)
+        match(seg,/number="[0-9]+"/); num=substr(seg,RSTART+8,RLENGTH-9)
+        match(seg,/hits="[0-9]+"/);   h=substr(seg,RSTART+6,RLENGTH-7)
+        if (fn!="") print fn "\t" num "\t" h
+        s=substr(s,RSTART+RLENGTH)
+      }
+    }
+  ' "$1" 2>/dev/null
+}
+
 _mode="${COVERAGE_ADEQUACY_MODE:-verdict}"
 _diff="$(cat 2>/dev/null || true)"
 
@@ -40,14 +57,23 @@ if [ "$_mode" = "lcov-hits" ]; then
   exit 0
 fi
 
+if [ "$_mode" = "cobertura-hits" ]; then
+  [ -f "${COVERAGE_ADEQUACY_LCOV:-}" ] && _cobertura_hits "${COVERAGE_ADEQUACY_LCOV}"
+  exit 0
+fi
+
 _floor="${COVERAGE_ADEQUACY_FLOOR:-80}"
 [[ "$_floor" =~ ^[0-9]+$ ]] || _floor=80
 
 _lcov="${COVERAGE_ADEQUACY_LCOV:-}"
 if [ ! -f "$_lcov" ]; then echo "unverified"; exit 0; fi
 
-# Build "path<TAB>line -> hits" table from lcov; suffix-match diff paths against SF paths.
-_cov="$(_lcov_hits "$_lcov")"
+# Build "path<TAB>line -> hits" table from the coverage artifact; suffix-match diff paths
+# against source paths. Auto-select parser by extension: *.xml -> cobertura, else lcov.
+case "$_lcov" in
+  *.xml) _cov="$(_cobertura_hits "$_lcov")" ;;
+  *)     _cov="$(_lcov_hits "$_lcov")" ;;
+esac
 _changed="$(printf '%s\n' "$_diff" | _changed_lines)"
 
 # Join: for each changed path:line, is there a coverage record (suffix match) and hits>0?
