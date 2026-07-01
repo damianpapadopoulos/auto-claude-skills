@@ -47,6 +47,11 @@ fi
 # checked first because skipping review and then chasing verification is the
 # recurring failure mode — the more actionable message wins.
 # Ad-hoc pushes (no composition) are allowed — no gate needed for unplanned work.
+# EXCEPTION: the routing-governance gate (below) fires independent of composition
+# for pushes touching routing files (skills/|config/|hooks/) in a skill-routing
+# plugin repo, requiring a clean verification verdict — routing changes are
+# high-risk by nature. Still fail-open: no verdict lib / not a routing repo /
+# unresolvable diff base => no gate.
 case "${_COMMAND}" in
     *"git push"*)
         _COMP_STATE="${HOME}/.claude/.skill-composition-state-${_SESSION_TOKEN}"
@@ -57,6 +62,14 @@ case "${_COMMAND}" in
         if [ -f "${_PLUGIN_ROOT}/hooks/lib/branch-ledger.sh" ]; then
             # shellcheck source=lib/branch-ledger.sh
             . "${_PLUGIN_ROOT}/hooks/lib/branch-ledger.sh" && _LEDGER_OK=true
+        fi
+        # Verdict layer: STATUS (a gating Skill returned, tracked above) is NOT a
+        # passing VERDICT. verdict.sh reads the owned SHA-fresh verification verdict.
+        # `|| true` so a non-zero source cannot trip `trap 'exit 0' ERR`.
+        _VERDICT_OK=false
+        if [ -f "${_PLUGIN_ROOT}/hooks/lib/verdict.sh" ]; then
+            # shellcheck source=lib/verdict.sh
+            . "${_PLUGIN_ROOT}/hooks/lib/verdict.sh" 2>/dev/null && _VERDICT_OK=true || true
         fi
         _HEAD_SHA="$(git rev-parse HEAD 2>/dev/null || true)"
         _STALE_MSG=""
@@ -96,10 +109,45 @@ case "${_COMMAND}" in
                 exit 0
             fi
 
+            # Verify-verdict hardening (fail-open): status != verdict. A recorded
+            # verify milestone means the Skill returned, NOT that tests passed. If an
+            # owned verdict COVERS HEAD and shows a test failure, deny even when status
+            # says completed. Absent/stale/cross-branch verdict => no denial (the
+            # sha-covers-HEAD check is the false-block guard).
+            if [ "${_VERDICT_OK}" = "true" ] && [ "${_verif_in_chain}" = "true" ] \
+               && verdict_covers_head "${_SESSION_TOKEN}" "" \
+               && verdict_has_test_failure "${_SESSION_TOKEN}"; then
+                _gates="$(verdict_failing_gates "${_SESSION_TOKEN}")"
+                _MSG="PUSH GATE: verification-before-completion is recorded, but the verification verdict at HEAD reports failing gate(s): ${_gates}. Fix and re-run Skill(auto-claude-skills:project-verification) before pushing."
+                jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
+                exit 0
+            fi
+
             # Soft staleness is NOT emitted here (no early exit, no permissionDecision):
             # doing so would auto-approve the lower-confidence path and suppress the
             # SHIP-phase advisories below. Instead _STALE_MSG is folded into _WARNINGS in
             # the SHIP-phase block so all advisories emit together as one additionalContext.
+        fi
+
+        # Routing-governance gate (fail-closed, scoped). In a skill-routing plugin
+        # repo, pushes touching routing paths (skills/|config/|hooks/) require a CLEAN
+        # verdict covering the branch. Fires regardless of composition chain — routing
+        # changes are high-risk by nature, not by phase. Fail-safe: no lib, not a
+        # routing repo, or an unresolvable diff base => no gate (never a false-block).
+        if [ "${_VERDICT_OK}" = "true" ]; then
+            _proot="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+            if is_routing_repo "${_proot}" && diff_touches_routing "${_proot}"; then
+                if verdict_is_clean "${_SESSION_TOKEN}" && verdict_covers_head "${_SESSION_TOKEN}" "${_proot}"; then
+                    if ! verdict_sha_is_head "${_SESSION_TOKEN}" "${_proot}"; then
+                        _STALE_MSG="${_STALE_MSG}${_STALE_MSG:+; }routing change: the clean verification verdict covers an earlier commit, not HEAD. Re-run project-verification if later commits changed routing files."
+                    fi
+                    : # clean verdict on this branch's history — allow
+                else
+                    _MSG="PUSH GATE (routing governance): this push modifies routing files (skills/, config/, or hooks/) but no clean verification verdict covering this branch exists. Run Skill(auto-claude-skills:project-verification) until it reports a clean verdict, then push."
+                    jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
+                    exit 0
+                fi
+            fi
         fi
         ;;
 esac
