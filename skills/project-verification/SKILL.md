@@ -46,7 +46,8 @@ Write `~/.claude/.skill-project-verified-<token>` (resolve `<token>` from `~/.cl
 
 ```bash
 TOKEN="$(cat ~/.claude/.skill-session-token 2>/dev/null || echo default)"
-# write the JSON below to ~/.claude/.skill-project-verified-${TOKEN}
+SHA="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+# write the JSON below to ~/.claude/.skill-project-verified-${TOKEN} (include "sha": "$SHA")
 ```
 
 ```json
@@ -57,6 +58,7 @@ TOKEN="$(cat ~/.claude/.skill-session-token 2>/dev/null || echo default)"
   "failed": [],
   "could_not_verify": ["types"],
   "gate_gaming_status": "clean",
+  "sha": "<git rev-parse HEAD — the commit this verdict covers>",
   "command": "ruff check . && pyright && uv run pytest -m \"not slow\"",
   "output_excerpt": "pyright: command not found …",
   "ts": "<UTC ISO-8601>"
@@ -64,6 +66,8 @@ TOKEN="$(cat ~/.claude/.skill-session-token 2>/dev/null || echo default)"
 ```
 
 The example above is a **field-shape illustration**, not an accepted-evidence sample: because its `could_not_verify` is non-empty (the `types` gate could not run), `deploy-gate` correctly does **not** accept it as local verification of record. A fully-accepted evidence file has `failed` and `could_not_verify` both empty and `gate_gaming_status: "clean"`.
+
+`sha` records the HEAD commit the verdict was produced against (`git rev-parse HEAD`); the push gate honors a verdict only when this `sha` covers the pushed HEAD (equal, or an ancestor on the branch), so a stale or cross-branch verdict is ignored rather than causing a false block.
 
 `passed`/`failed` are the command *names*. A command that could not execute (missing tool, runner error — distinct from a test failure) goes in `could_not_verify`, never silently omitted. `gate_gaming_status` is one of `clean` | `suspect` | `unverified` (the check could not run); if `suspect`, the verdict is SUSPECT, not PASS; if `unverified`, the gate-gaming check is also added to `could_not_verify`. The field is always written — `deploy-gate` accepts local evidence only when it is exactly `clean`. Then print a short human summary table (name, command, PASS/FAIL, excerpt) so the result is visible in-session. This evidence is advisory; `deploy-gate` may read it as local verification of record when hosted CI is absent.
 
