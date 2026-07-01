@@ -176,6 +176,8 @@ Task tool (general-purpose):
     - Edge cases not covered
     - DRY violations
     - YAGNI violations (over-engineering)
+    - Simplification: can this logic be expressed more simply or with less code, without losing behavior?
+    - Readability: will a future maintainer understand this at a glance (control flow, nesting depth, clear intent)?
     - Performance concerns
     - Maintainability
 
