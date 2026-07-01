@@ -40,6 +40,47 @@ if [ "$_mode" = "lcov-hits" ]; then
   exit 0
 fi
 
-# verdict mode filled in Task 3
-echo "unverified"
+_floor="${COVERAGE_ADEQUACY_FLOOR:-80}"
+[[ "$_floor" =~ ^[0-9]+$ ]] || _floor=80
+
+_lcov="${COVERAGE_ADEQUACY_LCOV:-}"
+if [ ! -f "$_lcov" ]; then echo "unverified"; exit 0; fi
+
+# Build "path<TAB>line -> hits" table from lcov; suffix-match diff paths against SF paths.
+_cov="$(_lcov_hits "$_lcov")"
+_changed="$(printf '%s\n' "$_diff" | _changed_lines)"
+
+# Join: for each changed path:line, is there a coverage record (suffix match) and hits>0?
+_join="$(awk -F'\t' '
+  NR==FNR { key=$1 SUBSEP $2; hits[key]=$3; paths[$1]=1; next }
+  {
+    cp=$1; cl=$2; matched=0; covered=0
+    for (p in paths) {
+      # suffix match either direction (handle abs vs rel paths)
+      if (p==cp || index(p, "/" cp) == length(p)-length(cp) || index(cp, "/" p) == length(cp)-length(p)) {
+        k=p SUBSEP cl
+        if (k in hits) { matched=1; if (hits[k]+0>0) covered=1; break }
+      }
+      k2=cp SUBSEP cl
+      if (k2 in hits) { matched=1; if (hits[k2]+0>0) covered=1; break }
+    }
+    if (matched) { total++; if (covered) cov++; else print "UNCOV\t" cp ":" cl }
+  }
+  END { print "TOTAL\t" total+0 "\t" cov+0 }
+' <(printf '%s\n' "$_cov") <(printf '%s\n' "$_changed"))"
+
+_total="$(printf '%s\n' "$_join" | awk -F'\t' '/^TOTAL/{print $2}')"
+_covn="$(printf '%s\n' "$_join" | awk -F'\t' '/^TOTAL/{print $3}')"
+[[ "$_total" =~ ^[0-9]+$ ]] || _total=0
+[[ "$_covn" =~ ^[0-9]+$ ]] || _covn=0
+
+if [ "$_total" -eq 0 ]; then echo "unverified"; exit 0; fi
+
+_pct=$(( _covn * 100 / _total ))
+if [ "$_pct" -lt "$_floor" ]; then
+  echo "suspect"
+  printf '%s\n' "$_join" | awk -F'\t' '/^UNCOV/{print "> " $2}'
+  exit 0
+fi
+echo "clean"
 exit 0
