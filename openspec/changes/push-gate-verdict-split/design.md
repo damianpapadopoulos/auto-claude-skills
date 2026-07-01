@@ -38,6 +38,10 @@ The verdict is read **live at push time**, not snapshotted — see Decision D.
 - **D — Live-read at push time, no new ledger.** Avoids the parallel-`project-verification` ordering race and naturally survives chain re-anchor (the artifact persists per token regardless of `.completed` resets).
 - **E — Scoped to skill-routing plugin repos** via `config/default-triggers.json` presence, and the routing gate fires independent of an active composition chain.
 
+## Deferred follow-ups
+
+- **Routing gate requires `gate_gaming_status == "clean"` (via `verdict_is_clean`).** Consistent with `deploy-gate`'s local-verification-of-record precedent, but because the gate-gaming tripwire is documented false-alarm-prone (benign moves/renames/reorders), a routing push bundled with a benign test refactor could be hard-denied on a `suspect` false positive. Revival trigger: if this false-blocks a legitimate routing change in practice, loosen the routing-gate deny predicate to `failed[]` + `could_not_verify[]` empty only (a `verdict_passed` predicate) and demote `suspect` to the advisory `_STALE_MSG`, keeping gate-gaming advisory per its settled treatment.
+
 ## Out-of-scope
 
 - An owned/deterministic **review** verdict (Option C). Deferred with the revival trigger above.
