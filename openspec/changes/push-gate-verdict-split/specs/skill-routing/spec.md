@@ -17,13 +17,18 @@ The owned verification verdict artifact `~/.claude/.skill-project-verified-<toke
 
 ### Requirement: Verify-verdict hardening
 
-The push gate MUST deny `git push` when the verification verdict covers HEAD and is not clean — that is, when `failed[]` is non-empty, or `could_not_verify[]` is non-empty, or `gate_gaming_status` is not `clean` — even if the status layer records `verification-before-completion` as completed. When no covering verdict is present, the gate MUST preserve its current status-only behavior and MUST NOT introduce a new denial.
+The push gate MUST deny `git push` when a verification verdict **at HEAD** (its `sha` equals HEAD) reports a test failure — `failed[]` non-empty — even if the status layer records `verification-before-completion` as completed. Only positive test-failure evidence at the exact pushed commit denies: a `could_not_verify[]` entry and a `suspect` gate-gaming status remain advisory and MUST NOT hard-block, and a failing verdict that is merely an ancestor of HEAD (a later commit may be fixed) MUST NOT deny. When no such verdict is present, the gate MUST preserve its status-only behavior and MUST NOT introduce a new denial.
 
-#### Scenario: Failing verification blocks the push despite recorded status
+#### Scenario: Failing verification at HEAD blocks the push despite recorded status
 - **GIVEN** the status layer records `verification-before-completion` as completed
-- **AND** a verdict covering HEAD reports `failed` containing `tests`
+- **AND** a verdict whose `sha` equals HEAD reports `failed` containing `tests`
 - **WHEN** `git push` is attempted
 - **THEN** the gate MUST deny and name the failing gate (`tests`)
+
+#### Scenario: Ancestor failing verdict does not block a later HEAD
+- **GIVEN** a failing verdict whose `sha` is an ancestor of HEAD (HEAD advanced past it)
+- **WHEN** `git push` is attempted
+- **THEN** the gate MUST NOT deny on verdict grounds (the failure is authoritative only for the commit it was measured at)
 
 #### Scenario: Absent verdict preserves status behavior
 - **GIVEN** no verdict artifact exists for the session
@@ -33,7 +38,7 @@ The push gate MUST deny `git push` when the verification verdict covers HEAD and
 
 ### Requirement: Routing-governance push gate
 
-In a skill-routing plugin repository (detected by the presence of `config/default-triggers.json`), the push gate MUST require a clean verdict covering the branch when the pushed diff touches routing paths (`skills/`, `config/`, or `hooks/`), denying with a `project-verification` remedy when no clean covering verdict exists. This gate MUST fire independent of an active composition chain. A clean verdict that covers an older ancestor commit on the branch MUST warn (advisory) rather than deny. Repositories without `config/default-triggers.json` MUST NOT be subject to this gate.
+In a skill-routing plugin repository (detected by the presence of `config/default-triggers.json`), when the pushed diff touches routing paths (`skills/`, `config/`, or `hooks/`), the push gate MUST require a clean verdict that covers the pushed routing changes: either a clean verdict at HEAD, or a clean verdict at an ancestor whose routing files are unchanged since. The gate MUST deny with a `project-verification` remedy when no clean verdict covers HEAD, or when a clean verdict is an ancestor but routing files changed after it (an unverified routing delta). A clean ancestor verdict with no routing change since MUST warn (advisory) rather than deny. This gate MUST fire independent of an active composition chain. Repositories without `config/default-triggers.json` MUST NOT be subject to this gate.
 
 #### Scenario: Routing change without a clean verdict is denied
 - **GIVEN** the repository contains `config/default-triggers.json`
@@ -48,6 +53,13 @@ In a skill-routing plugin repository (detected by the presence of `config/defaul
 - **AND** a clean verdict covering HEAD exists
 - **WHEN** `git push` is attempted
 - **THEN** the gate MUST allow the push
+
+#### Scenario: Routing changed after an ancestor verdict is denied
+- **GIVEN** the repository contains `config/default-triggers.json`
+- **AND** a clean verdict exists whose `sha` is an ancestor of HEAD
+- **AND** a routing file (`skills/`, `config/`, or `hooks/`) changed in a commit after that `sha`
+- **WHEN** `git push` is attempted
+- **THEN** the gate MUST deny (the routing delta is unverified) and instruct the user to run `Skill(auto-claude-skills:project-verification)`
 
 #### Scenario: Non-routing repository is unaffected
 - **GIVEN** the repository does not contain `config/default-triggers.json`

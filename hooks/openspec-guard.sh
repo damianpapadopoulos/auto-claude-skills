@@ -111,13 +111,15 @@ case "${_COMMAND}" in
 
             # Verify-verdict hardening (fail-open): status != verdict. A recorded
             # verify milestone means the Skill returned, NOT that tests passed. If an
-            # owned verdict COVERS HEAD and shows a test failure, deny even when status
-            # says completed. Absent/stale/cross-branch verdict => no denial (the
-            # sha-covers-HEAD check is the false-block guard).
+            # owned verdict is AT HEAD and shows a test failure, deny even when status
+            # says completed. A failure is authoritative only for the exact commit it
+            # was measured at, so we require sha == HEAD (not merely ancestor): an
+            # ancestor/stale/cross-branch/absent verdict => no denial (a later HEAD may
+            # be fixed). This is the false-block guard.
             if [ "${_VERDICT_OK}" = "true" ] && [ "${_verif_in_chain}" = "true" ] \
-               && verdict_covers_head "${_SESSION_TOKEN}" "" \
+               && verdict_sha_is_head "${_SESSION_TOKEN}" "" \
                && verdict_has_test_failure "${_SESSION_TOKEN}"; then
-                _gates="$(verdict_failing_gates "${_SESSION_TOKEN}")"
+                _gates="$(verdict_failing_gates "${_SESSION_TOKEN}")" || true
                 _MSG="PUSH GATE: verification-before-completion is recorded, but the verification verdict at HEAD reports failing gate(s): ${_gates}. Fix and re-run Skill(auto-claude-skills:project-verification) before pushing."
                 jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
                 exit 0
@@ -137,13 +139,19 @@ case "${_COMMAND}" in
         if [ "${_VERDICT_OK}" = "true" ]; then
             _proot="$(git rev-parse --show-toplevel 2>/dev/null || true)"
             if is_routing_repo "${_proot}" && diff_touches_routing "${_proot}"; then
-                if verdict_is_clean "${_SESSION_TOKEN}" && verdict_covers_head "${_SESSION_TOKEN}" "${_proot}"; then
+                if verdict_is_clean "${_SESSION_TOKEN}" && verdict_covers_head "${_SESSION_TOKEN}" "${_proot}" \
+                   && { verdict_sha_is_head "${_SESSION_TOKEN}" "${_proot}" || ! verdict_routing_delta "${_SESSION_TOKEN}" "${_proot}"; }; then
+                    # Clean verdict at HEAD, OR at an ancestor whose routing files are
+                    # unchanged since (a benign non-routing follow-up) — allow. The
+                    # ancestor case only warns so follow-up commits aren't re-blocked.
                     if ! verdict_sha_is_head "${_SESSION_TOKEN}" "${_proot}"; then
-                        _STALE_MSG="${_STALE_MSG}${_STALE_MSG:+; }routing change: the clean verification verdict covers an earlier commit, not HEAD. Re-run project-verification if later commits changed routing files."
+                        _STALE_MSG="${_STALE_MSG}${_STALE_MSG:+; }routing change: the clean verification verdict covers an earlier commit, not HEAD (routing files unchanged since). Re-run project-verification to refresh."
                     fi
-                    : # clean verdict on this branch's history — allow
+                    : # allow
                 else
-                    _MSG="PUSH GATE (routing governance): this push modifies routing files (skills/, config/, or hooks/) but no clean verification verdict covering this branch exists. Run Skill(auto-claude-skills:project-verification) until it reports a clean verdict, then push."
+                    # No clean covering verdict, OR the clean verdict is an ancestor and
+                    # routing files CHANGED after it (an unverified routing delta) — deny.
+                    _MSG="PUSH GATE (routing governance): this push modifies routing files (skills/, config/, or hooks/) but no clean verification verdict covering these changes exists. Run Skill(auto-claude-skills:project-verification) until it reports a clean verdict, then push."
                     jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
                     exit 0
                 fi

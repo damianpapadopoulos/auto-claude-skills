@@ -55,6 +55,14 @@ mkart "$(jq -nc --arg s "${NRHEAD}" '{failed:[],could_not_verify:[],gate_gaming_
 out="$(run_in "${NR}")"
 assert_not_contains "clean verdict => no deny"             '"deny"' "${out:-}"
 
+# (1b) FAILING verdict at an ANCESTOR (HEAD moved past it, e.g. a fix commit) -> NO deny
+# [FALSE-BLOCK GUARD, Finding A]: a failure is authoritative only for the exact commit
+# it was measured at; a later HEAD may pass, so an ancestor failure must not block.
+( cd "${NR}"; echo b > f2; git add -A; git commit -qm c2-fix )
+mkart "$(jq -nc --arg s "${NRHEAD}" '{failed:["tests"],could_not_verify:[],gate_gaming_status:"clean",sha:$s}')"
+out="$(run_in "${NR}")"
+assert_not_contains "ancestor failing verdict => no deny (HEAD may be fixed)" '"deny"' "${out:-}"
+
 # ================= Routing-governance gate (routing repo) =================
 RR="${TMP}/routing"; mkdir -p "${RR}"
 ( cd "${RR}"; git init -q; git config user.email t@t; git config user.name t
@@ -62,7 +70,9 @@ RR="${TMP}/routing"; mkdir -p "${RR}"
 RRBASE="$(git -C "${RR}" rev-parse HEAD)"
 ( cd "${RR}"; git checkout -q -b feature; git branch -f main "${RRBASE}"
   mkdir hooks; echo 'echo x' > hooks/y.sh; git add -A; git commit -qm routing-change )
-RRHEAD="$(git -C "${RR}" rev-parse HEAD)"
+RRC2="$(git -C "${RR}" rev-parse HEAD)"                 # the routing commit itself
+( cd "${RR}"; mkdir -p docs; echo note > docs/n.md; git add -A; git commit -qm docs-followup )
+RRHEAD="$(git -C "${RR}" rev-parse HEAD)"               # docs-only commit on top of routing
 
 # (5) routing diff + NO clean verdict -> DENY with project-verification remedy
 rm -f "${ART}"
@@ -70,15 +80,21 @@ out="$(run_in "${RR}")"
 assert_contains     "routing change, no verdict => deny"    '"deny"'              "${out:-<empty>}"
 assert_contains     "routing deny names project-verification" "project-verification" "${out:-<empty>}"
 
-# (6) routing diff + clean verdict covering HEAD -> NO deny
+# (6) routing diff + clean verdict AT HEAD -> NO deny
 mkart "$(jq -nc --arg s "${RRHEAD}" '{failed:[],could_not_verify:[],gate_gaming_status:"clean",sha:$s}')"
 out="$(run_in "${RR}")"
 assert_not_contains "routing + clean@HEAD => no deny"       '"deny"' "${out:-}"
 
-# (7) routing diff + clean verdict at ancestor (base) -> NO deny (stale => advisory only)
+# (7a) clean verdict at BASE, routing files CHANGED after it -> DENY [Finding B: unverified routing delta]
 mkart "$(jq -nc --arg s "${RRBASE}" '{failed:[],could_not_verify:[],gate_gaming_status:"clean",sha:$s}')"
 out="$(run_in "${RR}")"
-assert_not_contains "routing + clean@ancestor => no deny"   '"deny"' "${out:-}"
+assert_contains     "routing changed since verdict => deny" '"deny"' "${out:-<empty>}"
+
+# (7b) clean verdict AT the routing commit, only a docs commit after -> NO deny (advisory;
+# routing unchanged since the verdict, so the benign follow-up is not re-blocked)
+mkart "$(jq -nc --arg s "${RRC2}" '{failed:[],could_not_verify:[],gate_gaming_status:"clean",sha:$s}')"
+out="$(run_in "${RR}")"
+assert_not_contains "routing verified, docs-only follow-up => no deny" '"deny"' "${out:-}"
 
 # (8) non-routing repo + routing-named diff + no verdict -> NO deny (routing gate scoped out)
 ( cd "${NR}"; git checkout -q -b feature2; mkdir -p hooks; echo z > hooks/z.sh; git add -A; git commit -qm h )

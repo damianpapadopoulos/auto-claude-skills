@@ -84,6 +84,14 @@ assert_equals "non-routing repo not detected" "1" "$(_bool is_routing_repo "${RE
   git add -A; git commit -qm routing-change )
 assert_equals "diff touches routing (hooks/)" "0" "$(_bool diff_touches_routing "${REPO}")"
 
+# verdict_routing_delta: routing files changed AFTER the verdict's sha => 0 (delta)
+FHEAD="$(git -C "${REPO}" rev-parse HEAD)"
+mkart "$(jq -nc --arg s "${C1}" '{failed:[],could_not_verify:[],gate_gaming_status:"clean",sha:$s}')"
+assert_equals "routing delta since old sha" "0" "$(_bool verdict_routing_delta "${TOKEN}" "${REPO}")"
+# verdict at HEAD => no routing delta since => 1
+mkart "$(jq -nc --arg s "${FHEAD}" '{failed:[],could_not_verify:[],gate_gaming_status:"clean",sha:$s}')"
+assert_equals "no routing delta at HEAD" "1" "$(_bool verdict_routing_delta "${TOKEN}" "${REPO}")"
+
 export HOME="${_OLDHOME}"
 rm -rf "${TMP}"
 print_summary

@@ -86,10 +86,25 @@ is_routing_repo() {
 # _routing_base <proj_root> — best-available mainline merge-base for HEAD.
 _routing_base() {
     local proot="${1:-.}" ref b
-    for ref in origin/HEAD '@{upstream}' origin/main main; do
+    for ref in origin/HEAD '@{upstream}' origin/main main origin/master master; do
         b="$(git -C "$proot" merge-base HEAD "$ref" 2>/dev/null)" && [ -n "$b" ] && { printf '%s' "$b"; return 0; }
     done
     return 1
+}
+
+# verdict_routing_delta <token> <proj_root> — 0 iff routing paths changed between
+# the verdict's sha and HEAD (i.e., routing work POST-DATES the verdict, so the
+# clean verdict does not cover it). Used by the routing gate to decide whether an
+# ancestor-clean verdict is still authoritative. Fail-open: sha unknown/unreadable
+# => 1 (no detectable delta => don't manufacture a false-block).
+verdict_routing_delta() {
+    local token="${1:-}" proot="${2:-}" sha head names
+    sha="$(_verdict_sha "$token")" || return 1
+    [ -z "$sha" ] && return 1
+    [ -z "$proot" ] && proot="$(git rev-parse --show-toplevel 2>/dev/null)"
+    head="$(git -C "${proot:-.}" rev-parse HEAD 2>/dev/null)" || return 1
+    names="$(git -C "${proot:-.}" diff --name-only "$sha" "$head" 2>/dev/null)" || return 1
+    printf '%s\n' "$names" | grep -Eq '^(skills|config|hooks)/'
 }
 
 # diff_touches_routing <proj_root> — 0 iff the branch diff (base..HEAD) touches a

@@ -20,8 +20,8 @@ The verdict is read **live at push time**, not snapshotted — see Decision D.
 
 ## Trade-offs
 
-- **Fail-open verify hardening only denies on positive failure evidence covering HEAD.** It does *not* catch "the user ran only the external `verification-before-completion` and never our `project-verification`" — that path has no owned artifact → falls back to status. Accepted: closing it would require an owned verdict for an external skill, which we cannot produce deterministically. The routing gate carries the deterministic teeth on the high-risk paths.
-- **Routing gate adds friction to routing-path pushes** (must have run `project-verification` on the branch). This is the intended new gate, always satisfiable by an owned skill, scoped to plugin repos, and staleness-tolerant to avoid re-blocking follow-up commits.
+- **Fail-open verify hardening only denies on a test failure AT HEAD** (`sha == HEAD`, `failed[]` non-empty). It does *not* catch "the user ran only the external `verification-before-completion` and never our `project-verification`" — that path has no owned artifact → falls back to status. A failing verdict at an *ancestor* is treated as stale (a later HEAD may be fixed) and does not deny — a failure is authoritative only for the exact commit it was measured at. Accepted: closing the no-artifact gap would require an owned verdict for an external skill, which we cannot produce deterministically. The routing gate carries the deterministic teeth on the high-risk paths.
+- **Routing gate adds friction to routing-path pushes** (must have run `project-verification` covering the routing changes). This is the intended new gate, always satisfiable by an owned skill, scoped to plugin repos, and delta-aware: a clean ancestor verdict is accepted only when routing files are unchanged since it (so a benign non-routing follow-up isn't re-blocked), but a routing change made *after* the verdict is an unverified delta and denies.
 - **No SHA on a legacy artifact** → treated as mismatch → status fallback. Chosen over "honor SHA-less verdicts" precisely to avoid cross-branch/stale false-blocks.
 
 ## Dissenting views
@@ -32,8 +32,8 @@ The verdict is read **live at push time**, not snapshotted — see Decision D.
 
 ## Decisions
 
-- **A — SHA-freshness is load-bearing.** A verdict (pass or fail) is honored only when it covers HEAD. This single mechanism makes every new denial a *true* block and closes both false-block holes (cross-branch bleed, stale-FAIL).
-- **B — Routing gate: deny on absent, warn on stale.** Deny only when no clean covering verdict exists for the branch; a clean-but-older ancestor verdict warns (advisory) rather than denies, so benign follow-up commits are not re-blocked.
+- **A — SHA-freshness is load-bearing, and the FAILURE deny requires `sha == HEAD`.** A verdict is honored only when its `sha` covers HEAD, and a *failure* denial additionally requires the failing verdict to be exactly at HEAD (not merely an ancestor) — a failure is authoritative only for the commit it was measured at. This makes every new denial a *true* block and closes both false-block holes (cross-branch bleed, and an ancestor-FAIL blocking a fixed HEAD).
+- **B — Routing gate: deny on absent-or-unverified-delta, warn on benign stale.** Deny when no clean verdict covers HEAD, or when a clean verdict is an ancestor but routing files changed after it (unverified routing delta). A clean ancestor verdict with *no* routing change since warns (advisory) rather than denies, so benign non-routing follow-up commits are not re-blocked. The freshness that matters is the verdict→HEAD routing delta, not merely ancestry.
 - **C — Review stays status-only**, gap documented. Revival trigger: if a review-skipped-but-status-recorded push causes a real incident, revisit with an owned review verdict (likely a persisted `security-scanner` artifact, the Option-C path).
 - **D — Live-read at push time, no new ledger.** Avoids the parallel-`project-verification` ordering race and naturally survives chain re-anchor (the artifact persists per token regardless of `.completed` resets).
 - **E — Scoped to skill-routing plugin repos** via `config/default-triggers.json` presence, and the routing gate fires independent of an active composition chain.
