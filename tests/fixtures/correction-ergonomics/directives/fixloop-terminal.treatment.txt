@@ -1,0 +1,1 @@
+After 3 iterations, stop the auto-fix loop and hand off each remaining failure as an explicit action — name the scenario, the observed failure, and the specific fix or decision the human must make. Do not file it as a passive "needs review."

@@ -1,0 +1,1 @@
+On blocking_issues — Expected: zero blocking findings before SHIP. Actual: N blocking finding(s) remain. Do now: TeamDelete the review team, return to IMPLEMENT, fix each blocking finding (cite file:line from the report), then re-review. Do NOT proceed to SHIP until re-review returns clean or suggestions_only.

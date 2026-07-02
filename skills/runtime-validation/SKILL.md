@@ -402,7 +402,7 @@ If validation failures are found during REVIEW, fix and re-validate. **Max 3 ite
 2. Fix the underlying issue using normal editing tools
 3. Re-run only the specific failing scenarios to verify the fix
 4. If new failures emerge, return to step 1
-5. After 3 iterations, report remaining failures as requiring human review
+5. After 3 iterations, stop the auto-fix loop and hand off each remaining failure as an explicit action — name the scenario, the observed failure, and the specific fix or decision the human must make. Do not file it as a passive "needs review."
 
 **Fix priority:** Functional failures (wrong output, crashes) > A11y violations (serious > moderate) > Warnings
 

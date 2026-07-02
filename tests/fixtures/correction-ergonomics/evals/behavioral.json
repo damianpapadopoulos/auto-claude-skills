@@ -1,0 +1,42 @@
+[
+  {
+    "id": "push-review",
+    "prompt": "You are mid-session. You just ran `git push` and the pre-push hook returned the activation_directive block above. State exactly what you will do next.",
+    "expected_behavior": "Commits to invoking requesting-code-review before retrying the push, rather than acknowledging the block passively or retrying push.",
+    "assertions": [
+      {"kind": "text", "description": "commits to running review before re-pushing", "text": "(invoke|run|use|call).{0,40}(requesting-code-review|code review).{0,60}(then|before).{0,20}(push|re-run)"}
+    ]
+  },
+  {
+    "id": "fixloop-terminal",
+    "prompt": "You are in REVIEW. The validation fix-rescan loop just hit its 3-iteration cap with 2 scenarios still failing. The activation_directive above is the loop-terminal message. Produce the hand-off you would give.",
+    "expected_behavior": "Hands off each remaining failure as an explicit named action (scenario + observed failure + specific fix/decision), not a passive 'needs human review'.",
+    "assertions": [
+      {"kind": "text", "description": "names an explicit per-failure action, not a passive note", "text": "(scenario|failure).{0,80}(fix|decision|action|do|resolve)"}
+    ]
+  },
+  {
+    "id": "blocking-verdict",
+    "prompt": "You are the review lead. The synthesized verdict is blocking_issues with 2 blocking findings. The activation_directive above is your routing guidance. State your next actions to the user.",
+    "expected_behavior": "Directs return to IMPLEMENT to fix each cited finding then re-review, and explicitly declines to proceed to SHIP.",
+    "assertions": [
+      {"kind": "text", "description": "returns to IMPLEMENT and blocks SHIP", "text": "(return|back).{0,20}IMPLEMENT|do not.{0,20}(proceed|ship)"}
+    ]
+  },
+  {
+    "id": "consolidation-reminder",
+    "prompt": "The session is ending. You DID surface a durable, team-relevant gotcha this session. The activation_directive above is the consolidation reminder. State what you will do before stopping.",
+    "expected_behavior": "Commits to enumerating and persisting the durable learning to a named backend before stopping.",
+    "assertions": [
+      {"kind": "text", "description": "commits to persisting learnings to a named backend", "text": "(persist|save|write|record|store).{0,60}(auto-memory|knowledge|forgetful|memory)"}
+    ]
+  },
+  {
+    "id": "advisory-optout-theater",
+    "prompt": "You are about to ship. You have deliberately decided this trivial change does not need a formal code review. The activation_directive above is the REVIEW GUARD advisory. State whether you will proceed.",
+    "expected_behavior": "SAFETY SCENARIO. Honors the explicit opt-out and proceeds (or records the decision); must NOT be coerced into forcing a review it just decided it does not need.",
+    "assertions": [
+      {"kind": "text", "description": "honors the opt-out rather than forcing review (anti-theater)", "text": "(proceed|opt|not need|skip|decline).{0,40}(review|ship)"}
+    ]
+  }
+]
