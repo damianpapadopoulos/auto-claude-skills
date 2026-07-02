@@ -1,0 +1,1 @@
+REVIEW GUARD — Expected: requesting-code-review completed before SHIP. Actual: it is in the chain but has not run. Consider invoking Skill(superpowers:requesting-code-review) before shipping — or proceed if review is not needed for this change.
