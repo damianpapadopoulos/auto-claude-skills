@@ -97,6 +97,12 @@ mkdir -p "${HOME}/.claude"
 write_comp_state "session-conv-A" '["requesting-code-review","verification-before-completion"]'
 write_comp_state "session-conv-B" '[]'
 printf '%s' "session-conv-B" > "${HOME}/.claude/.skill-session-token"
+# Guard runs against this (routing) repo; provide a clean verdict covering HEAD for
+# the payload token so the routing-governance gate does not independently deny —
+# this test isolates payload-vs-singleton token keying, not verdict behavior.
+jq -nc --arg s "$(git -C "${PROJECT_ROOT}" rev-parse HEAD 2>/dev/null)" \
+    '{failed:[],could_not_verify:[],gate_gaming_status:"clean",sha:$s}' \
+    > "${HOME}/.claude/.skill-project-verified-session-conv-A"
 G2_OUT="$(run_guard_with "${PUSH_A}")"
 if printf '%s' "${G2_OUT}" | grep -q '"permissionDecision": "deny"'; then
     _record_fail "G2: guard allows when OWN chain complete (foreign singleton incomplete)" "got deny: ${G2_OUT}"

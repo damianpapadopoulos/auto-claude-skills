@@ -31,6 +31,14 @@ _COMP="$HOME/.claude/.skill-composition-state-${_TOK}"
 printf '%s' '{"chain":["requesting-code-review","verification-before-completion"],"current_index":0,"completed":[]}' \
     > "${_COMP}"
 
+# This repo IS a skill-routing repo (has config/default-triggers.json), so the
+# routing-governance gate would independently deny a routing-touching push that
+# lacks a clean verdict. Provide one covering HEAD so these assertions isolate the
+# STATUS-layer ledger behavior (the routing gate is exercised in test-push-gate-verdict.sh).
+_PVHEAD="$(git -C "${PROJECT_ROOT}" rev-parse HEAD 2>/dev/null)"
+jq -nc --arg s "${_PVHEAD}" '{failed:[],could_not_verify:[],gate_gaming_status:"clean",sha:$s}' \
+    > "$HOME/.claude/.skill-project-verified-${_TOK}"
+
 _mkinput() {
     # Use jq to build JSON safely so any path characters are properly escaped
     jq -n --arg tp "$_TPATH" \
