@@ -97,6 +97,21 @@ export CLAUDE_BIN
 
 FAIL_COUNT=0
 TOTAL_COUNT=0
+SKIP_COUNT=0
+SESSION_LIMIT=0   # set to 1 when a run fails on the account session/usage limit
+
+# A (scenario,arm) is "done" if its variance report exists, contains the
+# per-assertion table header the runner writes on a successful variance run,
+# AND was captured at the SAME iteration count as this run (so a variance-2
+# pilot report is NOT mistaken for a completed variance-5 race entry).
+# RESUME=0 disables skipping (force a fresh full run).
+is_done() {
+    local report="$1"
+    [ "${RESUME:-1}" = "1" ] || return 1
+    [ -f "${report}" ] || return 1
+    grep -q 'Per-assertion pass rates' "${report}" 2>/dev/null || return 1
+    grep -qE "\\*\\*Iterations:\\*\\* ${VARIANCE}\$" "${report}" 2>/dev/null
+}
 
 # run_arm arm_name [--directive-file <path>]
 run_arm() {
@@ -105,18 +120,33 @@ run_arm() {
     dir="${OUT}/${arm}"
     mkdir -p "${dir}"
     for id in ${ids}; do
+        [ "${SESSION_LIMIT}" = "1" ] && return 0   # stop early once the limit is hit
         TOTAL_COUNT=$((TOTAL_COUNT + 1))
+        local report="${dir}/${id}-variance.md"
         if [ "${DRY_RUN}" = "1" ]; then
-            echo "[DRY_RUN][${arm}] would run: ARTIFACTS_DIR=${dir} SKILL_PATH=${BASE} CLAUDE_BIN=${CLAUDE_BIN} BEHAVIORAL_EVALS=1 bash ${RUNNER} --scenario ${id} --pack ${PACK} --variance ${VARIANCE} $* --variance-report ${dir}/${id}-variance.md > ${dir}/${id}.log 2>&1"
+            echo "[DRY_RUN][${arm}] would run: ARTIFACTS_DIR=${dir} SKILL_PATH=${BASE} CLAUDE_BIN=${CLAUDE_BIN} BEHAVIORAL_EVALS=1 bash ${RUNNER} --scenario ${id} --pack ${PACK} --variance ${VARIANCE} $* --variance-report ${report} > ${dir}/${id}.log 2>&1"
+            continue
+        fi
+        if is_done "${report}"; then
+            echo "[${arm}] ${id} skip (already complete)"
+            SKIP_COUNT=$((SKIP_COUNT + 1))
             continue
         fi
         ARTIFACTS_DIR="${dir}" SKILL_PATH="${BASE}" \
             bash "${RUNNER}" --scenario "${id}" --pack "${PACK}" \
             --variance "${VARIANCE}" "$@" \
-            --variance-report "${dir}/${id}-variance.md" \
+            --variance-report "${report}" \
             >"${dir}/${id}.log" 2>&1
         rc=$?
         if [ "${rc}" -ne 0 ]; then
+            # Distinguish the account session/usage limit (needs a wall-clock reset,
+            # not a retry) from other failures. Stop early on the former so we don't
+            # churn the rest of the race into failures.
+            if grep -qiE 'session limit|usage limit|"api_error_status":429|resets [0-9]' "${dir}/${id}.log" 2>/dev/null; then
+                echo "[${arm}] ${id} SESSION LIMIT hit — stopping. Re-run this same command after the limit resets; completed scenarios are skipped (RESUME=1 default)."
+                SESSION_LIMIT=1
+                return 0
+            fi
             echo "[${arm}] ${id} FAILED (exit ${rc}) — see ${dir}/${id}.log"
             FAIL_COUNT=$((FAIL_COUNT + 1))
         else
@@ -135,7 +165,12 @@ if [ "${DRY_RUN}" = "1" ]; then
 fi
 
 echo "race complete → ${OUT}"
-echo "summary: ${TOTAL_COUNT} runs, ${FAIL_COUNT} failed"
+echo "summary: ${TOTAL_COUNT} considered, ${SKIP_COUNT} skipped (already done), ${FAIL_COUNT} failed"
+if [ "${SESSION_LIMIT}" = "1" ]; then
+    echo "STOPPED EARLY on session/usage limit. Re-run the identical command after it resets;"
+    echo "completed (scenario,arm) pairs are skipped automatically (RESUME=1 default)."
+    exit 3
+fi
 if [ "${FAIL_COUNT}" -gt 0 ]; then
     exit 1
 fi
