@@ -92,7 +92,7 @@ case "${_COMMAND}" in
             jq -e '.completed | index("requesting-code-review")' "${_COMP_STATE}" >/dev/null 2>&1 && _review_completed=true
             _ledger_has "requesting-code-review" && _review_completed=true
             if [ "${_review_in_chain}" = "true" ] && [ "${_review_completed}" = "false" ]; then
-                _MSG="PUSH GATE: A composition chain is active and requesting-code-review has not been completed. Complete the REVIEW → VERIFY → SHIP sequence before pushing. Invoke Skill(superpowers:requesting-code-review) first."
+                _MSG="PUSH GATE — Expected: REVIEW → VERIFY → SHIP completed before push. Actual: requesting-code-review has not run on this chain. Do now: invoke Skill(superpowers:requesting-code-review), then re-run your push."
                 jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
                 exit 0
             fi
@@ -104,7 +104,7 @@ case "${_COMMAND}" in
             jq -e '.completed | index("verification-before-completion")' "${_COMP_STATE}" >/dev/null 2>&1 && _verif_completed=true
             _ledger_has "verification-before-completion" && _verif_completed=true
             if [ "${_verif_in_chain}" = "true" ] && [ "${_verif_completed}" = "false" ]; then
-                _MSG="PUSH GATE: A composition chain is active and verification-before-completion has not run. Complete the REVIEW → VERIFY → SHIP sequence before pushing. Invoke Skill(superpowers:verification-before-completion) first."
+                _MSG="PUSH GATE — Expected: verification-before-completion completed before push. Actual: it has not run on this active chain. Do now: invoke Skill(superpowers:verification-before-completion), then re-run your push."
                 jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
                 exit 0
             fi
