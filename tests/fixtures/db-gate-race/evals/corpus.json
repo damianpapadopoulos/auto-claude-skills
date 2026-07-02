@@ -5,8 +5,8 @@
     "expected_behavior": "A correct review must flag that adding a NOT NULL column without a staged default/backfill on the large orders table is an unsafe migration that can block or fail.",
     "assertions": [
       {
-        "text": "blocking|lock|table rewrite|backfill|unsafe migration",
-        "description": "Flags the unsafe large-table NOT NULL column migration and names the blocking/backfill risk."
+        "text": "DEFECTS:.*(unsafe.?migrat|blocking.?migrat|table.?rewrite|rewrite|non.?online|drop.*index|not.?null.*default|downtime)",
+        "description": "Machine verdict lists a unsafe-migration defect"
       }
     ]
   },
@@ -16,8 +16,8 @@
     "expected_behavior": "A correct review must flag the NOT NULL column addition combined with a same-statement secondary index add on a large existing table as an unsafe migration: the index add defeats MySQL's instant ADD COLUMN optimization and forces a full table rebuild, so it requires a nullable/add-backfill-enforce sequence with the index build run separately.",
     "assertions": [
       {
-        "text": "backfill|blocking|lock|online|unsafe migration",
-        "description": "Detects the unsafe non-staged NOT NULL addition on a large MySQL table."
+        "text": "DEFECTS:.*(unsafe.?migrat|blocking.?migrat|table.?rewrite|rewrite|non.?online|drop.*index|not.?null.*default|downtime)",
+        "description": "Machine verdict lists a unsafe-migration defect"
       }
     ]
   },
@@ -27,8 +27,8 @@
     "expected_behavior": "A correct review must flag that the migration drops an in-use index required by a hot query and would cause scan/sort regressions.",
     "assertions": [
       {
-        "text": "in-use index|full scan|seq scan|regression|supporting index",
-        "description": "Identifies that dropping the hot-query index is unsafe."
+        "text": "DEFECTS:.*(unsafe.?migrat|blocking.?migrat|table.?rewrite|rewrite|non.?online|drop.*index|not.?null.*default|downtime)",
+        "description": "Machine verdict lists a unsafe-migration defect"
       }
     ]
   },
@@ -38,8 +38,8 @@
     "expected_behavior": "A correct review must flag the COPY/exclusive-lock table rebuild on a large hot table as an unsafe non-online migration.",
     "assertions": [
       {
-        "text": "blocking|online|lock|downtime",
-        "description": "Flags the non-online schema change and exclusive lock risk."
+        "text": "DEFECTS:.*(unsafe.?migrat|blocking.?migrat|table.?rewrite|rewrite|non.?online|drop.*index|not.?null.*default|downtime)",
+        "description": "Machine verdict lists a unsafe-migration defect"
       }
     ]
   },
@@ -49,8 +49,8 @@
     "expected_behavior": "A correct review must flag that the actor_id filter and created_at order have no supporting index, causing a full/seq scan on a large table.",
     "assertions": [
       {
-        "text": "missing index|full scan|seq scan|type: ?ALL|add .*index",
-        "description": "Detects the missing supporting index for the actor_id lookup."
+        "text": "DEFECTS:.*(missing.?index|no.?index|unindexed|full.?scan|full.?table.?scan|seq.?scan|table.?scan|supporting.?index|add.?index)",
+        "description": "Machine verdict lists a missing-index defect"
       }
     ]
   },
@@ -60,8 +60,8 @@
     "expected_behavior": "A correct review must flag the missing index on shipments.order_id for the join, which can force a scan of shipments.",
     "assertions": [
       {
-        "text": "missing index|full scan|type: ?ALL|add .*index",
-        "description": "Identifies the missing join index on shipments.order_id."
+        "text": "DEFECTS:.*(missing.?index|no.?index|unindexed|full.?scan|full.?table.?scan|seq.?scan|table.?scan|supporting.?index|add.?index)",
+        "description": "Machine verdict lists a missing-index defect"
       }
     ]
   },
@@ -71,8 +71,8 @@
     "expected_behavior": "A correct review must flag that status/due_date lacks a supporting index and can require a seq scan plus sort on a large invoices table.",
     "assertions": [
       {
-        "text": "missing index|seq scan|full scan|sort|add .*index",
-        "description": "Detects the missing index for the open-invoices query."
+        "text": "DEFECTS:.*(missing.?index|no.?index|unindexed|full.?scan|full.?table.?scan|seq.?scan|table.?scan|supporting.?index|add.?index)",
+        "description": "Machine verdict lists a missing-index defect"
       }
     ]
   },
@@ -82,8 +82,8 @@
     "expected_behavior": "A correct review must flag that expires_at/revoked_at has no supporting index and the cleanup query can full-scan the large sessions table.",
     "assertions": [
       {
-        "text": "missing index|full scan|type: ?ALL|add .*index",
-        "description": "Finds the missing cleanup-query index."
+        "text": "DEFECTS:.*(missing.?index|no.?index|unindexed|full.?scan|full.?table.?scan|seq.?scan|table.?scan|supporting.?index|add.?index)",
+        "description": "Machine verdict lists a missing-index defect"
       }
     ]
   },
@@ -93,8 +93,8 @@
     "expected_behavior": "A correct review must flag the per-order query in the loop as an N+1 pattern that should be replaced with a batched query or join.",
     "assertions": [
       {
-        "text": "n[+]1|n[ -]?plus[ -]?one|query.*loop|per-row|per row|batch|join",
-        "description": "Flags the looped per-order item query as N+1."
+        "text": "DEFECTS:.*(n.?1|n.?plus.?one|per.?row|in.?a.?loop|loop|unbatched|repeated.?quer)",
+        "description": "Machine verdict lists a n-plus-one defect"
       }
     ]
   },
@@ -104,8 +104,8 @@
     "expected_behavior": "A correct review must flag the invoice aggregate query inside the customer loop as an N+1 database access pattern.",
     "assertions": [
       {
-        "text": "n[+]1|n[ -]?plus[ -]?one|query.*loop|per-row|per row|batch|aggregate",
-        "description": "Detects the per-customer aggregate query loop."
+        "text": "DEFECTS:.*(n.?1|n.?plus.?one|per.?row|in.?a.?loop|loop|unbatched|repeated.?quer)",
+        "description": "Machine verdict lists a n-plus-one defect"
       }
     ]
   },
@@ -115,8 +115,8 @@
     "expected_behavior": "A correct review must flag the latest-login lookup inside the user loop as N+1 and recommend batching or a lateral/join query.",
     "assertions": [
       {
-        "text": "n[+]1|n[ -]?plus[ -]?one|query.*loop|per-row|per row|batch|join",
-        "description": "Finds the repeated latest-login query per user."
+        "text": "DEFECTS:.*(n.?1|n.?plus.?one|per.?row|in.?a.?loop|loop|unbatched|repeated.?quer)",
+        "description": "Machine verdict lists a n-plus-one defect"
       }
     ]
   },
@@ -126,8 +126,8 @@
     "expected_behavior": "A correct review must flag the count query inside the projects loop as an N+1 issue requiring a grouped aggregate or prefetch.",
     "assertions": [
       {
-        "text": "n[+]1|n[ -]?plus[ -]?one|query.*loop|per-row|per row|batch|group",
-        "description": "Identifies the per-project count query as N+1."
+        "text": "DEFECTS:.*(n.?1|n.?plus.?one|per.?row|in.?a.?loop|loop|unbatched|repeated.?quer)",
+        "description": "Machine verdict lists a n-plus-one defect"
       }
     ]
   },
@@ -137,8 +137,8 @@
     "expected_behavior": "A correct review must flag deep LIMIT/OFFSET pagination on a huge table and recommend keyset/cursor pagination.",
     "assertions": [
       {
-        "text": "keyset|cursor|seek method|OFFSET.*slow|deep pagination",
-        "description": "Flags deep offset pagination and names the keyset/cursor fix."
+        "text": "DEFECTS:.*(offset|deep.?pag|large.?offset|keyset|cursor.?pag|pagination)",
+        "description": "Machine verdict lists a offset-pagination defect"
       }
     ]
   },
@@ -148,8 +148,8 @@
     "expected_behavior": "A correct review must flag the deep OFFSET despite the supporting order index and recommend cursor/keyset pagination.",
     "assertions": [
       {
-        "text": "keyset|cursor|seek method|OFFSET.*slow|deep pagination|large offset",
-        "description": "Catches the high-offset pagination risk."
+        "text": "DEFECTS:.*(offset|deep.?pag|large.?offset|keyset|cursor.?pag|pagination)",
+        "description": "Machine verdict lists a offset-pagination defect"
       }
     ]
   },
@@ -159,8 +159,8 @@
     "expected_behavior": "A correct review must flag the OFFSET-based export paging as deep pagination that should use a cursor/seek predicate.",
     "assertions": [
       {
-        "text": "keyset|cursor|seek method|OFFSET.*slow|deep pagination|large offset",
-        "description": "Detects offset paging in a full-table export."
+        "text": "DEFECTS:.*(offset|deep.?pag|large.?offset|keyset|cursor.?pag|pagination)",
+        "description": "Machine verdict lists a offset-pagination defect"
       }
     ]
   },
@@ -170,8 +170,8 @@
     "expected_behavior": "A correct review must flag the large OFFSET pagination on the active-products list and recommend keyset/cursor pagination.",
     "assertions": [
       {
-        "text": "keyset|cursor|seek method|OFFSET.*slow|deep pagination|large offset",
-        "description": "Identifies deep offset pagination on the product listing."
+        "text": "DEFECTS:.*(offset|deep.?pag|large.?offset|keyset|cursor.?pag|pagination)",
+        "description": "Machine verdict lists a offset-pagination defect"
       }
     ]
   },
@@ -181,8 +181,8 @@
     "expected_behavior": "A correct review must flag that the transaction holds FOR UPDATE locks while waiting on an external payment call, creating contention risk.",
     "assertions": [
       {
-        "text": "lock|contention|long transaction|hold.*transaction|external call",
-        "description": "Detects locks held across the external payment call."
+        "text": "DEFECTS:.*(lock.?risk|lock.?contention|long.?transaction|long.?running|for.?update|gap.?lock|broad.?lock|held.?lock|row.?lock)",
+        "description": "Machine verdict lists a lock-risk defect"
       }
     ]
   },
@@ -192,8 +192,8 @@
     "expected_behavior": "A correct review must flag that selecting hundreds of hot queued jobs FOR UPDATE and doing work before commit creates broad, long-held lock contention.",
     "assertions": [
       {
-        "text": "lock|contention|long transaction|broad.*lock|skip locked",
-        "description": "Flags broad row locks held during worker processing."
+        "text": "DEFECTS:.*(lock.?risk|lock.?contention|long.?transaction|long.?running|for.?update|gap.?lock|broad.?lock|held.?lock|row.?lock)",
+        "description": "Machine verdict lists a lock-risk defect"
       }
     ]
   },
@@ -203,8 +203,8 @@
     "expected_behavior": "A correct review must flag the huge update held open in one transaction, which can hold many row locks and cause contention.",
     "assertions": [
       {
-        "text": "lock|contention|long transaction|batch|row locks|hold.*transaction",
-        "description": "Detects the long transaction and broad row-lock risk."
+        "text": "DEFECTS:.*(lock.?risk|lock.?contention|long.?transaction|long.?running|for.?update|gap.?lock|broad.?lock|held.?lock|row.?lock)",
+        "description": "Machine verdict lists a lock-risk defect"
       }
     ]
   },
@@ -214,8 +214,8 @@
     "expected_behavior": "A correct review must flag the range SELECT FOR UPDATE on a hot path as a lock/gap-lock contention risk.",
     "assertions": [
       {
-        "text": "gap lock|next-key|contention|lock|hot path",
-        "description": "Identifies the hot range-lock contention risk."
+        "text": "DEFECTS:.*(lock.?risk|lock.?contention|long.?transaction|long.?running|for.?update|gap.?lock|broad.?lock|held.?lock|row.?lock)",
+        "description": "Machine verdict lists a lock-risk defect"
       }
     ]
   },
@@ -226,8 +226,8 @@
     "assertions": [
       {
         "kind": "absent",
-        "text": "unsafe migration|table rewrite|blocking migration|not null",
-        "description": "Guards against falsely flagging a safe nullable additive column."
+        "text": "DEFECTS:.*(unsafe.?migrat|blocking.?migrat|table.?rewrite|rewrite|non.?online|drop.*index|not.?null.*default|downtime|missing.?index|no.?index|unindexed|full.?scan|seq.?scan|table.?scan|supporting.?index|add.?index|n.?1|n.?plus.?one|per.?row|in.?a.?loop|loop|unbatched|deep.?pag|large.?offset|keyset|cursor.?pag|pagination|offset|lock.?risk|lock.?contention|long.?transaction|long.?running|for.?update|gap.?lock|broad.?lock|held.?lock|row.?lock)",
+        "description": "Machine verdict wrongly names a taxon defect on a safe change"
       }
     ]
   },
@@ -238,8 +238,8 @@
     "assertions": [
       {
         "kind": "absent",
-        "text": "missing index|full scan|type: ?ALL|seq scan|add .*index",
-        "description": "Guards against a false missing-index finding on a covered query."
+        "text": "DEFECTS:.*(unsafe.?migrat|blocking.?migrat|table.?rewrite|rewrite|non.?online|drop.*index|not.?null.*default|downtime|missing.?index|no.?index|unindexed|full.?scan|seq.?scan|table.?scan|supporting.?index|add.?index|n.?1|n.?plus.?one|per.?row|in.?a.?loop|loop|unbatched|deep.?pag|large.?offset|keyset|cursor.?pag|pagination|offset|lock.?risk|lock.?contention|long.?transaction|long.?running|for.?update|gap.?lock|broad.?lock|held.?lock|row.?lock)",
+        "description": "Machine verdict wrongly names a taxon defect on a safe change"
       }
     ]
   },
@@ -250,8 +250,8 @@
     "assertions": [
       {
         "kind": "absent",
-        "text": "OFFSET.*slow|deep pagination|large offset",
-        "description": "Guards against falsely flagging offset pagination where no OFFSET is used."
+        "text": "DEFECTS:.*(unsafe.?migrat|blocking.?migrat|table.?rewrite|rewrite|non.?online|drop.*index|not.?null.*default|downtime|missing.?index|no.?index|unindexed|full.?scan|seq.?scan|table.?scan|supporting.?index|add.?index|n.?1|n.?plus.?one|per.?row|in.?a.?loop|loop|unbatched|deep.?pag|large.?offset|keyset|cursor.?pag|pagination|offset|lock.?risk|lock.?contention|long.?transaction|long.?running|for.?update|gap.?lock|broad.?lock|held.?lock|row.?lock)",
+        "description": "Machine verdict wrongly names a taxon defect on a safe change"
       }
     ]
   },
@@ -262,8 +262,8 @@
     "assertions": [
       {
         "kind": "absent",
-        "text": "n[+]1|n[ -]?plus[ -]?one|query.*loop|per-row query",
-        "description": "Guards against falsely flagging a batched lookup as N+1."
+        "text": "DEFECTS:.*(unsafe.?migrat|blocking.?migrat|table.?rewrite|rewrite|non.?online|drop.*index|not.?null.*default|downtime|missing.?index|no.?index|unindexed|full.?scan|seq.?scan|table.?scan|supporting.?index|add.?index|n.?1|n.?plus.?one|per.?row|in.?a.?loop|loop|unbatched|deep.?pag|large.?offset|keyset|cursor.?pag|pagination|offset|lock.?risk|lock.?contention|long.?transaction|long.?running|for.?update|gap.?lock|broad.?lock|held.?lock|row.?lock)",
+        "description": "Machine verdict wrongly names a taxon defect on a safe change"
       }
     ]
   },
@@ -274,8 +274,8 @@
     "assertions": [
       {
         "kind": "absent",
-        "text": "long transaction|broad.*lock|gap lock|contention|deadlock",
-        "description": "Guards against falsely flagging a short row-level lock as a lock-risk defect."
+        "text": "DEFECTS:.*(unsafe.?migrat|blocking.?migrat|table.?rewrite|rewrite|non.?online|drop.*index|not.?null.*default|downtime|missing.?index|no.?index|unindexed|full.?scan|seq.?scan|table.?scan|supporting.?index|add.?index|n.?1|n.?plus.?one|per.?row|in.?a.?loop|loop|unbatched|deep.?pag|large.?offset|keyset|cursor.?pag|pagination|offset|lock.?risk|lock.?contention|long.?transaction|long.?running|for.?update|gap.?lock|broad.?lock|held.?lock|row.?lock)",
+        "description": "Machine verdict wrongly names a taxon defect on a safe change"
       }
     ]
   },
@@ -286,8 +286,8 @@
     "assertions": [
       {
         "kind": "absent",
-        "text": "unsafe migration|blocking migration|table rewrite|drop.*index",
-        "description": "Guards against falsely flagging a safe concurrent index build."
+        "text": "DEFECTS:.*(unsafe.?migrat|blocking.?migrat|table.?rewrite|rewrite|non.?online|drop.*index|not.?null.*default|downtime|missing.?index|no.?index|unindexed|full.?scan|seq.?scan|table.?scan|supporting.?index|add.?index|n.?1|n.?plus.?one|per.?row|in.?a.?loop|loop|unbatched|deep.?pag|large.?offset|keyset|cursor.?pag|pagination|offset|lock.?risk|lock.?contention|long.?transaction|long.?running|for.?update|gap.?lock|broad.?lock|held.?lock|row.?lock)",
+        "description": "Machine verdict wrongly names a taxon defect on a safe change"
       }
     ]
   },
@@ -298,8 +298,8 @@
     "assertions": [
       {
         "kind": "absent",
-        "text": "n[+]1|n[ -]?plus[ -]?one|per-row query|query.*loop",
-        "description": "Guards against falsely flagging grouped aggregate loading as N+1."
+        "text": "DEFECTS:.*(unsafe.?migrat|blocking.?migrat|table.?rewrite|rewrite|non.?online|drop.*index|not.?null.*default|downtime|missing.?index|no.?index|unindexed|full.?scan|seq.?scan|table.?scan|supporting.?index|add.?index|n.?1|n.?plus.?one|per.?row|in.?a.?loop|loop|unbatched|deep.?pag|large.?offset|keyset|cursor.?pag|pagination|offset|lock.?risk|lock.?contention|long.?transaction|long.?running|for.?update|gap.?lock|broad.?lock|held.?lock|row.?lock)",
+        "description": "Machine verdict wrongly names a taxon defect on a safe change"
       }
     ]
   },
@@ -310,8 +310,8 @@
     "assertions": [
       {
         "kind": "absent",
-        "text": "deep pagination|large offset|OFFSET.*slow|keyset required",
-        "description": "Guards against falsely flagging shallow OFFSET on a tiny lookup table."
+        "text": "DEFECTS:.*(unsafe.?migrat|blocking.?migrat|table.?rewrite|rewrite|non.?online|drop.*index|not.?null.*default|downtime|missing.?index|no.?index|unindexed|full.?scan|seq.?scan|table.?scan|supporting.?index|add.?index|n.?1|n.?plus.?one|per.?row|in.?a.?loop|loop|unbatched|deep.?pag|large.?offset|keyset|cursor.?pag|pagination|offset|lock.?risk|lock.?contention|long.?transaction|long.?running|for.?update|gap.?lock|broad.?lock|held.?lock|row.?lock)",
+        "description": "Machine verdict wrongly names a taxon defect on a safe change"
       }
     ]
   }
