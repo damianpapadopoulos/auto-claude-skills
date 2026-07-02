@@ -1585,7 +1585,8 @@
       "hint": "PLAYWRIGHT TESTING: Frontend changes detected. Include Playwright E2E tests covering the changed UI behavior. During REVIEW, use Skill(auto-claude-skills:runtime-validation) for orchestrated E2E and a11y validation.",
       "phases": [
         "DESIGN",
-        "IMPLEMENT"
+        "IMPLEMENT",
+        "REVIEW"
       ]
     },
     {
