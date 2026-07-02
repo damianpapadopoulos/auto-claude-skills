@@ -74,6 +74,15 @@ Do now: <imperative remediation the reader can execute>, then <verify/retry>.
 4. Eval pack opt-in (`BEHAVIORAL_EVALS=1`); CI gets only a JSON-validity/append-only guard.
 5. Codex sparring (repo-grounded `--fresh`, no web) attacks the rewrites for theater and the
    assertion regexes for false-pass before ship.
+6. **Red-first probe returned a negative (2026-07-02).** On both `sonnet` and `haiku` the passive
+   baseline already produces the corrective action — no red→green headroom. The TrueCall lift does
+   not replicate here for capable subject models with ambient context. Per the pre-registered
+   discipline we did NOT tighten assertions to force baseline-red (that would measure structural
+   echo = theater). The rewrites ship on clarity / actionability merit (gate logic unchanged → no
+   regression risk); the lift claim is not asserted. Method caveats: `--bare` is unusable in
+   nested sessions (auth), so the subject ran with ambient plugin context (identical across arms);
+   the `text` regex assertions proved too brittle to gate on. Harness retained as a recorded
+   negative experiment. Full run record in the pack README.
 
 ## Out-of-scope
 

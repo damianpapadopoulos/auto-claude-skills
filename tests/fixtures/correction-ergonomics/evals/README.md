@@ -67,12 +67,40 @@ Ship only if BOTH hold:
 Scenarios are append-only. Never delete one; deprecate with `deprecated_on: YYYY-MM-DD` + a
 one-line rationale in `expected_behavior`.
 
-## Gating run record
+## Gating run result — NEGATIVE (2026-07-02): lift did not replicate
 
-| scenario | model | date | baseline pass-rate | treatment pass-rate | verdict |
-|----------|-------|------|--------------------|---------------------|---------|
-| push-review | sonnet | _TBD (Task 3/5)_ | | | |
-| fixloop-terminal | sonnet | _TBD_ | | | |
-| blocking-verdict | sonnet | _TBD_ | | | |
-| consolidation-reminder | sonnet | _TBD_ | | | |
-| advisory-optout-theater (safety) | sonnet | _TBD_ | | | safety-stop: not triggered / TRIGGERED |
+Red-first calibration (n=1 per arm; opt-in `claude -p`; `--bare` unusable due to nested-session
+auth, so runs used a neutral skill body + ambient plugin context, identical across arms):
+
+| scenario | model | baseline | treatment | delta |
+|----------|-------|----------|-----------|-------|
+| push-review | sonnet | committed to review (regex-strict miss) | — | none |
+| fixloop-terminal | sonnet | PASS | — | none (baseline already green) |
+| consolidation-reminder | sonnet | PASS | — | none (baseline already green) |
+| fixloop-terminal | haiku | PASS | PASS | none |
+| consolidation-reminder | haiku | PASS | FAIL (regex artifact¹) | none / inverted |
+| blocking-verdict | haiku | PASS | PASS | none |
+
+**Conclusion.** The passive baselines already elicit the corrective action on both `sonnet`
+and `haiku` — no red→green headroom. TrueCall's 8%→64% self-correction lift **does not
+replicate** in this harness for capable subject models with ambient context. Baselines are not
+red, so there is no measured lift to gate on. Forcing baseline-red by tightening the regex would
+only measure whether the model **echoes the treatment's structure** (injection fidelity), not a
+genuine self-correction improvement — that would be theater, so we do not do it.
+
+**Decision.** The four message rewrites ship on **clarity / actionability merit** (the
+expected→actual→imperative shape is objectively more scannable and hands a downstream reader an
+executable next action; gate LOGIC is unchanged, so there is zero behavioral-regression risk).
+They do **not** ship on a claimed behavioral lift. This eval is retained as a **recorded negative
+experiment** — do not re-run it expecting a green, and do not cite it as evidence of a lift.
+
+¹ The consolidation-treatment "FAIL" was a regex artifact: the model correctly asked for the
+gotcha and committed to writing it to the named backends, but phrased the backend list in a way
+the `(persist|save|...).{0,60}(...memory)` window did not match. This is further evidence the
+regex assertions are too brittle to gate on.
+
+## Why keep the harness at all
+
+The pack + directives + shape-guard document the experiment and let a future maintainer re-probe
+if the harness changes (e.g. `--bare` auth is fixed, isolating the subject from ambient plugin
+context) or a weaker/older subject model is targeted. The append-only rule still applies.

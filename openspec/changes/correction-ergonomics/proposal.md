@@ -15,6 +15,11 @@ theater" — forcing corrective action on hints that legitimately offer an opt-o
 rewrites **only** hard-gates and could-not-verify/fix-loop terminals in files **we own**, and
 leaves genuinely-advisory opt-out warnings advisory.
 
+**Empirical note (negative result).** The claimed self-correction lift was probed red-first and
+**did not replicate** in our harness: on both `sonnet` and `haiku` the passive baseline already
+elicits the corrective action, leaving no headroom for the imperative wording to lift. The
+rewrites ship on clarity / actionability merit only; the lift claim is explicitly not asserted.
+
 ## What Changes
 
 - **`hooks/openspec-guard.sh`** — rewrite the two hard-block PUSH GATE deny strings (L82
@@ -31,9 +36,11 @@ leaves genuinely-advisory opt-out warnings advisory.
   durable emerged, say so and stop") so it does not force consolidation theater when there is
   nothing to persist.
 - **New red-first behavioral A/B pack** `tests/fixtures/correction-ergonomics/evals/behavioral.json`
-  proving the lift: baseline (passive wording) fails a corrective-action assertion, treatment
-  (imperative wording) passes. Includes an adversarial opt-out-advisory scenario with a
-  pre-registered safety-stop against imperative theater.
+  probing the lift. **Result: negative** — on both `sonnet` and `haiku` the passive baseline
+  already produces the corrective action (ceiling effect), so no red→green lift replicates. The
+  rewrites therefore ship on **clarity / actionability merit** (gate logic unchanged → no
+  regression risk), NOT on a claimed behavioral lift. The pack is retained as a recorded negative
+  experiment. See the pack README for the run record.
 
 ## Capabilities
 

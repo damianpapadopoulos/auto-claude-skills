@@ -14,9 +14,10 @@ theater. Genuinely-advisory
 messages that offer an explicit opt-out (e.g. the SHIP-phase `…or proceed if not needed`
 warnings) MUST remain advisory and MUST NOT be rewritten into imperative form. The rewrite
 MUST NOT change any gate block/allow decision, verdict routing, or fix-loop iteration count —
-only message wording. The imperative rewrite MUST ship only after a red-first behavioral A/B
-eval demonstrates that the imperative wording produces the remediation action at a higher rate
-than the prior passive wording.
+only message wording. The rewrite ships on clarity / actionability merit — because the gate
+LOGIC is unchanged there is no behavioral-regression risk — and MUST NOT be justified by a
+claimed behavioral self-correction lift unless such a lift is actually measured (see the
+red-first probe requirement below).
 
 #### Scenario: Hard-gate message names expected, actual, and an imperative next action
 - **WHEN** a push is blocked by openspec-guard because a required chain step has not run
@@ -34,22 +35,23 @@ than the prior passive wording.
 - **WHEN** an openspec-guard SHIP-phase warning offers an explicit opt-out ("…or proceed if not needed")
 - **THEN** it MUST retain the opt-out and MUST NOT be rewritten into an imperative mandate (no imperative theater)
 
-### Requirement: Correction-ergonomics lift is proven red-first with a pinned model
+### Requirement: Correction-ergonomics lift is probed red-first and the result recorded honestly
 
-The correction-ergonomics rewrite SHALL be gated by an opt-in behavioral A/B pack
-(`tests/fixtures/correction-ergonomics/evals/behavioral.json`) run via
-`tests/run-behavioral-evals.sh --directive-file`. The baseline arm injects the prior passive
-wording and MUST fail a deterministic corrective-action assertion (`tool_call` or `text`); the
-treatment arm injects the imperative wording and MUST pass it. The gating run MUST pin the inner
-`claude -p --model` and record the model plus the run date in the pack README. The pack MUST
-include an adversarial opt-out-advisory scenario with a pre-registered safety-stop: if imperative
-wording induces the agent to force a corrective action on an opt-out advisory, the ship HALTS.
-Scenarios are append-only and MUST be deprecated with a dated rationale rather than deleted.
+A behavioral A/B lift claim SHALL be probed red-first before it may be asserted, using an opt-in
+pack (`tests/fixtures/correction-ergonomics/evals/behavioral.json`) run via
+`tests/run-behavioral-evals.sh --directive-file` with a pinned inner `claude -p --model`. The
+baseline arm injects the prior passive wording; the treatment arm injects the imperative wording;
+a deterministic `text` / `tool_call` assertion measures the corrective action. If the baseline is
+already green (no red→green headroom), a self-correction lift MUST NOT be claimed and the rewrite
+MUST NOT be tightened into measuring structural echo of the treatment wording. The probe's result —
+including a negative result — MUST be recorded in the pack README with the pinned model(s) and run
+date. The pack is retained as a recorded experiment; scenarios are append-only and MUST be
+deprecated with a dated rationale rather than deleted.
 
-#### Scenario: Baseline red, treatment green
-- **WHEN** the A/B pack runs the same scenario with passive (baseline) then imperative (treatment) wording under a pinned model
-- **THEN** the baseline arm MUST fail the corrective-action assertion and the treatment arm MUST pass it, and the pinned model + run date MUST be recorded in the pack README
+#### Scenario: Red-first probe with no headroom yields a recorded negative, not a forced green
+- **WHEN** the A/B pack runs a scenario with passive (baseline) then imperative (treatment) wording under a pinned model and the baseline already passes the corrective-action assertion
+- **THEN** no self-correction lift may be claimed, the assertions MUST NOT be tightened to force baseline-red, and the negative result MUST be recorded in the pack README with the pinned model(s) and date
 
-#### Scenario: Imperative-theater safety-stop
-- **WHEN** the adversarial scenario injects an opt-out advisory in imperative-styled wording
-- **THEN** if the agent forces a corrective action instead of honoring the opt-out, the gate MUST be treated as a halt condition and the rewrite MUST NOT ship until revised
+#### Scenario: Rewrite ships on clarity merit when no lift is measured
+- **WHEN** the red-first probe records no measurable lift but the rewrites are clearer/more actionable and leave gate logic unchanged
+- **THEN** the rewrites MAY ship on clarity / actionability merit, and the change MUST NOT cite a behavioral lift as justification
