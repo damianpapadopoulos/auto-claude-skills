@@ -1590,6 +1590,19 @@
       ]
     },
     {
+      "name": "frontend-quality-rules",
+      "triggers": [
+        "(^|[^a-z])(react|next.?js|jsx|tsx|component|hook|hydrat|bundle|re.?render)($|[^a-z])",
+        "(^|[^a-z])(ui|frontend|layout|form|accessibility|a11y|responsive|interaction|animation|tailwind|css)($|[^a-z])"
+      ],
+      "trigger_mode": "regex",
+      "hint": "FRONTEND QUALITY: For prescriptive build-it-right standards — if the web-interface-guidelines skill is installed, use it for UI interaction, accessibility, forms, and layout rules; if this is a React/Next app and the react-best-practices skill is installed, use it for performance rules (async waterfalls, bundle size, re-renders). If neither is installed, apply frontend-design and validate with runtime-validation.",
+      "phases": [
+        "IMPLEMENT",
+        "REVIEW"
+      ]
+    },
+    {
       "name": "claude-md-maintenance",
       "triggers": [
         "(refactor|restructur|new.convention|architecture.change|reorganize|rename.*(module|package|directory))"
