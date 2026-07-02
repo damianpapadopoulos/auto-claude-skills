@@ -95,3 +95,23 @@ Deterministic feature → standard TDD + the acceptance scenarios below are the 
 probabilistic/AI behavior, so no eval set. **Trifecta:** private_data Absent, untrusted_input Absent
 (screenshots of a local dev server the user already runs), outbound_action Absent → count 0; no
 `agent-safety-review` required.
+
+## Implementation Notes (synced at ship time)
+
+As-built matches the spec; three implementation-level decisions worth recording:
+
+- **Routing tests are config-content assertions, not `run_hook`.** The routing test harness
+  (`install_registry`) uses a curated fixture registry that does not contain `frontend-playwright`
+  or `frontend-quality-rules`, so a `run_hook` test cannot exercise them. Engine phase-gating is
+  already covered by `test_phase_scoped_methodology_hints`; the new tests instead jq-assert the real
+  `config/default-triggers.json` (phase membership, hint presence, no-hardcoded-`Skill()`), which is
+  the honest, non-tautological check for a config change.
+- **Visual baselines persist via `snapshotPathTemplate`.** Playwright's default stores snapshots in
+  a `<spec>-snapshots/` folder beside the spec — here the `mktemp` dir that is `rm -rf`'d — so the
+  seed-vs-diff branch would be unreachable and baselines would never survive. The snippet sets
+  `snapshotPathTemplate` to route snapshots into the persistent (gitignored)
+  `tests/artifacts/validation/visual-baselines/`. (Found in code review.)
+- **`frontend-quality-rules` dropped the bare `hook` trigger token.** In this hook-heavy repo it
+  false-fired on self-development prompts ("run the session-start hook"); React is still detected via
+  `react|jsx|tsx|component|re.?render|next.?js|hydrat`, with NO_MATCH fixtures guarding the repo's
+  own hook prompts. (Found in code review.)
