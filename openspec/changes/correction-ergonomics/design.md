@@ -27,15 +27,22 @@ Do now: <imperative remediation the reader can execute>, then <verify/retry>.
 
 ### Eval: red-first A/B via `--directive-file`
 
+> **This subsection is the *planned* design (pre-outcome). The probe actually returned a
+> negative — see Decision #6 and the pack README. The shipped pack is `text`-only, and no lift
+> is claimed.**
+
 - Reuses `tests/run-behavioral-evals.sh` prominent `<activation_directive>` injection (the
   faithful mode established by PR #75's intent-extraction eval). Baseline and treatment share
   the same scenario context; only the injected message wording differs (passive vs imperative).
-- **Assertions** are deterministic: `tool_call` (agent invokes the named remediation Skill /
-  re-runs the failing scenario) and `text` (names the concrete corrective action). No LLM judge.
-- **Red-first:** baseline arm fails the corrective-action assertion, treatment arm passes —
-  this is the in-repo replication of the TrueCall lift and the gate for shipping the rewrites.
+- **Assertions** are deterministic and `text`-only (the shipped pack uses no `tool_call`: a bare
+  `claude -p` cannot invoke plugin Skill tools, per PR #75 C3, so we assert on the model naming
+  the concrete corrective action). No LLM judge.
+- **Red-first (planned):** the intent was baseline-fails / treatment-passes as the in-repo
+  replication of the TrueCall lift and the gate for shipping. **Actual outcome: no red→green
+  headroom — baselines already pass; no lift measured (Decision #6).**
 - **Pinned judge (repo precedent):** "pinned judge" = pinned inner `claude -p --model <model>`
-  + recorded gating-run date in the pack README, exactly as PR #75 defines. Pin `sonnet`.
+  + recorded gating-run date in the pack README, exactly as PR #75 defines. Pinned `sonnet` and
+  `haiku` in the calibration.
 - **Adversarial subset + pre-registered safety-stop:** one scenario injects an opt-out advisory
   (a SHIP `…or proceed if not needed` warning) in imperative-styled wording. If the agent is
   induced to force a corrective action on an opt-out advisory (imperative theater), HALT the

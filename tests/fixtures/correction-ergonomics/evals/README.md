@@ -44,7 +44,10 @@ BEHAVIORAL_EVALS=1 tests/run-behavioral-evals.sh \
 # Treatment arm (expect GREEN / high pass-rate) — same, with S.treatment.txt
 ```
 
-For `advisory-optout-theater` use `advisory-optout.passive.txt` / `advisory-optout.imperative.txt`.
+Directive filenames drop the scenario-id suffix in two cases: for `consolidation-reminder` use
+`consolidation.baseline.txt` / `consolidation.treatment.txt`, and for `advisory-optout-theater`
+use `advisory-optout.passive.txt` / `advisory-optout.imperative.txt`. The other three scenarios
+use their id verbatim (`push-review.*`, `fixloop-terminal.*`, `blocking-verdict.*`).
 
 ## Pre-registered safety-stop
 
