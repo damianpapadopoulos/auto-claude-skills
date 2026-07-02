@@ -1,6 +1,6 @@
 ---
 name: runtime-validation
-description: Use when you need to prove a change actually works through its real interfaces — during REVIEW or on requests like validate the feature, does it work, run e2e, or smoke test — covering browser E2E, API smoke, CLI checks, and a11y and perf (Lighthouse) audits with graceful tool-degradation
+description: Use when you need to prove a change actually works through its real interfaces — during REVIEW or on requests like validate the feature, does it work, run e2e, or smoke test — covering browser E2E, API smoke, CLI checks, and a11y, perf (Lighthouse), and visual-regression audits with graceful tool-degradation
 ---
 
 # Runtime Validation
@@ -237,14 +237,15 @@ test('homepage visual', async ({ page }) => {
 });
 EOTEST
 
-PW="npx playwright test --config ${VALIDATION_TMPDIR}/pw.config.ts ${VALIDATION_TMPDIR}/visual.spec.ts"
+# argv array (not a string) so paths with spaces never word-split the invocation.
+PW=(npx playwright test --config "${VALIDATION_TMPDIR}/pw.config.ts" "${VALIDATION_TMPDIR}/visual.spec.ts")
 # First run: no baseline yet → seed it (BASELINE_MISSING/SEEDED, not pass/fail).
 # Later runs: the baseline persists in visual-baselines/ → diff → MATCH or CHANGED.
 if [ -z "$(ls -A "${BASELINE_DIR}" 2>/dev/null)" ]; then
-  ${PW} --update-snapshots 2>/dev/null \
+  "${PW[@]}" --update-snapshots 2>/dev/null \
     && echo "visual: BASELINE_MISSING/SEEDED (baseline captured under visual-baselines/ — list in Coverage Gaps)"
 else
-  ${PW} 2>/dev/null && echo "visual: MATCH" || echo "visual: CHANGED (see diff under visual-runs/)"
+  "${PW[@]}" 2>/dev/null && echo "visual: MATCH" || echo "visual: CHANGED (see diff under visual-runs/)"
 fi
 ```
 
