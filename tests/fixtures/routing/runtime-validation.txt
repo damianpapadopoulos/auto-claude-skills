@@ -11,6 +11,7 @@ MATCH: run the lighthouse audit and show me the web vitals score
 # Visual-regression terms (frontend-testing-improvements)
 MATCH: run a visual regression check
 MATCH: compare the screenshot against the baseline
+MATCH: run a screenshot diff on the header
 MATCH: check for layout regression on the dashboard
 MATCH: validate the feature end to end
 
@@ -18,3 +19,5 @@ NO_MATCH: mass rename the fixtures
 NO_MATCH: tabulate the metrics for the quant engine
 NO_MATCH: update the onboarding docs
 NO_MATCH: refactor the screenspace allocator
+# 'screenshot' must carry visual-testing context — a passive mention must NOT route here.
+NO_MATCH: add a screenshot to the readme
