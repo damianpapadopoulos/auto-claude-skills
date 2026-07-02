@@ -5,18 +5,18 @@
     "expected_behavior": "A correct review must flag that adding a NOT NULL column without a staged default/backfill on the large orders table is an unsafe migration that can block or fail.",
     "assertions": [
       {
-        "text": "not null|blocking|lock|table rewrite|backfill|unsafe migration",
+        "text": "blocking|lock|table rewrite|backfill|unsafe migration",
         "description": "Flags the unsafe large-table NOT NULL column migration and names the blocking/backfill risk."
       }
     ]
   },
   {
     "id": "defect-unsafe-migration-02",
-    "prompt": "Please review this MySQL 8.0 migration for the production users table. The table has 64 million rows, steady signup traffic, and replicas used by the API. Existing indexes: PRIMARY(id), idx_users_email(email), idx_users_org_created(org_id, created_at). Migration:\nALTER TABLE users ADD COLUMN risk_score int NOT NULL;\nNew application code will populate risk_score for future users only.",
-    "expected_behavior": "A correct review must flag the NOT NULL column addition on a large existing table as an unsafe migration requiring a nullable/add-backfill-enforce sequence.",
+    "prompt": "Please review this MySQL 8.0 migration for the production users table. The table has 64 million rows, steady signup traffic, and replicas used by the API. Existing indexes: PRIMARY(id), idx_users_email(email), idx_users_org_created(org_id, created_at). Migration:\nALTER TABLE users ADD COLUMN risk_score int NOT NULL, ADD INDEX idx_users_risk_score(risk_score);\nNew application code will populate risk_score for future users only.",
+    "expected_behavior": "A correct review must flag the NOT NULL column addition combined with a same-statement secondary index add on a large existing table as an unsafe migration: the index add defeats MySQL's instant ADD COLUMN optimization and forces a full table rebuild, so it requires a nullable/add-backfill-enforce sequence with the index build run separately.",
     "assertions": [
       {
-        "text": "not null|backfill|blocking|lock|online|unsafe migration",
+        "text": "backfill|blocking|lock|online|unsafe migration",
         "description": "Detects the unsafe non-staged NOT NULL addition on a large MySQL table."
       }
     ]
@@ -27,7 +27,7 @@
     "expected_behavior": "A correct review must flag that the migration drops an in-use index required by a hot query and would cause scan/sort regressions.",
     "assertions": [
       {
-        "text": "drop.*index|in-use index|full scan|seq scan|regression|supporting index",
+        "text": "in-use index|full scan|seq scan|regression|supporting index",
         "description": "Identifies that dropping the hot-query index is unsafe."
       }
     ]
@@ -38,7 +38,7 @@
     "expected_behavior": "A correct review must flag the COPY/exclusive-lock table rebuild on a large hot table as an unsafe non-online migration.",
     "assertions": [
       {
-        "text": "copy|exclusive|blocking|online|lock|downtime",
+        "text": "blocking|online|lock|downtime",
         "description": "Flags the non-online schema change and exclusive lock risk."
       }
     ]
@@ -49,7 +49,7 @@
     "expected_behavior": "A correct review must flag that the actor_id filter and created_at order have no supporting index, causing a full/seq scan on a large table.",
     "assertions": [
       {
-        "text": "missing index|full scan|seq scan|type: ?ALL|add .*index|actor_id",
+        "text": "missing index|full scan|seq scan|type: ?ALL|add .*index",
         "description": "Detects the missing supporting index for the actor_id lookup."
       }
     ]
@@ -60,7 +60,7 @@
     "expected_behavior": "A correct review must flag the missing index on shipments.order_id for the join, which can force a scan of shipments.",
     "assertions": [
       {
-        "text": "missing index|full scan|type: ?ALL|add .*index|shipments.*order_id|order_id",
+        "text": "missing index|full scan|type: ?ALL|add .*index",
         "description": "Identifies the missing join index on shipments.order_id."
       }
     ]
@@ -71,7 +71,7 @@
     "expected_behavior": "A correct review must flag that status/due_date lacks a supporting index and can require a seq scan plus sort on a large invoices table.",
     "assertions": [
       {
-        "text": "missing index|seq scan|full scan|sort|add .*index|status.*due_date",
+        "text": "missing index|seq scan|full scan|sort|add .*index",
         "description": "Detects the missing index for the open-invoices query."
       }
     ]
@@ -82,7 +82,7 @@
     "expected_behavior": "A correct review must flag that expires_at/revoked_at has no supporting index and the cleanup query can full-scan the large sessions table.",
     "assertions": [
       {
-        "text": "missing index|full scan|type: ?ALL|add .*index|expires_at|revoked_at",
+        "text": "missing index|full scan|type: ?ALL|add .*index",
         "description": "Finds the missing cleanup-query index."
       }
     ]
@@ -137,7 +137,7 @@
     "expected_behavior": "A correct review must flag deep LIMIT/OFFSET pagination on a huge table and recommend keyset/cursor pagination.",
     "assertions": [
       {
-        "text": "keyset|cursor|seek method|OFFSET.*slow|deep pagination|limit.*offset",
+        "text": "keyset|cursor|seek method|OFFSET.*slow|deep pagination",
         "description": "Flags deep offset pagination and names the keyset/cursor fix."
       }
     ]
@@ -181,7 +181,7 @@
     "expected_behavior": "A correct review must flag that the transaction holds FOR UPDATE locks while waiting on an external payment call, creating contention risk.",
     "assertions": [
       {
-        "text": "lock|contention|for update|long transaction|hold.*transaction|external call",
+        "text": "lock|contention|long transaction|hold.*transaction|external call",
         "description": "Detects locks held across the external payment call."
       }
     ]
@@ -192,7 +192,7 @@
     "expected_behavior": "A correct review must flag that selecting hundreds of hot queued jobs FOR UPDATE and doing work before commit creates broad, long-held lock contention.",
     "assertions": [
       {
-        "text": "lock|contention|for update|long transaction|broad.*lock|skip locked",
+        "text": "lock|contention|long transaction|broad.*lock|skip locked",
         "description": "Flags broad row locks held during worker processing."
       }
     ]
@@ -214,7 +214,7 @@
     "expected_behavior": "A correct review must flag the range SELECT FOR UPDATE on a hot path as a lock/gap-lock contention risk.",
     "assertions": [
       {
-        "text": "gap lock|next-key|for update|contention|lock|hot path",
+        "text": "gap lock|next-key|contention|lock|hot path",
         "description": "Identifies the hot range-lock contention risk."
       }
     ]

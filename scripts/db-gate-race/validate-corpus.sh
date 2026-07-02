@@ -8,17 +8,20 @@ jq -e '.' "$PACK" >/dev/null 2>&1 || { echo "pack is not valid JSON: $PACK"; exi
 fail=0
 defects=$(jq '[.[]|select(.id|startswith("defect-"))]|length' "$PACK")
 cleans=$(jq  '[.[]|select(.id|startswith("clean-"))]|length' "$PACK")
-[ "$defects" -ge 18 ] || { echo "need >=18 defect scenarios, got $defects"; fail=1; }
+[ "$defects" -ge 20 ] || { echo "need >=20 defect scenarios, got $defects"; fail=1; }
 [ "$cleans"  -ge 8  ] || { echo "need >=8 clean scenarios, got $cleans"; fail=1; }
-# every defect has >=1 text assertion; every clean has only absent assertions
-bad_defect=$(jq '[.[]|select(.id|startswith("defect-"))|select([.assertions[].kind//"text"]|index("text")|not)]|length' "$PACK")
+# every defect has >=1 assertion with real (non-empty) detection text; every clean has only absent assertions
+bad_defect=$(jq '[.[]|select(.id|startswith("defect-"))|select([.assertions[]|select((.text//"")|length>0)]|length==0)]|length' "$PACK")
 bad_clean=$(jq  '[.[]|select(.id|startswith("clean-"))|select([.assertions[].kind]|any(.!="absent"))]|length' "$PACK")
-[ "$bad_defect" -eq 0 ] || { echo "$bad_defect defect scenarios lack a text assertion"; fail=1; }
+[ "$bad_defect" -eq 0 ] || { echo "$bad_defect defect scenarios lack a non-empty text assertion"; fail=1; }
 [ "$bad_clean"  -eq 0 ] || { echo "$bad_clean clean scenarios have non-absent assertions"; fail=1; }
-# taxon coverage: each taxon appears in >=3 defect ids
+# global: no assertion anywhere (any scenario, any kind) may have empty/missing text
+empty_text=$(jq '[.[]|.assertions[]|select((.text//"")|length==0)]|length' "$PACK")
+[ "$empty_text" -eq 0 ] || { echo "$empty_text assertions have empty/missing text"; fail=1; }
+# taxon coverage: each taxon appears in >=4 defect ids
 for t in unsafe-migration missing-index n-plus-one offset-pagination lock-risk; do
   n=$(jq --arg t "$t" '[.[]|select(.id|startswith("defect-"+$t))]|length' "$PACK")
-  [ "$n" -ge 3 ] || { echo "taxon $t underrepresented ($n<3)"; fail=1; }
+  [ "$n" -ge 4 ] || { echo "taxon $t underrepresented ($n<4)"; fail=1; }
 done
 # every scenario has the required behavioral-pack fields
 missing_fields=$(jq '[.[]|select((has("id") and has("prompt") and has("expected_behavior") and has("assertions"))|not)]|length' "$PACK")
