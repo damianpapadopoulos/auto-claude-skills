@@ -213,27 +213,38 @@ Uses Playwright's built-in screenshot comparison (`toHaveScreenshot`) — no ext
 Baselines are **gitignored** artifacts under `tests/artifacts/validation/`, never committed:
 
 ```bash
-# Baselines: tests/artifacts/validation/visual-baselines/<scenario>/<viewport>.png
+# Baselines: tests/artifacts/validation/visual-baselines/  (gitignored, persists across runs)
 # Actuals + diffs: tests/artifacts/validation/visual-runs/
-mkdir -p tests/artifacts/validation/visual-baselines
+BASELINE_DIR="$(pwd)/tests/artifacts/validation/visual-baselines"
+mkdir -p "${BASELINE_DIR}" tests/artifacts/validation/visual-runs
+
+# Route Playwright's snapshots to the PERSISTENT baseline dir (default is a
+# <spec>-snapshots/ folder beside the spec — which here is the mktemp dir that
+# gets rm -rf'd, so baselines would never survive). snapshotPathTemplate fixes that.
+cat > "${VALIDATION_TMPDIR}/pw.config.ts" << EOCFG
+import { defineConfig } from '@playwright/test';
+export default defineConfig({
+  snapshotPathTemplate: '${BASELINE_DIR}/{arg}{ext}',
+  outputDir: '$(pwd)/tests/artifacts/validation/visual-runs',
+});
+EOCFG
 cat > "${VALIDATION_TMPDIR}/visual.spec.ts" << 'EOTEST'
 import { test, expect } from '@playwright/test';
 test('homepage visual', async ({ page }) => {
   await page.goto(process.env.PERF_URL || 'http://localhost:3000/');
   await page.waitForLoadState('networkidle');
-  // First run with --update-snapshots seeds the baseline (BASELINE_MISSING/SEEDED);
-  // later runs diff and mark CHANGED without failing the review.
   await expect(page).toHaveScreenshot('homepage.png', { maxDiffPixelRatio: 0.02 });
 });
 EOTEST
-# Seed if no baseline exists; otherwise diff against it:
-if [ ! -d tests/artifacts/validation/visual-baselines ] || \
-   [ -z "$(ls -A tests/artifacts/validation/visual-baselines 2>/dev/null)" ]; then
-  npx playwright test "${VALIDATION_TMPDIR}/visual.spec.ts" --update-snapshots 2>/dev/null \
-    && echo "visual: BASELINE_MISSING/SEEDED (baseline captured — list in Coverage Gaps)"
+
+PW="npx playwright test --config ${VALIDATION_TMPDIR}/pw.config.ts ${VALIDATION_TMPDIR}/visual.spec.ts"
+# First run: no baseline yet → seed it (BASELINE_MISSING/SEEDED, not pass/fail).
+# Later runs: the baseline persists in visual-baselines/ → diff → MATCH or CHANGED.
+if [ -z "$(ls -A "${BASELINE_DIR}" 2>/dev/null)" ]; then
+  ${PW} --update-snapshots 2>/dev/null \
+    && echo "visual: BASELINE_MISSING/SEEDED (baseline captured under visual-baselines/ — list in Coverage Gaps)"
 else
-  npx playwright test "${VALIDATION_TMPDIR}/visual.spec.ts" 2>/dev/null \
-    && echo "visual: MATCH" || echo "visual: CHANGED (see diff artifact)"
+  ${PW} 2>/dev/null && echo "visual: MATCH" || echo "visual: CHANGED (see diff under visual-runs/)"
 fi
 ```
 

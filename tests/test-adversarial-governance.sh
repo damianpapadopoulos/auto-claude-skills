@@ -94,7 +94,7 @@ assert_contains "frontend-quality: hint present" "FRONTEND QUALITY" "${FQR_HINT}
 assert_contains "frontend-quality: names web-interface-guidelines" "web-interface-guidelines" "${FQR_HINT}"
 assert_contains "frontend-quality: names react-best-practices" "react-best-practices" "${FQR_HINT}"
 assert_contains "frontend-quality: names our fallback (runtime-validation)" "runtime-validation" "${FQR_HINT}"
-assert_contains "frontend-quality: conditional wording (if installed)" "if" "${FQR_HINT}"
+assert_contains "frontend-quality: conditional wording (is installed)" "is installed" "${FQR_HINT}"
 assert_not_contains "frontend-quality: no hardcoded Skill() for web-interface-guidelines" "Skill(web-interface-guidelines" "${FQR_HINT}"
 assert_not_contains "frontend-quality: no hardcoded Skill() for react-best-practices" "Skill(react-best-practices" "${FQR_HINT}"
 assert_contains "frontend-quality: fires in IMPLEMENT" "IMPLEMENT" "${FQR_PHASES}"

@@ -9,6 +9,9 @@ NO_MATCH: update the onboarding docs
 NO_MATCH: paginate the results from duckdb
 NO_MATCH: perform the database migration
 NO_MATCH: transform the dataframe and reformat the output
+# This repo is hook-heavy: a bare 'hook' token must NOT route frontend-quality here.
+NO_MATCH: run the session-start hook
+NO_MATCH: fix the skill-activation-hook
 # General frontend prompts (web-interface-guidelines territory)
 MATCH: fix the form accessibility
 MATCH: improve the responsive layout

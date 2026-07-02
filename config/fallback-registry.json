@@ -1592,7 +1592,7 @@
     {
       "name": "frontend-quality-rules",
       "triggers": [
-        "(^|[^a-z])(react|next.?js|jsx|tsx|component|hook|hydrat|bundle|re.?render)($|[^a-z])",
+        "(^|[^a-z])(react|next.?js|jsx|tsx|component|hydrat|bundle|re.?render)($|[^a-z])",
         "(^|[^a-z])(ui|frontend|layout|form|accessibility|a11y|responsive|interaction|animation|tailwind|css)($|[^a-z])"
       ],
       "trigger_mode": "regex",
