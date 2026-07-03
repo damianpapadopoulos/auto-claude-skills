@@ -95,4 +95,18 @@ exit_code=$?
 assert_equals "corrupt baseline exits 2" "2" "${exit_code}"
 assert_contains "error names the corrupt baseline" "not valid JSON" "${output}"
 
+echo "-- artifacts-dir: iteration artifacts survive the run --"
+KEEP_DIR="$(mktemp -d -t keepart.XXXXXX)"
+REPORT="$(mktemp -t packreportA.XXXXXX)"
+output="$(BEHAVIORAL_EVALS=1 CLAUDE_BIN="${MOCK}" MOCK_RESPONSE_FILE="${RESP}" \
+    bash "${PACK_RUNNER}" --pack "${FIX}/pack.json" --variance 1 \
+    --baseline "${FIX}/baseline-stable.json" --report "${REPORT}" \
+    --artifacts-dir "${KEEP_DIR}" 2>&1)"
+count="$(ls "${KEEP_DIR}" | grep -c '\.json$')"
+if [ "${count}" -ge 3 ]; then
+    _record_pass "artifacts-dir: iteration artifacts persisted (${count})"
+else
+    _record_fail "artifacts-dir: iteration artifacts persisted" "found ${count}, expected >= 3"
+fi
+
 print_summary

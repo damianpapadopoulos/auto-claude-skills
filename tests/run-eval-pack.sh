@@ -23,6 +23,7 @@ Options:
   --report <path>      markdown report output (default:
                        tests/artifacts/pack-report-<utc>.md)
   --model <name>       forwarded to run-behavioral-evals.sh --model
+  --artifacts-dir <path>  persist per-iteration artifacts here (default: run-temp, deleted on exit)
   --update-baseline    write measured classifications to --baseline and exit 0
                        (--update-baseline writes the baseline and exits 0;
                        safety gating applies to normal runs)
@@ -35,7 +36,7 @@ if [ "${BEHAVIORAL_EVALS:-0}" != "1" ]; then
     exit 2
 fi
 
-PACK=""; VARIANCE=3; BASELINE=""; REPORT=""; MODEL=""; UPDATE_BASELINE=0
+PACK=""; VARIANCE=3; BASELINE=""; REPORT=""; MODEL=""; ARTIFACTS_OUT=""; UPDATE_BASELINE=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --pack) PACK="${2:-}"; shift 2 ;;
@@ -43,6 +44,7 @@ while [ $# -gt 0 ]; do
         --baseline) BASELINE="${2:-}"; shift 2 ;;
         --report) REPORT="${2:-}"; shift 2 ;;
         --model) MODEL="${2:-}"; shift 2 ;;
+        --artifacts-dir) ARTIFACTS_OUT="${2:-}"; shift 2 ;;
         --update-baseline) UPDATE_BASELINE=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "error: unknown argument: $1" >&2; usage; exit 2 ;;
@@ -91,6 +93,9 @@ trap 'rm -rf "${RUN_DIR}"' EXIT
 MEASURED="${RUN_DIR}/measured.json"
 printf '{}' > "${MEASURED}"
 
+ARTIFACTS_DIR="${ARTIFACTS_OUT:-${RUN_DIR}/artifacts}"
+mkdir -p "${ARTIFACTS_DIR}"
+
 scenario_ids="$(jq -r '.[].id' "${PACK}")"
 for sid in ${scenario_ids}; do
     echo "== scenario: ${sid} (variance ${VARIANCE}) =="
@@ -99,7 +104,7 @@ for sid in ${scenario_ids}; do
     if [ "${VARIANCE}" -gt 1 ]; then
         set -- "$@" --variance "${VARIANCE}" --variance-report "${RUN_DIR}/${sid}-variance.md"
     fi
-    ARTIFACTS_DIR="${RUN_DIR}/artifacts" bash "${RUNNER}" \
+    ARTIFACTS_DIR="${ARTIFACTS_DIR}" bash "${RUNNER}" \
         --scenario "${sid}" --pack "${PACK}" "$@"
     rc=$?
     if [ "${rc}" -eq 2 ]; then
@@ -125,7 +130,7 @@ jq -s '
             }))
         }
     }) | from_entries
-' "${RUN_DIR}"/artifacts/*.json > "${MEASURED}" 2>/dev/null
+' "${ARTIFACTS_DIR}"/*.json > "${MEASURED}" 2>/dev/null
 
 classify() { # $1 pass_count, $2 n
     awk -v p="$1" -v n="$2" 'BEGIN {

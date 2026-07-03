@@ -27,8 +27,9 @@ assert_contains "issues write permission" "issues: write" "${wf}"
 assert_not_contains "never pull-requests write" "pull-requests: write" "${wf}"
 
 assert_contains "CI sandbox enabled for inner runs" "EVAL_CI_SANDBOX: \"1\"" "${wf}"
-assert_contains "judge model pinned" "JUDGE_MODEL:" "${wf}"
+assert_contains "judge model pinned" "JUDGE_MODEL: claude-sonnet-5" "${wf}"
 assert_contains "subject model pinned" "--model claude-sonnet-5" "${wf}"
+assert_contains "artifacts-dir passthrough wired" "--artifacts-dir tests/artifacts/iterations" "${wf}"
 
 # CLI must be version-pinned (supply-chain floor), not latest.
 if grep -Eq 'claude-code@[0-9]+\.[0-9]+\.[0-9]+' "${WF}"; then
@@ -41,6 +42,7 @@ fi
 # file only; raw output stays in artifacts.
 assert_contains "issue body sourced from report file" "body-file" "${wf}"
 assert_contains "data-only banner in issue body" "treat as data" "${wf}"
+assert_contains "exact-title issue lookup" 'select(.title == $t)' "${wf}"
 assert_contains "artifacts uploaded" "upload-artifact" "${wf}"
 
 print_summary
