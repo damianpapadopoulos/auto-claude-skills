@@ -51,6 +51,7 @@ assert_contains "guard names the missing scenario id" "pack-scn-deleted" "${outp
 
 echo "-- update-baseline writes measured classifications --"
 NEW_BASELINE="$(mktemp -t packbase.XXXXXX)"
+rm -f "${NEW_BASELINE}"  # --update-baseline targets a path that does not yet exist
 REPORT="$(mktemp -t packreport3.XXXXXX)"
 output="$(run_pack "${NEW_BASELINE}" --update-baseline)"
 exit_code=$?
@@ -74,5 +75,24 @@ output="$(BEHAVIORAL_EVALS=1 CLAUDE_BIN="${MOCK}" MOCK_RESPONSE_FILE="${RESP}" \
 exit_code=$?
 assert_equals "missing baseline (non-update) exits 2" "2" "${exit_code}"
 assert_contains "guard tells user to run --update-baseline" "update-baseline" "${output}"
+
+echo "-- default baseline path: derived from skill dir (grandparent) --"
+output="$(BEHAVIORAL_EVALS=1 CLAUDE_BIN="${MOCK}" MOCK_RESPONSE_FILE="${RESP}" \
+    bash "${PACK_RUNNER}" --pack "${FIX}/pack.json" --variance 1 \
+    --report "$(mktemp -t rep.XXXXXX)" 2>&1)"
+exit_code=$?
+assert_equals "default-baseline missing exits 2" "2" "${exit_code}"
+assert_contains "error names grandparent-scoped default path" "tests/baselines/fixtures-pack.baseline.json" "${output}"
+
+echo "-- corrupt baseline exits 2 (no silent 'new' classification) --"
+BAD_BASE="$(mktemp -t badbase.XXXXXX)"
+printf '{"scenarios": TRUNCATED' > "${BAD_BASE}"
+REPORT="$(mktemp -t packreportX.XXXXXX)"
+output="$(BEHAVIORAL_EVALS=1 CLAUDE_BIN="${MOCK}" MOCK_RESPONSE_FILE="${RESP}" \
+    bash "${PACK_RUNNER}" --pack "${FIX}/pack.json" --variance 1 \
+    --baseline "${BAD_BASE}" --report "${REPORT}" 2>&1)"
+exit_code=$?
+assert_equals "corrupt baseline exits 2" "2" "${exit_code}"
+assert_contains "error names the corrupt baseline" "not valid JSON" "${output}"
 
 print_summary

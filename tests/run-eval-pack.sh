@@ -56,7 +56,7 @@ jq -e 'type == "array" and length > 0' "${PACK}" >/dev/null 2>&1 \
 case "${VARIANCE}" in ''|*[!0-9]*|0) echo "error: --variance must be >= 1" >&2; exit 2 ;; esac
 
 pack_base="$(basename "${PACK}" .json)"
-pack_dir="$(basename "$(dirname "${PACK}")")"
+pack_dir="$(basename "$(dirname "$(dirname "${PACK}")")")"
 [ -z "${BASELINE}" ] && BASELINE="tests/baselines/${pack_dir}-${pack_base}.baseline.json"
 utc_now="$(date -u +%Y%m%dT%H%M%SZ)"
 [ -z "${REPORT}" ] && REPORT="tests/artifacts/pack-report-${utc_now}.md"
@@ -64,6 +64,13 @@ utc_now="$(date -u +%Y%m%dT%H%M%SZ)"
 if [ "${UPDATE_BASELINE}" -eq 0 ] && [ ! -f "${BASELINE}" ]; then
     echo "error: baseline not found: ${BASELINE} — generate one with --update-baseline" >&2
     exit 2
+fi
+
+if [ -f "${BASELINE}" ]; then
+    if ! jq -e '.scenarios | type == "object"' "${BASELINE}" >/dev/null 2>&1; then
+        echo "error: baseline is not valid JSON (or missing .scenarios): ${BASELINE}" >&2
+        exit 2
+    fi
 fi
 
 # Never-delete guard: every baseline scenario must still exist in the pack.
@@ -80,6 +87,7 @@ if [ -f "${BASELINE}" ]; then
 fi
 
 RUN_DIR="$(mktemp -d -t evalpack.XXXXXX)"
+trap 'rm -rf "${RUN_DIR}"' EXIT
 MEASURED="${RUN_DIR}/measured.json"
 printf '{}' > "${MEASURED}"
 
