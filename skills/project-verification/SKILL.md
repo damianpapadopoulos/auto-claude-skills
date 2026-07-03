@@ -82,8 +82,12 @@ Evidence is accepted-as-adequate only when the status is **exactly clean**; `sus
 
 Limits: coverage is not effectiveness — a line can be executed by a test that asserts
 nothing, so `clean` here means "exercised," not "meaningfully tested." Only two artifact
-formats are parsed (lcov, cobertura); everything else degrades to `unverified`. This is an
-advisory tripwire, not a trust boundary.
+formats are parsed (lcov, cobertura); everything else degrades to `unverified`. Phase 1
+checks changed-line coverage only — coverage regression against the base ref (did overall
+coverage drop even though the new lines are covered) is a disclosed Phase-2 deferral, not
+implemented here. This is an advisory tripwire, not a trust boundary; it is however
+CONSUMED by `deploy-gate` (parity with `gate_gaming_status`) — a `suspect` result there
+blocks acceptance of local verification evidence, so it is not advisory-prose-only.
 
 ## Verification
 
