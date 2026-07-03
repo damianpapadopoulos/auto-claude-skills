@@ -542,4 +542,28 @@ output="$(BEHAVIORAL_EVALS=1 \
 assert_contains "JUDGE_BIN: judge assertion passes via override" "PASS [0/judge]" "${output}"
 assert_contains "JUDGE_BIN: override binary was called" "called" "$(cat "${JUDGE_BIN_LOG}" 2>/dev/null)"
 
+# ---------------------------------------------------------------------------
+# Judge routing: subject pinned to a different model than judge is not misrouted.
+# Regression test for the --model discrimination fix. When the subject call
+# carries --model subject-pin-model and the judge call carries --model judge-mock,
+# the subject response must NOT be mistaken for the judge response.
+# ---------------------------------------------------------------------------
+echo "-- judge routing: subject --model != JUDGE_MODEL is not misrouted --"
+SUBJ_RESP2="$(mktemp -t subj2.XXXXXX)"
+JUDGE_RESP3="$(mktemp -t judge3.XXXXXX)"
+printf 'The root cause is X. Links: query-A' > "${SUBJ_RESP2}"
+printf '{"verdict":"pass","reason":"ok"}' > "${JUDGE_RESP3}"
+output="$(BEHAVIORAL_EVALS=1 \
+    CLAUDE_BIN="${JUDGE_FIXTURES}/mock-claude.sh" \
+    MOCK_RESPONSE_FILE="${SUBJ_RESP2}" \
+    MOCK_JUDGE_RESPONSE_FILE="${JUDGE_RESP3}" \
+    JUDGE_MODEL="judge-mock" \
+    bash "${RUNNER}" --scenario judge-pass-scenario \
+    --model subject-pin-model \
+    --pack "${JUDGE_FIXTURES}/scenarios.json" 2>&1)"
+exit_code=$?
+assert_equals "subject pin to different model: exits 0" "0" "${exit_code}"
+assert_contains "subject pin to different model: judge assertion PASSes" "PASS [0/judge]" "${output}"
+assert_not_contains "subject pin to different model: judge NOT unparseable" "judge-unparseable" "${output}"
+
 print_summary

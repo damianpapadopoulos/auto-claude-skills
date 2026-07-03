@@ -329,8 +329,7 @@ ${criteria}
 ${RAW_OUTPUT}
 </subject_output>
 
-Respond with ONLY a JSON object, no markdown fences:
-{\"verdict\":\"pass\"|\"fail\",\"reason\":\"<one sentence>\"}"
+Respond with only {\"verdict\":\"pass\",\"reason\":\"<one sentence>\"} or {\"verdict\":\"fail\",\"reason\":\"<one sentence>\"}"
 
     JUDGE_VERDICT="unparseable"
     JUDGE_REASON=""

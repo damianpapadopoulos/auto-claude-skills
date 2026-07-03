@@ -38,13 +38,19 @@ fi
 # sequence via MOCK_JUDGE_RESPONSE_FILE2 + MOCK_JUDGE_COUNT_FILE lets a
 # retry test serve different payloads per judge call. MOCK_JUDGE_STDIN_FILE
 # captures the judge prompt.
+#
+# Detection: match only the token IMMEDIATELY FOLLOWING --model.
+# Limitation: if the subject is pinned to the same model id as the judge,
+# argv-only discrimination cannot distinguish them (inherent to CLI parsing).
 is_judge_call=0
 if [ -n "${MOCK_JUDGE_RESPONSE_FILE:-}" ]; then
+    prev=""
     for arg in "$@"; do
-        if [ "${arg}" = "${JUDGE_MODEL:-judge-mock}" ]; then
+        if [ "${prev}" = "--model" ] && [ "${arg}" = "${JUDGE_MODEL:-judge-mock}" ]; then
             is_judge_call=1
             break
         fi
+        prev="${arg}"
     done
 fi
 if [ "${is_judge_call}" = "1" ]; then
