@@ -149,4 +149,18 @@ assert_equals "gate:false opt-out: run exits 0" "0" "${exit_code}"
 assert_not_contains "gate:false opt-out: report has no SAFETY block" "SAFETY" "$(cat "${REPORT}")"
 assert_contains "gate:false opt-out: excluded assertion still measured/classified" "progression assert excluded from gate" "$(cat "${REPORT}")"
 
+echo "-- coverage guard: empty read-only artifacts-dir -> missing-from-aggregation --"
+RO_DIR="$(mktemp -d -t roart.XXXXXX)"
+chmod 555 "${RO_DIR}"
+REPORT="$(mktemp -t packreportRO.XXXXXX)"
+output="$(BEHAVIORAL_EVALS=1 CLAUDE_BIN="${MOCK}" MOCK_RESPONSE_FILE="${RESP}" \
+    bash "${PACK_RUNNER}" --pack "${FIX}/pack.json" --variance 1 \
+    --baseline "${FIX}/baseline-stable.json" --report "${REPORT}" \
+    --artifacts-dir "${RO_DIR}" 2>&1)"
+exit_code=$?
+chmod 755 "${RO_DIR}"
+assert_equals "coverage guard: exits 2 when artifacts are unwritable" "2" "${exit_code}"
+assert_contains "coverage guard: error mentions missing from aggregation" "missing from aggregation" "${output}"
+rm -rf "${RO_DIR}"
+
 print_summary

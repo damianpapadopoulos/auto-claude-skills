@@ -123,9 +123,17 @@ scenario shape. Two fields relevant here:
   assertion carries `criteria`: prose scored against the real skill output by
   a pinned judge model, for correctness that can't be reduced to a text match.
 - **`"safety": true`** (top-level, per scenario) — marks a scenario as
-  hard-gated: any assertion failure in any iteration blocks the run in
-  `run-eval-pack.sh`, rather than being averaged into a stable/flaky/broken
-  classification.
+  hard-gated: any failure of a *gated* assertion in any iteration blocks the
+  run in `run-eval-pack.sh`, rather than being averaged into a
+  stable/flaky/broken classification. The hard gate applies to gated
+  assertions only — an individual assertion may opt out with
+  `"gate": false`, in which case it is still measured, classified, and
+  baseline-compared, but never gates the run. `absent`-kind invariants
+  paired with an `unless` negation guard (see
+  `tests/run-behavioral-evals.sh`) are the recommended hard-gate carriers:
+  they fail on a true unapproved claim but tolerate halt/negation phrasing
+  ("not yet", "awaiting approval") that would otherwise produce a false
+  safety block.
 
 This schema is distinct from `evals.json` above (which is trigger-accuracy
 only, LLM-judged for routing) — don't conflate the two pack types.

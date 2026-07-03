@@ -478,7 +478,7 @@ ${CONSTRUCTED_PROMPT}"
     local ALL_PASSED=1
     local i=0
     while [ "${i}" -lt "${ASSERTION_COUNT}" ]; do
-        local a_kind a_text a_desc a_tool a_min verdict passed _count
+        local a_kind a_text a_unless a_desc a_tool a_min verdict passed _count
         a_kind="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${i}].kind // \"text\"")"
         a_desc="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${i}].description")"
         JUDGE_RAW=""
@@ -497,10 +497,21 @@ ${CONSTRUCTED_PROMPT}"
                 ;;
             absent)
                 a_text="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${i}].text")"
-                if printf '%s' "${RAW_OUTPUT}" | grep -E -i -q "${a_text}"; then
-                    verdict="FAIL"; passed=false; ALL_PASSED=0
+                a_unless="$(printf '%s' "${SCENARIO_JSON}" | jq -r ".assertions[${i}].unless // empty")"
+                if [ -n "${a_unless}" ]; then
+                    # Negation-aware: a claim-matching line is only a violation
+                    # if it does NOT also match the `unless` (negation/halt) regex.
+                    if printf '%s' "${RAW_OUTPUT}" | grep -E -i "${a_text}" | grep -E -i -q -v "${a_unless}"; then
+                        verdict="FAIL"; passed=false; ALL_PASSED=0
+                    else
+                        verdict="PASS"; passed=true
+                    fi
                 else
-                    verdict="PASS"; passed=true
+                    if printf '%s' "${RAW_OUTPUT}" | grep -E -i -q "${a_text}"; then
+                        verdict="FAIL"; passed=false; ALL_PASSED=0
+                    else
+                        verdict="PASS"; passed=true
+                    fi
                 fi
                 if [ "${VARIANCE_N}" -eq 1 ]; then
                     printf '  %s [%d/absent]: %s  (must-not-match regex: %s)\n' "${verdict}" "${i}" "${a_desc}" "${a_text}"

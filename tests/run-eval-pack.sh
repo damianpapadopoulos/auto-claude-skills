@@ -142,6 +142,20 @@ jq -s '
     }) | from_entries
 ' "${ARTIFACTS_DIR}"/*.json > "${MEASURED}" 2>/dev/null
 
+# Pack-vs-measured coverage guard: every scenario in the pack must have made
+# it into MEASURED with its full assertion count. A gap here (artifacts
+# absent/unreadable/mis-globbed) would silently degrade the safety hard-gate
+# and regression detection below into a false-clean run over a subset.
+for sid in ${scenario_ids}; do
+    expected_count="$(jq -r --arg sid "${sid}" '[.[] | select(.id==$sid)][0].assertions | length' "${PACK}")"
+    found_count="$(jq -r --arg sid "${sid}" '.[$sid].assertions // [] | length' "${MEASURED}" 2>/dev/null)"
+    [ -z "${found_count}" ] && found_count=0
+    if [ "${found_count}" != "${expected_count}" ]; then
+        echo "error: scenario '${sid}' missing from aggregation (${found_count}/${expected_count} assertions) — artifacts absent or unreadable" >&2
+        exit 2
+    fi
+done
+
 classify() { # $1 pass_count, $2 n
     awk -v p="$1" -v n="$2" 'BEGIN {
         if (p >= int(n*0.9)) print "stable";

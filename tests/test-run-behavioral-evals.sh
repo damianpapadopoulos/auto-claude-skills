@@ -419,6 +419,73 @@ assert_contains "output names the failing assertion description" "Does not menti
 rm -rf "${ABSENT_ART_DIR}"
 
 # ---------------------------------------------------------------------------
+# Assertion kind: absent with `unless` negation guard — a line matching the
+# claim regex is only a violation if it does NOT also match the `unless`
+# regex. Exercises the committed 'absent-unless-scenario' fixture end-to-end
+# through the real runner (not a bare grep test).
+# ---------------------------------------------------------------------------
+echo "-- assertion kind: absent with unless negation guard --"
+
+UNLESS_PASS_RESPONSE_FILE="${TMPDIR:-/tmp}/acs-unless-pass-resp-$$.txt"
+UNLESS_FAIL_RESPONSE_FILE="${TMPDIR:-/tmp}/acs-unless-fail-resp-$$.txt"
+UNLESS_SAMELINE_RESPONSE_FILE="${TMPDIR:-/tmp}/acs-unless-sameline-resp-$$.txt"
+UNLESS_ART_DIR="${TMPDIR:-/tmp}/acs-unless-art-$$"
+trap 'rm -f "${CANNED_RESPONSE_FILE}" "${SANDBOX_RESPONSE_FILE}" "${SANDBOX_ARGS_FILE}" "${MODEL_RESPONSE_FILE}" "${MODEL_ARGS_FILE}" "${NOMODEL_ARGS_FILE}" "${BARE_ARGS_FILE}" "${NOBARE_ARGS_FILE}" "${ABSENT_PACK_FILE}" "${ABSENT_PASS_RESPONSE_FILE}" "${ABSENT_FAIL_RESPONSE_FILE}" "${UNLESS_PASS_RESPONSE_FILE}" "${UNLESS_FAIL_RESPONSE_FILE}" "${UNLESS_SAMELINE_RESPONSE_FILE}"; rm -rf "${SANDBOX_ART_DIR}" "${MODEL_ART_DIR}" "${ABSENT_ART_DIR}" "${UNLESS_ART_DIR}"' EXIT
+
+printf 'I have not created the ticket yet — awaiting your approval.\n' > "${UNLESS_PASS_RESPONSE_FILE}"
+printf 'Done: I created the ticket ACME-1 as requested.\n' > "${UNLESS_FAIL_RESPONSE_FILE}"
+# Real newline between sentences: the claim line ("I filed the ticket.") has
+# no negation of its own; the negation on the next line does not exonerate it.
+printf 'I filed the ticket.\nIt was not a problem.\n' > "${UNLESS_SAMELINE_RESPONSE_FILE}"
+
+echo "-- unless: PASSES when the claim line also matches the negation family --"
+
+output="$(MOCK_RESPONSE_FILE="${UNLESS_PASS_RESPONSE_FILE}" \
+BEHAVIORAL_EVALS=1 \
+CLAUDE_BIN="${PROJECT_ROOT}/tests/fixtures/behavioral-runner/mock-claude.sh" \
+ARTIFACTS_DIR="${UNLESS_ART_DIR}" \
+SKILL_PATH="${PROJECT_ROOT}/skills/incident-analysis/SKILL.md" \
+bash "${RUNNER}" \
+  --scenario absent-unless-scenario \
+  --pack "${PROJECT_ROOT}/tests/fixtures/behavioral-runner/scenarios.json" 2>&1)"
+exit_code=$?
+
+assert_equals "unless: negated halt phrasing tolerated (exit 0)" "0" "${exit_code}"
+assert_contains "unless: output reports PASS" "PASS" "${output}"
+
+echo "-- unless: FAILS when the claim is a true, unnegated statement --"
+
+output="$(MOCK_RESPONSE_FILE="${UNLESS_FAIL_RESPONSE_FILE}" \
+BEHAVIORAL_EVALS=1 \
+CLAUDE_BIN="${PROJECT_ROOT}/tests/fixtures/behavioral-runner/mock-claude.sh" \
+ARTIFACTS_DIR="${UNLESS_ART_DIR}" \
+SKILL_PATH="${PROJECT_ROOT}/skills/incident-analysis/SKILL.md" \
+bash "${RUNNER}" \
+  --scenario absent-unless-scenario \
+  --pack "${PROJECT_ROOT}/tests/fixtures/behavioral-runner/scenarios.json" 2>&1)"
+exit_code=$?
+
+assert_equals "unless: true unnegated claim still caught (exit 1)" "1" "${exit_code}"
+assert_contains "unless: output reports FAIL" "FAIL" "${output}"
+
+echo "-- unless: FAILS when the negation is on a different line than the claim --"
+
+output="$(MOCK_RESPONSE_FILE="${UNLESS_SAMELINE_RESPONSE_FILE}" \
+BEHAVIORAL_EVALS=1 \
+CLAUDE_BIN="${PROJECT_ROOT}/tests/fixtures/behavioral-runner/mock-claude.sh" \
+ARTIFACTS_DIR="${UNLESS_ART_DIR}" \
+SKILL_PATH="${PROJECT_ROOT}/skills/incident-analysis/SKILL.md" \
+bash "${RUNNER}" \
+  --scenario absent-unless-scenario \
+  --pack "${PROJECT_ROOT}/tests/fixtures/behavioral-runner/scenarios.json" 2>&1)"
+exit_code=$?
+
+assert_equals "unless: line-based match — claim line without negation still fails (exit 1)" "1" "${exit_code}"
+assert_contains "unless: output reports FAIL" "FAIL" "${output}"
+
+rm -rf "${UNLESS_ART_DIR}"
+
+# ---------------------------------------------------------------------------
 # Judge assertion kind
 # ---------------------------------------------------------------------------
 echo "-- judge: pass verdict --"

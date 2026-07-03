@@ -46,4 +46,6 @@ assert_contains "exact-title issue lookup" 'select(.title == $t)' "${wf}"
 assert_contains "issue lookup paginates past default 30" "--limit 500" "${wf}"
 assert_contains "artifacts uploaded" "upload-artifact" "${wf}"
 
+assert_contains "issue closes only on explicit clean run" '"$RC" = "0"' "${wf}"
+
 print_summary

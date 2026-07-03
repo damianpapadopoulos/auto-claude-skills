@@ -72,8 +72,11 @@ jobs:
             --artifacts-dir tests/artifacts/iterations || rc=$?
           echo "exit_code=$rc" >> "$GITHUB_OUTPUT"
           cat tests/artifacts/pack-report.md >> "$GITHUB_STEP_SUMMARY" || true
-          # exit 2 = tooling failure -> fail the job loudly; exit 1 handled below
-          [ "$rc" -eq 2 ] && exit 2
+          # rc 0 = clean, rc 1 = regression/safety-fail (handled downstream by
+          # the tracking-issue step); any other rc is an unrecognized tooling
+          # failure -> fail the job loudly instead of silently treating it as
+          # a clean or regression run.
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; then exit "$rc"; fi
           exit 0
 
       - name: Upload artifacts (raw outputs live here, never in the issue)
@@ -105,7 +108,7 @@ jobs:
             else
               gh issue create --title "$ISSUE_TITLE" --body-file /tmp/issue-body.md
             fi
-          elif [ -n "$existing" ]; then
+          elif [ "$RC" = "0" ] && [ -n "$existing" ]; then
             gh issue comment "$existing" --body "Clean run: $RUN_URL — closing."
             gh issue close "$existing"
           fi
