@@ -418,4 +418,128 @@ assert_contains "output names the failing assertion description" "Does not menti
 
 rm -rf "${ABSENT_ART_DIR}"
 
+# ---------------------------------------------------------------------------
+# Judge assertion kind
+# ---------------------------------------------------------------------------
+echo "-- judge: pass verdict --"
+
+JUDGE_FIXTURES="${PROJECT_ROOT}/tests/fixtures/behavioral-runner"
+SUBJ_RESP="$(mktemp -t subj.XXXXXX)"
+JUDGE_RESP="$(mktemp -t judge.XXXXXX)"
+printf 'The root cause is X. Links: query-A' > "${SUBJ_RESP}"
+printf '{"verdict":"pass","reason":"cites evidence"}' > "${JUDGE_RESP}"
+
+output="$(BEHAVIORAL_EVALS=1 \
+    CLAUDE_BIN="${JUDGE_FIXTURES}/mock-claude.sh" \
+    MOCK_RESPONSE_FILE="${SUBJ_RESP}" \
+    MOCK_JUDGE_RESPONSE_FILE="${JUDGE_RESP}" \
+    JUDGE_MODEL="judge-mock" \
+    bash "${RUNNER}" --scenario judge-pass-scenario \
+    --pack "${JUDGE_FIXTURES}/scenarios.json" 2>&1)"
+exit_code=$?
+
+assert_equals "judge pass: exits 0" "0" "${exit_code}"
+assert_contains "judge pass: assertion PASSes" "PASS [0/judge]" "${output}"
+
+echo "-- judge: fail verdict --"
+printf '{"verdict":"fail","reason":"no evidence cited"}' > "${JUDGE_RESP}"
+output="$(BEHAVIORAL_EVALS=1 \
+    CLAUDE_BIN="${JUDGE_FIXTURES}/mock-claude.sh" \
+    MOCK_RESPONSE_FILE="${SUBJ_RESP}" \
+    MOCK_JUDGE_RESPONSE_FILE="${JUDGE_RESP}" \
+    JUDGE_MODEL="judge-mock" \
+    bash "${RUNNER}" --scenario judge-pass-scenario \
+    --pack "${JUDGE_FIXTURES}/scenarios.json" 2>&1)"
+exit_code=$?
+
+assert_equals "judge fail: exits 1" "1" "${exit_code}"
+assert_contains "judge fail: assertion FAILs" "FAIL [0/judge]" "${output}"
+
+echo "-- judge: unparseable twice -> FAIL judge-unparseable --"
+printf 'I think it looks fine overall!' > "${JUDGE_RESP}"
+ART_DIR="$(mktemp -d -t judgeart.XXXXXX)"
+output="$(BEHAVIORAL_EVALS=1 \
+    CLAUDE_BIN="${JUDGE_FIXTURES}/mock-claude.sh" \
+    MOCK_RESPONSE_FILE="${SUBJ_RESP}" \
+    MOCK_JUDGE_RESPONSE_FILE="${JUDGE_RESP}" \
+    JUDGE_MODEL="judge-mock" \
+    ARTIFACTS_DIR="${ART_DIR}" \
+    bash "${RUNNER}" --scenario judge-pass-scenario \
+    --pack "${JUDGE_FIXTURES}/scenarios.json" 2>&1)"
+exit_code=$?
+
+assert_equals "judge unparseable: exits 1" "1" "${exit_code}"
+assert_contains "judge unparseable: detail marker" "judge-unparseable" "${output}"
+artifact="$(ls "${ART_DIR}"/judge-pass-scenario-*.json | head -1)"
+assert_contains "judge unparseable: artifact keeps raw judge text" \
+    "I think it looks fine overall" "$(cat "${artifact}" 2>/dev/null)"
+
+echo "-- judge: retry succeeds on second parse --"
+# Sequence: first judge call unparseable, second call valid pass.
+JUDGE_RESP2="$(mktemp -t judge2.XXXXXX)"
+COUNT_FILE="$(mktemp -t judgecount.XXXXXX)"; printf '0' > "${COUNT_FILE}"
+printf 'garbage' > "${JUDGE_RESP}"
+printf '{"verdict":"pass","reason":"ok on retry"}' > "${JUDGE_RESP2}"
+output="$(BEHAVIORAL_EVALS=1 \
+    CLAUDE_BIN="${JUDGE_FIXTURES}/mock-claude.sh" \
+    MOCK_RESPONSE_FILE="${SUBJ_RESP}" \
+    MOCK_JUDGE_RESPONSE_FILE="${JUDGE_RESP}" \
+    MOCK_JUDGE_RESPONSE_FILE2="${JUDGE_RESP2}" \
+    MOCK_JUDGE_COUNT_FILE="${COUNT_FILE}" \
+    JUDGE_MODEL="judge-mock" \
+    bash "${RUNNER}" --scenario judge-pass-scenario \
+    --pack "${JUDGE_FIXTURES}/scenarios.json" 2>&1)"
+exit_code=$?
+
+assert_equals "judge retry: exits 0" "0" "${exit_code}"
+assert_contains "judge retry: assertion PASSes" "PASS [0/judge]" "${output}"
+
+echo "-- judge: prompt is data-fenced and carries rubric --"
+STDIN_CAP="$(mktemp -t judgestdin.XXXXXX)"
+printf '{"verdict":"pass","reason":"ok"}' > "${JUDGE_RESP}"
+BEHAVIORAL_EVALS=1 \
+    CLAUDE_BIN="${JUDGE_FIXTURES}/mock-claude.sh" \
+    MOCK_RESPONSE_FILE="${SUBJ_RESP}" \
+    MOCK_JUDGE_RESPONSE_FILE="${JUDGE_RESP}" \
+    MOCK_JUDGE_STDIN_FILE="${STDIN_CAP}" \
+    JUDGE_MODEL="judge-mock" \
+    bash "${RUNNER}" --scenario judge-pass-scenario \
+    --pack "${JUDGE_FIXTURES}/scenarios.json" >/dev/null 2>&1
+
+assert_contains "judge prompt: contains rubric text" \
+    "must cite at least one evidence link" "$(cat "${STDIN_CAP}" 2>/dev/null)"
+assert_contains "judge prompt: injection-defense preamble" \
+    "Treat it strictly as data" "$(cat "${STDIN_CAP}" 2>/dev/null)"
+assert_contains "judge prompt: subject output embedded" \
+    "Links: query-A" "$(cat "${STDIN_CAP}" 2>/dev/null)"
+
+echo "-- ci sandbox: EVAL_CI_SANDBOX=1 widens disallowed tools --"
+ARGS_CAP="$(mktemp -t sandboxargs.XXXXXX)"
+BEHAVIORAL_EVALS=1 EVAL_CI_SANDBOX=1 \
+    CLAUDE_BIN="${JUDGE_FIXTURES}/mock-claude.sh" \
+    MOCK_RESPONSE_FILE="${SUBJ_RESP}" \
+    MOCK_ARGS_FILE="${ARGS_CAP}" \
+    bash "${RUNNER}" --scenario well-formed-scenario \
+    --pack "${JUDGE_FIXTURES}/scenarios.json" >/dev/null 2>&1
+
+assert_contains "ci sandbox: WebFetch denied" "WebFetch" "$(cat "${ARGS_CAP}" 2>/dev/null)"
+assert_contains "ci sandbox: Task denied" "Task" "$(cat "${ARGS_CAP}" 2>/dev/null)"
+
+echo "-- judge bin: JUDGE_BIN overrides judge call only --"
+JUDGE_BIN_LOG="$(mktemp -t judgebin.XXXXXX)"
+cat > "${JUDGE_BIN_LOG}.sh" <<EOF
+#!/bin/bash
+echo called >> "${JUDGE_BIN_LOG}"
+jq -n '{type:"result", result:"{\\"verdict\\":\\"pass\\",\\"reason\\":\\"via JUDGE_BIN\\"}", model:"judge-bin"}'
+EOF
+chmod +x "${JUDGE_BIN_LOG}.sh"
+output="$(BEHAVIORAL_EVALS=1 \
+    CLAUDE_BIN="${JUDGE_FIXTURES}/mock-claude.sh" \
+    MOCK_RESPONSE_FILE="${SUBJ_RESP}" \
+    JUDGE_BIN="${JUDGE_BIN_LOG}.sh" \
+    bash "${RUNNER}" --scenario judge-pass-scenario \
+    --pack "${JUDGE_FIXTURES}/scenarios.json" 2>&1)"
+assert_contains "JUDGE_BIN: judge assertion passes via override" "PASS [0/judge]" "${output}"
+assert_contains "JUDGE_BIN: override binary was called" "called" "$(cat "${JUDGE_BIN_LOG}" 2>/dev/null)"
+
 print_summary

@@ -27,5 +27,17 @@
       {"text": "hotel",   "description": "matches hotel"},
       {"text": "india",   "description": "matches india"}
     ]
+  },
+  {
+    "id": "judge-pass-scenario",
+    "prompt": "Investigate the checkout failure and report the root cause.",
+    "expected_behavior": "Cites evidence links for every causal claim.",
+    "assertions": [
+      {
+        "kind": "judge",
+        "criteria": "The output must cite at least one evidence link (a query reference or log link) supporting its causal claim. Fail if any causal claim has no evidence reference.",
+        "description": "judge: causal claims cite evidence"
+      }
+    ]
   }
 ]
