@@ -103,6 +103,40 @@ assert_contains "output reports PASS for the matching assertion" "PASS" "${outpu
 assert_contains "output names the matched scenario id" "well-formed-scenario" "${output}"
 
 # ---------------------------------------------------------------------------
+# Directive injection: --directive-file content reaches the constructed prompt.
+# This is the mechanism that drives the db-gate-race B1/B2 treatment arms; a
+# silent break here would make all arms identical with no error. Assert the
+# directive body is injected (and wrapped in the activation_directive block).
+# ---------------------------------------------------------------------------
+echo "-- directive: --directive-file content is injected into the prompt --"
+
+DIRECTIVE_FILE_T="${TMPDIR:-/tmp}/acs-directive-$$.md"
+STDIN_CAPTURE="${TMPDIR:-/tmp}/acs-stdin-$$.txt"
+printf 'ZZ_UNIQUE_DIRECTIVE_MARKER_9137 walk the checklist\n' > "${DIRECTIVE_FILE_T}"
+# Re-list accumulated temp paths so an abnormal exit before the inline cleanup
+# below does not leak these (matches the trap-accumulation pattern used at the
+# section boundaries at lines ~218/259).
+trap 'rm -f "${CANNED_RESPONSE_FILE}" "${DIRECTIVE_FILE_T}" "${STDIN_CAPTURE}"' EXIT
+
+# Exit code is intentionally NOT asserted here (hence >/dev/null); the observable
+# under test is the captured stdin (STDIN_CAPTURE), asserted below.
+MOCK_RESPONSE_FILE="${CANNED_RESPONSE_FILE}" \
+MOCK_STDIN_FILE="${STDIN_CAPTURE}" \
+BEHAVIORAL_EVALS=1 \
+CLAUDE_BIN="${PROJECT_ROOT}/tests/fixtures/behavioral-runner/mock-claude.sh" \
+ARTIFACTS_DIR="${TMPDIR:-/tmp}/acs-artifacts-$$" \
+SKILL_PATH="${PROJECT_ROOT}/skills/incident-analysis/SKILL.md" \
+bash "${RUNNER}" \
+  --scenario well-formed-scenario \
+  --directive-file "${DIRECTIVE_FILE_T}" \
+  --pack "${PROJECT_ROOT}/tests/fixtures/behavioral-runner/scenarios.json" >/dev/null 2>&1
+
+directive_captured="$(cat "${STDIN_CAPTURE}" 2>/dev/null)"
+assert_contains "directive body is injected into the constructed prompt" "ZZ_UNIQUE_DIRECTIVE_MARKER_9137" "${directive_captured}"
+assert_contains "directive is wrapped in an activation_directive block" "activation_directive" "${directive_captured}"
+rm -f "${DIRECTIVE_FILE_T}" "${STDIN_CAPTURE}"
+
+# ---------------------------------------------------------------------------
 # Verdict: stubbed claude returns a response that does NOT match the assertion
 # ---------------------------------------------------------------------------
 echo "-- verdict: stubbed claude fail case --"
@@ -312,5 +346,76 @@ MOCK_RESPONSE_FILE="${MODEL_RESPONSE_FILE}" \
 
 nobare_flag_line="$(grep -nxF -- '--bare' "${NOBARE_ARGS_FILE}" 2>/dev/null | head -n1 | cut -d: -f1)"
 assert_equals "no --bare flag forwarded when unset" "" "${nobare_flag_line}"
+
+# ---------------------------------------------------------------------------
+# Assertion kind: absent — mirror of 'text' that PASSES when a regex is NOT
+# found in RAW_OUTPUT and FAILS when it is. Built as a scenario-level,
+# end-to-end run through the real runner (not a bare grep test) so the
+# actual `case "${a_kind}" in absent)` branch is exercised. The pack is a
+# throwaway temp file (not a committed fixture) to keep this change scoped
+# to this test file only.
+# ---------------------------------------------------------------------------
+echo "-- assertion kind: absent --"
+
+ABSENT_PACK_FILE="${TMPDIR:-/tmp}/acs-absent-pack-$$.json"
+ABSENT_PASS_RESPONSE_FILE="${TMPDIR:-/tmp}/acs-absent-pass-resp-$$.txt"
+ABSENT_FAIL_RESPONSE_FILE="${TMPDIR:-/tmp}/acs-absent-fail-resp-$$.txt"
+ABSENT_ART_DIR="${TMPDIR:-/tmp}/acs-absent-art-$$"
+trap 'rm -f "${CANNED_RESPONSE_FILE}" "${SANDBOX_RESPONSE_FILE}" "${SANDBOX_ARGS_FILE}" "${MODEL_RESPONSE_FILE}" "${MODEL_ARGS_FILE}" "${NOMODEL_ARGS_FILE}" "${BARE_ARGS_FILE}" "${NOBARE_ARGS_FILE}" "${ABSENT_PACK_FILE}" "${ABSENT_PASS_RESPONSE_FILE}" "${ABSENT_FAIL_RESPONSE_FILE}"; rm -rf "${SANDBOX_ART_DIR}" "${MODEL_ART_DIR}" "${ABSENT_ART_DIR}"' EXIT
+
+cat > "${ABSENT_PACK_FILE}" <<'EOF'
+[
+  {
+    "id": "absent-assertion-scenario",
+    "prompt": "review this migration",
+    "expected_behavior": "Must not mention destructive DDL when the migration is safe.",
+    "assertions": [
+      {"kind": "absent", "text": "DROP TABLE|TRUNCATE", "description": "Does not mention destructive DDL"}
+    ]
+  }
+]
+EOF
+
+cat > "${ABSENT_PASS_RESPONSE_FILE}" <<'EOF'
+Reviewed migration: adds a nullable column, safe online.
+EOF
+
+cat > "${ABSENT_FAIL_RESPONSE_FILE}" <<'EOF'
+This migration will DROP TABLE orders — destructive.
+EOF
+
+echo "-- absent: PASSES when regex is missing from output --"
+
+output="$(MOCK_RESPONSE_FILE="${ABSENT_PASS_RESPONSE_FILE}" \
+BEHAVIORAL_EVALS=1 \
+CLAUDE_BIN="${PROJECT_ROOT}/tests/fixtures/behavioral-runner/mock-claude.sh" \
+ARTIFACTS_DIR="${ABSENT_ART_DIR}" \
+SKILL_PATH="${PROJECT_ROOT}/skills/incident-analysis/SKILL.md" \
+bash "${RUNNER}" \
+  --scenario absent-assertion-scenario \
+  --pack "${ABSENT_PACK_FILE}" 2>&1)"
+exit_code=$?
+
+assert_equals "absent assertion PASSES (exit 0) when regex missing from output" "0" "${exit_code}"
+assert_contains "output reports PASS for the absent assertion" "PASS" "${output}"
+assert_contains "output tags the assertion as kind absent" "absent" "${output}"
+
+echo "-- absent: FAILS when regex is present in output --"
+
+output="$(MOCK_RESPONSE_FILE="${ABSENT_FAIL_RESPONSE_FILE}" \
+BEHAVIORAL_EVALS=1 \
+CLAUDE_BIN="${PROJECT_ROOT}/tests/fixtures/behavioral-runner/mock-claude.sh" \
+ARTIFACTS_DIR="${ABSENT_ART_DIR}" \
+SKILL_PATH="${PROJECT_ROOT}/skills/incident-analysis/SKILL.md" \
+bash "${RUNNER}" \
+  --scenario absent-assertion-scenario \
+  --pack "${ABSENT_PACK_FILE}" 2>&1)"
+exit_code=$?
+
+assert_equals "absent assertion FAILS (exit 1) when regex present in output" "1" "${exit_code}"
+assert_contains "output reports FAIL for the absent assertion" "FAIL" "${output}"
+assert_contains "output names the failing assertion description" "Does not mention destructive DDL" "${output}"
+
+rm -rf "${ABSENT_ART_DIR}"
 
 print_summary
