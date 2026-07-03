@@ -24,6 +24,7 @@ Options:
                        tests/artifacts/pack-report-<utc>.md)
   --model <name>       forwarded to run-behavioral-evals.sh --model
   --artifacts-dir <path>  persist per-iteration artifacts here (default: run-temp, deleted on exit)
+                       (must not already contain .json files)
   --update-baseline    write measured classifications to --baseline and exit 0
                        (--update-baseline writes the baseline and exits 0;
                        safety gating applies to normal runs)
@@ -56,6 +57,11 @@ done
 jq -e 'type == "array" and length > 0' "${PACK}" >/dev/null 2>&1 \
     || { echo "error: pack must be a non-empty top-level array" >&2; exit 2; }
 case "${VARIANCE}" in ''|*[!0-9]*|0) echo "error: --variance must be >= 1" >&2; exit 2 ;; esac
+
+if [ -n "${ARTIFACTS_OUT}" ] && ls "${ARTIFACTS_OUT}"/*.json >/dev/null 2>&1; then
+    echo "error: --artifacts-dir '${ARTIFACTS_OUT}' already contains .json artifacts — stale files would corrupt aggregation counts; use a fresh directory" >&2
+    exit 2
+fi
 
 pack_base="$(basename "${PACK}" .json)"
 pack_dir="$(basename "$(dirname "$(dirname "${PACK}")")")"

@@ -109,4 +109,16 @@ else
     _record_fail "artifacts-dir: iteration artifacts persisted" "found ${count}, expected >= 3"
 fi
 
+echo "-- artifacts-dir: refuses pre-existing .json artifacts --"
+STALE_DIR="$(mktemp -d -t staleart.XXXXXX)"
+printf '{}' > "${STALE_DIR}/old.json"
+REPORT="$(mktemp -t packreportS.XXXXXX)"
+output="$(BEHAVIORAL_EVALS=1 CLAUDE_BIN="${MOCK}" MOCK_RESPONSE_FILE="${RESP}" \
+    bash "${PACK_RUNNER}" --pack "${FIX}/pack.json" --variance 1 \
+    --baseline "${FIX}/baseline-stable.json" --report "${REPORT}" \
+    --artifacts-dir "${STALE_DIR}" 2>&1)"
+exit_code=$?
+assert_equals "stale artifacts-dir exits 2" "2" "${exit_code}"
+assert_contains "error names staleness" "stale" "${output}"
+
 print_summary

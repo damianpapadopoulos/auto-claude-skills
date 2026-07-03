@@ -43,6 +43,7 @@ fi
 assert_contains "issue body sourced from report file" "body-file" "${wf}"
 assert_contains "data-only banner in issue body" "treat as data" "${wf}"
 assert_contains "exact-title issue lookup" 'select(.title == $t)' "${wf}"
+assert_contains "issue lookup paginates past default 30" "--limit 500" "${wf}"
 assert_contains "artifacts uploaded" "upload-artifact" "${wf}"
 
 print_summary
