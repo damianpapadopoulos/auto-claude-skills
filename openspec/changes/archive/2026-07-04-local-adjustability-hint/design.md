@@ -34,3 +34,8 @@ On emission: `touch ~/.claude/.skill-adjustability-hint-last || true`.
 3. Cooldown marker is a bare `touch` file — mtime is the datum; no content, no token scoping (the hint is per-user, not per-session).
 4. All failure modes suppress the hint (fail-open): unreadable files, non-numeric counters, jq errors, `find` errors, marker touch failure.
 5. Capability: extends `skill-routing` (HIGH-confidence noun-family match; no new capability).
+
+## Implementation Notes (synced at ship time)
+
+- Built exactly as designed (approach A). Review corrections folded in pre-ship: rate computed once; the vacuous malformed-counter test relabeled as the upstream-guard integration test it is, replaced by a real jq-parse-error fail-open case (malformed skill-config.json present → hint still fires); 29%/30% boundary pair added; jq-missing rationale corrected (unreachable — session-start exits at Step 2 without jq; the in-block guard is defensive-only).
+- Reviewer flagged (out of scope, pre-existing): the state-prune `-mtime +7` is an off-by-one for "7 days" — this feature deliberately uses `-mtime +6`; do not copy the prune's constant.

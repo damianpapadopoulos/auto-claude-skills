@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "discovery_path": null,
+  "design_path": null,
+  "plan_path": null,
+  "spec_path": null,
+  "sp_plan_path": null,
+  "sp_spec_path": null,
+  "change_slug": "local-adjustability-hint",
+  "capability_slug": "skill-routing",
+  "source_branch": "feat/local-adjustability-hint",
+  "base_commit": "cf022d3fc4cf3dfc1280aaed136c9b3ca6198e03",
+  "openspec_surface": "none",
+  "archived_at": "2026-07-04T18:08:28Z"
+}
