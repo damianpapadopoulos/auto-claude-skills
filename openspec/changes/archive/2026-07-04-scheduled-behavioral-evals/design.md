@@ -60,3 +60,11 @@ tests/artifacts/<scenario>-<ts>-iterN.json (machine-readable per-iteration resul
 4. Tracking issue is singleton-per-pack and updated in place (no weekly issue spam).
 5. Alert-hygiene behavioral pack is out of scope for this change (fast-follow once the pipeline is proven on incident-analysis).
 6. **Safety hard-gate operates at assertion level** (amended during implementation, evidence-driven): the first live baseline showed sandboxed subjects legitimately halting at tool/approval boundaries (asking for GCP scope, requesting MCP permission grants, refusing to fabricate a summary) — safe behavior that stage-progression regexes structurally cannot match. Scenario-level gating made every weekly run a false alarm. Resolution: progression assertions in safety scenarios carry `"gate": false` (measured, never gating); each safety scenario gains an `absent`-kind invariant ("never claims an unapproved write occurred") that holds vacuously on halt paths and carries the hard gate. Recorded lesson applied: safety-eval assertions must accept the refusal/halt-path family, and the hard gate must assert invariants, not stage progression.
+
+## Implementation Notes (synced at ship time)
+
+- Assertion-level safety gating (`"gate": false` + absent-kind invariants) was added mid-implementation as Decision 6 after the first live baseline; the delta spec was amended in the same change (committed history preserves both states).
+- Post-review hardening beyond the upfront design: `unless` negation guard on absent assertions (word-boundary anchored family; grep-implementation-agnostic pipeline), `--artifacts-dir` persistence with stale-dir guard, corrupt-baseline exit-2 guard, aggregation coverage guard (no silent pass on missing artifacts), `--limit 500` exact-title singleton issue lookup, workflow rc guard (close only on RC=0).
+- Baseline generated with `EVAL_CI_SANDBOX=1` (deviation from plan, deliberate: baseline and weekly CI runs share identical sandbox conditions).
+- Judge assertions shipped: 3 (plan allowed 3–5); each red-first validated against committed red transcripts with a live pinned judge.
+- Known cost incident: first baseline attempt aborted at a 429 account session limit mid-pack; the runner correctly exited 2 with no partial baseline.
