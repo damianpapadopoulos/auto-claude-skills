@@ -2104,4 +2104,115 @@ test_fallback_registry_in_sync_with_default_triggers() {
 }
 test_fallback_registry_in_sync_with_default_triggers
 
+
+# ---------------------------------------------------------------------------
+# Local-adjustability hint (evidence-gated session-start banner line)
+# The hint consumes the PREVIOUS session's zero-match counters, so each case
+# seeds ~/.claude/.skill-zero-match-count and one .skill-prompt-count-* file
+# in the fake HOME before invoking session-start.
+# ---------------------------------------------------------------------------
+
+_run_session_start_for_hint() {
+    # $1 = zero-match count, $2 = total prompts
+    printf '%s' "$1" > "${HOME}/.claude/.skill-zero-match-count"
+    printf '%s' "$2" > "${HOME}/.claude/.skill-prompt-count-session-hinttest"
+    CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        bash "${PROJECT_ROOT}/hooks/session-start-hook.sh" 2>/dev/null < /dev/null
+}
+
+echo "-- test: adjustability hint fires at 5/10 and touches cooldown --"
+setup_test_env
+mkdir -p "${HOME}/.claude"
+output="$(_run_session_start_for_hint 5 10)"
+if printf '%s' "${output}" | grep -q "Routing hint:.*5 of 10.*skill-config.json"; then
+    echo "  PASS: hint line present with counts"; TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo "  FAIL: expected hint line with 5 of 10"; TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+if [ -f "${HOME}/.claude/.skill-adjustability-hint-last" ]; then
+    echo "  PASS: cooldown marker touched"; TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo "  FAIL: cooldown marker missing"; TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+teardown_test_env
+
+echo "-- test: adjustability hint suppressed at 10% rate (chatty session) --"
+setup_test_env
+mkdir -p "${HOME}/.claude"
+output="$(_run_session_start_for_hint 5 50)"
+if printf '%s' "${output}" | grep -q "Routing hint:"; then
+    echo "  FAIL: hint fired at 10% rate"; TESTS_FAILED=$((TESTS_FAILED + 1))
+else
+    echo "  PASS: no hint at 10% rate"; TESTS_PASSED=$((TESTS_PASSED + 1))
+fi
+teardown_test_env
+
+echo "-- test: adjustability hint suppressed below count floor (4/8) --"
+setup_test_env
+mkdir -p "${HOME}/.claude"
+output="$(_run_session_start_for_hint 4 8)"
+if printf '%s' "${output}" | grep -q "Routing hint:"; then
+    echo "  FAIL: hint fired below ZM floor"; TESTS_FAILED=$((TESTS_FAILED + 1))
+else
+    echo "  PASS: no hint below ZM floor"; TESTS_PASSED=$((TESTS_PASSED + 1))
+fi
+teardown_test_env
+
+echo "-- test: adjustability hint suppressed below total floor (5/7) --"
+setup_test_env
+mkdir -p "${HOME}/.claude"
+output="$(_run_session_start_for_hint 5 7)"
+if printf '%s' "${output}" | grep -q "Routing hint:"; then
+    echo "  FAIL: hint fired below total floor"; TESTS_FAILED=$((TESTS_FAILED + 1))
+else
+    echo "  PASS: no hint below total floor"; TESTS_PASSED=$((TESTS_PASSED + 1))
+fi
+teardown_test_env
+
+echo "-- test: adjustability hint suppressed by fresh cooldown, mtime unchanged --"
+setup_test_env
+mkdir -p "${HOME}/.claude"
+touch "${HOME}/.claude/.skill-adjustability-hint-last"
+_marker_before="$(ls -l "${HOME}/.claude/.skill-adjustability-hint-last")"
+output="$(_run_session_start_for_hint 5 10)"
+_marker_after="$(ls -l "${HOME}/.claude/.skill-adjustability-hint-last")"
+if printf '%s' "${output}" | grep -q "Routing hint:"; then
+    echo "  FAIL: hint fired under fresh cooldown"; TESTS_FAILED=$((TESTS_FAILED + 1))
+else
+    echo "  PASS: cooldown suppresses hint"; TESTS_PASSED=$((TESTS_PASSED + 1))
+fi
+if [ "${_marker_before}" = "${_marker_after}" ]; then
+    echo "  PASS: marker mtime unchanged"; TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo "  FAIL: marker was re-touched under cooldown"; TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+teardown_test_env
+
+echo "-- test: adjustability hint suppressed by existing per-skill overrides --"
+setup_test_env
+mkdir -p "${HOME}/.claude"
+printf '{"skills": {"incident-analysis": {"enabled": false}}}' > "${HOME}/.claude/skill-config.json"
+output="$(_run_session_start_for_hint 5 10)"
+if printf '%s' "${output}" | grep -q "Routing hint:"; then
+    echo "  FAIL: hint fired despite existing overrides"; TESTS_FAILED=$((TESTS_FAILED + 1))
+else
+    echo "  PASS: existing overrides suppress hint"; TESTS_PASSED=$((TESTS_PASSED + 1))
+fi
+teardown_test_env
+
+echo "-- test: adjustability hint fail-open on malformed counter --"
+setup_test_env
+mkdir -p "${HOME}/.claude"
+printf 'garbage' > "${HOME}/.claude/.skill-zero-match-count"
+printf '10' > "${HOME}/.claude/.skill-prompt-count-session-hinttest"
+output="$(CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" bash "${PROJECT_ROOT}/hooks/session-start-hook.sh" 2>/dev/null < /dev/null)"
+exit_code=$?
+if [ "${exit_code}" -eq 0 ] && ! printf '%s' "${output}" | grep -q "Routing hint:"; then
+    echo "  PASS: malformed counter -> no hint, exit 0"; TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo "  FAIL: malformed counter broke the hook or fired the hint"; TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+teardown_test_env
+
+
 print_summary
