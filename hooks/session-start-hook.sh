@@ -1206,6 +1206,41 @@ _ZM_STAT=""
 if [[ "$_PREV_TOTAL" -gt 10 ]] && [[ "$_PREV_ZM" -gt 0 ]]; then
     _ZM_STAT=" | prev: ${_PREV_ZM}/${_PREV_TOTAL} unmatched"
 fi
+
+# --- Local-adjustability hint (evidence-gated, fail-open) -------------------
+# Surfaces the skill-config.json override mechanism when the PREVIOUS session
+# showed real routing friction. Rate-based (not raw count) so long
+# conversational sessions do not false-fire. Suppressed by a 7-day cooldown
+# marker and by existing per-skill overrides (user already knows the
+# mechanism). Every failure suppresses the hint; the banner is never broken.
+# _PREV_ZM/_PREV_TOTAL are validated-numeric upstream (zero-match stats step).
+_ADJ_HINT=""
+_ADJ_MARKER="${HOME}/.claude/.skill-adjustability-hint-last"
+_adj_rate=0
+[[ "$_PREV_TOTAL" -ge 8 ]] && _adj_rate=$(( _PREV_ZM * 100 / _PREV_TOTAL ))
+if [[ "$_PREV_ZM" -ge 5 ]] && [[ "$_PREV_TOTAL" -ge 8 ]] \
+   && [[ "$_adj_rate" -ge 30 ]]; then
+    _adj_eligible=1
+    # Cooldown: a marker younger than 7 days suppresses. find prints the path
+    # only when mtime is >= 7 days ago; existing-but-fresh => suppress.
+    if [[ -e "$_ADJ_MARKER" ]]; then
+        _adj_aged="$(find "$_ADJ_MARKER" -mtime +6 -print 2>/dev/null || true)"
+        [[ -n "$_adj_aged" ]] || _adj_eligible=0
+    fi
+    # Existing per-skill overrides: user already found the mechanism.
+    if [[ "$_adj_eligible" -eq 1 ]] && command -v jq >/dev/null 2>&1 \
+       && [[ -f "${HOME}/.claude/skill-config.json" ]]; then
+        if jq -e '.skills | type == "object" and length > 0' \
+             "${HOME}/.claude/skill-config.json" >/dev/null 2>&1; then
+            _adj_eligible=0
+        fi
+    fi
+    if [[ "$_adj_eligible" -eq 1 ]]; then
+        _ADJ_HINT="Routing hint: last session ${_PREV_ZM} of ${_PREV_TOTAL} prompts matched no skill (${_adj_rate}%). Tune triggers locally via ~/.claude/skill-config.json (missed prompts: ~/.claude/.skill-zero-match-log; debug a prompt with SKILL_EXPLAIN=1)."
+        touch "$_ADJ_MARKER" 2>/dev/null || true
+    fi
+fi
+
 STATUS="SessionStart: ${AVAILABLE_COUNT} skills active (${INSTALLED_COMPANIONS} of ${TOTAL_COMPANIONS} plugins)${_ZM_STAT}${SETUP_CTA}"
 
 # Build model context: status + first-response instruction + any warnings
@@ -1218,6 +1253,12 @@ _CAP_LINE="$(printf '%s' "${CONTEXT_CAPS}" | jq -r 'to_entries | map("\(.key)=\(
 if [ -n "${_CAP_LINE}" ]; then
     CONTEXT="${CONTEXT}
 ${_CAP_LINE}"
+fi
+
+# Evidence-gated local-adjustability hint (computed above, next to _ZM_STAT)
+if [ -n "${_ADJ_HINT}" ]; then
+    CONTEXT="${CONTEXT}
+${_ADJ_HINT}"
 fi
 
 # Emit Serena usage hint when available
