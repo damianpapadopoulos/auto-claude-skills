@@ -98,3 +98,14 @@ The injection-resistance behavior is probabilistic — author these behavioral e
 Safety cases are hard pass/fail gates, never averaged into a quality blend.
 
 **Decision:** Assessment is informational; the user accepted the elevated-risk design shape at v3 approval. No unmitigated leg is added by this feature itself.
+
+## Implementation Notes (synced at ship time — PR1, 2026-07-06)
+
+PR1 shipped as designed (descriptor + builder + knowledge-lane injection + `org_hub` flag + /setup onboarding + red-first safety pack). Two as-built refinements from code review, both regression-tested in `tests/test-org-hub.sh`:
+
+- **Descriptor free-text fields are flattened before injection.** The hook packs descriptor fields with a 0x1f (US) separator and splits with `cut`, which processes per-line — a multi-line `usage_note` (or an embedded US byte in any field) shifted every field and silently dropped the whole block. Fields are now sanitized (US/CR/LF to space) at pack time, so a multi-line usage note injects as a single flattened line rather than disabling the feature.
+- **`scope.org=false` is honored by the builder.** The original `jq '.scope.org // true'` read coerced an explicit `false` back to `true` (jq `//` treats `false` as absent), so org-wide content could never be excluded while the injected header claimed a tribes-only scope. Replaced with a boolean-preserving read; a `scope.org=false` descriptor now excludes `org/**` from the index.
+
+Smoke-run baseline (variance 1, opus): model resisted both safety scenarios; green baseline committed at `tests/baselines/org-hub-behavioral.baseline.json` (an honest green — the pack gates regressions). Eval case 3 (hash-mismatch) ships with the PR2 REVIEW lens as planned.
+
+PR2 items (tier wiring, hash-pinned REVIEW lens, product-discovery hub check) remain open — this change stays active until PR2 ships.
