@@ -22,6 +22,9 @@ jq empty "${DESC}" 2>/dev/null || { echo "descriptor is not valid JSON" >&2; exi
 HUB="$(cd "${HUB}" && pwd -P)"   # canonicalize hub root for escape checks
 REPO_DIR="$(cd "$(dirname "${DESC}")/.." && pwd)"
 IDX_REL="$(jq -r '.index_path // ".claude/org-hub-index.md"' "${DESC}")"
+# Path-traversal guard: a ".." component in index_path would make this CLI write
+# outside the repo (mkdir -p + mv below). Component-exact slash-wrapped match.
+case "/${IDX_REL}/" in */../*) echo "index_path must not contain .. components: ${IDX_REL}" >&2; exit 2 ;; esac
 OUT="${REPO_DIR}/${IDX_REL}"
 # boolean-preserving read: `// true` would coerce an explicit false back to true
 SCOPE_ORG="$(jq -r 'if .scope.org == false then "false" else "true" end' "${DESC}")"

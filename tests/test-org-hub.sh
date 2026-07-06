@@ -161,6 +161,41 @@ test_staleness_advisory() {
     teardown_test_env
 }
 
+test_index_path_traversal_blocked() {
+    echo "-- test: index_path with .. components cannot read outside the repo --"
+    setup_test_env
+    local hub consumer ctx
+    hub="$(make_hub_clone)"; consumer="$(make_consumer_repo "${hub}")"
+    # plant a file OUTSIDE the consumer repo that a traversal path would reach
+    printf -- '- [Evil Secret](x.md) — scope:org type:instruction\n' > "${TEST_TMPDIR}/outside.md"
+    local tmp="${consumer}/.claude/org-hub.json.tmp"
+    jq '.index_path = "../outside.md"' \
+        "${consumer}/.claude/org-hub.json" > "${tmp}" && mv "${tmp}" "${consumer}/.claude/org-hub.json"
+    ctx="$(run_hook_in "${consumer}")"
+    assert_not_contains "traversal target not injected" "Evil Secret" "${ctx}"
+    assert_not_contains "block silent on traversal path" "Org Hub" "${ctx}"
+    teardown_test_env
+}
+
+test_builder_rejects_traversal_index_path() {
+    echo "-- test: builder refuses index_path with .. components --"
+    setup_test_env
+    local hub consumer rc
+    hub="$(make_hub_clone)"; consumer="$(make_consumer_repo "${hub}")"
+    local tmp="${consumer}/.claude/org-hub.json.tmp"
+    jq '.index_path = "../escaped-index.md"' \
+        "${consumer}/.claude/org-hub.json" > "${tmp}" && mv "${tmp}" "${consumer}/.claude/org-hub.json"
+    rc=0
+    (cd "${consumer}" && /bin/bash "${BUILDER}" --hub "${hub}" --descriptor .claude/org-hub.json >/dev/null 2>&1) || rc=$?
+    assert_not_empty "builder exits non-zero on traversal index_path" "$([ "${rc}" -ne 0 ] && echo nonzero)"
+    if [ -f "${TEST_TMPDIR}/escaped-index.md" ]; then
+        _record_fail "no file written outside the repo" "found ${TEST_TMPDIR}/escaped-index.md"
+    else
+        _record_pass "no file written outside the repo"
+    fi
+    teardown_test_env
+}
+
 test_multiline_usage_note_still_injects() {
     echo "-- test: multi-line usage_note does not kill injection --"
     setup_test_env
@@ -249,6 +284,8 @@ test_builder_symlink_escape_blocked
 test_injection_happy_path
 test_injection_refuses_oversized_index
 test_staleness_advisory
+test_index_path_traversal_blocked
+test_builder_rejects_traversal_index_path
 test_multiline_usage_note_still_injects
 test_us_byte_in_descriptor_field_survives
 test_tilde_hub_path_staleness
