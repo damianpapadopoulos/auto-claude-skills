@@ -66,6 +66,21 @@ test_builder_symlink_escape_blocked() {
 }
 
 # ---------------------------------------------------------------------------
+# /setup onboarding doc (commands/setup.md) — governance strings
+# ---------------------------------------------------------------------------
+
+test_setup_doc_governance_strings() {
+    echo "-- test: setup.md org-hub onboarding governance strings --"
+    setup_test_env
+    local doc="${REPO_ROOT}/commands/setup.md"
+    assert_contains "onboarding step present" "Connect org hub" "$(cat "${doc}")"
+    assert_contains "public-repo warning present" "encode org structure" "$(cat "${doc}")"
+    assert_contains "gitignore note present" '!.claude/org-hub.json' "$(cat "${doc}")"
+    assert_contains "HITL confirm present" "confirm before committing" "$(cat "${doc}")"
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # Hook injection (hooks/session-start-hook.sh)
 # ---------------------------------------------------------------------------
 
@@ -151,5 +166,6 @@ test_injection_happy_path
 test_injection_refuses_oversized_index
 test_staleness_advisory
 test_fail_open_paths
+test_setup_doc_governance_strings
 
 print_summary

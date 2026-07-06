@@ -622,9 +622,25 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup-managed-settings.sh" --model-routing
 After the writes, remind the user that env-var changes take effect on the next
 `claude` launch.
 
+### 11. Connect org hub (optional)
+
+Ask the user: "Does your organization maintain a context-hub repo (curated knowledge + product specs, e.g. a `context/` + `specs/` git repo)? I can connect it so every session in this repo gets scoped org context."
+
+If no / unsure: skip silently. Do not re-ask within this flow.
+
+If yes:
+1. Ask for the local clone path. If no clone exists, ask the user to clone it first (the connector never fetches over the network).
+2. Explore the hub READ-ONLY: its README/CLAUDE.md/CONTRIBUTING, any manifest (e.g. `org-hub.json` at the hub root — use it as input if present), directory layout, frontmatter conventions, glossaries. Summarize to the user what you found: context roots, scope axes (org/tribes/domains), artifact types, spec roots.
+3. Propose a scope for THIS repo (which tribe(s)/domains apply). The user decides.
+4. Draft `.claude/org-hub.json` (schema_version 1 — see `scripts/org-hub-build-index.sh` header for fields) and show it to the user; you MUST confirm before committing anything.
+5. Run: `bash scripts/org-hub-build-index.sh --hub <clone> --descriptor .claude/org-hub.json` and show the resulting index to the user for review.
+6. WARNING (always show verbatim): "The descriptor and index encode org structure (tribe/domain names). Do NOT commit them to public or wider-access repos. Confirm this repo's audience matches the hub content's audience."
+7. If the repo gitignores `.claude/` wholesale, add `!.claude/org-hub.json` and `!.claude/org-hub-index.md` to `.gitignore` (same pattern as `!.claude/knowledge/`).
+8. After the user confirms, stage both files; the user (or their normal PR flow) commits. Re-run step 5 any time the hub moves (a staleness advisory in the session banner will say "re-run /setup").
+
 ## Execution
 
-Run each step in order. For steps 0 and 1, use AskUserQuestion to get the user's preference before taking action. For steps 2-4, if a skill directory already exists at the target path, skip it. For steps 5, 6, 7, 9, and 10, use AskUserQuestion to get the user's preference before installing, and skip tools that are already installed.
+Run each step in order. For steps 0 and 1, use AskUserQuestion to get the user's preference before taking action. For steps 2-4, if a skill directory already exists at the target path, skip it. For steps 5, 6, 7, 9, 10, and 11, use AskUserQuestion to get the user's preference before installing, and skip tools that are already installed (for step 11: skip if `.claude/org-hub.json` already exists).
 
 After setup, confirm what was configured:
 - Companion plugins: which were installed or skipped
@@ -638,6 +654,7 @@ After setup, confirm what was configured:
 - `openspec`: available or skipped
 - Serena MCP: connected or skipped
 - Forgetful Memory MCP: connected or skipped
+- Org hub: connected (descriptor + index staged) or skipped
 - GCP Observability MCP: configured or skipped
 - `gcloud`: available or skipped
 - `kubectl`: available or skipped
