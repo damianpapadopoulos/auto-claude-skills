@@ -23,7 +23,8 @@ HUB="$(cd "${HUB}" && pwd -P)"   # canonicalize hub root for escape checks
 REPO_DIR="$(cd "$(dirname "${DESC}")/.." && pwd)"
 IDX_REL="$(jq -r '.index_path // ".claude/org-hub-index.md"' "${DESC}")"
 OUT="${REPO_DIR}/${IDX_REL}"
-SCOPE_ORG="$(jq -r '.scope.org // true' "${DESC}")"
+# boolean-preserving read: `// true` would coerce an explicit false back to true
+SCOPE_ORG="$(jq -r 'if .scope.org == false then "false" else "true" end' "${DESC}")"
 TRIBES="$(jq -r '(.scope.tribes // []) | join(" ")' "${DESC}")"
 ROOTS="$(jq -r '(.context_roots // ["context/"]) | join(" ")' "${DESC}")"
 

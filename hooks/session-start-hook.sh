@@ -1291,8 +1291,11 @@ if [ "${_has_org_hub:-false}" = "true" ] && [ -f "${_OH_DESC}" ]; then
           (.index_built_at_sha // ""),
           (.usage_note // ""),
           ((.scope // {}) | [(if .org == false then empty else "org" end)] + ((.tribes // []) | map("tribes/" + .)) | join("+"))
-         ] | join("\u001f")' "${_OH_DESC}" 2>/dev/null)" || _OH_FIELDS=""
-    # NOTE: separator written as a jq \u-escape (never a literal control char); verify output with cat -v
+         ] | map(gsub("[\u001f\r\n]"; " ")) | join("\u001f")' "${_OH_DESC}" 2>/dev/null)" || _OH_FIELDS=""
+    # NOTE: separator written as a jq \u-escape (never a literal control char); verify output with cat -v.
+    # Fields are flattened (US/CR/LF -> space) before packing: cut splits per-line, so an embedded
+    # newline or US byte in a free-text field (name, usage_note) would shift every field and
+    # silently drop the block.
     if [ -n "${_OH_FIELDS}" ]; then
         _oh_name="$(printf '%s' "${_OH_FIELDS}" | cut -d"${_US}" -f1)"
         _oh_idx_rel="$(printf '%s' "${_OH_FIELDS}" | cut -d"${_US}" -f2)"

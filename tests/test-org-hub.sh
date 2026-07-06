@@ -52,6 +52,30 @@ test_builder_scope_filter() {
     teardown_test_env
 }
 
+test_builder_scope_org_false() {
+    echo "-- test: scope.org=false excludes org content --"
+    setup_test_env
+    local hub consumer
+    hub="$(make_hub_clone)"
+    consumer="${TEST_TMPDIR}/consumer-noorg"
+    mkdir -p "${consumer}/.claude"
+    (cd "${consumer}" && git init -q)
+    jq -n --arg hub "${hub}" '{
+        schema_version: 1, name: "Mini Hub", hub_path: $hub,
+        scope: {org: false, tribes: ["alpha"], domains: []},
+        context_roots: ["context/"],
+        glossaries: [], spec_roots: [],
+        usage_note: "",
+        index_path: ".claude/org-hub-index.md", index_built_at_sha: ""
+    }' > "${consumer}/.claude/org-hub.json"
+    (cd "${consumer}" && /bin/bash "${BUILDER}" --hub "${hub}" --descriptor .claude/org-hub.json >/dev/null)
+    local idx="${consumer}/.claude/org-hub-index.md"
+    assert_contains "alpha tribe still included" "protocols.md" "$(cat "${idx}")"
+    assert_not_contains "org content excluded when scope.org=false" "deploy-rules.md" "$(cat "${idx}")"
+    assert_not_contains "org content excluded when scope.org=false (voice)" "voice.md" "$(cat "${idx}")"
+    teardown_test_env
+}
+
 test_builder_symlink_escape_blocked() {
     echo "-- test: builder blocks symlink escape --"
     setup_test_env
@@ -137,6 +161,65 @@ test_staleness_advisory() {
     teardown_test_env
 }
 
+test_multiline_usage_note_still_injects() {
+    echo "-- test: multi-line usage_note does not kill injection --"
+    setup_test_env
+    local hub consumer ctx
+    hub="$(make_hub_clone)"; consumer="$(make_consumer_repo "${hub}")"
+    # rewrite descriptor with a two-line usage note (legitimate authoring style)
+    local tmp="${consumer}/.claude/org-hub.json.tmp"
+    jq '.usage_note = "Glossary-first: use canonical terms.\nSpecs win over tribal knowledge."' \
+        "${consumer}/.claude/org-hub.json" > "${tmp}" && mv "${tmp}" "${consumer}/.claude/org-hub.json"
+    (cd "${consumer}" && /bin/bash "${BUILDER}" --hub "${hub}" --descriptor .claude/org-hub.json >/dev/null)
+    ctx="$(run_hook_in "${consumer}")"
+    assert_contains "block survives multi-line note" "Org Hub (Mini Hub, scope:" "${ctx}"
+    assert_contains "first note line present" "Glossary-first" "${ctx}"
+    assert_contains "second note line present" "Specs win over tribal knowledge" "${ctx}"
+    assert_contains "index lines still injected" "protocols.md" "${ctx}"
+    teardown_test_env
+}
+
+test_us_byte_in_descriptor_field_survives() {
+    echo "-- test: raw US byte in a descriptor field does not shift fields --"
+    setup_test_env
+    local hub consumer ctx
+    hub="$(make_hub_clone)"; consumer="$(make_consumer_repo "${hub}")"
+    local tmp="${consumer}/.claude/org-hub.json.tmp"
+    jq '.name = "Mini\u001fHub"' \
+        "${consumer}/.claude/org-hub.json" > "${tmp}" && mv "${tmp}" "${consumer}/.claude/org-hub.json"
+    (cd "${consumer}" && /bin/bash "${BUILDER}" --hub "${hub}" --descriptor .claude/org-hub.json >/dev/null)
+    ctx="$(run_hook_in "${consumer}")"
+    assert_contains "block survives US byte in name" "Org Hub (Mini Hub, scope:" "${ctx}"
+    assert_contains "index lines still injected" "protocols.md" "${ctx}"
+    teardown_test_env
+}
+
+test_tilde_hub_path_staleness() {
+    echo "-- test: tilde hub_path expands for staleness check --"
+    setup_test_env
+    local hub consumer ctx
+    # hub lives under TEST_HOME so "~/hub-clone" resolves inside the hook (HOME=TEST_HOME)
+    local dest="${TEST_HOME}/hub-clone"
+    cp -R "${FIXTURE_HUB_SRC}" "${dest}"
+    (cd "${dest}" && git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm init)
+    hub="${dest}"
+    consumer="${TEST_TMPDIR}/consumer"
+    mkdir -p "${consumer}/.claude"
+    (cd "${consumer}" && git init -q)
+    jq -n '{
+        schema_version: 1, name: "Mini Hub", hub_path: "~/hub-clone",
+        scope: {org: true, tribes: ["alpha"], domains: []},
+        context_roots: ["context/"], glossaries: [], spec_roots: [],
+        usage_note: "note",
+        index_path: ".claude/org-hub-index.md", index_built_at_sha: ""
+    }' > "${consumer}/.claude/org-hub.json"
+    (cd "${consumer}" && /bin/bash "${BUILDER}" --hub "${hub}" --descriptor .claude/org-hub.json >/dev/null)
+    (cd "${hub}" && echo x >> README.md && git add -A && git -c user.email=t@t -c user.name=t commit -qm drift)
+    ctx="$(run_hook_in "${consumer}")"
+    assert_contains "tilde hub_path staleness advisory" "re-run /setup" "${ctx}"
+    teardown_test_env
+}
+
 test_fail_open_paths() {
     echo "-- test: fail-open paths (absent/malformed/missing clone) --"
     setup_test_env
@@ -161,10 +244,14 @@ test_fail_open_paths() {
 
 echo "=== test-org-hub.sh ==="
 test_builder_scope_filter
+test_builder_scope_org_false
 test_builder_symlink_escape_blocked
 test_injection_happy_path
 test_injection_refuses_oversized_index
 test_staleness_advisory
+test_multiline_usage_note_still_injects
+test_us_byte_in_descriptor_field_survives
+test_tilde_hub_path_staleness
 test_fail_open_paths
 test_setup_doc_governance_strings
 
