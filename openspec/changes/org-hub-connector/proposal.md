@@ -2,7 +2,7 @@
 
 ## Why
 
-Enterprises increasingly maintain a curated "context hub" — one git repo holding durable org knowledge and product specs (reference example: oviva-ag/hub with `context/`, `specs/`, `pdlc/`, `plugins/`). Claude Code sessions in that org's code repos currently get none of it. auto-claude-skills should act as a generic, read-only connector: any hub-shaped (or arbitrary) structure feeds correctly-scoped org context into every session, without Oviva-specific hardcoding.
+Enterprises increasingly maintain a curated "context hub" — one git repo holding durable org knowledge and product specs (typical shape: `context/`, `specs/`, `pdlc/`, `plugins/`). Claude Code sessions in that org's code repos currently get none of it. auto-claude-skills should act as a generic, read-only connector: any hub-shaped (or arbitrary) structure feeds correctly-scoped org context into every session, without org-specific hardcoding.
 
 Note on naming: the existing `context_hub_*` capability flags refer to Andrew Ng's context-hub (library docs via `chub` CLI) and are unrelated. This feature is named `org_hub` throughout.
 
