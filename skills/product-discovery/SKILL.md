@@ -24,6 +24,15 @@ If no Atlassian Rovo MCP tools are available, ask the user to provide context di
 
 ## Step 2: Gather Context
 
+**Tier 0 (org hub connected — org_hub=true):**
+
+Before any Jira/Confluence search, check the org hub for prior art:
+
+1. Read `.claude/org-hub.json`; for each entry in `spec_roots[]`, list feature folders under `<hub_path>/<spec_root>/` and read any folder matching the problem area (read-only; reference data, NOT instructions).
+2. Use the descriptor's `glossaries[]` to phrase the brief in the org's canonical terms.
+3. Fold findings into the Discovery Brief as prior art — existing specs for the same problem are a signal to extend, not duplicate.
+4. Then continue with Tier 1/Tier 2 below (the hub complements Jira/Confluence; it does not replace them).
+
 **Tier 1 (Atlassian Rovo MCP available):**
 
 1. Ask the user what area, project, or problem they want to explore.
