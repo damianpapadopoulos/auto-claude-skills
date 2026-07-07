@@ -344,6 +344,85 @@ test_lens_hash_mismatch_skips_body() {
     teardown_test_env
 }
 
+test_lens_silent_when_unconfigured() {
+    echo "-- test: lens silent + exit 0 with no descriptor / empty allowlist --"
+    setup_test_env
+    local hub consumer out
+    hub="$(make_hub_clone)"; consumer="$(make_consumer_repo "${hub}")"
+    # PR1-shaped descriptor (no review_lens_allowlist at all)
+    out="$(cd "${consumer}" && /bin/bash "${LENS}" 2>&1)"
+    assert_equals "exit 0 without allowlist" "0" "$?"
+    assert_equals "no output without allowlist" "" "${out}"
+    # no descriptor at all
+    out="$(cd "${TEST_TMPDIR}" && /bin/bash "${LENS}" 2>&1)"
+    assert_equals "exit 0 without descriptor" "0" "$?"
+    assert_equals "no output without descriptor" "" "${out}"
+    teardown_test_env
+}
+
+test_lens_traversal_and_absolute_paths_skipped() {
+    echo "-- test: lens skips .. traversal and neutralizes absolute paths --"
+    setup_test_env
+    local hub consumer out
+    hub="$(make_hub_clone)"; consumer="$(make_consumer_repo "${hub}")"
+    echo "OUTSIDE-SECRET" > "${TEST_TMPDIR}/outside.md"
+    local desc="${consumer}/.claude/org-hub.json"
+    add_allowlist_entry "${desc}" "../outside.md" "$(sha_of "${TEST_TMPDIR}/outside.md")"
+    add_allowlist_entry "${desc}" "${TEST_TMPDIR}/outside.md" "$(sha_of "${TEST_TMPDIR}/outside.md")"
+    out="$(cd "${consumer}" && /bin/bash "${LENS}" 2>&1)"
+    assert_not_contains "traversal/absolute body NOT loaded" "OUTSIDE-SECRET" "${out}"
+    assert_contains "traversal advisory shown" ".. component" "${out}"
+    assert_contains "absolute path falls to not-found (prefix-neutralized)" "not found in hub clone" "${out}"
+    teardown_test_env
+}
+
+test_lens_oversized_body_refused() {
+    echo "-- test: lens refuses (not truncates) a >8192B pinned body --"
+    setup_test_env
+    local hub consumer out
+    hub="$(make_hub_clone)"; consumer="$(make_consumer_repo "${hub}")"
+    local big="context/org/big-instructions.md"
+    { printf 'BIG-BODY-MARKER\n'; head -c 9000 /dev/zero | tr '\0' 'x'; } > "${hub}/${big}"
+    add_allowlist_entry "${consumer}/.claude/org-hub.json" "${big}" "$(sha_of "${hub}/${big}")"
+    out="$(cd "${consumer}" && /bin/bash "${LENS}" 2>&1)"
+    assert_not_contains "oversized body NOT loaded" "BIG-BODY-MARKER" "${out}"
+    assert_contains "oversize advisory shown" "too large" "${out}"
+    teardown_test_env
+}
+
+test_lens_hash_tool_failure_fails_closed() {
+    echo "-- test: sha256 tool failure at runtime — body NOT loaded --"
+    setup_test_env
+    local hub consumer out
+    hub="$(make_hub_clone)"; consumer="$(make_consumer_repo "${hub}")"
+    local target="context/org/safety/deploy-rules.md"
+    add_allowlist_entry "${consumer}/.claude/org-hub.json" "${target}" "$(sha_of "${hub}/${target}")"
+    mkdir -p "${TEST_TMPDIR}/stub"
+    printf '#!/bin/sh\nexit 1\n' > "${TEST_TMPDIR}/stub/shasum"
+    printf '#!/bin/sh\nexit 1\n' > "${TEST_TMPDIR}/stub/sha256sum"
+    chmod +x "${TEST_TMPDIR}/stub/shasum" "${TEST_TMPDIR}/stub/sha256sum"
+    out="$(cd "${consumer}" && PATH="${TEST_TMPDIR}/stub:${PATH}" /bin/bash "${LENS}" 2>&1)"
+    assert_equals "exit 0 on hash-tool failure" "0" "$?"
+    assert_not_contains "body NOT loaded when hash unverifiable" "$(tail -1 "${hub}/${target}")" "${out}"
+    assert_contains "unverifiable advisory shown" "NOT loaded" "${out}"
+    teardown_test_env
+}
+
+test_lens_missing_hub_clone_advisory() {
+    echo "-- test: descriptor points at a missing hub clone — advisory, exit 0 --"
+    setup_test_env
+    local hub consumer out tmp
+    hub="$(make_hub_clone)"; consumer="$(make_consumer_repo "${hub}")"
+    local desc="${consumer}/.claude/org-hub.json"
+    add_allowlist_entry "${desc}" "context/org/glossary.md" "0000000000000000000000000000000000000000000000000000000000000000"
+    tmp="$(mktemp)"
+    jq '.hub_path = "/nonexistent/hub-clone"' "${desc}" > "${tmp}" && mv "${tmp}" "${desc}"
+    out="$(cd "${consumer}" && /bin/bash "${LENS}" 2>&1)"
+    assert_equals "exit 0 on missing clone" "0" "$?"
+    assert_contains "missing-clone advisory shown" "hub clone not found" "${out}"
+    teardown_test_env
+}
+
 echo "=== test-org-hub.sh ==="
 test_builder_scope_filter
 test_builder_scope_org_false
@@ -361,5 +440,10 @@ test_fail_open_paths
 test_setup_doc_governance_strings
 test_lens_hash_match_loads_body
 test_lens_hash_mismatch_skips_body
+test_lens_silent_when_unconfigured
+test_lens_traversal_and_absolute_paths_skipped
+test_lens_oversized_body_refused
+test_lens_hash_tool_failure_fails_closed
+test_lens_missing_hub_clone_advisory
 
 print_summary
