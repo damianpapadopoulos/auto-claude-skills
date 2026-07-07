@@ -2250,4 +2250,50 @@ fi
 teardown_test_env
 
 
+# ---------------------------------------------------------------------------
+# skill-rules.json routing interop (org-hub PR-X)
+# ---------------------------------------------------------------------------
+echo "-- test: skill-rules.json keywords become word-boundary triggers --"
+setup_test_env
+_hub="${HOME}/.claude/plugins/cache/oviva-hub/hub-plugin/1.0.0"
+mkdir -p "${_hub}/skills/hub-skill"
+printf '%s\n' '---' 'name: hub-skill' 'description: A hub skill' '---' '# Hub Skill' \
+    > "${_hub}/skills/hub-skill/SKILL.md"
+cat > "${_hub}/skill-rules.json" <<'JSON'
+{ "skills": { "hub-skill": { "promptTriggers": {
+  "keywords": ["branch", "values.yaml", "PR"] } } } }
+JSON
+run_hook >/dev/null
+_cf="${HOME}/.claude/.skill-registry-cache.json"
+# Extract raw trigger strings (jq -r) so regex backslashes are not JSON-doubled
+_trigs="$(jq -r '.skills[] | select(.name=="hub-skill") | .triggers[]' "${_cf}" 2>/dev/null)"
+if printf '%s\n' "${_trigs}" | grep -qxF '(^|[^a-z0-9])branch($|[^a-z0-9])' \
+   && printf '%s\n' "${_trigs}" | grep -qxF '(^|[^a-z0-9])values\.yaml($|[^a-z0-9])' \
+   && printf '%s\n' "${_trigs}" | grep -qxF '(^|[^a-z0-9])pr($|[^a-z0-9])'; then
+    echo "  PASS: keywords translated to lowercased, escaped, boundary-wrapped triggers"; TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo "  FAIL: got triggers=${_trigs}"; TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+teardown_test_env
+
+echo "-- test: frontmatter triggers win over skill-rules --"
+setup_test_env
+_hub2="${HOME}/.claude/plugins/cache/oviva-hub/fm-plugin/1.0.0"
+mkdir -p "${_hub2}/skills/fm-skill"
+printf '%s\n' '---' 'name: fm-skill' 'description: fm' 'triggers:' '  - "customtrig"' '---' '# FM' \
+    > "${_hub2}/skills/fm-skill/SKILL.md"
+cat > "${_hub2}/skill-rules.json" <<'JSON'
+{ "skills": { "fm-skill": { "promptTriggers": { "keywords": ["ignored"] } } } }
+JSON
+run_hook >/dev/null
+_cf2="${HOME}/.claude/.skill-registry-cache.json"
+_ft="$(jq -c '.skills[] | select(.name=="fm-skill") | .triggers' "${_cf2}" 2>/dev/null)"
+if printf '%s' "${_ft}" | grep -qF 'customtrig' && ! printf '%s' "${_ft}" | grep -qF 'ignored'; then
+    echo "  PASS: frontmatter triggers preserved, skill-rules ignored"; TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    echo "  FAIL: got triggers=${_ft}"; TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+teardown_test_env
+
+
 print_summary

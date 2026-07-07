@@ -253,6 +253,61 @@ _parse_frontmatter() {
 }
 
 # -----------------------------------------------------------------
+# skill-rules.json -> ERE trigger translation (hub routing interop)
+# -----------------------------------------------------------------
+# Emits one line per skill:  <name>\t<triggers_json_array>\t<dropped_count>
+# keywords       -> lowercased, ERE-escaped, word-boundary-wrapped regexes
+# intentPatterns -> ERE-valid only: PCRE-only dropped via jq denylist, then
+#                   survivors compile-checked under bash [[ =~ ]].
+# Fail-open: a missing/malformed file yields no output for it.
+_translate_skill_rules() {
+    _srf="$1"
+    [ -f "${_srf}" ] || return 0
+    _sr_rows="$(jq -r '
+        def esc: gsub("(?<c>[.^$*+?()\\[\\]{}|\\\\])"; "\\" + .c);
+        def pcre: "[*+?]\\?|\\{[0-9,]*\\}\\?|\\\\[dDwWsSbB]|\\(\\?[:=!<]|\\\\[1-9]";
+        (.skills // {}) | to_entries[] |
+        .key as $n |
+        ((.value.promptTriggers.keywords // [])
+            | map(select(type=="string" and length>0))
+            | map(ascii_downcase | esc | "(^|[^a-z0-9])" + . + "($|[^a-z0-9])")) as $kw |
+        ((.value.promptTriggers.intentPatterns // [])
+            | map(select(type=="string" and length>0))) as $ipall |
+        ($ipall | map(select(test(pcre) | not))) as $ip |
+        [$n, ($kw|tojson), ($ip|tojson), ($ipall|length|tostring)] | join("\u001f")
+    ' "${_srf}" 2>/dev/null)" || return 0
+    [ -z "${_sr_rows}" ] && return 0
+
+    printf '%s\n' "${_sr_rows}" | while IFS=$'\x1f' read -r _n _kwj _ipj _iporig; do
+        [ -z "${_n}" ] && continue
+        _kept=0
+        _good_lines=""
+        _ip_list="$(printf '%s' "${_ipj}" | jq -r '.[]' 2>/dev/null)"
+        if [ -n "${_ip_list}" ]; then
+            while IFS= read -r _pat; do
+                [ -z "${_pat}" ] && continue
+                [[ "" =~ ${_pat} ]] 2>/dev/null
+                if [ "$?" -ne 2 ]; then
+                    _good_lines="${_good_lines}${_pat}
+"
+                    _kept=$((_kept + 1))
+                fi
+            done <<IPEOF
+${_ip_list}
+IPEOF
+        fi
+        _good_ip="$(printf '%s' "${_good_lines}" | jq -Rn '[inputs | select(length>0)]' 2>/dev/null)"
+        [ -z "${_good_ip}" ] && _good_ip="[]"
+        _trig="$(jq -cn --argjson kw "${_kwj:-[]}" --argjson ip "${_good_ip}" '$kw + $ip' 2>/dev/null)"
+        [ -z "${_trig}" ] && _trig="[]"
+        _drop=0
+        [[ "${_iporig}" =~ ^[0-9]+$ ]] && _drop=$(( _iporig - _kept ))
+        [ "${_drop}" -lt 0 ] && _drop=0
+        printf '%s\t%s\t%s\n' "${_n}" "${_trig}" "${_drop}"
+    done
+}
+
+# -----------------------------------------------------------------
 # Step 3: Discover all external plugin skills (unified scanner)
 # -----------------------------------------------------------------
 EXTERNAL_DISCOVERED=""
@@ -325,6 +380,7 @@ ALL_DISCOVERED="${EXTERNAL_DISCOVERED}${PLUGIN_DISCOVERED}${USER_DISCOVERED}"
 # -----------------------------------------------------------------
 _FM_FILES=""
 _FM_NAMES=""
+_SR_FILES=""
 
 # Scan all external plugins (same traversal as unified scanner in Step 3)
 for _mkt_dir in "${HOME}/.claude/plugins/cache"/*/; do
@@ -337,6 +393,10 @@ for _mkt_dir in "${HOME}/.claude/plugins/cache"/*/; do
         _latest_ver="$(ls -1 "${_plugin_dir}" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)"
         if [ -n "${_latest_ver}" ]; then
             _resolved="${_plugin_dir}${_latest_ver}/"
+        fi
+        # Hub-style routing metadata sits beside skills/ (one file per plugin)
+        if [ -f "${_resolved}skill-rules.json" ]; then
+            _SR_FILES="${_SR_FILES} ${_resolved}skill-rules.json"
         fi
         if [ -d "${_resolved}skills" ]; then
             for _smd in "${_resolved}skills"/*/SKILL.md; do
@@ -376,6 +436,44 @@ if [ -n "${_FM_FILES}" ]; then
             [range(0; [$names | length, ($objs | length)] | min) as $i |
                 {($names[$i]): $objs[$i]}] | add // {}
         ')" || FRONTMATTER_MAP="{}"
+    fi
+fi
+
+# -----------------------------------------------------------------
+# Step 5c: Derive triggers from skill-rules.json for discovered skills
+# whose SKILL.md frontmatter supplied none (hub routing interop).
+# -----------------------------------------------------------------
+if [ -n "${_SR_FILES}" ]; then
+    _SR_OUT=""
+    for _srf in ${_SR_FILES}; do
+        _one="$(_translate_skill_rules "${_srf}")"
+        [ -z "${_one}" ] && continue
+        _SR_OUT="${_SR_OUT}${_one}
+"
+        _file_drop="$(printf '%s' "${_one}" | awk -F'\t' '{s+=$3} END{print s+0}')"
+        if [[ "${_file_drop}" =~ ^[0-9]+$ ]] && [ "${_file_drop}" -gt 0 ]; then
+            _sr_label="$(basename "$(dirname "${_srf}")")"
+            case "${_sr_label}" in
+                [0-9]*.[0-9]*) _sr_label="$(basename "$(dirname "$(dirname "${_srf}")")")" ;;
+            esac
+            printf '[skill-rules] %s: dropped %s PCRE-only/invalid intentPattern(s)\n' \
+                "${_sr_label}" "${_file_drop}" >&2
+        fi
+    done
+    if [ -n "${_SR_OUT}" ]; then
+        _SR_TRIGGERS_MAP="$(printf '%s' "${_SR_OUT}" | jq -Rn '
+            [inputs | select(length>0) | split("\t") | select(length>=2)
+             | {(.[0]): (.[1]|fromjson)}] | add // {}
+        ' 2>/dev/null)"
+        [ -z "${_SR_TRIGGERS_MAP}" ] && _SR_TRIGGERS_MAP="{}"
+        FRONTMATTER_MAP="$(printf '%s' "${FRONTMATTER_MAP}" | jq -c --argjson add "${_SR_TRIGGERS_MAP}" '
+            reduce ($add | to_entries[]) as $e (.;
+                if ((.[$e.key].triggers // []) | length) == 0 and (($e.value | length) > 0)
+                then .[$e.key] = ((.[$e.key] // {}) + {triggers: $e.value})
+                else . end
+            )
+        ' 2>/dev/null)" || FRONTMATTER_MAP="${FRONTMATTER_MAP}"
+        [ -z "${FRONTMATTER_MAP}" ] && FRONTMATTER_MAP="{}"
     fi
 fi
 
