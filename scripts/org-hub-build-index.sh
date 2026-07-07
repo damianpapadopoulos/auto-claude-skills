@@ -11,8 +11,9 @@
 HUB=""; DESC=""
 while [ $# -gt 0 ]; do
     case "$1" in
-        --hub) HUB="$2"; shift 2 ;;
-        --descriptor) DESC="$2"; shift 2 ;;
+        # dangling flag guard: shift 2 with $#=1 fails WITHOUT shifting → infinite loop
+        --hub) [ $# -ge 2 ] || { echo "missing value for --hub" >&2; exit 2; }; HUB="$2"; shift 2 ;;
+        --descriptor) [ $# -ge 2 ] || { echo "missing value for --descriptor" >&2; exit 2; }; DESC="$2"; shift 2 ;;
         *) echo "unknown arg: $1" >&2; exit 2 ;;
     esac
 done

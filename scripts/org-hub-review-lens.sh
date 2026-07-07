@@ -16,7 +16,10 @@
 DESC=".claude/org-hub.json"
 while [ $# -gt 0 ]; do
     case "$1" in
-        --descriptor) DESC="$2"; shift 2 ;;
+        --descriptor)
+            # dangling flag: shift 2 with $#=1 fails WITHOUT shifting → infinite loop
+            [ $# -ge 2 ] || { echo "usage: org-hub-review-lens.sh [--descriptor <path>]" >&2; exit 2; }
+            DESC="$2"; shift 2 ;;
         *) echo "unknown arg: $1" >&2; exit 2 ;;
     esac
 done
@@ -53,6 +56,11 @@ i=0
 while [ "${i}" -lt "${COUNT}" ]; do
     p="$(jq -r --argjson i "${i}" '.review_lens_allowlist[$i].path // ""' "${DESC}" 2>/dev/null)" || p=""
     pin="$(jq -r --argjson i "${i}" '.review_lens_allowlist[$i].sha256 // ""' "${DESC}" 2>/dev/null)" || pin=""
+    # Flatten control chars (PR1 descriptor-field convention): fields are echoed in
+    # advisories, so an embedded newline could otherwise forge a standalone
+    # "--- <p> (sha256 verified) ---" framing line from an UNPINNED entry.
+    p="$(printf '%s' "${p}" | tr '\000-\037' ' ')"
+    pin="$(printf '%s' "${pin}" | tr '\000-\037' ' ')"
     i=$(( i + 1 ))
     if [ -z "${p}" ] || [ -z "${pin}" ]; then
         echo "[org-hub review lens] allowlist entry $(( i - 1 )) missing path or sha256 — skipped."
@@ -75,15 +83,16 @@ while [ "${i}" -lt "${COUNT}" ]; do
         echo "[org-hub review lens] ${p}: resolves outside the hub clone — skipped."
         continue ;;
     esac
-    actual="$(_sha256 "${f}")"
-    if [ -z "${actual}" ] || [ "${actual}" != "${pin}" ]; then
-        echo "[org-hub review lens] ${p}: content hash mismatch (pinned ${pin}, current ${actual:-unreadable}) — body NOT loaded. Re-review the file and re-pin via /setup."
-        continue
-    fi
+    # Size check BEFORE hashing: don't hash an arbitrarily large file just to refuse it.
     bytes="$(wc -c < "${f}" 2>/dev/null | tr -d '[:space:]')" || bytes=""
     [[ "${bytes}" =~ ^[0-9]+$ ]] || bytes=999999
     if [ "${bytes}" -gt 8192 ]; then
         echo "[org-hub review lens] ${p}: body too large (${bytes}B > 8192B) — NOT loaded (refuse, not truncate). Split the file in the hub and re-pin."
+        continue
+    fi
+    actual="$(_sha256 "${f}")"
+    if [ -z "${actual}" ] || [ "${actual}" != "${pin}" ]; then
+        echo "[org-hub review lens] ${p}: content hash mismatch (pinned ${pin}, current ${actual:-unreadable}) — body NOT loaded. Re-review the file and re-pin via /setup."
         continue
     fi
     echo ""
