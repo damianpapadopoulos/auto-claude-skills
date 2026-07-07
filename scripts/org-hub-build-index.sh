@@ -4,13 +4,16 @@
 # Usage: org-hub-build-index.sh --hub <clone-path> --descriptor <descriptor-json>
 # Reads scope/context_roots from the descriptor; writes index to its index_path
 # (relative to the descriptor's directory parent repo); records hub HEAD sha.
+# Descriptor also supports optional review_lens_allowlist: [{path, sha256}] — consumed by
+# scripts/org-hub-review-lens.sh (REVIEW-phase hash-pinned body loading), not by this builder.
 # Bash 3.2. Exits non-zero on hard errors (this is a CLI, not a fail-open hook).
 
 HUB=""; DESC=""
 while [ $# -gt 0 ]; do
     case "$1" in
-        --hub) HUB="$2"; shift 2 ;;
-        --descriptor) DESC="$2"; shift 2 ;;
+        # dangling flag guard: shift 2 with $#=1 fails WITHOUT shifting → infinite loop
+        --hub) [ $# -ge 2 ] || { echo "missing value for --hub" >&2; exit 2; }; HUB="$2"; shift 2 ;;
+        --descriptor) [ $# -ge 2 ] || { echo "missing value for --descriptor" >&2; exit 2; }; DESC="$2"; shift 2 ;;
         *) echo "unknown arg: $1" >&2; exit 2 ;;
     esac
 done

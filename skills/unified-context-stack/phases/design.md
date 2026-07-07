@@ -11,6 +11,8 @@ IF the task involves a known feature or capability, check for existing specifica
 - **ELSE IF `openspec/specs/<capability>/spec.md` exists:** Read the canonical spec. Proposed approaches should satisfy existing requirements unless the user explicitly wants to change direction.
 - **ELSE IF `docs/superpowers/specs/` has a matching design spec (legacy):** Read it, but note it may be stale
 - **IF no artifacts found:** Proceed without spec context.
+- **IF `org_hub=true` (parallel, additive):** Read `.claude/org-hub.json`; check the hub clone's `spec_roots[]` for feature folders matching this design's area, and honor any `applies_context:` frontmatter on hub artifacts already injected via the session-start index.
+- **Glossary-first (org_hub=true):** Before naming new concepts, read the descriptor's `glossaries[]` files and use the org's canonical terms in the design.
 
 ### 1. Historical Truth
 Query institutional memory for past decisions and constraints in this area:
