@@ -72,6 +72,20 @@ case "${_COMMAND}" in
             . "${_PLUGIN_ROOT}/hooks/lib/verdict.sh" 2>/dev/null && _VERDICT_OK=true || true
         fi
         _HEAD_SHA="$(git rev-parse HEAD 2>/dev/null || true)"
+        # Bind the verdict to the COMMIT, not the session. The payload-less
+        # project-verification SKILL writes under the shared singleton's token while
+        # this hook resolves payload-first (issue #51); concurrent sessions clobber the
+        # singleton so the two diverge and a token-scoped read would deadlock. Verdict
+        # reads below use _VERDICT_TOKEN: identical to _SESSION_TOKEN whenever the
+        # session's own verdict covers HEAD, otherwise a sibling artifact bound to the
+        # same HEAD (failure-preferring). Composition/ledger/signal reads stay session-
+        # scoped. Fail-open: token unchanged if the lib is unavailable.
+        _proot="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+        _VERDICT_TOKEN="${_SESSION_TOKEN}"
+        if [ "${_VERDICT_OK}" = "true" ]; then
+            _VERDICT_TOKEN="$(verdict_resolve_token "${_SESSION_TOKEN}" "${_proot}")" || _VERDICT_TOKEN="${_SESSION_TOKEN}"
+            [ -z "${_VERDICT_TOKEN}" ] && _VERDICT_TOKEN="${_SESSION_TOKEN}"
+        fi
         _STALE_MSG=""
         # _ledger_has MILESTONE — returns 0 if ledger satisfies; accumulates stale
         # warning text in _STALE_MSG when the recorded SHA differs from HEAD.
@@ -117,9 +131,9 @@ case "${_COMMAND}" in
             # ancestor/stale/cross-branch/absent verdict => no denial (a later HEAD may
             # be fixed). This is the false-block guard.
             if [ "${_VERDICT_OK}" = "true" ] && [ "${_verif_in_chain}" = "true" ] \
-               && verdict_sha_is_head "${_SESSION_TOKEN}" "" \
-               && verdict_has_test_failure "${_SESSION_TOKEN}"; then
-                _gates="$(verdict_failing_gates "${_SESSION_TOKEN}")" || true
+               && verdict_sha_is_head "${_VERDICT_TOKEN}" "" \
+               && verdict_has_test_failure "${_VERDICT_TOKEN}"; then
+                _gates="$(verdict_failing_gates "${_VERDICT_TOKEN}")" || true
                 _MSG="PUSH GATE: verification-before-completion is recorded, but the verification verdict at HEAD reports failing gate(s): ${_gates}. Fix and re-run Skill(auto-claude-skills:project-verification) before pushing."
                 jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
                 exit 0
@@ -137,14 +151,14 @@ case "${_COMMAND}" in
         # changes are high-risk by nature, not by phase. Fail-safe: no lib, not a
         # routing repo, or an unresolvable diff base => no gate (never a false-block).
         if [ "${_VERDICT_OK}" = "true" ]; then
-            _proot="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+            # _proot resolved once above, alongside _VERDICT_TOKEN.
             if is_routing_repo "${_proot}" && diff_touches_routing "${_proot}"; then
-                if verdict_is_clean "${_SESSION_TOKEN}" && verdict_covers_head "${_SESSION_TOKEN}" "${_proot}" \
-                   && { verdict_sha_is_head "${_SESSION_TOKEN}" "${_proot}" || ! verdict_routing_delta "${_SESSION_TOKEN}" "${_proot}"; }; then
+                if verdict_is_clean "${_VERDICT_TOKEN}" && verdict_covers_head "${_VERDICT_TOKEN}" "${_proot}" \
+                   && { verdict_sha_is_head "${_VERDICT_TOKEN}" "${_proot}" || ! verdict_routing_delta "${_VERDICT_TOKEN}" "${_proot}"; }; then
                     # Clean verdict at HEAD, OR at an ancestor whose routing files are
                     # unchanged since (a benign non-routing follow-up) — allow. The
                     # ancestor case only warns so follow-up commits aren't re-blocked.
-                    if ! verdict_sha_is_head "${_SESSION_TOKEN}" "${_proot}"; then
+                    if ! verdict_sha_is_head "${_VERDICT_TOKEN}" "${_proot}"; then
                         _STALE_MSG="${_STALE_MSG}${_STALE_MSG:+; }routing change: the clean verification verdict covers an earlier commit, not HEAD (routing files unchanged since). Re-run project-verification to refresh."
                     fi
                     : # allow

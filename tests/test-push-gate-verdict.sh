@@ -102,6 +102,45 @@ rm -f "${ART}"
 out="$(run_in "${NR}")"
 assert_not_contains "non-routing repo => routing gate scoped out" '"deny"' "${out:-}"
 
+# ============ Token convergence: concurrent-session singleton clobber (the live deadlock) ============
+# The payload-derived guard token is session-t, but the payload-less SKILL wrote the
+# verdict under a DIFFERENT token (it read a singleton later clobbered by another
+# session). Binding on sha (not session token) must bridge this so the gate finds the
+# clean verdict for THIS HEAD and does not false-block.
+CV="${TMP}/convrepo"; mkdir -p "${CV}"
+( cd "${CV}"; git init -q; git config user.email t@t; git config user.name t
+  mkdir config; echo '{}' > config/default-triggers.json; git add -A; git commit -qm c1 )
+CVBASE="$(git -C "${CV}" rev-parse HEAD)"
+( cd "${CV}"; git checkout -q -b feature; git branch -f main "${CVBASE}"
+  mkdir hooks; echo 'echo x' > hooks/y.sh; git add -A; git commit -qm routing-change )
+CVHEAD="$(git -C "${CV}" rev-parse HEAD)"
+
+# (9) routing diff, clean verdict AT HEAD but under a FOREIGN token (not session-t) -> NO deny
+rm -f "${HOME}/.claude/.skill-project-verified-"*
+printf '%s' "$(jq -nc --arg s "${CVHEAD}" '{failed:[],could_not_verify:[],gate_gaming_status:"clean",sha:$s}')" \
+  > "${HOME}/.claude/.skill-project-verified-session-FOREIGN"
+out="$(run_in "${CV}")"
+assert_not_contains "foreign-token clean verdict @HEAD bridges deadlock" '"deny"' "${out:-}"
+
+# (10) anti-gate-gaming: a foreign CLEAN@HEAD must NOT mask a foreign FAILED@HEAD.
+#      Verify is in the chain (status completed), so verify-hardening must still deny,
+#      naming the failing gate (deny-bias in token resolution).
+rm -f "${HOME}/.claude/.skill-project-verified-"*
+printf '%s' "$(jq -nc --arg s "${CVHEAD}" '{failed:[],could_not_verify:[],gate_gaming_status:"clean",sha:$s}')" \
+  > "${HOME}/.claude/.skill-project-verified-session-CLEANFOREIGN"
+printf '%s' "$(jq -nc --arg s "${CVHEAD}" '{failed:["tests"],could_not_verify:[],gate_gaming_status:"clean",sha:$s}')" \
+  > "${HOME}/.claude/.skill-project-verified-session-FAILEDFOREIGN"
+out="$(run_in "${CV}")"
+assert_contains "clean sibling cannot mask failed@HEAD sibling"  '"deny"' "${out:-<empty>}"
+assert_contains "deny names the failing gate (deny-bias)"        "tests"  "${out:-<empty>}"
+
+# (11) foreign token but sha is NOT HEAD (stale) -> still deny (no covering verdict) [no over-bridging]
+rm -f "${HOME}/.claude/.skill-project-verified-"*
+printf '%s' "$(jq -nc '{failed:[],could_not_verify:[],gate_gaming_status:"clean",sha:"0000000000000000000000000000000000000000"}')" \
+  > "${HOME}/.claude/.skill-project-verified-session-STALEFOREIGN"
+out="$(run_in "${CV}")"
+assert_contains "foreign verdict not@HEAD => still deny (sha binding intact)" '"deny"' "${out:-<empty>}"
+
 export HOME="${_OLDHOME}"
 rm -rf "${TMP}"
 print_summary
