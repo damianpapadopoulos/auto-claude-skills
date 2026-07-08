@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "discovery_path": null,
+  "design_path": "",
+  "plan_path": "",
+  "spec_path": "",
+  "sp_plan_path": "",
+  "sp_spec_path": "",
+  "change_slug": "skill-content-coverage-gate",
+  "capability_slug": "skill-creation-gate",
+  "source_branch": "feat/skill-content-coverage-gate",
+  "base_commit": "0d4705603c1ae9ded8e088296ffc99c94a466c8c",
+  "openspec_surface": "none",
+  "archived_at": "2026-07-08T23:42:47Z"
+}
