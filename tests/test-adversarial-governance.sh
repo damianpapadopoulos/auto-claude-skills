@@ -113,6 +113,12 @@ assert_contains "frontend-quality: mirrored to fallback registry" "frontend-qual
 assert_contains "agent-safety-review: safety eval red before code" "before the behavior is implemented" "${SAFETY_CONTENT}"
 assert_contains "agent-safety-review: compose with TDD" "test-driven-development" "${SAFETY_CONTENT}"
 
+# agent-safety-review: Step 2b autonomy-control coherence backstop (additive).
+assert_contains "agent-safety-review: Step 2b autonomy coherence" "Step 2b" "${SAFETY_CONTENT}"
+assert_contains "agent-safety-review: autonomy ladder rungs" "execute-reversible" "${SAFETY_CONTENT}"
+assert_contains "agent-safety-review: additive-only note (does not change trifecta)" "does not change the trifecta" "${SAFETY_CONTENT}"
+assert_contains "agent-safety-review: output autonomy row" "Autonomy:" "${SAFETY_CONTENT}"
+
 # Summary
 echo ""
 echo "=============================="
