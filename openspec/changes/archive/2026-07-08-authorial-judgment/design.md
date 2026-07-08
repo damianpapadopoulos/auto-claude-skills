@@ -76,3 +76,19 @@ not decorate the absence. This is the anti-hallucination guard.
 - Specs, changelogs, release notes, status updates, meeting notes (procedural).
 - Code, commit messages, tests, config.
 - Drafting-time steering; a two-layer generate+review split.
+
+## Implementation Notes (synced at ship time)
+
+- Triggers were tightened twice during REVIEW without changing the spec's
+  acceptance scenarios (activation on persuasive prose; suppression on
+  reference/procedural/code writing still hold — suppression was strengthened,
+  not relaxed):
+  1. Held-out routing review removed over-broad bare alternations (`post`
+     substring-matching "postgres/postmortem", bare `column`/`generic`/`draft`/
+     `copy`) that fired on dev/reference prompts.
+  2. Whole-branch review applied the repo-native `(^|[^a-z])` boundary idiom to
+     `op.?ed` and `article` (which were substring-matching "developed" and
+     "particle"). All regressions are locked into
+     `tests/fixtures/routing/authorial-judgment.txt`.
+- `available: false` in `fallback-registry.json` matches the repo's established
+  fallback-entry shape (parity with `alert-hygiene`), not `true`.
