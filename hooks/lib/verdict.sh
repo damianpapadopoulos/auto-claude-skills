@@ -76,7 +76,7 @@ verdict_resolve_token() {
     [ -z "$head" ] && { printf '%s' "$session_token"; return 0; }
     while IFS= read -r f; do
         [ -n "$f" ] || continue
-        base="$(basename -- "$f" 2>/dev/null)" || continue
+        base="${f##*/}"                                   # fork-free basename (bash 3.2; no BSD -- ambiguity)
         tok="${base#.skill-project-verified-}"
         [ -z "$tok" ] && continue
         [ "$tok" = "$session_token" ] && continue
