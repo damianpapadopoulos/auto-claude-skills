@@ -28,14 +28,20 @@ owned_with_triggers="$(jq -r '
 
 while IFS= read -r skill || [ -n "${skill}" ]; do
     [ -z "${skill}" ] && continue
-    # Any *.sh under tests/ that references skills/<name>/, other than this suite itself.
-    matches="$(grep -rlF "skills/${skill}/" "${TESTS_DIR}" --include='*.sh' 2>/dev/null \
-        | grep -v '/test-skill-content-coverage\.sh$' || true)"
-    if [ -n "${matches}" ]; then
-        count="$(printf '%s\n' "${matches}" | grep -c .)"
+    # A test "covers" the skill if it references the real skills/<name>/ path. Two kinds
+    # of matches must NOT count: (1) this suite's own dynamic "skills/${skill}/"; (2) mock
+    # fixtures under .claude/skills/<name>/ — registry/discovery mechanics tests (e.g.
+    # test-registry.sh) build fake skill trees at ${HOME}/.claude/skills/<name>/ using the
+    # real skill name, but assert nothing about the real SKILL.md. Grep lines, not just
+    # filenames, so a file that has BOTH a mock ref and a real ref still counts by the real one.
+    real="$(grep -rnF "skills/${skill}/" "${TESTS_DIR}" --include='*.sh' 2>/dev/null \
+        | grep -v 'test-skill-content-coverage\.sh:' \
+        | grep -vF '.claude/skills/' || true)"
+    if [ -n "${real}" ]; then
+        count="$(printf '%s\n' "${real}" | awk -F: '{print $1}' | sort -u | grep -c .)"
         _record_pass "${skill}: content-asserted by ${count} test file(s)"
     else
-        _record_fail "owned skill '${skill}' has no content-assertion test (no tests/*.sh references skills/${skill}/)"
+        _record_fail "owned skill '${skill}' has no content-assertion test (no tests/*.sh reads the real skills/${skill}/SKILL.md; mock .claude/skills paths do not count)"
     fi
 done <<EOF
 ${owned_with_triggers}
