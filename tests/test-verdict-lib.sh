@@ -92,6 +92,47 @@ assert_equals "routing delta since old sha" "0" "$(_bool verdict_routing_delta "
 mkart "$(jq -nc --arg s "${FHEAD}" '{failed:[],could_not_verify:[],gate_gaming_status:"clean",sha:$s}')"
 assert_equals "no routing delta at HEAD" "1" "$(_bool verdict_routing_delta "${TOKEN}" "${REPO}")"
 
+# ---- verdict_resolve_token: bind verdict to COMMIT (sha), not session token ----
+# A payload-less SKILL writes the verdict under the shared singleton's token while
+# the guard resolves payload-first (issue #51); concurrent sessions clobber the
+# singleton so the tokens diverge and the gate would never find the verdict.
+# Resolution keeps the session token whenever ITS artifact covers HEAD (byte-identical
+# to prior behavior) and only otherwise consults sibling artifacts bound to the same HEAD.
+rm -f "${HOME}/.claude/.skill-project-verified-"*
+RHEAD="$(git -C "${REPO}" rev-parse HEAD)"
+mkart_tok() { printf '%s' "$2" > "${HOME}/.claude/.skill-project-verified-$1"; }
+
+# (a) session token's own verdict covers HEAD -> returned verbatim (no sibling scan)
+mkart_tok "session-self" "$(jq -nc --arg s "${RHEAD}" '{failed:[],could_not_verify:[],gate_gaming_status:"clean",sha:$s}')"
+mkart_tok "session-sib"  "$(jq -nc --arg s "${RHEAD}" '{failed:[],could_not_verify:[],gate_gaming_status:"clean",sha:$s}')"
+assert_equals "resolve: own covering token wins" "session-self" "$(verdict_resolve_token "session-self" "${REPO}")"
+
+# (b) session token absent, a SIBLING verdict covers HEAD -> sibling bridges the deadlock
+rm -f "${HOME}/.claude/.skill-project-verified-"*
+mkart_tok "session-sib" "$(jq -nc --arg s "${RHEAD}" '{failed:[],could_not_verify:[],gate_gaming_status:"clean",sha:$s}')"
+assert_equals "resolve: sibling covering verdict bridges deadlock" "session-sib" "$(verdict_resolve_token "session-absent" "${REPO}")"
+
+# (c) deny-bias: a sibling FAILED@HEAD outranks a sibling CLEAN@HEAD
+rm -f "${HOME}/.claude/.skill-project-verified-"*
+mkart_tok "session-clean"  "$(jq -nc --arg s "${RHEAD}" '{failed:[],could_not_verify:[],gate_gaming_status:"clean",sha:$s}')"
+mkart_tok "session-failed" "$(jq -nc --arg s "${RHEAD}" '{failed:["tests"],could_not_verify:[],gate_gaming_status:"clean",sha:$s}')"
+RT="$(verdict_resolve_token "session-absent" "${REPO}")"
+assert_equals "resolve: failed@HEAD sibling wins (deny-bias)" "0" "$(_bool verdict_has_test_failure "${RT}")"
+
+# (d) nothing covers HEAD anywhere -> session token returned UNCHANGED (absent semantics kept)
+rm -f "${HOME}/.claude/.skill-project-verified-"*
+mkart_tok "session-stale" "$(jq -nc '{failed:[],could_not_verify:[],gate_gaming_status:"clean",sha:"0000000000000000000000000000000000000000"}')"
+assert_equals "resolve: no covering verdict => session token unchanged" "session-absent" "$(verdict_resolve_token "session-absent" "${REPO}")"
+
+# (e) cross-token bridging is EXACT-HEAD only: a FOREIGN clean verdict at an ANCESTOR
+# must NOT bridge (ancestor acceptance is scoped to the session's OWN token, step 1).
+rm -f "${HOME}/.claude/.skill-project-verified-"*
+mkart_tok "session-anc" "$(jq -nc --arg s "${C1}" '{failed:[],could_not_verify:[],gate_gaming_status:"clean",sha:$s}')"
+assert_equals "resolve: foreign ancestor-clean does NOT bridge (exact-HEAD only)" "session-absent" "$(verdict_resolve_token "session-absent" "${REPO}")"
+# but the SAME artifact under the session's OWN token DOES cover (ancestor, step 1)
+mv "${HOME}/.claude/.skill-project-verified-session-anc" "${HOME}/.claude/.skill-project-verified-session-own"
+assert_equals "resolve: own ancestor-clean still covers (step 1)" "session-own" "$(verdict_resolve_token "session-own" "${REPO}")"
+
 export HOME="${_OLDHOME}"
 rm -rf "${TMP}"
 print_summary
