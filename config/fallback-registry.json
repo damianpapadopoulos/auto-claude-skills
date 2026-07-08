@@ -820,8 +820,8 @@
       "role": "domain",
       "phase": "IMPLEMENT",
       "triggers": [
-        "(write|draft|author|compose|help me write).*(blog post|essay|op.?ed|article|newsletter|think.?piece|keynote|speech|conference talk)",
-        "(blog post|essay|op.?ed|newsletter|article|think.?piece).*(about|arguing|on how|draft|rewrite)",
+        "(write|draft|author|compose|help me write).*(blog post|essay|(^|[^a-z])op.?ed|(^|[^a-z])article|newsletter|think.?piece|keynote|speech|conference talk)",
+        "(blog post|essay|(^|[^a-z])op.?ed|newsletter|(^|[^a-z])article|think.?piece).*(about|arguing|on how|draft|rewrite)",
         "(sound|read|feel)(s|ing)?.*(like ai|ai.generated|like a robot|robotic|soulless|lifeless)",
         "(make|keep|help).*(it|this|the (piece|copy|writing|draft|prose)).*(less generic|more human|sound human|not sound like ai|not read like ai)",
         "(rewrite|revise|punch up).*(prose|essay|blog post|article|newsletter|the piece|the copy|this draft)"
