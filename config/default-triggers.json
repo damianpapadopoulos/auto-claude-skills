@@ -737,6 +737,34 @@
       "requires": [],
       "description": "Advisory-driven org-wide audit of a published supply-chain attack on a registry package. Distinct trigger surface from security-scanner (which fires on routine CVE/scan language).",
       "invoke": "Skill(auto-claude-skills:supply-chain-investigation)"
+    },
+    {
+      "name": "authorial-judgment",
+      "role": "domain",
+      "phase": "IMPLEMENT",
+      "triggers": [
+        "(write|draft|author|compose|help me write).*(blog post|essay|op.?ed|article|newsletter|column|think.?piece|keynote|talk|speech)",
+        "(blog post|essay|op.?ed|newsletter|article|think.?piece).*(about|arguing|on how|draft|rewrite)",
+        "(sound|read|feel)(s|ing)?.*(like ai|ai.generated|robotic|generic|soulless|lifeless)",
+        "(make|keep|help).*(it|this|the (piece|copy|writing|draft|prose)).*(less generic|more human|sound human|not sound like ai|not read like ai)",
+        "(rewrite|revise|punch up).*(prose|essay|post|article|draft|copy|newsletter)"
+      ],
+      "keywords": [
+        "blog post",
+        "essay",
+        "op-ed",
+        "newsletter",
+        "sounds like AI",
+        "less generic",
+        "more human",
+        "authorial voice"
+      ],
+      "trigger_mode": "regex",
+      "priority": 15,
+      "precedes": [],
+      "requires": [],
+      "description": "Use when authoring or de-generic-ifying persuasive prose — essays, blog posts, op-eds, newsletters, talks, or a 'make this not sound like AI' rewrite — to apply a post-draft authorial-judgment revision pass. NOT for README/API-docs, specs/changelogs, or code.",
+      "invoke": "Skill(auto-claude-skills:authorial-judgment)"
     }
   ],
   "phase_guide": {
