@@ -25,6 +25,7 @@ assert_contains "autonomy check in DESIGN hints (fallback)" "AUTONOMY CHECK" "${
 assert_contains "autonomy principle stated (default)" "autonomy without proportional control is a liability" "${REGISTRY_CONTENT}"
 assert_contains "autonomy principle stated (fallback)" "autonomy without proportional control is a liability" "${FALLBACK_CONTENT}"
 assert_contains "autonomy hint is advisory not a gate (default)" "this is guidance, not a gate" "${REGISTRY_CONTENT}"
+assert_contains "autonomy hint is advisory not a gate (fallback)" "this is guidance, not a gate" "${FALLBACK_CONTENT}"
 
 # --- agent-safety-review: design-time governance ---
 SAFETY_SKILL="${PROJECT_ROOT}/skills/agent-safety-review/SKILL.md"
