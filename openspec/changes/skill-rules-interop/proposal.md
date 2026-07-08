@@ -10,7 +10,7 @@ frontmatter. The builder ignores `skill-rules.json`, so those skills are
 activation context.
 
 `skill-rules.json` is the routing convention several hub plugins already ship
-(verified: 4 real files under `plugins/marketplaces/oviva-hub/plugins/*/` use
+(verified against real installed hub plugins whose files use the shape
 `{skills.<name>.promptTriggers.{keywords,intentPatterns}}`). This is the
 committed, independent follow-up (PR-X) recorded in the org-hub-connector
 proposal — conflict-free with that change, landing after PR1 fixtures exist.
