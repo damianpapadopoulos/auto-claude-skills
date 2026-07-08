@@ -92,6 +92,16 @@ keywords are the load-bearing routing source. That is expected and logged.
 4. Triggers-only; `type`/`priority`/`enforcement` mapping deferred.
 5. Drop count logged to stderr once per plugin when non-zero; stdout stays clean.
 
+## Follow-up (noted, out of scope for PR-X)
+
+Because nearly every real `intentPatterns` entry is PCRE (`.*?`, `(?!...)`) and
+gets dropped, keyword quality becomes the sole routing signal for hub skills.
+A follow-up could surface **which** skills lost the most patterns (a per-skill
+dropped-pattern breakdown, not just a per-plugin count) so hub authors can
+rewrite them as ERE or lean harder on keywords. PR-X logs only the aggregate
+per-plugin count to stderr; the richer author-facing breakdown is deferred
+(revival trigger: a hub author reports routing gaps traced to dropped patterns).
+
 ## Security posture
 
 Read-only of local, already-installed plugin files. skill-rules.json content
