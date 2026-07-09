@@ -19,6 +19,14 @@ assert_contains "adversarial checklist in REVIEW hints (fallback)" "ADVERSARIAL 
 assert_contains "HITL check in adversarial checklist" "safety gate, HITL requirement" "${REGISTRY_CONTENT}"
 assert_contains "bypass patterns in adversarial checklist" "dangerouslyDisableSandbox" "${REGISTRY_CONTENT}"
 
+# --- Autonomy<->control coherence (DESIGN) ---
+assert_contains "autonomy check in DESIGN hints (default)" "AUTONOMY CHECK" "${REGISTRY_CONTENT}"
+assert_contains "autonomy check in DESIGN hints (fallback)" "AUTONOMY CHECK" "${FALLBACK_CONTENT}"
+assert_contains "autonomy principle stated (default)" "autonomy without proportional control is a liability" "${REGISTRY_CONTENT}"
+assert_contains "autonomy principle stated (fallback)" "autonomy without proportional control is a liability" "${FALLBACK_CONTENT}"
+assert_contains "autonomy hint is advisory not a gate (default)" "this is guidance, not a gate" "${REGISTRY_CONTENT}"
+assert_contains "autonomy hint is advisory not a gate (fallback)" "this is guidance, not a gate" "${FALLBACK_CONTENT}"
+
 # --- agent-safety-review: design-time governance ---
 SAFETY_SKILL="${PROJECT_ROOT}/skills/agent-safety-review/SKILL.md"
 SAFETY_CONTENT="$(cat "${SAFETY_SKILL}")"
@@ -105,6 +113,12 @@ assert_contains "frontend-quality: mirrored to fallback registry" "frontend-qual
 # agent-safety-review: safety eval cases red before code (TDD-for-evals).
 assert_contains "agent-safety-review: safety eval red before code" "before the behavior is implemented" "${SAFETY_CONTENT}"
 assert_contains "agent-safety-review: compose with TDD" "test-driven-development" "${SAFETY_CONTENT}"
+
+# agent-safety-review: Step 2b autonomy-control coherence backstop (additive).
+assert_contains "agent-safety-review: Step 2b autonomy coherence" "Step 2b" "${SAFETY_CONTENT}"
+assert_contains "agent-safety-review: autonomy ladder rungs" "execute-reversible" "${SAFETY_CONTENT}"
+assert_contains "agent-safety-review: additive-only note (does not change trifecta)" "does not change the trifecta" "${SAFETY_CONTENT}"
+assert_contains "agent-safety-review: output autonomy row" "Autonomy:" "${SAFETY_CONTENT}"
 
 # Summary
 echo ""

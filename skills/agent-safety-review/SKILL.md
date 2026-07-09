@@ -34,6 +34,34 @@ For each field, state:
 | 2 of 3 | **Elevated risk** | Note which leg is missing. Recommend not adding the third without mitigation. |
 | 0-1 | **Standard risk** | No special action required |
 
+## Step 2b: Assess Autonomy–Control Coherence
+
+Independent of the trifecta count above — **this does not change the trifecta
+classification**; it adds a separate advisory. Data-flow risk and autonomy risk
+are different axes.
+
+State the agent's intended **autonomy level**:
+
+| Rung | Meaning |
+|------|---------|
+| `advise` | Proposes; a human acts |
+| `recommend` | Proposes a specific action; a human approves each one |
+| `execute-reversible` | Acts autonomously; effects bounded, observable, easily undone |
+| `execute-irreversible · unattended` | Acts autonomously with hard-to-reverse effects, **or** runs recurring/unattended with no per-run human checkpoint |
+
+Then state whether **proportional oversight** is present — *strong* = per-run
+approval, HITL checkpoint, manifest+dry-run review, or a bounded/reversible blast
+radius; *weak* = none of those.
+
+**Advisory rule:** if the level is `execute-reversible` or higher **AND**
+oversight is weak, emit an advisory proportional to the rung (firmer for
+`execute-irreversible · unattended`, softer "consider" for `execute-reversible`):
+autonomy without proportional control is a liability, not power — recommend
+designing in per-run approval, narrowing scope, or making actions reversible.
+Stay **silent** when oversight is strong (a reviewed manifest, a required
+approval, or reversible/bounded effects already supply the control). This is
+guidance, not a veto.
+
 ## Step 3: Recommend Mitigation (if lethal trifecta)
 
 The primary mitigation is **blast-radius control** — cutting at least one leg of the trifecta. Improved detection scores are NOT proof of safety.
@@ -72,6 +100,8 @@ Output a structured assessment:
 
 ### Classification
 **Risk level:** Lethal trifecta / Elevated / Standard
+**Autonomy:** <advise | recommend | execute-reversible | execute-irreversible · unattended> · **Oversight:** <strong | weak>
+**Autonomy advisory (if flagged):** <proportional recommendation, or "none">
 
 ### Mitigation (if required)
 **Recommended approach:** <which leg to cut and how>
