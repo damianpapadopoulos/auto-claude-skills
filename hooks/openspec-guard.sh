@@ -54,6 +54,17 @@ fi
 # unresolvable diff base => no gate.
 case "${_COMMAND}" in
     *"git push"*)
+        # Explicit bypass. This is a Claude Code PreToolUse hook: it only sees
+        # pushes the AGENT runs through the Bash tool — a human pushing from their
+        # own terminal never reaches here, which is the primary escape hatch. For an
+        # in-agent override, honor ACSM_SKIP_PUSH_GATE=1 either as an exported env var
+        # or as an inline prefix on the command (the hook runs in a separate process,
+        # so an inline `VAR=1 git push` sets the var for git, NOT for us — hence we
+        # also scan the command string). When set, ALL push-gate denials are skipped;
+        # SHIP-phase advisories below still emit.
+        _PUSHGATE_SKIP=false
+        [ "${ACSM_SKIP_PUSH_GATE:-}" = "1" ] && _PUSHGATE_SKIP=true
+        case "${_COMMAND}" in *ACSM_SKIP_PUSH_GATE=1*) _PUSHGATE_SKIP=true ;; esac
         _COMP_STATE="${HOME}/.claude/.skill-composition-state-${_SESSION_TOKEN}"
         # Durable per-(repo+branch) ledger: gate readiness that survives chain
         # re-anchors. Fail-safe: if the helper or branch key is unavailable, the
@@ -98,7 +109,7 @@ case "${_COMMAND}" in
             fi
             return 0
         }
-        if [ -f "${_COMP_STATE}" ] && command -v jq >/dev/null 2>&1; then
+        if [ "${_PUSHGATE_SKIP}" != "true" ] && [ -f "${_COMP_STATE}" ] && command -v jq >/dev/null 2>&1; then
             # Check 1: REVIEW in chain but not completed — deny with REVIEW message
             _review_in_chain=false
             _review_completed=false
@@ -145,12 +156,54 @@ case "${_COMMAND}" in
             # the SHIP-phase block so all advisories emit together as one additionalContext.
         fi
 
+        # Global fail-closed gate — fires for EVERY push, composition or not. Closes
+        # the pre-existing fail-open hole: a push with no active composition state used
+        # to be allowed unconditionally, so the whole gate could be sidestepped by just
+        # not being in a driven session. Now every push must carry, for THIS branch,
+        # both a durable REVIEW record and a passing VERIFY signal. The checks reuse the
+        # same durable artifacts the composition block trusts (branch-ledger milestones,
+        # + a session-local .completed fallback for the write-lag window, + a SHA-bound
+        # clean verdict as stronger VERIFY evidence). Fail-open on INFRASTRUCTURE error:
+        # the block only runs when the ledger lib actually loaded (_LEDGER_OK) — a check
+        # that cannot run never blocks. Only a check that runs and finds NO record denies.
+        # Bypass: _PUSHGATE_SKIP (human terminal push, or ACSM_SKIP_PUSH_GATE=1).
+        if [ "${_PUSHGATE_SKIP}" != "true" ] && [ "${_LEDGER_OK}" = "true" ]; then
+            _g_review=false
+            _g_verify=false
+            branch_ledger_has "requesting-code-review"         "${_proot}" && _g_review=true
+            branch_ledger_has "verification-before-completion" "${_proot}" && _g_verify=true
+            # Same-session fallback: composition .completed (the durable ledger write can
+            # lag skill completion within the session that just ran the skill).
+            if [ -f "${_COMP_STATE}" ] && command -v jq >/dev/null 2>&1; then
+                jq -e '.completed | index("requesting-code-review")'         "${_COMP_STATE}" >/dev/null 2>&1 && _g_review=true
+                jq -e '.completed | index("verification-before-completion")' "${_COMP_STATE}" >/dev/null 2>&1 && _g_verify=true
+            fi
+            # A clean verification verdict covering HEAD is stronger (SHA-bound) evidence
+            # of VERIFY than the status milestone, so it also satisfies the verify leg.
+            if [ "${_g_verify}" = "false" ] && [ "${_VERDICT_OK}" = "true" ] \
+               && verdict_is_clean "${_VERDICT_TOKEN}" && verdict_covers_head "${_VERDICT_TOKEN}" "${_proot}"; then
+                _g_verify=true
+            fi
+            if [ "${_g_review}" = "false" ] || [ "${_g_verify}" = "false" ]; then
+                _need=""
+                [ "${_g_review}" = "false" ] && _need="requesting-code-review"
+                [ "${_g_verify}" = "false" ] && _need="${_need}${_need:+ and }verification-before-completion"
+                _MSG="PUSH GATE (fail-closed): pushing this branch requires ${_need} to have run, but no record exists for it on this branch. Invoke the missing Skill(s) and let them complete, then push again. To bypass intentionally: push from your own terminal, or prefix the push with ACSM_SKIP_PUSH_GATE=1."
+                if command -v jq >/dev/null 2>&1; then
+                    jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
+                else
+                    printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"%s"}\n' "${_MSG}"
+                fi
+                exit 0
+            fi
+        fi
+
         # Routing-governance gate (fail-closed, scoped). In a skill-routing plugin
         # repo, pushes touching routing paths (skills/|config/|hooks/) require a CLEAN
         # verdict covering the branch. Fires regardless of composition chain — routing
         # changes are high-risk by nature, not by phase. Fail-safe: no lib, not a
         # routing repo, or an unresolvable diff base => no gate (never a false-block).
-        if [ "${_VERDICT_OK}" = "true" ]; then
+        if [ "${_PUSHGATE_SKIP}" != "true" ] && [ "${_VERDICT_OK}" = "true" ]; then
             # _proot resolved once above, alongside _VERDICT_TOKEN.
             if is_routing_repo "${_proot}" && diff_touches_routing "${_proot}"; then
                 if verdict_is_clean "${_VERDICT_TOKEN}" && verdict_covers_head "${_VERDICT_TOKEN}" "${_proot}" \
