@@ -13,4 +13,3 @@ Run (opt-in): BEHAVIORAL_EVALS=1 SKILL_PATH=skills/product-discovery/SKILL.md \
 
 RED/GREEN evidence (2026-07-10, sonnet, 5 reps/arm): control (pre-audit skill) 0/5 pass
 deterministic contract; with-skill 4/5 (5th = h3-Options formatting, correctly flagged).
-Details: feature branch .superpowers/sdd/task-2-report.md addendum.

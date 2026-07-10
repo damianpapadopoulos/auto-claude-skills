@@ -77,7 +77,11 @@ else
                     ;;
             esac
         fi
-        if [ "$importance" = "H" ] && [ "$g" -ge 3 ]; then  # fragile
+        # Case-insensitive: h/H/high/High all count — lowercase must not
+        # silently bypass the fragile-threshold rule (false-PASS direction).
+        _imp_uc="$(printf '%s' "$importance" | tr '[:lower:]' '[:upper:]')"
+        case "$_imp_uc" in H|HIGH) _imp_high=1 ;; *) _imp_high=0 ;; esac
+        if [ "$_imp_high" -eq 1 ] && [ "$g" -ge 3 ]; then  # fragile
             [ -z "$thresh" ] && violate "$aid: fragile assumption missing kill_threshold (use 'untested (cutoff)' below the materiality cutoff)"
         fi
     done < "$ROWS_FILE"

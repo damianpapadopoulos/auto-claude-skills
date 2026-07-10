@@ -98,7 +98,7 @@ running it; mark the rest `untested (cutoff)`. State the recommendation
 conditionally: proceed / proceed-with-conditions naming a hard number / hold.
 
 Before presenting the brief, run the deterministic checker and fix every violation:
-`bash "$CLAUDE_PLUGIN_ROOT/scripts/assumption-audit-check.sh" <discovery-doc>`
+`bash "${CLAUDE_PLUGIN_ROOT:-$(git rev-parse --show-toplevel)}/scripts/assumption-audit-check.sh" <discovery-doc>`
 
 Proportionality: for declared small/obvious work, state "skipping Assumption
 Audit: <reason>" in chat and proceed — never skip silently.

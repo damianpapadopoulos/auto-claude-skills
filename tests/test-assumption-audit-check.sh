@@ -32,5 +32,8 @@ assert_equals "A/B row citing non-grepping local literal must exit 1" "1" "$?"
 /bin/bash "${CHECKER}" "${FIX}/does-not-exist.md" >/dev/null 2>&1
 assert_equals "missing file must fail open (exit 0)" "0" "$?"
 
+/bin/bash "${CHECKER}" "${FIX}/lowercase-importance.md" >/dev/null 2>&1
+assert_equals "non-uppercase (high) fragile row without threshold must exit 1" "1" "$?"
+
 print_summary
 exit $?

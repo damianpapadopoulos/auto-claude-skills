@@ -54,6 +54,14 @@ Four independent pieces, no shared runtime state:
   formatting; mitigated by the references/ template being the single format
   the skill emits.
 
+## Implementation note (post-review annotation)
+
+- R2's "surfaced against user push" scenario is met by model-native behavior
+  plus the Step-4 fragile-assumption quadrant; no dedicated anti-sycophancy
+  prose was added — the writing-skills control arm was already at ceiling on
+  that behavior (Iron Law stop rule), so a red-first eval cannot show lift.
+  The spec's MUST stands as written.
+
 ## Dissenting views
 
 - Codex argued the strongest case against in-skill placement (routing reach);
