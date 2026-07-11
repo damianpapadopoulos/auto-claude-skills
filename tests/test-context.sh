@@ -1250,30 +1250,30 @@ test_openspec_state_set_intent_empty_token
 test_openspec_state_read_intent_missing_file
 
 # ---------------------------------------------------------------------------
-# discovery-audit-companion hint (DESIGN routing companion for Assumption Audit)
+# Discovery precondition in brainstorming step text (replaces the dead
+# discovery-audit-companion hint, which was measured at 0/5 uptake in PR #102).
 # ---------------------------------------------------------------------------
-test_discovery_audit_companion_hint() {
-    echo "-- test: discovery-audit-companion hint present and fires on DESIGN --"
+test_discovery_precondition_wiring() {
+    echo "-- test: discovery precondition in step text; dead hint removed --"
 
+    # brainstorming carries the precondition in BOTH configs (lockstep)
+    local reg_pc fb_pc
+    reg_pc="$(jq -r '.skills[] | select(.name=="brainstorming") | .precondition // ""' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+    fb_pc="$(jq -r '.skills[] | select(.name=="brainstorming") | .precondition // ""' "${PROJECT_ROOT}/config/fallback-registry.json" 2>/dev/null)"
+    assert_contains "brainstorming precondition routes to product-discovery (default)" "product-discovery" "${reg_pc}"
+    assert_contains "brainstorming precondition is model-gated (default)" "Skip for" "${reg_pc}"
+    assert_contains "brainstorming precondition mirrored in fallback" "product-discovery" "${fb_pc}"
+
+    # the dead discovery-audit-companion hint is gone from BOTH configs
     local reg_hint fb_hint
-    reg_hint="$(jq -r '.methodology_hints[] | select(.name=="discovery-audit-companion") | .hint' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    fb_hint="$(jq -r '.methodology_hints[] | select(.name=="discovery-audit-companion") | .hint' "${PROJECT_ROOT}/config/fallback-registry.json" 2>/dev/null)"
+    reg_hint="$(jq -r '.methodology_hints[]? | select(.name=="discovery-audit-companion") | .name' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+    fb_hint="$(jq -r '.methodology_hints[]? | select(.name=="discovery-audit-companion") | .name' "${PROJECT_ROOT}/config/fallback-registry.json" 2>/dev/null)"
+    assert_equals "discovery-audit-companion hint removed (default)" "" "${reg_hint}"
+    assert_equals "discovery-audit-companion hint removed (fallback)" "" "${fb_hint}"
 
-    assert_contains "hint routes to product-discovery (default)" "product-discovery" "${reg_hint}"
-    assert_contains "hint mentions Assumption Ledger (default)" "Assumption Ledger" "${reg_hint}"
-    assert_contains "hint is model-gated, judge the ask (default)" "Judge from the actual ask" "${reg_hint}"
-    assert_contains "hint mirrored in fallback registry" "product-discovery" "${fb_hint}"
-
-    local phases
-    phases="$(jq -r '.methodology_hints[] | select(.name=="discovery-audit-companion") | .phases[]' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "hint is DESIGN-scoped" "DESIGN" "${phases}"
-
-    # Live: a DESIGN-routed new-feature prompt surfaces the hint.
-    # Isolated HOME + registry cache seeded from THIS tree's config, so the
-    # shared ~/.claude cache (built from another checkout) cannot leak in.
+    # Live: a DESIGN new-feature prompt surfaces the PRECONDITION in the CURRENT
+    # composition step, and the old DISCOVERY CHECK hint line is gone.
     setup_test_env
-    # The cache schema carries per-skill available/enabled flags that
-    # session-start discovery normally sets; seed them all true.
     jq '.skills = [.skills[] | .available = true | .enabled = true]' \
         "${PROJECT_ROOT}/config/default-triggers.json" \
         > "${TEST_HOME}/.claude/.skill-registry-cache.json"
@@ -1282,10 +1282,12 @@ test_discovery_audit_companion_hint() {
         HOME="${TEST_HOME}" CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
         bash "${HOOK}" 2>/dev/null)"
     ctx="$(extract_context "${out}")"
-    assert_contains "hint fires on DESIGN new-feature prompt" "DISCOVERY CHECK" "${ctx}"
+    assert_contains "precondition fires on DESIGN new-feature prompt" "PRECONDITION" "${ctx}"
+    assert_contains "precondition routes to product-discovery" "product-discovery" "${ctx}"
+    assert_not_contains "old DISCOVERY CHECK hint no longer emitted" "DISCOVERY CHECK" "${ctx}"
     teardown_test_env
 }
 
-test_discovery_audit_companion_hint
+test_discovery_precondition_wiring
 
 print_summary

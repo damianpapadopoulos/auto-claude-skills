@@ -48,6 +48,7 @@
       "requires": [],
       "description": "Ask clarifying questions, explore options, and get user approval before planning. Activated for Build intents.",
       "invoke": "Skill(superpowers:brainstorming)",
+      "precondition": "PRECONDITION: if this is a new feature or initiative and no discovery brief with an Assumption Ledger exists (check session-state discovery_path or docs/plans/*-discovery.md), invoke Skill(auto-claude-skills:product-discovery) FIRST to surface and grade the load-bearing assumptions, then return to brainstorming. Skip for bugfixes, small changes, or work already covered by an approved brief.",
       "available": false,
       "enabled": true
     },
@@ -1676,17 +1677,6 @@
       "phases": [
         "DESIGN",
         "PLAN"
-      ]
-    },
-    {
-      "name": "discovery-audit-companion",
-      "triggers": [
-        "(^|[^a-z])(build|create|implement|develop|design)[^a-z].*(feature|capability|product|service|integration|initiative)(s)?([^a-z]|$)"
-      ],
-      "trigger_mode": "regex",
-      "hint": "DISCOVERY CHECK: If this is a new feature or initiative and no discovery brief with an Assumption Ledger exists for it (check session-state discovery_path / docs/plans/*-discovery.md), consider Skill(auto-claude-skills:product-discovery) first to surface and grade the load-bearing assumptions before designing. Judge from the actual ask — skip for small changes, bugfixes, and work already covered by an approved brief.",
-      "phases": [
-        "DESIGN"
       ]
     },
     {
