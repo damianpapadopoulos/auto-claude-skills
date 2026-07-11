@@ -899,6 +899,17 @@ EOF
         _step=$((_idx + 1))
         _chain_lines="${_chain_lines}
   [${_marker}] Step ${_step}: ${_cinvoke} -- ${_cdesc}"
+        # Render an optional per-skill `precondition` ONLY under the CURRENT step.
+        # This places conditional routing in the mandatory channel the model obeys
+        # (the same guidance as an advisory hint gets 0/5 uptake). One jq fork, and
+        # only when a composition is being rendered. Fail-open: no field => no line.
+        if [[ "$_marker" == "CURRENT" ]]; then
+          _cprecond="$(printf '%s' "$REGISTRY" | jq -r --arg n "$_cname" '.skills[] | select(.name == $n) | .precondition // empty' 2>/dev/null)"
+          if [[ -n "$_cprecond" ]]; then
+            _chain_lines="${_chain_lines}
+      ${_cprecond}"
+          fi
+        fi
 
         # Build phase label (fall back to skill name if no phase)
         _plabel="${_cphase:-${_cname}}"

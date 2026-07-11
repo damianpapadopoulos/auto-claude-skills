@@ -298,6 +298,97 @@ REGISTRY
 }
 
 # ---------------------------------------------------------------------------
+# Registry where two chain skills carry a `precondition`. brainstorming (CURRENT
+# on a build prompt) should render its precondition line; writing-plans (NEXT,
+# not CURRENT) must NOT — proving CURRENT-only rendering in one prompt.
+# ---------------------------------------------------------------------------
+install_registry_precondition() {
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'REGISTRY'
+{
+  "version": "4.0.0",
+  "skills": [
+    {
+      "name": "brainstorming",
+      "role": "process",
+      "phase": "DESIGN",
+      "triggers": [
+        "(build|create|implement|develop|scaffold|brainstorm|design|architect|add|write|make|generate|new|start)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 30,
+      "precedes": ["writing-plans"],
+      "requires": [],
+      "description": "Ask clarifying questions and get approval before planning.",
+      "precondition": "PRECONDITION: BRAINSTORM-DISC if new feature and no brief, invoke Skill(auto-claude-skills:product-discovery) FIRST, then return.",
+      "invoke": "Skill(superpowers:brainstorming)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "writing-plans",
+      "role": "process",
+      "phase": "PLAN",
+      "triggers": [
+        "(plan|outline|break.?down|detail|spec|write.*(plan|spec))"
+      ],
+      "trigger_mode": "regex",
+      "priority": 40,
+      "precedes": ["executing-plans"],
+      "requires": ["brainstorming"],
+      "description": "Break work into tasks.",
+      "precondition": "PRECONDITION: PLAN-ONLY-MARKER must not render off the CURRENT step.",
+      "invoke": "Skill(superpowers:writing-plans)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "executing-plans",
+      "role": "process",
+      "phase": "IMPLEMENT",
+      "triggers": [
+        "(execute.*plan|run.the.plan|implement.the.plan|continue|follow.the.plan|resume|next.task|next.step)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 15,
+      "precedes": [],
+      "requires": ["writing-plans"],
+      "description": "Execute the approved plan step by step.",
+      "invoke": "Skill(superpowers:executing-plans)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "methodology_hints": [],
+  "phase_guide": {
+    "DESIGN":    "brainstorming (ask questions, get approval)",
+    "PLAN":      "writing-plans (break into tasks, confirm before execution)",
+    "IMPLEMENT": "executing-plans or subagent-driven-development"
+  },
+  "warnings": []
+}
+REGISTRY
+}
+
+# Precondition renders under the CURRENT composition step, and ONLY there.
+test_precondition_renders_on_current_only() {
+    echo "-- test: precondition renders on CURRENT step only --"
+    setup_test_env
+    install_registry_precondition
+
+    local output context
+    output="$(run_hook "build a new dashboard feature")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "CURRENT brainstorming shows its PRECONDITION" "BRAINSTORM-DISC" "${context}"
+    assert_contains "precondition names product-discovery" "product-discovery" "${context}"
+    assert_not_contains "NEXT writing-plans hides its PRECONDITION" "PLAN-ONLY-MARKER" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # 1. 0 skills -> silent (no output at all)
 # ---------------------------------------------------------------------------
 test_zero_skills_minimal_output() {
@@ -738,6 +829,7 @@ test_full_format_process_first
 test_composition_state_written
 test_composition_recovery_after_compaction
 test_composition_done_not_done_question
+test_precondition_renders_on_current_only
 test_context_stack_parallel_emission
 test_context_stack_hint_emission
 test_phase_doc_path_emission
