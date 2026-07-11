@@ -46,25 +46,29 @@ fi
 # Gate order matches the canonical chain: REVIEW → VERIFY → SHIP. Review is
 # checked first because skipping review and then chasing verification is the
 # recurring failure mode — the more actionable message wins.
-# Ad-hoc pushes (no composition) are allowed — no gate needed for unplanned work.
-# EXCEPTION: the routing-governance gate (below) fires independent of composition
-# for pushes touching routing files (skills/|config/|hooks/) in a skill-routing
-# plugin repo, requiring a clean verification verdict — routing changes are
-# high-risk by nature. Still fail-open: no verdict lib / not a routing repo /
-# unresolvable diff base => no gate.
+# Two gates fire independent of any composition chain (both fail-open on infra error):
+#   1. Global fail-closed gate (below) — EVERY agent push must carry a durable REVIEW
+#      record and a passing VERIFY signal for this branch. Closes the prior hole where a
+#      push from a non-driven session (no composition state) was allowed unconditionally.
+#   2. Routing-governance gate (further below) — pushes touching routing files
+#      (skills/|config/|hooks/) in a skill-routing plugin repo require a clean
+#      verification verdict. Routing changes are high-risk by nature, not by phase.
+# Fail-open guards for both: missing lib / missing jq / not a routing repo /
+# unresolvable diff base => no gate (never a false-block).
 case "${_COMMAND}" in
     *"git push"*)
-        # Explicit bypass. This is a Claude Code PreToolUse hook: it only sees
-        # pushes the AGENT runs through the Bash tool — a human pushing from their
-        # own terminal never reaches here, which is the primary escape hatch. For an
-        # in-agent override, honor ACSM_SKIP_PUSH_GATE=1 either as an exported env var
-        # or as an inline prefix on the command (the hook runs in a separate process,
-        # so an inline `VAR=1 git push` sets the var for git, NOT for us — hence we
-        # also scan the command string). When set, ALL push-gate denials are skipped;
+        # Explicit bypass — HUMAN-ONLY by construction. This is a Claude Code PreToolUse
+        # hook: it only sees pushes the AGENT runs through the Bash tool — a human pushing
+        # from their own terminal never reaches here, which is the primary escape hatch.
+        # For an in-session override, honor ACSM_SKIP_PUSH_GATE=1 ONLY as an env var in the
+        # hook's own process, which is inherited from the environment that launched Claude
+        # Code — a human sets it at launch; the agent cannot mutate our process env from a
+        # Bash subshell. We deliberately do NOT scan the command string for the token: the
+        # agent composes that string, so an inline scan would be an agent-forgeable bypass,
+        # which defeats a fail-CLOSED gate. When set, ALL push-gate denials are skipped;
         # SHIP-phase advisories below still emit.
         _PUSHGATE_SKIP=false
         [ "${ACSM_SKIP_PUSH_GATE:-}" = "1" ] && _PUSHGATE_SKIP=true
-        case "${_COMMAND}" in *ACSM_SKIP_PUSH_GATE=1*) _PUSHGATE_SKIP=true ;; esac
         _COMP_STATE="${HOME}/.claude/.skill-composition-state-${_SESSION_TOKEN}"
         # Durable per-(repo+branch) ledger: gate readiness that survives chain
         # re-anchors. Fail-safe: if the helper or branch key is unavailable, the
@@ -164,10 +168,16 @@ case "${_COMMAND}" in
         # same durable artifacts the composition block trusts (branch-ledger milestones,
         # + a session-local .completed fallback for the write-lag window, + a SHA-bound
         # clean verdict as stronger VERIFY evidence). Fail-open on INFRASTRUCTURE error:
-        # the block only runs when the ledger lib actually loaded (_LEDGER_OK) — a check
-        # that cannot run never blocks. Only a check that runs and finds NO record denies.
-        # Bypass: _PUSHGATE_SKIP (human terminal push, or ACSM_SKIP_PUSH_GATE=1).
-        if [ "${_PUSHGATE_SKIP}" != "true" ] && [ "${_LEDGER_OK}" = "true" ]; then
+        # the block only runs when the ledger lib actually loaded (_LEDGER_OK) AND jq is
+        # present — a check that cannot run never blocks. jq is required because every
+        # evidence leg needs it: the ledger's sole WRITER (skill-completion-hook.sh)
+        # exits early without jq so the ledger is never populated, the .completed
+        # fallback is jq-guarded, and the verdict lib returns non-clean without jq. So
+        # without jq no evidence is establishable and the gate must fall open (matches
+        # the composition block above and CLAUDE.md "jq is optional at runtime").
+        # Only a check that runs and finds NO record denies.
+        # Bypass: _PUSHGATE_SKIP (human terminal push, or human-set ACSM_SKIP_PUSH_GATE=1 env).
+        if [ "${_PUSHGATE_SKIP}" != "true" ] && [ "${_LEDGER_OK}" = "true" ] && command -v jq >/dev/null 2>&1; then
             _g_review=false
             _g_verify=false
             branch_ledger_has "requesting-code-review"         "${_proot}" && _g_review=true
@@ -188,12 +198,9 @@ case "${_COMMAND}" in
                 _need=""
                 [ "${_g_review}" = "false" ] && _need="requesting-code-review"
                 [ "${_g_verify}" = "false" ] && _need="${_need}${_need:+ and }verification-before-completion"
-                _MSG="PUSH GATE (fail-closed): pushing this branch requires ${_need} to have run, but no record exists for it on this branch. Invoke the missing Skill(s) and let them complete, then push again. To bypass intentionally: push from your own terminal, or prefix the push with ACSM_SKIP_PUSH_GATE=1."
-                if command -v jq >/dev/null 2>&1; then
-                    jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
-                else
-                    printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"%s"}\n' "${_MSG}"
-                fi
+                _MSG="PUSH GATE (fail-closed): pushing this branch requires ${_need} to have run, but no record exists for it on this branch. Invoke the missing Skill(s) and let them complete, then push again. To bypass intentionally: push from your own terminal, or relaunch Claude Code with ACSM_SKIP_PUSH_GATE=1 set in its environment."
+                # jq presence is guaranteed by the block guard above.
+                jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
                 exit 0
             fi
         fi
