@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "discovery_path": null,
+  "design_path": "",
+  "plan_path": "",
+  "spec_path": "",
+  "sp_plan_path": "",
+  "sp_spec_path": "",
+  "change_slug": "discovery-precondition",
+  "capability_slug": "pdlc-closed-loop",
+  "source_branch": "feat/discovery-precondition",
+  "base_commit": "549a7a79be2f428169c6a7a7ed194dfa5a07c16c",
+  "openspec_surface": "none",
+  "archived_at": "2026-07-11T17:20:59Z"
+}

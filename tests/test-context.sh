@@ -298,6 +298,97 @@ REGISTRY
 }
 
 # ---------------------------------------------------------------------------
+# Registry where two chain skills carry a `precondition`. brainstorming (CURRENT
+# on a build prompt) should render its precondition line; writing-plans (NEXT,
+# not CURRENT) must NOT — proving CURRENT-only rendering in one prompt.
+# ---------------------------------------------------------------------------
+install_registry_precondition() {
+    local cache_file="${HOME}/.claude/.skill-registry-cache.json"
+    mkdir -p "$(dirname "${cache_file}")"
+    cat > "${cache_file}" <<'REGISTRY'
+{
+  "version": "4.0.0",
+  "skills": [
+    {
+      "name": "brainstorming",
+      "role": "process",
+      "phase": "DESIGN",
+      "triggers": [
+        "(build|create|implement|develop|scaffold|brainstorm|design|architect|add|write|make|generate|new|start)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 30,
+      "precedes": ["writing-plans"],
+      "requires": [],
+      "description": "Ask clarifying questions and get approval before planning.",
+      "precondition": "PRECONDITION: BRAINSTORM-DISC if new feature and no brief, invoke Skill(auto-claude-skills:product-discovery) FIRST, then return.",
+      "invoke": "Skill(superpowers:brainstorming)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "writing-plans",
+      "role": "process",
+      "phase": "PLAN",
+      "triggers": [
+        "(plan|outline|break.?down|detail|spec|write.*(plan|spec))"
+      ],
+      "trigger_mode": "regex",
+      "priority": 40,
+      "precedes": ["executing-plans"],
+      "requires": ["brainstorming"],
+      "description": "Break work into tasks.",
+      "precondition": "PRECONDITION: PLAN-ONLY-MARKER must not render off the CURRENT step.",
+      "invoke": "Skill(superpowers:writing-plans)",
+      "available": true,
+      "enabled": true
+    },
+    {
+      "name": "executing-plans",
+      "role": "process",
+      "phase": "IMPLEMENT",
+      "triggers": [
+        "(execute.*plan|run.the.plan|implement.the.plan|continue|follow.the.plan|resume|next.task|next.step)"
+      ],
+      "trigger_mode": "regex",
+      "priority": 15,
+      "precedes": [],
+      "requires": ["writing-plans"],
+      "description": "Execute the approved plan step by step.",
+      "invoke": "Skill(superpowers:executing-plans)",
+      "available": true,
+      "enabled": true
+    }
+  ],
+  "methodology_hints": [],
+  "phase_guide": {
+    "DESIGN":    "brainstorming (ask questions, get approval)",
+    "PLAN":      "writing-plans (break into tasks, confirm before execution)",
+    "IMPLEMENT": "executing-plans or subagent-driven-development"
+  },
+  "warnings": []
+}
+REGISTRY
+}
+
+# Precondition renders under the CURRENT composition step, and ONLY there.
+test_precondition_renders_on_current_only() {
+    echo "-- test: precondition renders on CURRENT step only --"
+    setup_test_env
+    install_registry_precondition
+
+    local output context
+    output="$(run_hook "build a new dashboard feature")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "CURRENT brainstorming shows its PRECONDITION" "BRAINSTORM-DISC" "${context}"
+    assert_contains "precondition names product-discovery" "product-discovery" "${context}"
+    assert_not_contains "NEXT writing-plans hides its PRECONDITION" "PLAN-ONLY-MARKER" "${context}"
+
+    teardown_test_env
+}
+
+# ---------------------------------------------------------------------------
 # 1. 0 skills -> silent (no output at all)
 # ---------------------------------------------------------------------------
 test_zero_skills_minimal_output() {
@@ -738,6 +829,7 @@ test_full_format_process_first
 test_composition_state_written
 test_composition_recovery_after_compaction
 test_composition_done_not_done_question
+test_precondition_renders_on_current_only
 test_context_stack_parallel_emission
 test_context_stack_hint_emission
 test_phase_doc_path_emission
@@ -1158,30 +1250,30 @@ test_openspec_state_set_intent_empty_token
 test_openspec_state_read_intent_missing_file
 
 # ---------------------------------------------------------------------------
-# discovery-audit-companion hint (DESIGN routing companion for Assumption Audit)
+# Discovery precondition in brainstorming step text (replaces the dead
+# discovery-audit-companion hint, which was measured at 0/5 uptake in PR #102).
 # ---------------------------------------------------------------------------
-test_discovery_audit_companion_hint() {
-    echo "-- test: discovery-audit-companion hint present and fires on DESIGN --"
+test_discovery_precondition_wiring() {
+    echo "-- test: discovery precondition in step text; dead hint removed --"
 
+    # brainstorming carries the precondition in BOTH configs (lockstep)
+    local reg_pc fb_pc
+    reg_pc="$(jq -r '.skills[] | select(.name=="brainstorming") | .precondition // ""' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+    fb_pc="$(jq -r '.skills[] | select(.name=="brainstorming") | .precondition // ""' "${PROJECT_ROOT}/config/fallback-registry.json" 2>/dev/null)"
+    assert_contains "brainstorming precondition routes to product-discovery (default)" "product-discovery" "${reg_pc}"
+    assert_contains "brainstorming precondition is model-gated (default)" "Skip for" "${reg_pc}"
+    assert_contains "brainstorming precondition mirrored in fallback" "product-discovery" "${fb_pc}"
+
+    # the dead discovery-audit-companion hint is gone from BOTH configs
     local reg_hint fb_hint
-    reg_hint="$(jq -r '.methodology_hints[] | select(.name=="discovery-audit-companion") | .hint' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    fb_hint="$(jq -r '.methodology_hints[] | select(.name=="discovery-audit-companion") | .hint' "${PROJECT_ROOT}/config/fallback-registry.json" 2>/dev/null)"
+    reg_hint="$(jq -r '.methodology_hints[]? | select(.name=="discovery-audit-companion") | .name' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+    fb_hint="$(jq -r '.methodology_hints[]? | select(.name=="discovery-audit-companion") | .name' "${PROJECT_ROOT}/config/fallback-registry.json" 2>/dev/null)"
+    assert_equals "discovery-audit-companion hint removed (default)" "" "${reg_hint}"
+    assert_equals "discovery-audit-companion hint removed (fallback)" "" "${fb_hint}"
 
-    assert_contains "hint routes to product-discovery (default)" "product-discovery" "${reg_hint}"
-    assert_contains "hint mentions Assumption Ledger (default)" "Assumption Ledger" "${reg_hint}"
-    assert_contains "hint is model-gated, judge the ask (default)" "Judge from the actual ask" "${reg_hint}"
-    assert_contains "hint mirrored in fallback registry" "product-discovery" "${fb_hint}"
-
-    local phases
-    phases="$(jq -r '.methodology_hints[] | select(.name=="discovery-audit-companion") | .phases[]' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
-    assert_equals "hint is DESIGN-scoped" "DESIGN" "${phases}"
-
-    # Live: a DESIGN-routed new-feature prompt surfaces the hint.
-    # Isolated HOME + registry cache seeded from THIS tree's config, so the
-    # shared ~/.claude cache (built from another checkout) cannot leak in.
+    # Live: a DESIGN new-feature prompt surfaces the PRECONDITION in the CURRENT
+    # composition step, and the old DISCOVERY CHECK hint line is gone.
     setup_test_env
-    # The cache schema carries per-skill available/enabled flags that
-    # session-start discovery normally sets; seed them all true.
     jq '.skills = [.skills[] | .available = true | .enabled = true]' \
         "${PROJECT_ROOT}/config/default-triggers.json" \
         > "${TEST_HOME}/.claude/.skill-registry-cache.json"
@@ -1190,10 +1282,12 @@ test_discovery_audit_companion_hint() {
         HOME="${TEST_HOME}" CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
         bash "${HOOK}" 2>/dev/null)"
     ctx="$(extract_context "${out}")"
-    assert_contains "hint fires on DESIGN new-feature prompt" "DISCOVERY CHECK" "${ctx}"
+    assert_contains "precondition fires on DESIGN new-feature prompt" "PRECONDITION" "${ctx}"
+    assert_contains "precondition routes to product-discovery" "product-discovery" "${ctx}"
+    assert_not_contains "old DISCOVERY CHECK hint no longer emitted" "DISCOVERY CHECK" "${ctx}"
     teardown_test_env
 }
 
-test_discovery_audit_companion_hint
+test_discovery_precondition_wiring
 
 print_summary
