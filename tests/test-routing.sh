@@ -6001,6 +6001,10 @@ EOSPEC
     context="$(extract_context "${output}")"
 
     assert_contains "all sections present via specs" "all sections present" "${context}"
+    # The summary line must not misstate where acceptance was satisfied —
+    # the design file itself does NOT contain the scenarios here.
+    assert_contains "summary carries the specs annotation" \
+        "acceptance in sibling specs/" "${context}"
     assert_not_contains "nothing flagged missing" "(missing" "${context}"
 
     teardown_test_env

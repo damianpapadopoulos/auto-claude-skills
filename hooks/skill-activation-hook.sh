@@ -1620,8 +1620,12 @@ Action: confirm the design_path or re-run the design step before invoking Skill(
       fi
 
       if [[ $_DC_CAPS -eq 1 ]] && [[ $_DC_OOS -eq 1 ]] && [[ $_DC_ACC -eq 1 ]]; then
+        # Keep the sibling-specs annotation on the summary line too — the
+        # design file itself does NOT contain the scenarios in that case.
+        _DC_ALL_SUFFIX=""
+        [[ ${_DC_ACC_SPECS:-0} -eq 1 ]] && _DC_ALL_SUFFIX="; acceptance in sibling specs/"
         DESIGN_COMPLETENESS="
-DESIGN COMPLETENESS: all sections present (${_DP_DESIGN})${_DC_LINE_BAR}"
+DESIGN COMPLETENESS: all sections present (${_DP_DESIGN}${_DC_ALL_SUFFIX})${_DC_LINE_BAR}"
       else
         if [[ $_DC_CAPS -eq 1 ]]; then
           _DC_LINE_CAPS='  [OK] Capabilities Affected'
