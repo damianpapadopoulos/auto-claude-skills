@@ -1581,6 +1581,39 @@ Action: confirm the design_path or re-run the design step before invoking Skill(
         fi
       fi
 
+      # Spec-path fallback (design-guard-spec-path): in spec-driven mode the
+      # scenarios live in sibling specs/<cap>/spec.md files, not design.md —
+      # without this, [OK] is unreachable for spec-driven changes (measured:
+      # 8/10 real docs permanently [X] in the PR #105 dogfood). Satisfied
+      # when sibling specs carry >=2 aggregated WHEN/THEN pairs. NOTE the
+      # deliberate threshold divergence from the design-file check above:
+      # that one requires min(GIVEN,WHEN,THEN); this one only
+      # min(WHEN,THEN), because the OpenSpec scenario template makes GIVEN
+      # optional — if that policy changes, change BOTH blocks. Strictly
+      # additive: only flips [X]->[OK]; any error path (no specs dir,
+      # empty glob, awk failure, non-numeric output) degrades to the
+      # design-file verdict above. Empty-glob mechanics: bash 3.2 has no
+      # nullglob here, so a matchless glob reaches cat as a literal path —
+      # the resulting ENOENT is intentionally absorbed by 2>/dev/null and
+      # `|| true`, not an oversight.
+      _DC_ACC_SPECS=0; _DC_SPEC_WT=""
+      if [[ $_DC_ACC -eq 0 ]]; then
+        _DP_DIR="${_DP_DESIGN%/*}"
+        if [[ -d "${_DP_DIR}/specs" ]]; then
+          _DC_SPEC_WT="$(cat "${_DP_DIR}"/specs/*/spec.md 2>/dev/null | awk '
+            {
+              if ($0 ~ /(^|[^A-Za-z])WHEN([^A-Za-z]|$)/) w++
+              if ($0 ~ /(^|[^A-Za-z])THEN([^A-Za-z]|$)/) t++
+            }
+            END { m = w + 0; if (t + 0 < m) m = t + 0; print m }
+          ' 2>/dev/null || true)"
+          if [[ "$_DC_SPEC_WT" =~ ^[0-9]+$ ]] && [[ "$_DC_SPEC_WT" -ge 2 ]]; then
+            _DC_ACC=1
+            _DC_ACC_SPECS=1
+          fi
+        fi
+      fi
+
       # [i]-only numeric-bar nudge: advisory, never affects the verdict.
       # ERE avoids \b (BSD grep) and PCRE (Bash 3.2 gotcha); grep failure
       # degrades to the advisory line, never a block.
@@ -1593,8 +1626,12 @@ Action: confirm the design_path or re-run the design step before invoking Skill(
       fi
 
       if [[ $_DC_CAPS -eq 1 ]] && [[ $_DC_OOS -eq 1 ]] && [[ $_DC_ACC -eq 1 ]]; then
+        # Keep the sibling-specs annotation on the summary line too — the
+        # design file itself does NOT contain the scenarios in that case.
+        _DC_ALL_SUFFIX=""
+        [[ ${_DC_ACC_SPECS:-0} -eq 1 ]] && _DC_ALL_SUFFIX="; acceptance in sibling specs/"
         DESIGN_COMPLETENESS="
-DESIGN COMPLETENESS: all sections present (${_DP_DESIGN})${_DC_LINE_BAR}"
+DESIGN COMPLETENESS: all sections present (${_DP_DESIGN}${_DC_ALL_SUFFIX})${_DC_LINE_BAR}"
       else
         if [[ $_DC_CAPS -eq 1 ]]; then
           _DC_LINE_CAPS='  [OK] Capabilities Affected'
@@ -1606,7 +1643,9 @@ DESIGN COMPLETENESS: all sections present (${_DP_DESIGN})${_DC_LINE_BAR}"
         else
           _DC_LINE_OOS='  [X]  Out-of-Scope (missing — add `## Out-of-Scope` section)'
         fi
-        if [[ $_DC_ACC -eq 1 ]]; then
+        if [[ $_DC_ACC -eq 1 ]] && [[ ${_DC_ACC_SPECS:-0} -eq 1 ]]; then
+          _DC_LINE_ACC='  [OK] Acceptance Scenarios (in sibling specs/)'
+        elif [[ $_DC_ACC -eq 1 ]]; then
           _DC_LINE_ACC='  [OK] Acceptance Scenarios'
         elif [[ $_DC_ACC_HEAD -eq 1 ]]; then
           if [[ "${_DC_GWT_FILE:-}" =~ ^[0-9]+$ ]] && [[ "$_DC_GWT_FILE" -ge 2 ]]; then
@@ -1625,7 +1664,7 @@ ${_DC_LINE_ACC}${_DC_LINE_BAR}
 Action: complete the missing section(s) before invoking Skill(superpowers:writing-plans)."
       fi
       [[ -n "${SKILL_EXPLAIN:-}" ]] && \
-        echo "[skill-hook]   [design-guard] caps=${_DC_CAPS} oos=${_DC_OOS} acc=${_DC_ACC} gwt=${_DC_GWT:-n/a} gwt_closed_by_heading=${_DC_GWT_CLOSED:-n/a} gwt_filewide=${_DC_GWT_FILE:-n/a} bar=${_DC_BAR} path=${_DP_DESIGN}" >&2
+        echo "[skill-hook]   [design-guard] caps=${_DC_CAPS} oos=${_DC_OOS} acc=${_DC_ACC} gwt=${_DC_GWT:-n/a} gwt_closed_by_heading=${_DC_GWT_CLOSED:-n/a} gwt_filewide=${_DC_GWT_FILE:-n/a} gwt_specs=${_DC_SPEC_WT:-n/a} bar=${_DC_BAR} path=${_DP_DESIGN}" >&2
     fi
 
     SKILL_LINES="${SKILL_LINES}${DESIGN_COMPLETENESS}"
