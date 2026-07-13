@@ -1523,7 +1523,7 @@ Action: confirm the design_path or re-run the design step before invoking Skill(
       # "### Capabilities affected", "## 🚫 Acceptance Scenarios").
       # h4+, body-text mentions, and leading whitespace before ##
       # intentionally do not count.
-      _DC_CAPS=0; _DC_OOS=0; _DC_ACC=0; _DC_ACC_HEAD=0; _DC_GWT=""
+      _DC_CAPS=0; _DC_OOS=0; _DC_ACC=0; _DC_ACC_HEAD=0; _DC_GWT=""; _DC_GWT_CLOSED=""
       grep -Eiq '^#{2,3} .*capabilities[- ]affected' "$_DP_DESIGN" 2>/dev/null && _DC_CAPS=1
       grep -Eiq '^#{2,3} .*out[- ]of[- ]scope'       "$_DP_DESIGN" 2>/dev/null && _DC_OOS=1
       grep -Eiq '^#{2,3} .*acceptance[- ]scenarios'  "$_DP_DESIGN" 2>/dev/null && _DC_ACC_HEAD=1
@@ -1538,11 +1538,19 @@ Action: confirm the design_path or re-run the design step before invoking Skill(
       # at min(GIVEN,WHEN,THEN) >= 2; upper bound not enforced. Counting
       # is per-line (a line with two full scenarios counts once; tokens on
       # the heading line are skipped) — an undercount can only make the
-      # advisory stricter, never block. Fail-open: awk failure or
-      # non-numeric output degrades to heading semantics.
+      # advisory stricter, never block. h3 sub-headings CLOSE the section
+      # (h2/h3 are section boundaries per the heading grammar above) —
+      # deliberate deny-bias: scenarios grouped under h3 trip the advisory
+      # rather than risk counting a neighboring section (use h4
+      # "#### Scenario:" grouping, the OpenSpec convention); early
+      # closures are surfaced as gwt_closed_by_heading in the
+      # SKILL_EXPLAIN breadcrumb so a false advisory is debuggable.
+      # Fail-open: awk failure or non-numeric output degrades to heading
+      # semantics.
       if [[ $_DC_ACC_HEAD -eq 1 ]]; then
-        _DC_GWT="$(awk '
+        _DC_GWT_PAIR="$(awk '
           /^##/ && !/^####/ {
+            if (inacc && tolower($0) !~ /acceptance[- ]scenarios/) closed++
             inacc = (tolower($0) ~ /acceptance[- ]scenarios/) ? 1 : 0
             next
           }
@@ -1551,8 +1559,10 @@ Action: confirm the design_path or re-run the design step before invoking Skill(
             if ($0 ~ /(^|[^A-Za-z])WHEN([^A-Za-z]|$)/)  w++
             if ($0 ~ /(^|[^A-Za-z])THEN([^A-Za-z]|$)/)  t++
           }
-          END { m = g + 0; if (w + 0 < m) m = w + 0; if (t + 0 < m) m = t + 0; print m }
+          END { m = g + 0; if (w + 0 < m) m = w + 0; if (t + 0 < m) m = t + 0; print m, closed + 0 }
         ' "$_DP_DESIGN" 2>/dev/null || true)"
+        _DC_GWT="${_DC_GWT_PAIR%% *}"
+        _DC_GWT_CLOSED="${_DC_GWT_PAIR##* }"
         if [[ "$_DC_GWT" =~ ^[0-9]+$ ]] && [[ "$_DC_GWT" -lt 2 ]]; then
           _DC_ACC=0
         fi
@@ -1598,7 +1608,7 @@ ${_DC_LINE_ACC}${_DC_LINE_BAR}
 Action: complete the missing section(s) before invoking Skill(superpowers:writing-plans)."
       fi
       [[ -n "${SKILL_EXPLAIN:-}" ]] && \
-        echo "[skill-hook]   [design-guard] caps=${_DC_CAPS} oos=${_DC_OOS} acc=${_DC_ACC} gwt=${_DC_GWT:-n/a} bar=${_DC_BAR} path=${_DP_DESIGN}" >&2
+        echo "[skill-hook]   [design-guard] caps=${_DC_CAPS} oos=${_DC_OOS} acc=${_DC_ACC} gwt=${_DC_GWT:-n/a} gwt_closed_by_heading=${_DC_GWT_CLOSED:-n/a} bar=${_DC_BAR} path=${_DP_DESIGN}" >&2
     fi
 
     SKILL_LINES="${SKILL_LINES}${DESIGN_COMPLETENESS}"

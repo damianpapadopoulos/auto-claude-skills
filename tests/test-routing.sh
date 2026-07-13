@@ -5872,6 +5872,55 @@ test_plan_completeness_gwt_awk_failure_fails_open() {
 }
 test_plan_completeness_gwt_awk_failure_fails_open
 
+test_plan_completeness_gwt_h3_grouping_closes_section() {
+    echo "-- test: DESIGN COMPLETENESS h3 sub-headings close the acceptance section (deny-bias) --"
+    setup_test_env
+    install_registry
+
+    local token="plan-guard-gwt-h3-$$"
+    local design="${HOME}/design-gwt-h3.md"
+    # Scenarios grouped under h3 sub-headings: the first h3 closes the
+    # section (h2/h3 are section boundaries per the guard's own heading
+    # grammar), so the count is 0 and the thin advisory fires. This is
+    # the documented deny-bias trade-off: an undercount only strengthens
+    # the advisory; treating h3 as non-boundary could leak counts in
+    # from neighboring sections (false OK). h4 grouping (the OpenSpec
+    # '#### Scenario:' convention) stays inside the section.
+    {
+        printf '# Design: fixture\n\n'
+        printf '## Capabilities Affected\n\nBody.\n\n'
+        printf '## Out-of-Scope\n\nBody.\n\n'
+        printf '## Acceptance Scenarios\n\n'
+        printf '### Scenario A\n\n- GIVEN x WHEN y THEN z\n\n'
+        printf '### Scenario B\n\n- GIVEN a WHEN b THEN c\n\n'
+    } > "${design}"
+    _seed_plan_state "${token}" "fixture-slug" "${design}"
+
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local stderr_file="${TEST_TMPDIR}/stderr_gwt_h3.txt"
+    local output context
+    output="$(jq -n --arg p "let us plan this out" '{"prompt":$p}' | \
+        CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" \
+        SKILL_EXPLAIN=1 \
+        bash "${HOOK}" 2>"${stderr_file}")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "h3-grouped scenarios trip the thin advisory" \
+        "heading present but <2 GIVEN/WHEN/THEN" "${context}"
+
+    # The SKILL_EXPLAIN breadcrumb surfaces the early-closure count so a
+    # false advisory on an h3-grouped doc is debuggable.
+    local guard_line
+    guard_line="$(grep '\[design-guard\]' "${stderr_file}")"
+    assert_contains "breadcrumb reports h3 closures" \
+        "gwt_closed_by_heading=1" "${guard_line}"
+
+    teardown_test_env
+}
+test_plan_completeness_gwt_h3_grouping_closes_section
+
 test_plan_completeness_bar_info_when_no_numerics() {
     echo "-- test: DESIGN COMPLETENESS adds [i] numeric-bar line when doc has no thresholds --"
     setup_test_env
