@@ -5931,6 +5931,116 @@ test_plan_completeness_gwt_h3_grouping_closes_section() {
 }
 test_plan_completeness_gwt_h3_grouping_closes_section
 
+test_plan_completeness_specpath_satisfies_perline() {
+    echo "-- test: DESIGN COMPLETENESS accepts scenarios from sibling specs/ (per-line render) --"
+    setup_test_env
+    install_registry
+
+    local token="plan-guard-specpath-$$"
+    local dir="${HOME}/change-specpath"
+    mkdir -p "${dir}/specs/cap-a"
+    # Spec-driven shape: design.md has caps but NO acceptance heading and NO
+    # oos (oos missing keeps the per-line render so the annotation is visible).
+    _write_design_fixture_raw "${dir}/design.md" '## Capabilities Affected'
+    # GIVEN-less bold WHEN/THEN — the OpenSpec template shape (load-bearing:
+    # requiring GIVEN would false-[X] template-conformant specs).
+    cat > "${dir}/specs/cap-a/spec.md" << 'EOSPEC'
+### Requirement: sample
+#### Scenario: first
+- **WHEN** a thing happens
+- **THEN** an outcome is observed
+#### Scenario: second
+- **WHEN** another thing happens
+- **THEN** another outcome is observed
+EOSPEC
+    _seed_plan_state "${token}" "fixture-slug" "${dir}/design.md"
+
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output context
+    output="$(run_hook "let us plan this out")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "acceptance satisfied via specs" \
+        "Acceptance Scenarios (in sibling specs/)" "${context}"
+    assert_not_contains "no missing-acceptance message" \
+        "Acceptance Scenarios (missing" "${context}"
+    assert_contains "oos still flagged" "Out-of-Scope (missing" "${context}"
+
+    teardown_test_env
+}
+test_plan_completeness_specpath_satisfies_perline
+
+test_plan_completeness_specpath_all_present() {
+    echo "-- test: DESIGN COMPLETENESS all-present via sibling specs --"
+    setup_test_env
+    install_registry
+
+    local token="plan-guard-specpath-all-$$"
+    local dir="${HOME}/change-specpath-all"
+    mkdir -p "${dir}/specs/cap-a"
+    _write_design_fixture_raw "${dir}/design.md" \
+        '## Capabilities Affected' \
+        '## Out-of-Scope'
+    cat > "${dir}/specs/cap-a/spec.md" << 'EOSPEC'
+#### Scenario: first
+- **WHEN** a thing happens
+- **THEN** an outcome is observed
+#### Scenario: second
+- **WHEN** another thing happens
+- **THEN** another outcome is observed
+EOSPEC
+    _seed_plan_state "${token}" "fixture-slug" "${dir}/design.md"
+
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output context
+    output="$(run_hook "let us plan this out")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "all sections present via specs" "all sections present" "${context}"
+    assert_not_contains "nothing flagged missing" "(missing" "${context}"
+
+    teardown_test_env
+}
+test_plan_completeness_specpath_all_present
+
+test_plan_completeness_specpath_thin_specs_stay_flagged() {
+    echo "-- test: DESIGN COMPLETENESS thin sibling specs do not flip the verdict --"
+    setup_test_env
+    install_registry
+
+    local token="plan-guard-specpath-thin-$$"
+    local dir="${HOME}/change-specpath-thin"
+    mkdir -p "${dir}/specs/cap-a"
+    _write_design_fixture_raw "${dir}/design.md" \
+        '## Capabilities Affected' \
+        '## Out-of-Scope'
+    # Only ONE WHEN/THEN pair -> min(WHEN,THEN)=1 < 2 -> no flip.
+    cat > "${dir}/specs/cap-a/spec.md" << 'EOSPEC'
+#### Scenario: only
+- **WHEN** a thing happens
+- **THEN** an outcome is observed
+EOSPEC
+    _seed_plan_state "${token}" "fixture-slug" "${dir}/design.md"
+
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    local output context
+    output="$(run_hook "let us plan this out")"
+    context="$(extract_context "${output}")"
+
+    assert_contains "acceptance still flagged missing" \
+        "Acceptance Scenarios (missing" "${context}"
+    assert_not_contains "no specs annotation" "in sibling specs/" "${context}"
+
+    teardown_test_env
+}
+test_plan_completeness_specpath_thin_specs_stay_flagged
+
 test_plan_completeness_bar_info_when_no_numerics() {
     echo "-- test: DESIGN COMPLETENESS adds [i] numeric-bar line when doc has no thresholds --"
     setup_test_env
