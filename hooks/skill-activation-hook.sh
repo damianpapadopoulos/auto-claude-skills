@@ -1535,8 +1535,11 @@ Action: confirm the design_path or re-run the design step before invoking Skill(
       # counts uppercase GIVEN/WHEN/THEN tokens inside the section (until
       # the next h2/h3; h4+ subsections stay inside). Case-sensitive so
       # lowercase prose ("when the user...") never counts. Contract holds
-      # at min(GIVEN,WHEN,THEN) >= 2; upper bound not enforced. Fail-open:
-      # awk failure or non-numeric output degrades to heading semantics.
+      # at min(GIVEN,WHEN,THEN) >= 2; upper bound not enforced. Counting
+      # is per-line (a line with two full scenarios counts once; tokens on
+      # the heading line are skipped) — an undercount can only make the
+      # advisory stricter, never block. Fail-open: awk failure or
+      # non-numeric output degrades to heading semantics.
       if [[ $_DC_ACC_HEAD -eq 1 ]]; then
         _DC_GWT="$(awk '
           /^##/ && !/^####/ {

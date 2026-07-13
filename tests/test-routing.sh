@@ -5831,6 +5831,47 @@ test_plan_completeness_gwt_lowercase_not_counted() {
 }
 test_plan_completeness_gwt_lowercase_not_counted
 
+test_plan_completeness_gwt_awk_failure_fails_open() {
+    echo "-- test: DESIGN COMPLETENESS G/W/T check fails open when awk fails --"
+    setup_test_env
+    install_registry
+
+    local token="plan-guard-gwt-failopen-$$"
+    local design="${HOME}/design-gwt-failopen.md"
+    # Thin acceptance section: with awk working this is flagged; with the
+    # G/W/T awk pass broken it must degrade to heading-presence [OK].
+    _write_design_fixture_raw "${design}" \
+        '## Capabilities Affected' \
+        '## Out-of-Scope' \
+        '## Acceptance Scenarios'
+    _seed_plan_state "${token}" "fixture-slug" "${design}"
+
+    printf '{"skill":"brainstorming","phase":"DESIGN"}' \
+        > "${HOME}/.claude/.skill-last-invoked-${token}"
+
+    # Stub awk that fails ONLY the G/W/T section pass (its program text
+    # contains "inacc") and passes all other awk invocations through, so
+    # the hook's unrelated awk field-splitting keeps working.
+    local stubdir="${HOME}/awk-stub"
+    mkdir -p "${stubdir}"
+    printf '#!/bin/sh\ncase "$*" in *inacc*) exit 1 ;; esac\nexec /usr/bin/awk "$@"\n' \
+        > "${stubdir}/awk"
+    chmod +x "${stubdir}/awk"
+    local saved_path="${PATH}"
+    export PATH="${stubdir}:${PATH}"
+
+    local output context
+    output="$(run_hook "let us plan this out")"
+    export PATH="${saved_path}"
+    context="$(extract_context "${output}")"
+
+    assert_contains "degrades to heading-presence semantics" "all sections present" "${context}"
+    assert_not_contains "no thin-heading advisory without a count" "heading present but <2" "${context}"
+
+    teardown_test_env
+}
+test_plan_completeness_gwt_awk_failure_fails_open
+
 test_plan_completeness_bar_info_when_no_numerics() {
     echo "-- test: DESIGN COMPLETENESS adds [i] numeric-bar line when doc has no thresholds --"
     setup_test_env
