@@ -147,6 +147,12 @@ if [ -f "${_ACT_HOOK}" ]; then
             '"deny"' "${out:-<empty>}"
         assert_contains "e2e: deny names the unfabricatable REVIEW milestone" \
             "requesting-code-review" "${out:-<empty>}"
+        # The actual invariant (robust against future chain reordering): the
+        # walker wrote state for this prompt, yet neither gating milestone is
+        # in .completed.
+        _e2e_fab="$(jq -r '.completed | (index("requesting-code-review") != null) or (index("verification-before-completion") != null)' "${_E2E_COMP}" 2>/dev/null)"
+        assert_contains "e2e: no gating milestone in walker-written .completed" \
+            "false" "${_e2e_fab:-<empty>}"
     else
         _record_fail "e2e activation hook wrote composition state" \
             "missing ${_E2E_COMP}"
