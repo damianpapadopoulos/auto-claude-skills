@@ -58,7 +58,7 @@ Append to `tests/test-completion-ledger.sh`, before `print_summary`:
 assert_contains "credits subagent-driven-development"  "subagent-driven-development" "${h}"
 assert_contains "credits agent-team-execution"         "agent-team-execution"        "${h}"
 assert_contains "credits agent-team-review"            "agent-team-review"           "${h}"
-assert_contains "review-embedding arm records canonical key" 'branch_ledger_record "requesting-code-review"' "${h}"
+assert_contains "review-embedding arm records canonical key" '_record_gating_milestone "requesting-code-review"' "${h}"
 ```
 
 - [ ] **Step 2: Run it — expect FAIL**
