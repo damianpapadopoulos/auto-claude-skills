@@ -57,10 +57,17 @@ Guard wiring (`hooks/openspec-guard.sh`):
 
 ## Residual limits (documented, accepted)
 
-- Grouped forms are COVERED: leading `(`/`{` tokens are unwrapped in the token
-  walks, so `(git push)`, `{ git commit; git push; }`, and
-  `(git commit) && git push` are detected (governance review caught the bare
-  `(git push)` full-evasion; fixed red-first in this change).
+- Grouped forms are COVERED: leading `(`/`{` tokens are unwrapped AND trailing
+  `)`/`}` closers are stripped from extracted words in both token walks, so
+  `(git push)`, `(cd sub && git push)`, `{ git commit; git push; }`,
+  `(git commit) && git push`, and `(gh pr merge)` are all detected. Two review
+  rounds were needed: governance caught the leading-paren evasion; code review
+  caught that the first fix left BARE forms open (the closer glues onto the
+  final token — `push)` ≠ `push`) while docs and an args-carrying test claimed
+  completeness. Both fixed red-first; guard-level bare-paren deny pinned.
+- `gh api …/pulls/N/merge` WITHOUT `PUT` is the merge-STATUS read and is
+  deliberately not gated (over-gating reads breeds evasion — measured live
+  this session); PUT forms and GraphQL `mergePullRequest` are gated.
 - Inherent string-detection ceiling (pre-existing, unchanged): `bash -c 'git
   push'`, `eval`, `xargs`, script files (`./push.sh`, Makefile targets), and
   curl-based GraphQL evade shell-string detection. GitHub branch protection is

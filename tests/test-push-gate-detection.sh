@@ -39,6 +39,11 @@ assert_contains "real push is gated" '"deny"' "${out:-<empty>}"
 out="$(_run 'git -C /tmp/x push -u origin feature/y')"
 assert_contains "push with -C is gated" '"deny"' "${out:-<empty>}"
 
+# (e) Guard-level: a bare paren-wrapped push must reach the gate (real-world
+#     impact of the trailing-closer fix — pre-fix this was silently allowed).
+out="$(_run '(git push)')"
+assert_contains "bare paren-wrapped push is gated" '"deny"' "${out:-<empty>}"
+
 # Pre-filter: a large command with no "git" substring is not gated (and returns fast).
 _big_nogit="echo $(printf 'x%.0s' $(seq 1 6000))"
 out="$(_run "${_big_nogit}")"
@@ -94,6 +99,16 @@ _assert_pred "paren-wrapped gh merge detected"    0 command_invokes_gh_merge '(g
 _assert_pred "paren commit then push (compound)"  0 command_git_mutate_before_push '(git commit -m x) && git push'
 _assert_pred "brace group commit;push (compound)" 0 command_git_mutate_before_push '{ git commit -m x; git push; }'
 _assert_pred "quoted paren phrase still ignored"  1 command_invokes_git_write "echo '(git push)'"
+# Trailing-closer forms: the closer glues onto the FINAL token when the
+# subcommand (or its last arg) is last — review round 2 caught bare forms
+# evading while the args-carrying test above stayed green.
+_assert_pred "bare paren-wrapped push detected"   0 command_invokes_git_write '(git push)'
+_assert_pred "cd-subdir paren push detected"      0 command_invokes_git_write '(cd sub && git push)'
+_assert_pred "bare paren gh merge detected"       0 command_invokes_gh_merge '(gh pr merge)'
+_assert_pred "fully-parenthesized compound"       0 command_git_mutate_before_push '(git commit -am x && git push)'
+# gh api merge-status GET is a READ — must not be gated; PUT forms are writes.
+_assert_pred "gh api GET merge-status not gated"  1 command_invokes_gh_merge 'gh api repos/o/r/pulls/5/merge'
+_assert_pred "gh api --method PUT merge gated"    0 command_invokes_gh_merge 'gh api --method PUT repos/o/r/pulls/5/merge'
 
 # Refactor guard: existing write-detection semantics must be unchanged.
 _assert_pred "git push still detected"            0 command_invokes_git_write 'git push origin HEAD'

@@ -80,7 +80,20 @@ _gc_segment_git_sub() {
             -C|-c|--git-dir|--work-tree|--namespace)
                 if [ "$#" -ge 2 ]; then shift 2; else shift; fi ;;
             -*) shift ;;
-            *) printf '%s' "$1"; return 0 ;;
+            *)
+                # Strip trailing group closers: in `(git push)` the closer
+                # glues onto the final token, yielding `push)` — no git
+                # subcommand contains ) or }, so stripping is always safe.
+                _gc_t="$1"
+                while :; do
+                    case "${_gc_t}" in
+                        *')') _gc_t="${_gc_t%\)}" ;;
+                        *'}') _gc_t="${_gc_t%\}}" ;;
+                        *) break ;;
+                    esac
+                done
+                printf '%s' "${_gc_t}"
+                return 0 ;;
         esac
     done
     return 0
@@ -172,8 +185,18 @@ command_invokes_gh_merge() {
                                 if [ "$#" -ge 2 ]; then shift 2; else shift; fi ;;
                             -*) shift ;;
                             *)
-                                if [ -z "${_gc_w1}" ]; then _gc_w1="$1"
-                                elif [ -z "${_gc_w2}" ]; then _gc_w2="$1"; break
+                                # Strip trailing group closers (`(gh pr merge)`
+                                # glues `)` onto the last collected word).
+                                _gc_t="$1"
+                                while :; do
+                                    case "${_gc_t}" in
+                                        *')') _gc_t="${_gc_t%\)}" ;;
+                                        *'}') _gc_t="${_gc_t%\}}" ;;
+                                        *) break ;;
+                                    esac
+                                done
+                                if [ -z "${_gc_w1}" ]; then _gc_w1="${_gc_t}"
+                                elif [ -z "${_gc_w2}" ]; then _gc_w2="${_gc_t}"; break
                                 fi
                                 shift ;;
                         esac
@@ -182,8 +205,17 @@ command_invokes_gh_merge() {
                         IFS="${_gc_oldifs}"; return 0
                     fi
                     if [ "${_gc_w1}" = "api" ]; then
+                        # REST pull-merge is a WRITE only as PUT — a bare
+                        # `gh api …/pulls/N/merge` is the merge-STATUS read
+                        # (review round 2: over-gating a read breeds evasion).
                         case "${_gc_seg}" in
-                            *pulls/*/merge*|*mergePullRequest*)
+                            *pulls/*/merge*)
+                                case "${_gc_seg}" in
+                                    *PUT*) IFS="${_gc_oldifs}"; return 0 ;;
+                                esac ;;
+                        esac
+                        case "${_gc_seg}" in
+                            *mergePullRequest*)
                                 IFS="${_gc_oldifs}"; return 0 ;;
                         esac
                     fi
