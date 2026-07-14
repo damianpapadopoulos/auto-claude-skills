@@ -34,9 +34,11 @@ the plugin source (not a downstream repo).
   the milestone-recording `case` in `skill-completion-hook.sh` so that
   `subagent-driven-development`, `agent-team-execution`, and `agent-team-review`
   each record the durable branch-ledger REVIEW milestone under the **canonical
-  key `requesting-code-review`**. Every existing reader (4 sites in
-  `openspec-guard.sh`, the SHIP advisory in `skill-activation-hook.sh`) is
-  satisfied unchanged.
+  key `requesting-code-review`**. The push gate's ledger-reading deny-path readers
+  (the sites in `openspec-guard.sh`) are satisfied unchanged. Note: the SHIP
+  advisory in `skill-activation-hook.sh` reads only composition `.completed`, not
+  the ledger, so it is unaffected by this change — an SDD-reviewed branch may still
+  see that advisory nag; hardening it is out of scope (a pre-existing gap).
 - **Fix #3 — first-token git-write detection.** Add a helper that decides whether
   a command actually *invokes* `git push` / `git commit` by inspecting the first
   token of each shell segment (after stripping `VAR=val`/`env` prefixes and git's
