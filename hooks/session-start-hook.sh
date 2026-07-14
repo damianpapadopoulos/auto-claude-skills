@@ -164,7 +164,7 @@ if ! command -v jq >/dev/null 2>&1; then
         printf '{"version":"4.0.0-fallback","warnings":["jq not available, no fallback found"],"skills":[]}\n' > "${CACHE_FILE}"
     fi
     # NOTE: jq unavailable on this path; MSG must remain a simple ASCII string (no quotes or backslashes)
-    MSG="SessionStart: jq not found -- skill routing disabled. Install jq: brew install jq (macOS) or apt install jq (Linux)"
+    MSG="SessionStart: jq not found -- skill routing disabled, and the fail-closed push gate cannot establish evidence so it falls open (no push enforcement) until jq is installed. Install jq: brew install jq (macOS) or apt install jq (Linux)"
     printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "${MSG}"
     exit 0
 fi
@@ -572,6 +572,40 @@ rm -f "${CACHE_FILE}.customs.$$"
 # Step 7: Apply user config overrides (single jq call)
 # -----------------------------------------------------------------
 WARNINGS="[]"
+
+# Step 6a-bis: push-gate precondition canary (audit F5). The push gate is
+# deliberately fail-open on infra error — a missing/unparseable gate lib
+# silently disables enforcement with no signal anywhere. Surface that here,
+# where a human reads output. Healthy environments emit NOTHING. Fail-open:
+# a canary error must never break session start.
+# PAIRED: this list covers the gate-ENFORCEMENT components the guard sources
+# — a new enforcement lib must be added here in the same change. Deliberately
+# excluded: consol-marker.sh (drives only an advisory warning, has an inline
+# missing-file fallback; its loss cannot silently disable push enforcement).
+_CANARY_BAD=""
+# Guard script: executes and reads stdin, so parse-check only.
+if [ ! -f "${PLUGIN_ROOT}/hooks/openspec-guard.sh" ]; then
+    _CANARY_BAD="openspec-guard.sh (missing)"
+elif ! /bin/bash -n "${PLUGIN_ROOT}/hooks/openspec-guard.sh" >/dev/null 2>&1; then
+    _CANARY_BAD="openspec-guard.sh (unparseable)"
+fi
+# Gate libs: SOURCE-probe in a stdio-nulled subshell — parse-only (-n) misses
+# the documented Bash-3.2 expansion-time killer (quoted operand in $(( ))),
+# which aborts at source time; sourcing is exactly what the guard does, and
+# these libs are function-definition-only, so a subshell probe is safe.
+for _cf in "hooks/lib/branch-ledger.sh" "hooks/lib/verdict.sh" \
+           "hooks/lib/git-command.sh" "hooks/lib/session-token.sh"; do
+    if [ ! -f "${PLUGIN_ROOT}/${_cf}" ]; then
+        _CANARY_BAD="${_CANARY_BAD}${_CANARY_BAD:+, }${_cf##*/} (missing)"
+    elif ! ( . "${PLUGIN_ROOT}/${_cf}" ) </dev/null >/dev/null 2>&1; then
+        _CANARY_BAD="${_CANARY_BAD}${_CANARY_BAD:+, }${_cf##*/} (unsourceable)"
+    fi
+done
+if [ -n "${_CANARY_BAD}" ]; then
+    # || fallback restores valid JSON (WARNINGS is still [] at this point) so a
+    # contrived jq failure can't poison every later append with empty input.
+    WARNINGS="$(printf '%s' "${WARNINGS}" | jq --arg m "PUSH-GATE CANARY: ${_CANARY_BAD} — the fail-closed push gate silently skips the affected checks (fail-open, no enforcement). Restore the file(s) to re-arm enforcement." '. + [$m]')" || WARNINGS="[]"
+fi
 
 # Step 6b: Resolve preset (if configured in skill-config.json)
 _preset_name=""
