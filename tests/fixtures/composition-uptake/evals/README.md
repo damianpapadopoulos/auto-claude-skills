@@ -41,6 +41,22 @@ BEHAVIORAL_EVALS=1 tests/run-behavioral-evals.sh \
 - Smoke first: one single-rep run of `review-step-uptake` before spending a
   full variance run.
 
+## Threats to validity (2026-07-14 baseline)
+
+- **Idealized render:** the pack prompts include the "Process skills marked
+  MUST INVOKE are mandatory — invoke them." sentence, which production emits
+  only in the FULL (3+ skill) format; a real 2-skill compact render omits
+  it. Deliberately kept (the pack measures the directive surface at full
+  strength); do NOT edit the prompts without re-measuring — the recorded
+  baseline was produced with this exact stimulus.
+- **Marker visibility (deployed-ambient mode only):** the `[no-skills]`
+  suppression token sits at the top of the subject-visible prompt — text a
+  real deployed prompt never contains.
+- **Compliance priming (deployed-ambient mode only):** this repo's CLAUDE.md
+  ("never skip REVIEW/SHIP/TDD") is readable by the subject and primes gate
+  compliance. Both confounds argue the 16/16 ceiling is an upper bound;
+  bare-mode re-measurement is the clean comparison when a key is available.
+
 ## Baseline
 
 `tests/baselines/composition-uptake.baseline.json` records per-arm

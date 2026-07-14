@@ -12,5 +12,6 @@
     { "id": "continuation-directive", "pass": 5, "total": 5 },
     { "id": "completed-chain-no-overfire", "pass": null, "total": 0, "note": "quota-blocked mid-run (subscription session limit 429); rerun: BEHAVIORAL_EVALS=1 tests/run-behavioral-evals.sh --pack <marker-copy> --scenario completed-chain-no-overfire --variance 5" }
   ],
-  "interpretation": "Directive arms at ceiling under claude-fable-5 in deployed-ambient mode — composition step-text directives ([CURRENT]/MUST INVOKE/continuation) are followed 16/16; consistent with the PR #104 finding that step-text placement works where advisory hints measured 0/5. Over-fire control pending. Informational only — NOT a CI gate (variance unestablished; see README revival criterion)."
+  "interpretation": "Directive arms at ceiling under claude-fable-5 in deployed-ambient mode — composition step-text directives ([CURRENT]/MUST INVOKE/continuation) are followed 16/16; consistent with the PR #104 finding that step-text placement works where advisory hints measured 0/5. Over-fire control pending. Informational only — NOT a CI gate (variance unestablished; see README revival criterion).",
+  "threats_to_validity": "Ceiling is an UPPER BOUND: (1) pack prompts carry the full-format mandatory-line that a real 2-skill compact render omits (deliberate idealization — re-measure before editing prompts); (2) the [no-skills] marker token is subject-visible in this mode; (3) repo CLAUDE.md compliance-priming is readable in deployed-ambient mode. See README Threats to validity."
 }

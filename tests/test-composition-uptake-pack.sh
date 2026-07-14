@@ -47,5 +47,23 @@ assert_equals "every prompt embeds Composition: chain and [CURRENT] marker" "0" 
 _no_exp="$(jq -r '[.[] | select((.expected_behavior // "") == "")] | length' "${PACK}" 2>/dev/null)"
 assert_equals "every scenario documents expected_behavior" "0" "${_no_exp}"
 
+# Every scenario carries at least one assertion (an empty/missing assertions
+# array would silently pass the per-assertion checks above).
+_no_asserts="$(jq -r '[.[] | select(((.assertions // []) | length) == 0)] | length' "${PACK}" 2>/dev/null)"
+assert_equals "every scenario has >=1 assertion" "0" "${_no_asserts}"
+
+# Baseline measurement contract (spec scenario 2): the committed baseline
+# records mode, judge model, date, and one pass/total entry per pack arm.
+BASELINE="${PROJECT_ROOT}/tests/baselines/composition-uptake.baseline.json"
+assert_file_exists "baseline artifact exists" "${BASELINE}"
+if [ -f "${BASELINE}" ]; then
+    _b_ok="$(jq -r '(has("mode")) and (has("judge_model")) and (has("date")) and (has("reps_per_arm")) and ((.arms | type) == "array")' "${BASELINE}" 2>/dev/null)"
+    assert_equals "baseline records mode/judge_model/date/reps/arms" "true" "${_b_ok}"
+    _b_arms="$(jq -r '[.arms[] | select((has("id") and has("pass") and has("total")) | not)] | length' "${BASELINE}" 2>/dev/null)"
+    assert_equals "every baseline arm has id/pass/total" "0" "${_b_arms}"
+    _b_cover="$(jq --slurpfile p "${PACK}" -r '[$p[0][].id] - [.arms[].id] | length' "${BASELINE}" 2>/dev/null)"
+    assert_equals "baseline covers every pack arm" "0" "${_b_cover}"
+fi
+
 print_summary
 exit $?
