@@ -1084,6 +1084,9 @@ ${HINTS}${COMPOSITION_HINTS}"
       # review/verification ran; those names enter .completed only via the
       # PostToolUse completion hook (real Skill return) or the on-disk union
       # below. Everything else still back-fills (chore false-block guard).
+      # PAIRED: adding a third gated milestone means updating this filter, the
+      # crediting case in skill-completion-hook.sh, and the openspec-guard.sh
+      # milestone checks together.
       _comp_completed="$(printf '%s' "$_full_chain" | tr '|' '\n' | head -n "$((_progress_idx + 1))" | jq -R . | jq -s 'map(select(. != "requesting-code-review" and . != "verification-before-completion"))' 2>/dev/null)" || _comp_completed="[]"
     fi
     _comp_chain="$(printf '%s' "$_full_chain" | tr '|' '\n' | jq -R . | jq -s . 2>/dev/null)" || {

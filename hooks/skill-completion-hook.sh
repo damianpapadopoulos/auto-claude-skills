@@ -82,6 +82,9 @@ _record_gating_milestone() {
     . "${_PLUGIN_ROOT}/hooks/lib/branch-ledger.sh" 2>/dev/null || true
     branch_ledger_record "$1" 2>/dev/null || true
 }
+# PAIRED: these milestone names are also excluded from the walker's back-fill
+# prefix (skill-activation-hook.sh gating-milestone filter) and checked by
+# openspec-guard.sh — a third gated milestone must be added in all three.
 case "${_BARE}" in
     requesting-code-review|verification-before-completion)
         _record_gating_milestone "${_BARE}" ;;
