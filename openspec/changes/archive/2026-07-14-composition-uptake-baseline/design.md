@@ -56,3 +56,22 @@ Measurement stack:
    rationale in the README (eval-strategy convention).
 3. Trifecta: none (local fixtures, opt-in local runs, no outbound actions);
    no agent-safety-review needed.
+
+## Implementation Notes (synced at ship time)
+
+- Measurement executed in `deployed-ambient` fallback mode, not the designed
+  `--bare`: the CLI's bare mode skips OAuth by design and authenticates only
+  via ANTHROPIC_API_KEY, which this environment lacks. Double-injection was
+  suppressed with the activation hook's `[no-skills]` marker on a temp pack
+  copy; both modes and their non-comparability are documented in the README.
+- Result: directive arms at ceiling 16/16 (subject claude-fable-5, judge
+  claude-sonnet-5, 5 reps/arm + 1 pooled smoke). Over-fire control arm
+  quota-blocked mid-run (subscription 429); recorded pending with rerun
+  instructions — completing it is the one open follow-up.
+- Review (eval-design lens, verdict With-fixes, all applied): disclosed the
+  full-format mandatory-line idealization (a real 2-skill compact render
+  omits it — verified against the hook; prompts deliberately NOT edited
+  post-measurement), added a Threats-to-validity section (marker visibility,
+  CLAUDE.md priming ⇒ ceiling is an upper bound), and extended the structure
+  test with >=1-assertion and baseline measurement-contract checks (closing
+  the spec-scenario-2 test gap).
