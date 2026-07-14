@@ -29,13 +29,16 @@ documented inline there.
 
 ## Trade-offs
 
-- **`bash -n` (parse) vs subshell-source probe:** parse-only is side-effect
-  free by construction and catches the historically painful Bash-3.2
-  arithmetic class; a source probe would additionally catch runtime-only
-  failures (e.g. sourcing a file that `exit`s) but risks executing top-level
-  code. The gate libs are function-definition-only by convention, yet the
-  canary should not depend on that convention holding — parse check chosen.
-  Runtime-only source failures remain a (documented) blind spot.
+- **`bash -n` (parse) vs subshell-source probe — REVISED BY RED TEST:** the
+  original decision was parse-only (side-effect-free by construction), but
+  the red fixture — deliberately the documented Bash-3.2 killer, a quoted
+  operand in `$(( ))` — proved `-n` misses it: that class fails at
+  EXPANSION time, not parse time (CLAUDE.md's own gotcha says exactly this).
+  Final shape: gate LIBS get a stdio-nulled subshell SOURCE probe (sourcing
+  is precisely what the guard does; the libs are function-definition-only,
+  and a subshell contains any effects), while `openspec-guard.sh` itself —
+  a script that executes and reads stdin — stays parse-only. Runtime-only
+  failures in the guard's body remain the (documented) blind spot.
 - **Session-start placement vs per-push placement:** warning at push time
   would be tautological (the fail-open paths are exactly the ones that can't
   evaluate); session start is where degradation is readable BEFORE work
