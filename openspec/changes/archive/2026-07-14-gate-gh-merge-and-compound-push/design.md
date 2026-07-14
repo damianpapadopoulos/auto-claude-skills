@@ -93,3 +93,18 @@ Guard wiring (`hooks/openspec-guard.sh`):
 3. Red-first TDD; detector unit tests + guard behavior tests + full suite.
 4. Trifecta: outbound_action coverage EXPANDS the gate (more actions gated),
    no new data legs; no agent-safety-review required.
+
+## Implementation Notes (synced at ship time)
+
+- Built as designed, plus two review-driven hardening rounds beyond the
+  original scope (see Residual limits): grouped-form unwrapping (governance
+  finding) completed with trailing-closer stripping (code-review finding —
+  the first fix left bare wrapped forms open while its test stayed green),
+  PUT-only gating of the REST merge endpoint (bare form is a read), and
+  action-aware deny remedies.
+- Live validation during development: the INSTALLED plugin (3.69.2, pre-#107)
+  false-positive-denied this session's own test and commit commands for
+  containing gate phrases as data — the exact evasion-pressure failure mode
+  this change eliminates.
+- Reviews: code "With fixes" → fixes applied and empirically verified against
+  the reviewer's own repro cases; governance APPROVE-WITH-NOTES.
