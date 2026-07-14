@@ -602,7 +602,9 @@ for _cf in "hooks/lib/branch-ledger.sh" "hooks/lib/verdict.sh" \
     fi
 done
 if [ -n "${_CANARY_BAD}" ]; then
-    WARNINGS="$(printf '%s' "${WARNINGS}" | jq --arg m "PUSH-GATE CANARY: ${_CANARY_BAD} — the fail-closed push gate silently skips the affected checks (fail-open, no enforcement). Restore the file(s) to re-arm enforcement." '. + [$m]')" || true
+    # || fallback restores valid JSON (WARNINGS is still [] at this point) so a
+    # contrived jq failure can't poison every later append with empty input.
+    WARNINGS="$(printf '%s' "${WARNINGS}" | jq --arg m "PUSH-GATE CANARY: ${_CANARY_BAD} — the fail-closed push gate silently skips the affected checks (fail-open, no enforcement). Restore the file(s) to re-arm enforcement." '. + [$m]')" || WARNINGS="[]"
 fi
 
 # Step 6b: Resolve preset (if configured in skill-config.json)
