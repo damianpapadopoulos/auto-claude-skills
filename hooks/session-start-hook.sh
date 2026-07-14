@@ -578,8 +578,10 @@ WARNINGS="[]"
 # silently disables enforcement with no signal anywhere. Surface that here,
 # where a human reads output. Healthy environments emit NOTHING. Fail-open:
 # a canary error must never break session start.
-# PAIRED: this component list mirrors what hooks/openspec-guard.sh sources —
-# a new gate lib must be added here in the same change.
+# PAIRED: this list covers the gate-ENFORCEMENT components the guard sources
+# — a new enforcement lib must be added here in the same change. Deliberately
+# excluded: consol-marker.sh (drives only an advisory warning, has an inline
+# missing-file fallback; its loss cannot silently disable push enforcement).
 _CANARY_BAD=""
 # Guard script: executes and reads stdin, so parse-check only.
 if [ ! -f "${PLUGIN_ROOT}/hooks/openspec-guard.sh" ]; then
