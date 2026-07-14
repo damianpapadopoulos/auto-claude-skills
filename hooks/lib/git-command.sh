@@ -44,6 +44,8 @@ _gc_segment_git_sub() {
     set -- $1
     # Unwrap leading subshell/brace group openers so `(git push)` or
     # `{ git push` cannot hide the invocation from the gate.
+    # PAIRED: command_invokes_gh_merge carries a structural copy of this
+    # unwrap (it collects two words instead of echoing one) — update both.
     while [ "$#" -gt 0 ]; do
         case "$1" in
             '('|'{') shift ;;

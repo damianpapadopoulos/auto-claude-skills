@@ -38,8 +38,12 @@ _GC_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 # substring check so a huge git-containing command can't stall the hot path.
 _GC_MAX=4096   # above this, use the substring fallback (fail-closed) — bounds cost
 _gc_precise() {
+    # Both predicates are required: the fast-path and gate body call
+    # command_invokes_gh_merge too — if the lib were ever split and only one
+    # loaded, an unbound call would ERR-trap the whole gate open. Check both.
     [ "${#_COMMAND}" -le "${_GC_MAX}" ] && \
-        command -v command_invokes_git_write >/dev/null 2>&1
+        command -v command_invokes_git_write >/dev/null 2>&1 && \
+        command -v command_invokes_gh_merge >/dev/null 2>&1
 }
 
 # Fast path: only proceed for a REAL git commit/push or gh-merge invocation.
