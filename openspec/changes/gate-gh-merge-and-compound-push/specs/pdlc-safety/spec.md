@@ -4,11 +4,11 @@
 
 ### Requirement: Remote merges via gh are gated on the same milestones as push
 
-An agent Bash command that actually invokes a PR merge — `gh pr merge` in any
-flag order (including `--auto` and `-R/--repo`), or `gh api` naming the REST
-pull-merge path or GraphQL `mergePullRequest` — MUST pass the same REVIEW and
-VERIFY evidence gates as `git push` (composition checks, verify-hardening,
-global fail-closed gate). `gh pr create` MUST NOT be gated. Detection MUST be
+An agent Bash command that actually invokes a PR merge MUST pass the same
+REVIEW and VERIFY evidence gates as `git push` (composition checks,
+verify-hardening, global fail-closed gate). This covers `gh pr merge` in any
+flag order (including `--auto` and `-R/--repo`) and `gh api` naming the REST
+pull-merge path or GraphQL `mergePullRequest`. `gh pr create` MUST NOT be gated. Detection MUST be
 invocation-based (segment-aware), not phrase-based: a command that merely
 mentions the words MUST NOT trigger the gate. All denies MUST honor the
 human-only bypass and fail open on infrastructure errors (missing jq, missing
@@ -37,10 +37,9 @@ libs). Routing-governance remains push-scoped.
 
 ### Requirement: Compound mutate-then-push commands are denied
 
-A single Bash command in which a content-mutating git subcommand (`commit`,
-`merge`, `cherry-pick`, `rebase`, `revert`, `am`) is invoked in a segment
-ordered before a `git push` segment MUST be denied regardless of evidence
-state (the gate evaluates pre-exec state, so no evidence can cover the
+A single Bash command MUST be denied when a content-mutating git subcommand
+(`commit`, `merge`, `cherry-pick`, `rebase`, `revert`, `am`) is invoked in a
+segment ordered before a `git push` segment, regardless of evidence state (the gate evaluates pre-exec state, so no evidence can cover the
 not-yet-created commit), with a remedy instructing the agent to run the push
 as a separate command. The deny MUST honor the human-only bypass. `git pull
 && git push` and a plain `git push` MUST NOT match.
