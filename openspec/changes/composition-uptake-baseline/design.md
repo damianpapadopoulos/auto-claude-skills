@@ -24,13 +24,14 @@ Measurement stack:
 
 ## Trade-offs
 
-- **Real-environment measurement vs clean-room:** subjects run with repo cwd,
-  so CLAUDE.md and skills are readable and could reinforce the directives.
-  Deliberate: the quantity of interest is uptake in the DEPLOYED environment
-  (directive + surrounding context together), not the directive's isolated
-  persuasive power. A clean-room arm is a documented possible extension, not
-  built (would require the cwd-isolation harness from the
-  subject-read-contamination memory).
+- **Measurement mode — `--bare` (REVISED at plan time):** the runner's
+  `--bare` strips the plugin's own hooks from the inner subject; without it,
+  the live activation hook fires on the pack prompt and injects a SECOND
+  composition block over the embedded one (double-injection confound, not
+  "real environment"). So subjects measure exactly the embedded directive
+  surface — the model-routing-probation precedent. Repo cwd remains readable
+  (CLAUDE.md reinforcement is part of the deployed reality); a fully
+  clean-room arm stays a documented possible extension.
 - **Informational, not gating:** run-to-run variance is unmeasured; a 5-rep
   baseline cannot gate without lying (small-n memory). Revival criterion for
   gating: two independent full runs whose per-arm rates differ by <=1/5,
