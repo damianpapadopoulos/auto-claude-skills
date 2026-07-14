@@ -86,6 +86,15 @@ _assert_pred "pull && push (excluded set)"        1 command_git_mutate_before_pu
 _assert_pred "push before commit"                 1 command_git_mutate_before_push 'git push && git commit -m x'
 _assert_pred "quoted phrase only"                 1 command_git_mutate_before_push 'echo "git commit && git push"'
 
+# Grouped forms: subshell/brace wrapping must not hide the invocation — a
+# bare `(git push)` would otherwise evade the milestone gate entirely.
+_assert_pred "paren-wrapped push detected"        0 command_invokes_git_write '(git push origin HEAD)'
+_assert_pred "brace-group push detected"          0 command_invokes_git_write '{ git push origin HEAD; }'
+_assert_pred "paren-wrapped gh merge detected"    0 command_invokes_gh_merge '(gh pr merge 5)'
+_assert_pred "paren commit then push (compound)"  0 command_git_mutate_before_push '(git commit -m x) && git push'
+_assert_pred "brace group commit;push (compound)" 0 command_git_mutate_before_push '{ git commit -m x; git push; }'
+_assert_pred "quoted paren phrase still ignored"  1 command_invokes_git_write "echo '(git push)'"
+
 # Refactor guard: existing write-detection semantics must be unchanged.
 _assert_pred "git push still detected"            0 command_invokes_git_write 'git push origin HEAD'
 _assert_pred "git -C push still detected"         0 command_invokes_git_write 'git -C /tmp/x push'

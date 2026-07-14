@@ -39,8 +39,29 @@ _gc_split_segments() {
 #   `env`/VAR=val prefixes) is git or */git; echoes nothing otherwise.
 #   Extracted from command_invokes_git_write — semantics unchanged.
 _gc_segment_git_sub() {
+    local _gc_t
     # shellcheck disable=SC2086
     set -- $1
+    # Unwrap leading subshell/brace group openers so `(git push)` or
+    # `{ git push` cannot hide the invocation from the gate.
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            '('|'{') shift ;;
+            '('*|'{'*)
+                _gc_t="$1"
+                while :; do
+                    case "${_gc_t}" in
+                        '('*) _gc_t="${_gc_t#\(}" ;;
+                        '{'*) _gc_t="${_gc_t#\{}" ;;
+                        *) break ;;
+                    esac
+                done
+                shift
+                set -- "${_gc_t}" "$@"
+                break ;;
+            *) break ;;
+        esac
+    done
     while [ "$#" -gt 0 ]; do
         case "$1" in
             env) shift ;;
@@ -103,7 +124,7 @@ command_invokes_git_write() {
 #   Phrase mentions inside quotes of NON-gh segments never match (segment's
 #   first real token must be gh). `gh pr create` never matches.
 command_invokes_gh_merge() {
-    local _gc_segs _gc_oldifs _gc_seg _gc_w1 _gc_w2
+    local _gc_segs _gc_oldifs _gc_seg _gc_w1 _gc_w2 _gc_t
     _gc_segs="$(_gc_split_segments "$1")"
     _gc_oldifs="$IFS"
     IFS='
@@ -112,6 +133,25 @@ command_invokes_gh_merge() {
         IFS="${_gc_oldifs}"
         # shellcheck disable=SC2086
         set -- ${_gc_seg}
+        # Unwrap leading group openers (see _gc_segment_git_sub).
+        while [ "$#" -gt 0 ]; do
+            case "$1" in
+                '('|'{') shift ;;
+                '('*|'{'*)
+                    _gc_t="$1"
+                    while :; do
+                        case "${_gc_t}" in
+                            '('*) _gc_t="${_gc_t#\(}" ;;
+                            '{'*) _gc_t="${_gc_t#\{}" ;;
+                            *) break ;;
+                        esac
+                    done
+                    shift
+                    set -- "${_gc_t}" "$@"
+                    break ;;
+                *) break ;;
+            esac
+        done
         while [ "$#" -gt 0 ]; do
             case "$1" in
                 env) shift ;;

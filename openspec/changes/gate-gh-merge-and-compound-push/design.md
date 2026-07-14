@@ -55,6 +55,18 @@ Guard wiring (`hooks/openspec-guard.sh`):
 - **`gh pr create` ungated:** creation starts review; gating it would block
   the normal PR workflow this plugin itself drives. Pinned by regression.
 
+## Residual limits (documented, accepted)
+
+- Grouped forms are COVERED: leading `(`/`{` tokens are unwrapped in the token
+  walks, so `(git push)`, `{ git commit; git push; }`, and
+  `(git commit) && git push` are detected (governance review caught the bare
+  `(git push)` full-evasion; fixed red-first in this change).
+- Inherent string-detection ceiling (pre-existing, unchanged): `bash -c 'git
+  push'`, `eval`, `xargs`, script files (`./push.sh`, Makefile targets), and
+  curl-based GraphQL evade shell-string detection. GitHub branch protection is
+  the per-PR backstop; the gate is a drift guardrail, not an adversarial
+  boundary.
+
 ## Dissenting views
 
 - Codex sparring (2026-07-14 audit) wanted broad `gh api` coverage; conceded
