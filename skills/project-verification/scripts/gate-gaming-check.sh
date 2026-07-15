@@ -10,8 +10,10 @@
 # a strictly POSIX-only grep would silently under-match (acceptable for an advisory tripwire).
 # Known coverage gaps (extend the patterns, don't assume completeness): skip dialects not
 # yet matched include RSpec xit/pending, Rust #[ignore], and PHPUnit markTestSkipped(); and
-# the caller's `-- '*test*' '*spec*'` pathspec misses non-canonical test files (conftest.py,
-# __mocks__/, fixtures/). All acceptable for an advisory tripwire — see the SKILL.md Limits note.
+# the caller's `-- '*test*' '*spec*' '.verify.yml'` pathspec misses non-canonical test files
+# (conftest.py, __mocks__/, fixtures/). .verify.yml weakening is removal-only (a run:
+# rewritten to a no-op is not flagged). All acceptable for an advisory tripwire — see the
+# SKILL.md Limits note.
 set -u
 
 _diff="$(cat 2>/dev/null || true)"
@@ -32,9 +34,21 @@ _added_skip="$(printf '%s\n' "$_diff" \
   | grep -E '^\+.*(@pytest\.mark\.skip|@unittest\.skip|pytest\.skip|xfail|@Disabled|@Ignore|\.skip\(|\bxit\(|\bxdescribe\(|t\.Skip\(|t\.SkipNow)' \
   2>/dev/null || true)"
 
+# Removed .verify.yml gate entries: deletions of `- name:` / `run:` lines
+# inside a .verify.yml hunk — the gate DECLARATION shrinking is verification
+# weakening (evaluator-surface-advisory). File-tracked via +++ headers so
+# name:/run: removals in other YAML (e.g. workflow steps) cannot
+# false-positive. Removal-only by design, per the coverage-gaps note above.
+_removed_gate="$(printf '%s\n' "$_diff" | awk '
+  /^\+\+\+ / { f = $2; sub(/^b\//, "", f); next }
+  f == ".verify.yml" && /^-/ && !/^---/ && ($0 ~ /^-[[:space:]]*-[[:space:]]*name:/ || $0 ~ /^-[[:space:]]*run:/) { print }
+' 2>/dev/null || true)"
+
 [ -n "$_removed" ] && _hits="${_removed}"
 [ -n "$_added_skip" ] && _hits="${_hits}${_hits:+
 }${_added_skip}"
+[ -n "$_removed_gate" ] && _hits="${_hits}${_hits:+
+}${_removed_gate}"
 
 if [ -n "$_hits" ]; then
   echo "suspect"
