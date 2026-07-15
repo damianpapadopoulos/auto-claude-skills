@@ -298,18 +298,49 @@ if [ "${_gc_is_push}" = "true" ] || [ "${_gc_is_ghmerge}" = "true" ]; then
                 fi
             fi
         fi
+
+        # Evaluator-surface advisory (NEVER a deny): the branch edits file(s)
+        # that define what "verified" means, so a clean verdict is partly
+        # self-referential evidence — surface it for the human PR reviewer.
+        # Push-only (branch-local diff is the wrong delta for gh-merge, same
+        # reasoning as routing-governance). Fail-open: predicate missing or
+        # base unresolvable => silence. See
+        # openspec/changes/evaluator-surface-advisory/design.md.
+        if [ "${_gc_is_push}" = "true" ] && command -v diff_touches_evaluator >/dev/null 2>&1; then
+            _eval_hits="$(diff_touches_evaluator "${_proot}" 2>/dev/null)" || _eval_hits=""
+            if [ -n "${_eval_hits}" ]; then
+                _eval_list="$(printf '%s' "${_eval_hits}" | tr '\n' ' ')"
+                _STALE_MSG="${_STALE_MSG}${_STALE_MSG:+; }EVALUATOR SURFACE: this push modifies file(s) that define what verified means (${_eval_list}). The verification verdict is partly self-referential for this branch — call these files out for explicit human review in the PR."
+            fi
+        fi
 fi
+
+# Flush pending push advisories before any pre-SHIP early exit. _STALE_MSG is
+# otherwise only emitted via the SHIP-phase _WARNINGS fold-in below, which
+# silently dropped advisories for non-SHIP pushes (latent since the staleness
+# advisory landed). Advisory channel only — no permissionDecision here (one
+# would auto-approve and suppress downstream warnings; documented bug shape).
+_flush_push_advisories() {
+    [ -n "${_STALE_MSG:-}" ] || return 0
+    if command -v jq >/dev/null 2>&1; then
+        jq -n --arg msg "PUSH GATE (advisory): ${_STALE_MSG}" \
+            '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":$msg}}'
+    else
+        printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"%s"}}\n' \
+            "$(printf 'PUSH GATE (advisory): %s' "${_STALE_MSG}" | tr '\n"' ' ')"
+    fi
+}
 
 # Check if we're in SHIP phase (signal file is JSON: {"skill":"...","phase":"..."})
 _SIGNAL_FILE="${HOME}/.claude/.skill-last-invoked-${_SESSION_TOKEN}"
-[ -f "${_SIGNAL_FILE}" ] || exit 0
+[ -f "${_SIGNAL_FILE}" ] || { _flush_push_advisories; exit 0; }
 _PHASE=""
 if command -v jq >/dev/null 2>&1; then
     _PHASE="$(jq -r '.phase // empty' "${_SIGNAL_FILE}" 2>/dev/null)" || true
 else
     _PHASE="$(grep -o '"phase" *: *"[^"]*"' "${_SIGNAL_FILE}" | sed 's/"phase" *: *"//;s/"$//')" || true
 fi
-[ "${_PHASE}" = "SHIP" ] || exit 0
+[ "${_PHASE}" = "SHIP" ] || { _flush_push_advisories; exit 0; }
 
 # Compute project root unconditionally (needed by all checks)
 _proj_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
