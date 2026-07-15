@@ -33,6 +33,7 @@ staleness_delta() {
     [ -z "$root" ] && root="$(git rev-parse --show-toplevel 2>/dev/null)"
     [ -z "$root" ] && return 0
     git -C "$root" rev-parse --verify --quiet "${from}^{commit}" >/dev/null 2>&1 || return 0
+    git -C "$root" rev-parse --verify --quiet "${to}^{commit}" >/dev/null 2>&1 || return 0
 
     local numstat
     # --no-renames: rename rows ("dir/{a.md => b.md}") would defeat the

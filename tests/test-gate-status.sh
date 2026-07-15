@@ -54,6 +54,9 @@ assert_equals "empty delta is all zeros" \
     "files=0 docs_files=0 src_files=0 docs_lines=0 src_lines=0" \
     "$(staleness_delta "${HEAD_SHA}" "${HEAD_SHA}" "${FIX}")"
 assert_equals "unknown from-sha is silent (fail-open)" "" "$(staleness_delta deadbeef "${HEAD_SHA}" "${FIX}")"
+# contract pin, not red-first: a bad to-sha was already silent via git-diff
+# fail-open; the explicit guard makes the from/to contract symmetric.
+assert_equals "unknown to-sha is silent (fail-open)" "" "$(staleness_delta "${REVIEW_SHA}" deadbeef "${FIX}")"
 assert_equals "empty from-sha is silent (fail-open)" "" "$(staleness_delta "" "${HEAD_SHA}" "${FIX}")"
 rc=0; staleness_delta deadbeef "${HEAD_SHA}" "${FIX}" >/dev/null || rc=$?
 assert_equals "fail-open returns 0" "0" "${rc}"
