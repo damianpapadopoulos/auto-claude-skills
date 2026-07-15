@@ -69,4 +69,14 @@ pre-registered threshold agreed in advance.
 ## Never-delete policy
 
 Arms are never removed. Deprecate with a dated rationale here instead:
-(none deprecated yet).
+
+- `completed-chain-no-overfire` — NOT deprecated, but **flagged for redesign
+  (2026-07-15)** before its numbers are treated as over-fire signal: its
+  fictional completed-chain scenario collides with tool-bearing subjects
+  grounding themselves in the REAL repo (one failure halted on the
+  fiction/reality branch mismatch), and its FAIL criteria tension with
+  finishing-a-development-branch's own "verify tests" Step 1 (one failure was
+  the subject re-running tests — arguably correct skill-following). Redesign
+  options: single-turn constraint (matching the directive arms' shape) or an
+  isolated fictional repo. Recorded 1/3 (quota-truncated) with these caveats
+  in the baseline.
