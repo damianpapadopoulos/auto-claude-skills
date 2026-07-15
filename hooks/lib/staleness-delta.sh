@@ -17,7 +17,8 @@
 #
 # Docs classification (frozen in the backtest protocol — change requires a
 # re-registered backtest): docs/**, openspec/**, any *.md. Everything else is
-# source.
+# source. (The protocol also names CHANGELOG.md explicitly; it is subsumed by
+# the *.md rule — the classifier is functionally identical to the frozen set.)
 
 staleness_delta_is_docs() {
     case "$1" in

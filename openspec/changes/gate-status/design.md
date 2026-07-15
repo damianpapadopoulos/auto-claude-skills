@@ -33,7 +33,13 @@ deferred.
 - Token resolution: no stdin payload exists for a user-run script, so the
   session token comes from the shared singleton (caveat printed inline);
   verdict reads go through `verdict_resolve_token` (commit-bound bridge,
-  #97) exactly like the guard.
+  #97) exactly like the guard. SAFETY PROPERTY (do not "fix" the token
+  handling in a way that breaks it): the branch ledger and the verdict are
+  token-independent/commit-bound carriers, so gates 5 and 6 stay
+  authoritative even when the singleton diverges from the live guard's
+  payload-first token and chain gates 2–4 render n/a — a token divergence
+  can therefore never produce a false WOULD ALLOW on those gates, and the
+  summary carries an explicit caveat when 2–4 were unevaluated.
 - Gate 1 (compound mutate-then-push) is per-command, not per-state — reported
   as a rule reminder, not replayed.
 - Classifier docs-set (`docs/**`, `openspec/**`, `*.md`) is frozen with the

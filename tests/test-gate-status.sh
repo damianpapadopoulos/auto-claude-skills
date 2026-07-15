@@ -77,6 +77,8 @@ echo "== gate-status: evidence flips the replay (guard order) =="
     && branch_ledger_record "verification-before-completion" "${FIX}" )
 out="$(cd "${FIX}" && /bin/bash "${GATE_STATUS}")"
 assert_contains "ledger evidence => would allow (non-routing repo)" "=> git push NOW: WOULD ALLOW" "${out}"
+assert_contains "allow summary carries concurrency caveat when chain gates unevaluated" \
+    "caveat: chain gates 2-4 were unevaluated" "${out}"
 assert_contains "review evidence line shows ledger source" ": ledger @" "${out}"
 assert_contains "review at HEAD => no staleness" "review recorded at HEAD — no post-review delta" "${out}"
 assert_equals "replay lists gates 1-6 in guard order" \
@@ -136,6 +138,11 @@ for anchor in "command_git_mutate_before_push" "Check 1: REVIEW" "Check 2: VERIF
               "verdict_sha_is_head" "Global fail-closed gate" "Routing-governance gate"; do
     assert_contains "guard still contains replayed concept: ${anchor}" "${anchor}" "${guard}"
 done
+# gate-status renders the verdict sha via verdict.sh's internal _verdict_sha —
+# anchor the helper so a rename doesn't silently blank the display (fail-open
+# hides it from every behavioral assert).
+assert_contains "verdict.sh still defines _verdict_sha (rendered by gate-status)" \
+    "_verdict_sha()" "$(cat "${REPO_ROOT}/hooks/lib/verdict.sh")"
 
 cd "${REPO_ROOT}" || true
 teardown_test_env

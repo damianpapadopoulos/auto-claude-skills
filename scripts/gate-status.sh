@@ -100,8 +100,12 @@ fi
 # --- evidence ----------------------------------------------------------------
 echo ""
 echo "Evidence"
+# _scrub: strip control chars from artifact-derived text before rendering —
+# a crafted .failed[] gate name or ledger line must not be able to inject a
+# spoofed report line (security review, defense-in-depth).
+_scrub() { tr -d '\000-\037'; }
 _led() { command -v branch_ledger_has >/dev/null 2>&1 && branch_ledger_has "$1" "${_proot}"; }
-_led_sha() { command -v branch_ledger_sha >/dev/null 2>&1 && branch_ledger_sha "$1" "${_proot}"; }
+_led_sha() { command -v branch_ledger_sha >/dev/null 2>&1 && branch_ledger_sha "$1" "${_proot}" | _scrub; }
 _comp() {  # _comp <milestone> <field: chain|completed> — mirrors the guard's jq reads
     [ "${_HAS_JQ}" = "true" ] || return 1
     [ -n "${_token}" ] || return 1
@@ -123,10 +127,10 @@ _ev_line "VERIFY  (verification-before-completion)" "verification-before-complet
 
 _v_state="absent"; _v_sha=""; _v_pos=""
 if command -v verdict_is_clean >/dev/null 2>&1 && [ -n "${_vtoken}" ]; then
-    _v_sha="$(_verdict_sha "${_vtoken}" 2>/dev/null || true)"
+    _v_sha="$(_verdict_sha "${_vtoken}" 2>/dev/null | _scrub || true)"
     if [ -n "${_v_sha}" ]; then
         if verdict_is_clean "${_vtoken}"; then _v_state="clean"
-        elif verdict_has_test_failure "${_vtoken}"; then _v_state="FAILED (gates: $(verdict_failing_gates "${_vtoken}"))"
+        elif verdict_has_test_failure "${_vtoken}"; then _v_state="FAILED (gates: $(verdict_failing_gates "${_vtoken}" | _scrub))"
         else _v_state="not clean (could_not_verify / gate-gaming suspect — advisory only)"
         fi
         if verdict_sha_is_head "${_vtoken}" "${_proot}"; then _v_pos="= HEAD"
@@ -212,9 +216,13 @@ echo ""
 if [ -n "${_deny}" ]; then
     echo "=> git push NOW: WOULD DENY at ${_deny}"
     echo "   next action: ${_deny_fix}"
+    case "${_deny}" in 6*) echo "   note: gate 6 is push-only — gh pr merge is not subject to it (GitHub branch protection is the per-PR backstop)" ;; esac
+    [ "${ACSM_SKIP_PUSH_GATE:-}" = "1" ] && echo "   note: ACSM_SKIP_PUSH_GATE=1 is set in this shell — if the Claude Code process inherited it, these denials are skipped"
     echo "   (human bypass: push from your own terminal, or ACSM_SKIP_PUSH_GATE=1 at Claude Code launch)"
 else
     echo "=> git push NOW: WOULD ALLOW (gh pr merge traverses the same gates 2-5)"
+    [ "${_chain_state_ok}" = "false" ] && \
+        echo "   caveat: chain gates 2-4 were unevaluated for this token — under concurrent sessions the live guard resolves its token payload-first and may still deny (see token note above)"
 fi
 
 # --- staleness observation (advisory BY DESIGN — see backtest) ---------------
