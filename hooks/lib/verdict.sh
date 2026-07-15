@@ -165,3 +165,32 @@ diff_touches_routing() {
     names="$(git -C "$proot" diff --name-only "$base" "$head" 2>/dev/null)" || return 1
     printf '%s\n' "$names" | grep -Eq '^(skills|config|hooks)/'
 }
+
+# _EVALUATOR_SURFACES — files whose edit changes what "verified" means: the
+# drift-canary manifest (hooks/openspec-guard.sh + session-start's
+# _GATE_ENFORCE_LIBS; superset enforced by tests/test-evaluator-surface.sh)
+# plus the gate declaration (.verify.yml) and the measurement chain (verdict
+# writer, gaming checker). Consumed ONLY by the advisory path — this list must
+# never join a fail-closed deny (design D1, evaluator-surface-advisory).
+_EVALUATOR_SURFACES="hooks/openspec-guard.sh hooks/lib/verdict.sh hooks/lib/branch-ledger.sh hooks/lib/git-command.sh hooks/lib/session-token.sh .verify.yml scripts/verify-and-record.sh skills/project-verification/scripts/gate-gaming-check.sh"
+
+# diff_touches_evaluator <proj_root> — 0 iff the branch diff (mainline
+# merge-base..HEAD) touches an evaluator surface; prints each touched surface
+# on its own line. Exact whole-path match (grep -Fx): surfaces are files, not
+# trees, so a lookalike path cannot over-fire. Fail-open: unresolvable
+# base/git error => 1, no output (advisory silence, never a block).
+diff_touches_evaluator() {
+    local proot="${1:-}" head base names s hit=1
+    [ -z "$proot" ] && proot="$(git rev-parse --show-toplevel 2>/dev/null)"
+    [ -z "$proot" ] && return 1
+    head="$(git -C "$proot" rev-parse HEAD 2>/dev/null)" || return 1
+    base="$(_routing_base "$proot")" || return 1
+    names="$(git -C "$proot" diff --name-only "$base" "$head" 2>/dev/null)" || return 1
+    for s in ${_EVALUATOR_SURFACES}; do
+        if printf '%s\n' "$names" | grep -Fxq "$s" 2>/dev/null; then
+            printf '%s\n' "$s"
+            hit=0
+        fi
+    done
+    return $hit
+}
