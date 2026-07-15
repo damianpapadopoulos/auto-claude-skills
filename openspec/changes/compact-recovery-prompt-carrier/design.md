@@ -17,9 +17,11 @@ SessionStart matcher=compact (manual /compact only, since CC ~2.1.179)
        └─ rm marker                                        ← consumes it
 
 UserPromptSubmit (every prompt, every version)
-  └─ skill-activation-hook.sh
-       ├─ [ -f marker ] — single stat on the common path
-       └─ if present: render_compact_recovery <token> into output, rm marker
+  └─ compact-recovery-prompt-hook.sh          ← NEW, registered after
+       ├─ compgen -G marker glob — sole cost     skill-activation-hook.sh
+       │  on the common path (no stdin, no jq)
+       └─ if our token's marker exists: render_compact_recovery <token>,
+          rm marker, emit hookSpecificOutput additionalContext
 ```
 
 `hooks/lib/compact-recovery-render.sh` renders, in order: team checkpoint
