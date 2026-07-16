@@ -203,6 +203,48 @@ test_dedup_decisions() {
     teardown_test_env
 }
 
+test_kill_window_is_permanent() {
+    echo "-- test: kill window (first 5 rejections) is permanent; later approval does not revive --"
+    setup_test_env; make_fake_gh; init_fixture_repo; mkdir -p "${TEST_TMPDIR}/memory"
+    FAKE_GH_LEDGER="${TEST_TMPDIR}/ledger.json"
+    cat > "${FAKE_GH_LEDGER}" <<'EOF'
+[
+ {"number": 10, "author": {"login": "testowner"},
+  "body": "Mine run 1\n```json\n{\"run\":\"2026-07-01\",\"presented\":[{\"fp\":\"aaaa000000000001\",\"title\":\"p1\",\"rank\":1,\"grade\":\"B\",\"meta\":false,\"decision\":\"rejected\",\"reason\":\"no\",\"issue\":null},{\"fp\":\"aaaa000000000002\",\"title\":\"p2\",\"rank\":2,\"grade\":\"C\",\"meta\":true,\"decision\":\"rejected\",\"reason\":\"no\",\"issue\":null},{\"fp\":\"aaaa000000000003\",\"title\":\"p3\",\"rank\":3,\"grade\":\"C\",\"meta\":false,\"decision\":\"rejected\",\"reason\":\"no\",\"issue\":null}]}\n```\n"},
+ {"number": 12, "author": {"login": "testowner"},
+  "body": "Mine run 2\n```json\n{\"run\":\"2026-07-08\",\"presented\":[{\"fp\":\"aaaa000000000004\",\"title\":\"p4\",\"rank\":1,\"grade\":\"B\",\"meta\":false,\"decision\":\"rejected\",\"reason\":\"no\",\"issue\":null},{\"fp\":\"aaaa000000000005\",\"title\":\"p5\",\"rank\":2,\"grade\":\"D\",\"meta\":false,\"decision\":\"rejected\",\"reason\":\"no\",\"issue\":null}]}\n```\n"},
+ {"number": 15, "author": {"login": "testowner"},
+  "body": "Mine run 3\n```json\n{\"run\":\"2026-07-15\",\"presented\":[{\"fp\":\"aaaa000000000006\",\"title\":\"p6\",\"rank\":1,\"grade\":\"B\",\"meta\":false,\"decision\":\"approved\",\"reason\":\"yes\",\"issue\":99}]}\n```\n"}
+]
+EOF
+    local out; out="$(run_bundle)"
+    assert_equals "presented cumulative (5+1)" "6" "$(printf '%s' "$out" | jq -r '.ledger.presented')"
+    assert_equals "approved count" "1" "$(printf '%s' "$out" | jq -r '.ledger.approved')"
+    assert_equals "kill state stays tripped (first 5 window is permanent)" "tripped" "$(printf '%s' "$out" | jq -r '.kill.state')"
+    teardown_test_env
+}
+
+test_malformed_fence_skipped() {
+    echo "-- test: malformed json fences gracefully skipped, script continues with exit 0 --"
+    setup_test_env; make_fake_gh; init_fixture_repo; mkdir -p "${TEST_TMPDIR}/memory"
+    FAKE_GH_LEDGER="${TEST_TMPDIR}/ledger.json"
+    cat > "${FAKE_GH_LEDGER}" <<'EOF'
+[
+ {"number": 5, "author": {"login": "testowner"},
+  "body": "Mine run with no fence\nJust plain text body, no json fence."},
+ {"number": 7, "author": {"login": "testowner"},
+  "body": "Mine run with broken fence\n```json\n{\"run\":\"2026-07-01\",\"presented\":[{\"fp\":\"broken\",\"title\":\"bad\",\"rank\":1,\"grade\":\"B\",\"meta\":false,\"decision\":\"rejected\"\n```\n"},
+ {"number": 9, "author": {"login": "testowner"},
+  "body": "Mine run valid\n```json\n{\"run\":\"2026-07-09\",\"presented\":[{\"fp\":\"cccc000000000001\",\"title\":\"valid\",\"rank\":1,\"grade\":\"A\",\"meta\":false,\"decision\":\"rejected\",\"reason\":\"ok\",\"issue\":null}]}\n```\n"}
+]
+EOF
+    local out rc; out="$(run_bundle)"; rc=$?
+    assert_equals "exit code is 0 (no abort on malformed)" "0" "$rc"
+    assert_equals "runs counted (only valid issue)" "1" "$(printf '%s' "$out" | jq -r '.ledger.runs')"
+    assert_equals "presented from valid issue only" "1" "$(printf '%s' "$out" | jq -r '.ledger.presented')"
+    teardown_test_env
+}
+
 test_fingerprint_stable_and_distinct
 test_missing_gh_fails_loud
 test_bundle_local_sources
@@ -213,5 +255,7 @@ test_kill_math_tripped_and_alive
 test_zero_delta_run_not_counted
 test_ledger_author_allowlist
 test_dedup_decisions
+test_kill_window_is_permanent
+test_malformed_fence_skipped
 
 print_summary
