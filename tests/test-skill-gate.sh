@@ -48,4 +48,13 @@ _rc=0; /bin/bash -c ". '${ATTEST_LIB}' && phase_attest openspec-ship 'empty-file
 assert_equals "attest recovers from 0-byte file (exit 0)" "0" "$_rc"
 assert_contains "attest recorded after 0-byte recovery" "empty-file recovery" "$(cat "$ATTEST_FILE" 2>/dev/null)"
 
+# --- attest: whitespace-only and non-object files must not brick attestation ---
+printf '   ' > "$ATTEST_FILE"
+_rc=0; /bin/bash -c ". '${ATTEST_LIB}' && phase_attest openspec-ship 'whitespace recovery'" 2>/dev/null || _rc=$?
+assert_equals "attest recovers from whitespace-only file (exit 0)" "0" "$_rc"
+printf '[1,2,3]' > "$ATTEST_FILE"
+_rc=0; /bin/bash -c ". '${ATTEST_LIB}' && phase_attest openspec-ship 'array recovery'" 2>/dev/null || _rc=$?
+assert_equals "attest recovers from non-object JSON file (exit 0)" "0" "$_rc"
+assert_contains "attest recorded after array recovery" "array recovery" "$(cat "$ATTEST_FILE" 2>/dev/null)"
+
 print_summary

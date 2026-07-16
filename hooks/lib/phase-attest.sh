@@ -30,14 +30,12 @@ phase_attest() {
     local token; token="$(_phase_attest_token)"
     [ -z "$token" ] && { echo "[phase-attest] no session token" >&2; return 1; }
     local f="${HOME}/.claude/.skill-phase-attest-${token}" tmp
-    local base="{}"
-    if [ -f "$f" ] && [ -s "$f" ] && jq empty "$f" >/dev/null 2>&1; then
-        base="$(cat "$f")"
-    fi
+    local base
+    base="$(jq -c 'if type=="object" then . else {} end' "$f" 2>/dev/null)" || base=""
     [ -z "$base" ] && base="{}"
     tmp="$(printf '%s' "$base" | jq --arg s "$step" --arg r "$reason" \
         '. + {($s): {reason: $r, ts: (now | todate)}}' 2>/dev/null)" || return 1
-    [ -z "$tmp" ] && return 1
+    [ -z "$tmp" ] && { echo "[phase-attest] internal: merge produced no output" >&2; return 1; }
     printf '%s\n' "$tmp" > "${f}.tmp.$$" 2>/dev/null && mv "${f}.tmp.$$" "$f" 2>/dev/null || return 1
     printf '%s gate=attest decision=recorded step=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$step" \
         >> "${HOME}/.claude/.phase-gate-events.log" 2>/dev/null || true
