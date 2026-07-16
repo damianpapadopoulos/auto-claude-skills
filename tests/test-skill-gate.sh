@@ -107,4 +107,10 @@ assert_not_contains "errored Skill return NOT recorded" "openspec-ship" "$(cat "
 rm -rf "$_CH_REPO"
 printf '["brainstorming"]\n' > "$INVOC_FILE"
 
+# --- provenance: invocation record written even with NO composition state (review HIGH) ---
+rm -f "$COMP_FILE" "$INVOC_FILE"
+printf '{"transcript_path":"","tool_response":{"is_error":false},"tool_input":{"skill":"auto-claude-skills:project-verification"}}' \
+    | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "$COMPLETION_HOOK" >/dev/null 2>&1
+assert_contains "invocation record written without composition state" "project-verification" "$(cat "$INVOC_FILE" 2>/dev/null)"
+
 print_summary

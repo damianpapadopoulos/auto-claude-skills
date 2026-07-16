@@ -40,15 +40,38 @@ else
 fi
 [ -z "${_SESSION_TOKEN}" ] && exit 0
 
-_STATE="${HOME}/.claude/.skill-composition-state-${_SESSION_TOKEN}"
-[ -f "${_STATE}" ] || exit 0
-jq empty "${_STATE}" >/dev/null 2>&1 || exit 0
-
 [ "${_IS_ERROR}" = "true" ] && exit 0
 [ -z "${_RAW}" ] && exit 0
 
 _BARE="${_RAW##*:}"
 [ -z "${_BARE}" ] && exit 0
+
+# --- Append-only invocation record (phase-enforcement provenance split).
+# The gates trust THIS file, never the walker-writable .completed: a
+# successful Skill return is the only writer path (codex #2). Runs for ANY
+# successful skill return (chain member or not) — a later chain re-anchor
+# must still be able to find pre-anchor evidence. Deliberately evaluated
+# BEFORE the composition-state checks below (moved up from its original
+# position): roughly a third of skills never trigger composition-state
+# creation, so gating this write on the state file's existence made real
+# invocations invisible to phase_step_satisfied (review HIGH finding).
+_INVOC="${HOME}/.claude/.skill-invocation-evidence-${_SESSION_TOKEN}"
+_IBASE="[]"
+[ -f "${_INVOC}" ] && jq empty "${_INVOC}" >/dev/null 2>&1 && _IBASE="$(cat "${_INVOC}")"
+_ITMP="$(printf '%s' "${_IBASE}" | jq --arg s "${_BARE}" 'if index($s) == null then . + [$s] else . end' 2>/dev/null)" || _ITMP=""
+if [ -n "${_ITMP}" ]; then
+    printf '%s\n' "${_ITMP}" > "${_INVOC}.tmp.$$" 2>/dev/null && \
+        mv "${_INVOC}.tmp.$$" "${_INVOC}" 2>/dev/null || rm -f "${_INVOC}.tmp.$$" 2>/dev/null || true
+fi
+
+# ---- Composition-state-dependent sections below (chain .completed merge,
+# gating-milestone ledger, per-chain-step ledger, C1 telemetry). All require
+# the state file to exist and be valid JSON — same early-exit gate as
+# before restructuring, just evaluated after the state-independent
+# invocation record above.
+_STATE="${HOME}/.claude/.skill-composition-state-${_SESSION_TOKEN}"
+[ -f "${_STATE}" ] || exit 0
+jq empty "${_STATE}" >/dev/null 2>&1 || exit 0
 
 _TMP="$(jq --arg s "${_BARE}" '
   if ((.chain // []) | index($s)) != null
@@ -67,20 +90,6 @@ printf '%s\n' "${_TMP}" > "${_STATE}.tmp.$$" 2>/dev/null && \
 
 [ -n "${SKILL_EXPLAIN:-}" ] && \
     printf '[skill-hook]   [completion] %s → completed\n' "${_BARE}" >&2
-
-# --- Append-only invocation record (phase-enforcement provenance split).
-# The gates trust THIS file, never the walker-writable .completed: a
-# successful Skill return is the only writer path (codex #2). Runs for ANY
-# successful skill return (chain member or not) — a later chain re-anchor
-# must still be able to find pre-anchor evidence.
-_INVOC="${HOME}/.claude/.skill-invocation-evidence-${_SESSION_TOKEN}"
-_IBASE="[]"
-[ -f "${_INVOC}" ] && jq empty "${_INVOC}" >/dev/null 2>&1 && _IBASE="$(cat "${_INVOC}")"
-_ITMP="$(printf '%s' "${_IBASE}" | jq --arg s "${_BARE}" 'if index($s) == null then . + [$s] else . end' 2>/dev/null)" || _ITMP=""
-if [ -n "${_ITMP}" ]; then
-    printf '%s\n' "${_ITMP}" > "${_INVOC}.tmp.$$" 2>/dev/null && \
-        mv "${_INVOC}.tmp.$$" "${_INVOC}" 2>/dev/null || rm -f "${_INVOC}.tmp.$$" 2>/dev/null || true
-fi
 
 # ---- Durable gating-milestone ledger (push-gate readiness, branch-scoped) ----
 # Record review/verify completion to a per-(repo+branch) ledger so the push gate
