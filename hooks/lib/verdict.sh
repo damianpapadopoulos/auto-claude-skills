@@ -154,14 +154,49 @@ verdict_routing_delta() {
     printf '%s\n' "$names" | grep -Eq '^(skills|config|hooks)/'
 }
 
-# diff_touches_routing <proj_root> — 0 iff the branch diff (base..HEAD) touches a
-# routing path. Fail-open: unresolvable base => 1 (no gate).
-diff_touches_routing() {
-    local proot="${1:-}" head base names
+# _branch_diff_names <proj_root> — name-only branch diff (mainline merge-base
+# ..HEAD), shared by diff_touches_routing and diff_touches_evaluator so the
+# deny gate and the advisory can never disagree on what the branch changed.
+# Fail-open: unresolvable root/base or git error => non-zero, no output.
+_branch_diff_names() {
+    local proot="${1:-}" head base
     [ -z "$proot" ] && proot="$(git rev-parse --show-toplevel 2>/dev/null)"
     [ -z "$proot" ] && return 1
     head="$(git -C "$proot" rev-parse HEAD 2>/dev/null)" || return 1
     base="$(_routing_base "$proot")" || return 1
-    names="$(git -C "$proot" diff --name-only "$base" "$head" 2>/dev/null)" || return 1
+    git -C "$proot" diff --name-only "$base" "$head" 2>/dev/null
+}
+
+# diff_touches_routing <proj_root> — 0 iff the branch diff (base..HEAD) touches a
+# routing path. Fail-open: unresolvable base => 1 (no gate).
+diff_touches_routing() {
+    local names
+    names="$(_branch_diff_names "${1:-}")" || return 1
     printf '%s\n' "$names" | grep -Eq '^(skills|config|hooks)/'
+}
+
+# _EVALUATOR_SURFACES — files whose edit changes what "verified" means or what
+# the gate TRUSTS: the drift-canary manifest (hooks/openspec-guard.sh +
+# session-start's _GATE_ENFORCE_LIBS; superset enforced by
+# tests/test-evaluator-surface.sh), the gate declaration (.verify.yml), the
+# measurement chain (verdict writer, gaming checker), and the branch-ledger
+# milestone writer (skill-completion-hook.sh — the gate trusts what it
+# records). The activation-hook walker is deliberately EXCLUDED: it is the
+# most-edited file in the repo, and listing it would make this advisory
+# near-constant noise. Consumed ONLY by the advisory path — this list must
+# never join a fail-closed deny (design D1, evaluator-surface-advisory).
+_EVALUATOR_SURFACES="hooks/openspec-guard.sh hooks/lib/verdict.sh hooks/lib/branch-ledger.sh hooks/lib/git-command.sh hooks/lib/session-token.sh hooks/skill-completion-hook.sh .verify.yml scripts/verify-and-record.sh skills/project-verification/scripts/gate-gaming-check.sh"
+
+# diff_touches_evaluator <proj_root> — 0 iff the branch diff (mainline
+# merge-base..HEAD) touches an evaluator surface; prints each touched surface
+# on its own line. Exact whole-path membership (awk index over the padded
+# list): surfaces are files, not trees, so a lookalike path cannot over-fire;
+# one fork instead of a grep per surface (PreToolUse hot path). Fail-open:
+# unresolvable base/git error => 1, no output (advisory silence, never a block).
+diff_touches_evaluator() {
+    local names hits
+    names="$(_branch_diff_names "${1:-}")" || return 1
+    hits="$(printf '%s\n' "$names" | awk -v s=" ${_EVALUATOR_SURFACES} " '$0 != "" && index(s, " " $0 " ")' 2>/dev/null)" || return 1
+    [ -n "$hits" ] || return 1
+    printf '%s\n' "$hits"
 }
