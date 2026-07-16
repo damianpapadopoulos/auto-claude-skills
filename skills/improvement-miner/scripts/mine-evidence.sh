@@ -194,13 +194,13 @@ case "${MODE}" in
     select)
         require jq
         jq '
-          def grank: {"A":1,"B":2,"C":3,"D":4,"F":5}[.grade] // 9;
+          def grank: ({"A":1,"B":2,"C":3,"D":4,"F":5}[.grade // ""] // 9);
           . as $in
           | [ $in[] | select(.contract_complete != true)
               | {fp, reason: "missing_contract"} ] as $w1
           | [ $in[] | select(.contract_complete == true) ] as $pool
           | ([ $pool | to_entries[] | select(.value.meta == true) ]
-             | sort_by([.value | grank, .key]) | .[0:2] | [ .[].key ]) as $keepmeta
+             | sort_by([(.value | grank), .key]) | .[0:2] | [ .[].key ]) as $keepmeta
           | [ $pool | to_entries[]
               | select(.value.meta != true or (.key as $k | $keepmeta | index($k) != null))
               | .value ] as $afterMeta

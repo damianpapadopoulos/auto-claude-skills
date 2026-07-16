@@ -284,6 +284,38 @@ test_select_cap_and_end_user_warning() {
     teardown_test_env
 }
 
+test_select_null_grade_degrades() {
+    echo "-- test: select — null grade ranks worst (9), no crash, withheld by meta_cap --"
+    setup_test_env
+    local input out rc
+    input='[
+      {"fp":"f1","title":"meta A","grade":"A","meta":true,"contract_complete":true,"end_user":false},
+      {"fp":"f2","title":"meta B","grade":"B","meta":true,"contract_complete":true,"end_user":false},
+      {"fp":"f3","title":"meta null","grade":null,"meta":true,"contract_complete":true,"end_user":false}
+    ]'
+    out="$(run_select "${input}")"; rc=$?
+    assert_equals "select exits 0 (no crash)" "0" "$rc"
+    assert_equals "null-grade withheld meta_cap" "meta_cap" "$(printf '%s' "$out" | jq -r '.withheld[] | select(.fp=="f3") | .reason')"
+    assert_equals "presented count is 2 (f1, f2)" "2" "$(printf '%s' "$out" | jq -r '.presented | length')"
+    teardown_test_env
+}
+
+test_select_meta_tie_keeps_earlier() {
+    echo "-- test: select — same grade (C) keeps earlier input position, not key order --"
+    setup_test_env
+    local input out fps
+    input='[
+      {"fp":"t1","title":"meta 1","grade":"C","meta":true,"contract_complete":true,"end_user":false},
+      {"fp":"t2","title":"meta 2","grade":"C","meta":true,"contract_complete":true,"end_user":false},
+      {"fp":"t3","title":"meta 3","grade":"C","meta":true,"contract_complete":true,"end_user":false}
+    ]'
+    out="$(run_select "${input}")"
+    fps="$(printf '%s' "$out" | jq -c '[.presented[].fp]')"
+    assert_equals "fp order is t1,t2" '["t1","t2"]' "$fps"
+    assert_equals "t3 withheld meta_cap" "meta_cap" "$(printf '%s' "$out" | jq -r '.withheld[] | select(.fp=="t3") | .reason')"
+    teardown_test_env
+}
+
 test_fingerprint_stable_and_distinct
 test_missing_gh_fails_loud
 test_bundle_local_sources
@@ -298,5 +330,7 @@ test_kill_window_is_permanent
 test_malformed_fence_skipped
 test_select_contract_gate_and_meta_cap
 test_select_cap_and_end_user_warning
+test_select_null_grade_degrades
+test_select_meta_tie_keeps_earlier
 
 print_summary
