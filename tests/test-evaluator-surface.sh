@@ -45,7 +45,8 @@ fi
 # trusts what it records, so editing it is evaluator-shaped (review F6). The
 # activation-hook walker is deliberately excluded: it is the most-edited file
 # in the repo and listing it would make the advisory near-constant noise.
-for _f in hooks/openspec-guard.sh ${_canary_libs} .verify.yml hooks/skill-completion-hook.sh; do
+for _f in hooks/openspec-guard.sh ${_canary_libs} .verify.yml hooks/skill-completion-hook.sh \
+          scripts/verify-and-record.sh skills/project-verification/scripts/gate-gaming-check.sh; do
     case " ${_EVALUATOR_SURFACES:-} " in
         *" ${_f} "*) _record_pass "evaluator surfaces include ${_f}" ;;
         *)           _record_fail "evaluator surfaces include ${_f}" "missing from _EVALUATOR_SURFACES" ;;
@@ -136,6 +137,9 @@ assert_contains     "evaluator advisory emitted (non-SHIP push)" "EVALUATOR SURF
 assert_contains     "advisory names .verify.yml"                 ".verify.yml"         "${out:-<empty>}"
 assert_contains     "advisory is additionalContext"              "additionalContext"   "${out:-<empty>}"
 assert_not_contains "advisory never denies"                      '"deny"'              "${out:-}"
+# tr '\n' ' ' over the predicate's newline-terminated output must not leave a
+# trailing space before the closing paren (PR feedback: cosmetic, but pinned).
+assert_not_contains "advisory file list has no trailing space"   " )"                  "${out:-}"
 
 out="$(run_guard_in "${REPO}" "feat2")"
 assert_not_contains "clean branch => no evaluator advisory"      "EVALUATOR SURFACE"   "${out:-}"
