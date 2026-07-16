@@ -60,4 +60,47 @@ printf '# Team checkpoint body\n' > "$HOME/.claude/team-checkpoint.md"
 _out="$(/bin/bash -c ". '${RENDER_LIB}' && render_compact_recovery '' manual" 2>/dev/null)"
 assert_contains "empty token renders token-independent sections" "Team checkpoint body" "$_out"
 
+# --- renderer: findings 1 + 4 — intent (and team checkpoint) degrade independently
+# of jq; composition/openspec sections require jq and are absent without it. ---
+_clear_state; _seed_full_state
+_NOJQ_BIN="$(mktemp -d /tmp/crc-nojq-XXXXXX)"
+ln -s /bin/cat "$_NOJQ_BIN/cat"
+ln -s /usr/bin/head "$_NOJQ_BIN/head"
+_out="$(env PATH="$_NOJQ_BIN" /bin/bash -c ". '${RENDER_LIB}' && render_compact_recovery '${TOKEN}' auto" 2>/dev/null)"
+_status=$?
+assert_equals "finding4: no-jq renderer exits 0" "0" "$_status"
+assert_contains "finding4: no-jq renderer still emits team checkpoint" "Team checkpoint body" "$_out"
+assert_contains "finding1: no-jq renderer still emits confirmed intent" "fix auto-compact recovery" "$_out"
+assert_not_contains "finding1: no-jq renderer omits composition section (needs jq)" "superpowers:writing-plans" "$_out"
+assert_not_contains "finding1: no-jq renderer omits openspec changes (needs jq)" "compact-recovery-prompt-carrier" "$_out"
+rm -rf "$_NOJQ_BIN"
+
+# --- renderer: finding 2 — negative current_index must not jq-wrap to the last
+# chain element; it must clamp to "unknown". ---
+_clear_state
+printf '{"chain":["step-a","step-b"],"completed":["step-a"],"current_index":-1}\n' \
+    > "$HOME/.claude/.skill-composition-state-${TOKEN}"
+_out="$(/bin/bash -c ". '${RENDER_LIB}' && render_compact_recovery '${TOKEN}' auto" 2>/dev/null)"
+assert_contains "finding2: negative current_index clamps to unknown" "Current step: unknown" "$_out"
+assert_not_contains "finding2: negative current_index does not name last chain element as current" "Current step: step-b" "$_out"
+
+# --- renderer: finding 3 — openspec changes summary bounded to 6, deterministic
+# survivors (jq to_entries preserves insertion order: slug-1..slug-6 survive). ---
+_clear_state
+_changes_json='{"changes":{'
+_i=1
+while [ "$_i" -le 8 ]; do
+    _slug="$(printf 'slug-%02d' "$_i")"
+    _changes_json="${_changes_json}\"${_slug}\":{\"archived_at\":null}"
+    [ "$_i" -lt 8 ] && _changes_json="${_changes_json},"
+    _i=$((_i + 1))
+done
+_changes_json="${_changes_json}}}"
+printf '%s\n' "$_changes_json" > "$HOME/.claude/.skill-openspec-state-${TOKEN}"
+_out="$(/bin/bash -c ". '${RENDER_LIB}' && render_compact_recovery '${TOKEN}' auto" 2>/dev/null)"
+assert_contains "finding3: bounded changes keeps slug-01" "slug-01" "$_out"
+assert_contains "finding3: bounded changes keeps slug-06" "slug-06" "$_out"
+assert_not_contains "finding3: bounded changes drops slug-07" "slug-07" "$_out"
+assert_not_contains "finding3: bounded changes drops slug-08" "slug-08" "$_out"
+
 print_summary

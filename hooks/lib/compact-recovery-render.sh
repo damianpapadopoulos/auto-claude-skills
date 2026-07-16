@@ -26,28 +26,10 @@ ${_team}
         fi
     fi
 
-    if [ -n "$_token" ] && command -v jq >/dev/null 2>&1; then
-        # --- Composition chain state (single jq fork; empty when no chain) ---
-        local _comp="${HOME}/.claude/.skill-composition-state-${_token}"
-        if [ -f "$_comp" ]; then
-            local _chain=""
-            _chain="$(jq -r '
-                if ((.chain // []) | length) > 0 then
-                  "Chain: "        + (.chain | join(" -> "))            + "\n" +
-                  "Completed: "    + ((.completed // []) | join(", "))  + "\n" +
-                  "Current step: " + (.chain[.current_index // 0] // "unknown") + "\n" +
-                  "Resume from: "  + (.chain[.current_index // 0] // "unknown")
-                else empty end' "$_comp" 2>/dev/null)" || _chain=""
-            if [ -n "$_chain" ]; then
-                [ -n "$_sections" ] && _sections="${_sections}
-"
-                _sections="${_sections}=== Composition Recovery (from pre-compaction state) ===
-${_chain}
-=== End Composition Recovery ==="
-            fi
-        fi
-
+    if [ -n "$_token" ]; then
         # --- Confirmed intent (marker file; path owned by openspec-state.sh) ---
+        # Plain-text read via head -c only — no jq requirement, so this degrades
+        # independently of jq availability.
         local _intent_file="${HOME}/.claude/.skill-confirmed-intent-${_token}"
         if [ -f "$_intent_file" ]; then
             local _intent=""
@@ -59,21 +41,43 @@ ${_chain}
             fi
         fi
 
-        # --- Active OpenSpec changes (bounded to 6; single jq fork) ---
-        local _ostate="${HOME}/.claude/.skill-openspec-state-${_token}"
-        if [ -f "$_ostate" ]; then
-            local _changes=""
-            _changes="$(jq -r '
-                [.changes // {} | to_entries[]
-                  | select(.value.archived_at == null)
-                  | "- " + .key
-                    + ((.value.capability_slug // "") | if . == "" then "" else " (capability: " + . + ")" end)
-                ] | .[0:6] | join("\n")' "$_ostate" 2>/dev/null)" || _changes=""
-            if [ -n "$_changes" ]; then
-                [ -n "$_sections" ] && _sections="${_sections}
+        if command -v jq >/dev/null 2>&1; then
+            # --- Composition chain state (single jq fork; empty when no chain) ---
+            local _comp="${HOME}/.claude/.skill-composition-state-${_token}"
+            if [ -f "$_comp" ]; then
+                local _chain=""
+                _chain="$(jq -r '
+                    if ((.chain // []) | length) > 0 then
+                      "Chain: "        + (.chain | join(" -> "))            + "\n" +
+                      "Completed: "    + ((.completed // []) | join(", "))  + "\n" +
+                      "Current step: " + (if (.current_index // 0) >= 0 then (.chain[.current_index // 0] // "unknown") else "unknown" end) + "\n" +
+                      "Resume from: "  + (if (.current_index // 0) >= 0 then (.chain[.current_index // 0] // "unknown") else "unknown" end)
+                    else empty end' "$_comp" 2>/dev/null)" || _chain=""
+                if [ -n "$_chain" ]; then
+                    [ -n "$_sections" ] && _sections="${_sections}
 "
-                _sections="${_sections}Active OpenSpec changes:
+                    _sections="${_sections}=== Composition Recovery (from pre-compaction state) ===
+${_chain}
+=== End Composition Recovery ==="
+                fi
+            fi
+
+            # --- Active OpenSpec changes (bounded to 6; single jq fork) ---
+            local _ostate="${HOME}/.claude/.skill-openspec-state-${_token}"
+            if [ -f "$_ostate" ]; then
+                local _changes=""
+                _changes="$(jq -r '
+                    [.changes // {} | to_entries[]
+                      | select(.value.archived_at == null)
+                      | "- " + .key
+                        + ((.value.capability_slug // "") | if . == "" then "" else " (capability: " + . + ")" end)
+                    ] | .[0:6] | join("\n")' "$_ostate" 2>/dev/null)" || _changes=""
+                if [ -n "$_changes" ]; then
+                    [ -n "$_sections" ] && _sections="${_sections}
+"
+                    _sections="${_sections}Active OpenSpec changes:
 ${_changes}"
+                fi
             fi
         fi
     fi
