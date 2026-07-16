@@ -103,8 +103,14 @@ assert_contains "finding3: bounded changes keeps slug-06" "slug-06" "$_out"
 assert_not_contains "finding3: bounded changes drops slug-07" "slug-07" "$_out"
 assert_not_contains "finding3: bounded changes drops slug-08" "slug-08" "$_out"
 
-# --- pre-compact: writes marker + log even with cozempic absent ---
+# --- finding 1 (CRITICAL): hooks invoked directly by hooks.json (no `bash`
+# prefix) must carry the executable bit, or production sees exit 126. ---
 PRE_HOOK="${PROJECT_ROOT}/hooks/pre-compact-hook.sh"
+SESSIONSTART_HOOK="${PROJECT_ROOT}/hooks/compact-recovery-hook.sh"
+assert_equals "finding1: pre-compact hook is executable" "yes" "$([ -x "$PRE_HOOK" ] && echo yes || echo no)"
+assert_equals "finding1: SessionStart compact-recovery hook is executable" "yes" "$([ -x "$SESSIONSTART_HOOK" ] && echo yes || echo no)"
+
+# --- pre-compact: writes marker + log even with cozempic absent ---
 _clear_state
 printf '%s' "$TOKEN" > "$HOME/.claude/.skill-session-token"
 _fake_transcript="$HOME/fake-transcript.jsonl"
@@ -112,9 +118,38 @@ printf '{"type":"user"}\n' > "$_fake_transcript"
 printf '{"session_id":"s1","transcript_path":"%s","trigger":"auto"}' "$_fake_transcript" \
     | PATH="/usr/bin:/bin" CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "$PRE_HOOK" >/dev/null 2>&1
 assert_equals "pre-compact exits 0 without cozempic" "0" "$?"
-assert_file_exists "pre-compact writes pending marker without cozempic" "$HOME/.claude/.skill-compact-pending-${TOKEN}"
+assert_file_exists "pre-compact logs event without cozempic" "$HOME/.claude/.compact-events.log"
+
+# --- finding 2/3 (payload-first token resolution, issue #51): the token MUST
+# derive from the payload's own transcript_path via
+# resolve_session_token_from_transcript (session-<basename .jsonl>); the
+# shared singleton is a fallback ONLY, never checked first. Name the fake
+# transcript so its derived token equals TOKEN, and seed the singleton with a
+# DIFFERENT token to prove precedence — this pins singleton-first as a
+# regression. ---
+_WRONG_TOKEN="session-WRONG-SINGLETON"
+_clear_state
+rm -f "$HOME/.claude/.skill-compact-pending-${_WRONG_TOKEN}" 2>/dev/null
+printf '%s' "$_WRONG_TOKEN" > "$HOME/.claude/.skill-session-token"
+_derived_transcript="$HOME/test-crc.jsonl"
+printf '{"type":"user"}\n' > "$_derived_transcript"
+printf '{"session_id":"s1","transcript_path":"%s","trigger":"auto"}' "$_derived_transcript" \
+    | PATH="/usr/bin:/bin" CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "$PRE_HOOK" >/dev/null 2>&1
+assert_file_exists "finding2/3: payload-derived token marker exists at TOKEN" "$HOME/.claude/.skill-compact-pending-${TOKEN}"
+assert_equals "finding2/3: singleton token marker NOT written (payload wins)" "no" \
+    "$([ -f "$HOME/.claude/.skill-compact-pending-${_WRONG_TOKEN}" ] && echo yes || echo no)"
 _marker_body="$(cat "$HOME/.claude/.skill-compact-pending-${TOKEN}" 2>/dev/null)"
 assert_contains "marker records the trigger" "trigger=auto" "$_marker_body"
-assert_file_exists "pre-compact logs event without cozempic" "$HOME/.claude/.compact-events.log"
+rm -f "$HOME/.claude/.skill-compact-pending-${_WRONG_TOKEN}" 2>/dev/null
+
+# --- finding 2/3 fallback: when the payload's transcript_path resolves to
+# nothing (missing/empty), the singleton token IS used. ---
+_clear_state
+printf '%s' "$_WRONG_TOKEN" > "$HOME/.claude/.skill-session-token"
+printf '{"session_id":"s1","transcript_path":"","trigger":"manual"}' \
+    | PATH="/usr/bin:/bin" CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "$PRE_HOOK" >/dev/null 2>&1
+assert_file_exists "finding2/3 fallback: singleton token used when payload derives nothing" \
+    "$HOME/.claude/.skill-compact-pending-${_WRONG_TOKEN}"
+rm -f "$HOME/.claude/.skill-compact-pending-${_WRONG_TOKEN}" 2>/dev/null
 
 print_summary
