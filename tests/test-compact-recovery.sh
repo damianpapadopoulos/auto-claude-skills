@@ -103,4 +103,18 @@ assert_contains "finding3: bounded changes keeps slug-06" "slug-06" "$_out"
 assert_not_contains "finding3: bounded changes drops slug-07" "slug-07" "$_out"
 assert_not_contains "finding3: bounded changes drops slug-08" "slug-08" "$_out"
 
+# --- pre-compact: writes marker + log even with cozempic absent ---
+PRE_HOOK="${PROJECT_ROOT}/hooks/pre-compact-hook.sh"
+_clear_state
+printf '%s' "$TOKEN" > "$HOME/.claude/.skill-session-token"
+_fake_transcript="$HOME/fake-transcript.jsonl"
+printf '{"type":"user"}\n' > "$_fake_transcript"
+printf '{"session_id":"s1","transcript_path":"%s","trigger":"auto"}' "$_fake_transcript" \
+    | PATH="/usr/bin:/bin" CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "$PRE_HOOK" >/dev/null 2>&1
+assert_equals "pre-compact exits 0 without cozempic" "0" "$?"
+assert_file_exists "pre-compact writes pending marker without cozempic" "$HOME/.claude/.skill-compact-pending-${TOKEN}"
+_marker_body="$(cat "$HOME/.claude/.skill-compact-pending-${TOKEN}" 2>/dev/null)"
+assert_contains "marker records the trigger" "trigger=auto" "$_marker_body"
+assert_file_exists "pre-compact logs event without cozempic" "$HOME/.claude/.compact-events.log"
+
 print_summary
