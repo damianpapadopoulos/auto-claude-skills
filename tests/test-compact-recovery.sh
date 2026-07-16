@@ -174,6 +174,8 @@ _out="$(_payload | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "$PROMPT_HOOK"
 _json_status=1
 printf '%s' "$_out" | jq empty >/dev/null 2>&1 && _json_status=0
 assert_equals "prompt-carrier emits valid JSON" "0" "$_json_status"
+assert_contains "prompt-carrier envelope has hookSpecificOutput key" '"hookSpecificOutput"' "$_out"
+assert_contains "prompt-carrier envelope names UserPromptSubmit event" '"hookEventName":"UserPromptSubmit"' "$_out"
 assert_contains "prompt-carrier emits recovery block" "Post-Compaction State Recovery" "$_out"
 assert_contains "prompt-carrier carries confirmed intent" "fix auto-compact recovery" "$_out"
 assert_equals "prompt-carrier consumes the marker" "no" \
@@ -200,5 +202,26 @@ _out="$(_payload | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "$PROMPT_HOOK"
 assert_equals "stale marker suppressed" "" "$_out"
 assert_equals "stale marker consumed" "no" \
     "$([ -f "$HOME/.claude/.skill-compact-pending-${TOKEN}" ] && echo yes || echo no)"
+
+# --- SessionStart hook: renderer payload + marker consumption ---
+SS_HOOK="${PROJECT_ROOT}/hooks/compact-recovery-hook.sh"
+_clear_state; _seed_full_state
+printf 'x trigger=manual\n' > "$HOME/.claude/.skill-compact-pending-${TOKEN}"
+_out="$(printf '{"transcript_path":"%s","source":"compact"}' "$_derived_transcript" \
+    | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "$SS_HOOK" 2>/dev/null)"
+assert_contains "SessionStart emits composition section" "Composition Recovery" "$_out"
+assert_contains "SessionStart carries confirmed intent" "fix auto-compact recovery" "$_out"
+assert_contains "SessionStart carries openspec changes" "compact-recovery-prompt-carrier" "$_out"
+assert_equals "SessionStart consumes the marker" "no" \
+    "$([ -f "$HOME/.claude/.skill-compact-pending-${TOKEN}" ] && echo yes || echo no)"
+
+# e2e conformance: everything pre-compact checkpointed reappears (Scenario 1+2)
+_clear_state; _seed_full_state
+printf '{"session_id":"s1","transcript_path":"%s","trigger":"auto"}' "$_derived_transcript" \
+    | PATH="/usr/bin:/bin" CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "$PRE_HOOK" >/dev/null 2>&1
+_out="$(_payload | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "$PROMPT_HOOK" 2>/dev/null)"
+for _needle in "superpowers:writing-plans" "fix auto-compact recovery" "compact-recovery-prompt-carrier"; do
+    assert_contains "e2e survival: ${_needle}" "${_needle}" "$_out"
+done
 
 print_summary
