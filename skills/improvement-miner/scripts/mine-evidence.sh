@@ -28,13 +28,88 @@ require() {
 
 fp_of() { printf '%s:%s' "$1" "$2" | shasum -a 256 | cut -c1-16; }
 
+main_repo_root() {
+    # physical main checkout root (worktree-safe): common gitdir's parent
+    local common; common="$(git rev-parse --git-common-dir 2>/dev/null)" || return 1
+    ( cd "$(dirname "${common}")" && pwd -P )
+}
+
+memory_dir() {
+    if [ -n "${IMPROVEMENT_MINER_MEMORY_DIR:-}" ]; then
+        printf '%s' "${IMPROVEMENT_MINER_MEMORY_DIR}"; return
+    fi
+    local root slug
+    root="$(main_repo_root)" || { printf ''; return; }
+    slug="$(printf '%s' "${root}" | sed 's|[/.]|-|g')"
+    printf '%s' "${HOME}/.claude/projects/${slug}/memory"
+}
+
+json_baselines() {
+    ls tests/baselines/*.baseline.json 2>/dev/null \
+        | jq -R . | jq -s 'map(select(length > 0))'
+}
+
+json_gate_status() {
+    if [ -f scripts/gate-status.sh ]; then
+        local out; out="$(/bin/bash scripts/gate-status.sh 2>&1 || true)"
+        jq -n --arg o "${out}" '{available: true, output: $o}'
+    else
+        jq -n '{available: false, output: ""}'
+    fi
+}
+
+json_memory_index() {
+    local dir; dir="$(memory_dir)"
+    [ -d "${dir}" ] || { echo '[]'; return; }
+    local f base name desc kind rows
+    rows='[]'
+    for f in "${dir}"/*.md; do
+        [ -f "${f}" ] || continue
+        base="$(basename "${f}")"
+        [ "${base}" = "MEMORY.md" ] && continue
+        name="$(grep -m1 '^name:' "${f}" | sed 's/^name:[[:space:]]*//')"
+        desc="$(grep -m1 '^description:' "${f}" | sed 's/^description:[[:space:]]*//')"
+        kind=""
+        case "${base}" in feedback_*) kind="feedback" ;; esac
+        if [ -z "${kind}" ] && grep -qi 'revival' "${f}"; then kind="revival"; fi
+        [ -z "${kind}" ] && continue
+        rows="$(printf '%s' "${rows}" | jq --arg f "${base}" --arg n "${name}" \
+            --arg d "${desc}" --arg k "${kind}" '. + [{file:$f,name:$n,description:$d,kind:$k}]')"
+    done
+    printf '%s' "${rows}"
+}
+
+json_eval_reports() { echo '[]'; }
+json_ledger_summary() { echo '{}'; }
+
+emit_bundle() {
+    local head_sha; head_sha="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+    jq -n \
+        --arg sha "${head_sha}" \
+        --argjson baselines "$(json_baselines)" \
+        --argjson gate "$(json_gate_status)" \
+        --argjson mem "$(json_memory_index)" \
+        --argjson evals "$(json_eval_reports)" \
+        --argjson ledger "$(json_ledger_summary)" \
+        '{schema: 1, head_sha: $sha, baselines: $baselines, gate_status: $gate,
+          memory_index: $mem, eval_reports: $evals, ledger: $ledger,
+          kill: ($ledger.kill // {})}'
+}
+
 case "${MODE}" in
     fingerprint)
         require shasum
         [ -n "${2:-}" ] && [ -n "${3:-}" ] || usage
         fp_of "$2" "$3"
         ;;
-    bundle|dedup|select)
+    bundle)
+        require jq; require gh; require shasum
+        REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" \
+            || { echo "ERROR: not a git repository" >&2; exit 2; }
+        cd "${REPO_ROOT}" || exit 2
+        emit_bundle
+        ;;
+    dedup|select)
         require jq; require gh; require shasum
         echo "ERROR: mode '${MODE}' not implemented yet" >&2
         exit 4

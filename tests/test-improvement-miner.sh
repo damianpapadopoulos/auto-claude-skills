@@ -36,7 +36,70 @@ test_missing_gh_fails_loud() {
     teardown_test_env
 }
 
+make_fake_gh() {
+    # fake gh: logs argv, serves canned JSON per subcommand from env-pointed files
+    mkdir -p "${TEST_TMPDIR}/stub"
+    GH_LOG="${TEST_TMPDIR}/gh.log"
+    cat > "${TEST_TMPDIR}/stub/gh" <<'FAKEGH'
+#!/bin/bash
+echo "$*" >> "${GH_LOG}"
+case "$1 $2" in
+    "repo view") echo '{"owner":{"login":"testowner"}}' ;;
+    "issue list")
+        case "$*" in
+            *improvement-miner-run*) cat "${FAKE_GH_LEDGER:-/dev/null}" 2>/dev/null || echo '[]' ;;
+            *) cat "${FAKE_GH_EVALS:-/dev/null}" 2>/dev/null || echo '[]' ;;
+        esac ;;
+    *) echo '{}' ;;
+esac
+exit 0
+FAKEGH
+    chmod +x "${TEST_TMPDIR}/stub/gh"
+    export GH_LOG
+}
+
+run_bundle() { # runs bundle from the fixture repo with stubbed gh first in PATH
+    ( cd "${TEST_TMPDIR}/repo" && \
+      IMPROVEMENT_MINER_MEMORY_DIR="${TEST_TMPDIR}/memory" \
+      GH_LOG="${GH_LOG}" FAKE_GH_LEDGER="${FAKE_GH_LEDGER:-}" FAKE_GH_EVALS="${FAKE_GH_EVALS:-}" \
+      PATH="${TEST_TMPDIR}/stub:${PATH}" /bin/bash "${MINE}" bundle 2>&1 )
+}
+
+test_bundle_local_sources() {
+    echo "-- test: bundle collects baselines, notes absent gate-status, indexes memory --"
+    setup_test_env; make_fake_gh
+    mkdir -p "${TEST_TMPDIR}/repo/tests/baselines" "${TEST_TMPDIR}/memory"
+    (cd "${TEST_TMPDIR}/repo" && git init -q && git -c user.email="test@example.com" -c user.name="Test" commit -q --allow-empty -m init)
+    echo '{}' > "${TEST_TMPDIR}/repo/tests/baselines/x.baseline.json"
+    printf -- '---\nname: feedback-sample\ndescription: a sample feedback fact\nmetadata:\n  type: feedback\n---\nbody\n' \
+        > "${TEST_TMPDIR}/memory/feedback_sample.md"
+    printf -- '---\nname: parked-thing\ndescription: parked with revival criteria\nmetadata:\n  type: project\n---\nRevival criterion: X\n' \
+        > "${TEST_TMPDIR}/memory/project_parked_thing.md"
+    local out; out="$(run_bundle)"
+    assert_contains "baseline listed" "tests/baselines/x.baseline.json" "$out"
+    assert_equals "gate-status absent noted" "false" "$(printf '%s' "$out" | jq -r '.gate_status.available')"
+    assert_equals "feedback kind" "feedback" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="feedback_sample.md") | .kind')"
+    assert_equals "revival kind" "revival" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="project_parked_thing.md") | .kind')"
+    assert_equals "description extracted" "a sample feedback fact" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="feedback_sample.md") | .description')"
+    teardown_test_env
+}
+
+test_bundle_gate_status_present() {
+    echo "-- test: bundle runs gate-status.sh live when present --"
+    setup_test_env; make_fake_gh
+    mkdir -p "${TEST_TMPDIR}/repo/scripts" "${TEST_TMPDIR}/memory"
+    (cd "${TEST_TMPDIR}/repo" && git init -q && git -c user.email="test@example.com" -c user.name="Test" commit -q --allow-empty -m init)
+    printf '#!/bin/bash\necho GATE-REPORT-MARKER\nexit 0\n' > "${TEST_TMPDIR}/repo/scripts/gate-status.sh"
+    chmod +x "${TEST_TMPDIR}/repo/scripts/gate-status.sh"
+    local out; out="$(run_bundle)"
+    assert_equals "gate-status available" "true" "$(printf '%s' "$out" | jq -r '.gate_status.available')"
+    assert_contains "gate-status output captured" "GATE-REPORT-MARKER" "$(printf '%s' "$out" | jq -r '.gate_status.output')"
+    teardown_test_env
+}
+
 test_fingerprint_stable_and_distinct
 test_missing_gh_fails_loud
+test_bundle_local_sources
+test_bundle_gate_status_present
 
 print_summary
