@@ -36,6 +36,11 @@ Mirrors the existing routing-governance shape (predicate in `verdict.sh`, consum
 - D3: Push advisories flush on every push, not only SHIP-phase pushes (fixes a latent drop).
 - D4: `verify-and-record.sh` pathspec change ships here (file exists on main); coordination note for `feat/verify-and-record` in the PR body.
 
+## Implementation Notes (synced at ship time)
+
+- Detector semantics changed during review from line-removal to ENTRY-removal (a `- name:` deleted and not re-added): the line-level pattern turned benign `run:`-rewrites into `suspect`, which `verdict_is_clean` → routing-governance converts into a push DENY — the false-block shape this feature forbids. Red-first fixtures pin both directions.
+- Review additions beyond the upfront design: `+++ /dev/null` fallback (whole-file `.verify.yml` deletion previously escaped), diff-prefix pinning + tolerance (`diff.mnemonicPrefix` silently disabled detection), push-only advisory flush (was leaking branch-local staleness onto `gh pr merge`), `hooks/skill-completion-hook.sh` added to the surface list, SKILL.md manual pathspec widened for writer parity, and `_branch_diff_names` extracted (shared by routing + evaluator predicates).
+
 ## Dissenting views
 
 - Codex pass argued `.verify.yml` alone (+ canary five) is the minimal defensible list; the wider list (verdict writer + checker) was kept because both are unambiguously "what verified means" files and the channel is advisory (noise-only cost).

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "discovery_path": null,
+  "design_path": null,
+  "plan_path": null,
+  "spec_path": null,
+  "sp_plan_path": null,
+  "sp_spec_path": null,
+  "change_slug": "evaluator-surface-advisory",
+  "capability_slug": null,
+  "source_branch": "feat/evaluator-surface-advisory",
+  "base_commit": "3f8e7f595b2550f3f0d44f1539b9f69da8316a68",
+  "openspec_surface": "none",
+  "archived_at": "2026-07-16T08:23:29Z"
+}
