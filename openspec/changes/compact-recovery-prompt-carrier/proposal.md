@@ -32,10 +32,12 @@ DESIGN phase.
    (`~/.claude/.skill-compact-pending-<token>`) — before its cozempic dependency
    check, which today aborts the hook (including event logging) on machines without
    cozempic.
-2. `hooks/skill-activation-hook.sh` (UserPromptSubmit — fires on every prompt on
-   every Claude Code version) checks for the marker; when present it emits the
-   recovery context and clears the marker. The no-marker path is a single file
-   test (~0ms against the ~50ms budget).
+2. `hooks/compact-recovery-prompt-hook.sh` (new, dedicated `UserPromptSubmit`
+   hook, registered in `hooks/hooks.json` with a 5s timeout, after
+   `skill-activation-hook.sh`) checks for the marker via a single `compgen -G`
+   glob test; when present it emits the recovery context and clears the
+   marker. The no-marker path costs one glob test — no stdin read, no jq
+   fork — independent of the activation hook's own routing budget.
 3. Recovery rendering moves to a shared lib (`hooks/lib/compact-recovery-render.sh`)
    used by both the new prompt-carrier path and the existing
    `compact-recovery-hook.sh` (kept: it recovers instantly on manual `/compact`
@@ -52,7 +54,8 @@ DESIGN phase.
 ## Impact
 
 - Touched: `hooks/pre-compact-hook.sh`, `hooks/compact-recovery-hook.sh`,
-  `hooks/skill-activation-hook.sh`, new `hooks/lib/compact-recovery-render.sh`,
+  new `hooks/compact-recovery-prompt-hook.sh`, new
+  `hooks/lib/compact-recovery-render.sh`, `hooks/hooks.json` (registration),
   new `tests/test-compact-recovery.sh`.
 - No routing/scoring changes; no registry or config changes. All additions
   fail-open. Concurrent sessions are isolated by session-token-scoped marker and

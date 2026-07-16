@@ -26,8 +26,9 @@ UserPromptSubmit (every prompt, every version)
 
 `hooks/lib/compact-recovery-render.sh` renders, in order: team checkpoint
 (`~/.claude/team-checkpoint.md`), composition chain state
-(`.skill-composition-state-<token>`), confirmed intent
-(`openspec_state_read_intent`), and a bounded (max ~6 lines) summary of
+(`.skill-composition-state-<token>`), confirmed intent — read directly from
+`~/.claude/.skill-confirmed-intent-<token>` via `head -c 2048`, no lib
+sourcing — and a bounded (max ~6 lines) summary of
 non-archived `changes` entries (slug, capability, design/spec paths) from
 `.skill-openspec-state-<token>`. Output framed as recovered reference state.
 
@@ -43,10 +44,13 @@ crashed session must not inject into a much later one that reuses the token).
 - **Recovery at next prompt vs immediately**: the prompt-carrier injects one turn
   late. Acceptable: identical timing to constraintguard's mechanism, and the
   manual path keeps immediate recovery via the retained SessionStart hook.
-- **Integrating into skill-activation-hook vs a new UserPromptSubmit hook**: a
-  separate hook script costs a full bash+jq startup on every prompt; integration
-  costs one `[ -f ]`. Budget wins; fail-open wrapping keeps the activation hook's
-  routing path safe from renderer errors.
+- **Integrating into skill-activation-hook vs a new UserPromptSubmit hook**:
+  the activation hook has 8+ early-exit paths (short prompts, greetings,
+  zero-match, etc.) that would swallow recovery on exactly the prompt most
+  likely to follow an auto-compaction ("proceed"). A dedicated hook's common
+  path is one `compgen -G` glob test, so the per-prompt cost argument for
+  integrating was moot — the dedicated hook wins on both correctness and
+  budget.
 - **Marker vs re-deriving "compaction happened" from transcripts**: transcript
   heuristics are version-fragile — the exact fragility that caused this bug.
   The marker is written by the one hook proven to still fire.
@@ -59,8 +63,11 @@ crashed session must not inject into a much later one that reuses the token).
   cozempic-less machine exits before logging the compaction event.
 - Marker content: `<utc-timestamp> trigger=<auto|manual>` — human-debuggable,
   and the renderer surfaces the trigger in its header.
-- Renderer sources `openspec-state.sh` guarded (`|| true`) per the ERR-trap /
-  unguarded-source gotcha; every sub-render degrades independently.
+- Renderer reads `~/.claude/.skill-confirmed-intent-<token>` directly
+  (`head -c 2048`, no lib sourcing) — sidesteps the ERR-trap /
+  unguarded-source gotcha entirely for that section; the composition and
+  openspec-changes sections are gated behind a single `command -v jq` check,
+  so every sub-render degrades independently.
 - Telemetry: the prompt-carrier path appends `event=post_compact_prompt` to
   `~/.claude/.compact-events.log`, so carrier drift stays observable the same
   way this bug was found.

@@ -14,7 +14,7 @@ compaction itself.
 
 - GIVEN a session token with composition state on disk
 - AND `pre-compact-hook.sh` has run (any trigger) and written the pending marker
-- WHEN `skill-activation-hook.sh` processes the next user prompt
+- WHEN `compact-recovery-prompt-hook.sh` processes the next user prompt
 - THEN its output MUST contain the compact-recovery block (composition chain and
   current step)
 - AND the pending marker MUST be removed, so the following prompt emits no
@@ -26,7 +26,7 @@ compaction itself.
 - WHEN `compact-recovery-hook.sh` runs as SessionStart(compact)
 - THEN it MUST emit the recovery block immediately
 - AND it MUST remove the marker
-- AND a subsequent `skill-activation-hook.sh` run MUST NOT emit a second
+- AND a subsequent `compact-recovery-prompt-hook.sh` run MUST NOT emit a second
   recovery block
 
 ### Scenario 3: extended payload carries intent and change context
