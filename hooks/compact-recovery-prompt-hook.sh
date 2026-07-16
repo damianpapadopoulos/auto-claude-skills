@@ -68,8 +68,10 @@ if [ -f "${PLUGIN_ROOT}/hooks/lib/compact-recovery-render.sh" ]; then
 fi
 [ -z "$BLOCK" ] && exit 0
 
+_JSON="$(printf '%s' "$BLOCK" | jq -Rs .)" || exit 0
+[ -n "$_JSON" ] || exit 0
 printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":%s}}\n' \
-    "$(printf '%s' "$BLOCK" | jq -Rs .)"
+    "$_JSON"
 
 # Telemetry: same log the auto-compact drift was detected in.
 printf '%s event=post_compact_prompt trigger=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${_TRIGGER:-unknown}" \

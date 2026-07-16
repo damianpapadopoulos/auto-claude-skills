@@ -176,6 +176,12 @@ printf '%s' "$_out" | jq empty >/dev/null 2>&1 && _json_status=0
 assert_equals "prompt-carrier emits valid JSON" "0" "$_json_status"
 assert_contains "prompt-carrier envelope has hookSpecificOutput key" '"hookSpecificOutput"' "$_out"
 assert_contains "prompt-carrier envelope names UserPromptSubmit event" '"hookEventName":"UserPromptSubmit"' "$_out"
+# --- finding 3 (emit guard): static envelope-shape pin. additionalContext MUST
+# always be a JSON string — this is the regression pin for the empty-jq-
+# substitution bug (jq -Rs failing would previously still be substituted,
+# producing a malformed/empty additionalContext value). ---
+assert_equals "finding3: additionalContext is a JSON string (envelope shape)" "0" \
+    "$(printf '%s' "$_out" | jq -e '.hookSpecificOutput.additionalContext | type == "string"' >/dev/null 2>&1; echo $?)"
 assert_contains "prompt-carrier emits recovery block" "Post-Compaction State Recovery" "$_out"
 assert_contains "prompt-carrier carries confirmed intent" "fix auto-compact recovery" "$_out"
 assert_equals "prompt-carrier consumes the marker" "no" \
@@ -223,5 +229,24 @@ _out="$(_payload | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "$PROMPT_HOOK"
 for _needle in "superpowers:writing-plans" "fix auto-compact recovery" "compact-recovery-prompt-carrier"; do
     assert_contains "e2e survival: ${_needle}" "${_needle}" "$_out"
 done
+
+# --- finding 2 (marker GC): stale .skill-compact-pending-* markers must be
+# pruned by session-start-hook's age-based find alongside composition/openspec
+# state; a fresh marker (recent mtime) must survive. Uses the real hook, not a
+# mock, per the finding's instructions. ---
+echo "--- finding2: stale compact-pending marker pruned by session-start ---"
+SESSION_START_HOOK="${PROJECT_ROOT}/hooks/session-start-hook.sh"
+_clear_state
+_STALE_MARKER="$HOME/.claude/.skill-compact-pending-session-orphan-old"
+_FRESH_MARKER="$HOME/.claude/.skill-compact-pending-session-fresh-recent"
+printf 'x trigger=auto\n' > "$_STALE_MARKER"
+printf 'x trigger=auto\n' > "$_FRESH_MARKER"
+touch -t 200001010000 "$_STALE_MARKER" 2>/dev/null || touch -d "2000-01-01 00:00:00" "$_STALE_MARKER" 2>/dev/null || true
+CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "$SESSION_START_HOOK" </dev/null >/dev/null 2>&1 || true
+assert_equals "finding2: stale compact-pending marker pruned" "no" \
+    "$([ -f "$_STALE_MARKER" ] && echo yes || echo no)"
+assert_equals "finding2: fresh compact-pending marker preserved" "yes" \
+    "$([ -f "$_FRESH_MARKER" ] && echo yes || echo no)"
+rm -f "$_STALE_MARKER" "$_FRESH_MARKER" 2>/dev/null
 
 print_summary
