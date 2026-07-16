@@ -107,8 +107,10 @@ assert_not_contains "finding3: bounded changes drops slug-08" "slug-08" "$_out"
 # prefix) must carry the executable bit, or production sees exit 126. ---
 PRE_HOOK="${PROJECT_ROOT}/hooks/pre-compact-hook.sh"
 SESSIONSTART_HOOK="${PROJECT_ROOT}/hooks/compact-recovery-hook.sh"
+PROMPTCARRIER_HOOK="${PROJECT_ROOT}/hooks/compact-recovery-prompt-hook.sh"
 assert_equals "finding1: pre-compact hook is executable" "yes" "$([ -x "$PRE_HOOK" ] && echo yes || echo no)"
 assert_equals "finding1: SessionStart compact-recovery hook is executable" "yes" "$([ -x "$SESSIONSTART_HOOK" ] && echo yes || echo no)"
+assert_equals "finding1: UserPromptSubmit prompt-carrier hook is executable" "yes" "$([ -x "$PROMPTCARRIER_HOOK" ] && echo yes || echo no)"
 
 # --- pre-compact: writes marker + log even with cozempic absent ---
 _clear_state
@@ -151,5 +153,52 @@ printf '{"session_id":"s1","transcript_path":"","trigger":"manual"}' \
 assert_file_exists "finding2/3 fallback: singleton token used when payload derives nothing" \
     "$HOME/.claude/.skill-compact-pending-${_WRONG_TOKEN}"
 rm -f "$HOME/.claude/.skill-compact-pending-${_WRONG_TOKEN}" 2>/dev/null
+
+# --- prompt-carrier hook ---
+PROMPT_HOOK="${PROJECT_ROOT}/hooks/compact-recovery-prompt-hook.sh"
+# NOTE: uses $_derived_transcript (session-test-crc == $TOKEN), NOT
+# $_fake_transcript (derives session-fake-transcript) — the latter would
+# silently look up the wrong marker and test nothing on the positive path.
+_payload() { printf '{"transcript_path":"%s","prompt":"proceed"}' "$_derived_transcript"; }
+
+# no marker -> silent
+_clear_state
+printf '%s' "$TOKEN" > "$HOME/.claude/.skill-session-token"
+_out="$(_payload | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "$PROMPT_HOOK" 2>/dev/null)"
+assert_equals "prompt-carrier silent with no marker" "" "$_out"
+
+# marker + state -> emits recovery JSON and consumes marker
+_clear_state; _seed_full_state
+printf '%s trigger=auto\n' "2026-07-15T00:00:00Z" > "$HOME/.claude/.skill-compact-pending-${TOKEN}"
+_out="$(_payload | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "$PROMPT_HOOK" 2>/dev/null)"
+_json_status=1
+printf '%s' "$_out" | jq empty >/dev/null 2>&1 && _json_status=0
+assert_equals "prompt-carrier emits valid JSON" "0" "$_json_status"
+assert_contains "prompt-carrier emits recovery block" "Post-Compaction State Recovery" "$_out"
+assert_contains "prompt-carrier carries confirmed intent" "fix auto-compact recovery" "$_out"
+assert_equals "prompt-carrier consumes the marker" "no" \
+    "$([ -f "$HOME/.claude/.skill-compact-pending-${TOKEN}" ] && echo yes || echo no)"
+
+# second run after consumption -> silent (no double injection)
+_out="$(_payload | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "$PROMPT_HOOK" 2>/dev/null)"
+assert_equals "prompt-carrier silent after marker consumed" "" "$_out"
+
+# foreign-token marker -> untouched and silent
+_clear_state
+printf '%s' "$TOKEN" > "$HOME/.claude/.skill-session-token"
+printf 'x trigger=auto\n' > "$HOME/.claude/.skill-compact-pending-session-OTHER"
+_out="$(_payload | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "$PROMPT_HOOK" 2>/dev/null)"
+assert_equals "prompt-carrier ignores foreign-session marker" "" "$_out"
+assert_file_exists "foreign marker left in place" "$HOME/.claude/.skill-compact-pending-session-OTHER"
+rm -f "$HOME/.claude/.skill-compact-pending-session-OTHER"
+
+# stale marker (>24h) -> consumed silently
+_clear_state; _seed_full_state
+printf 'x trigger=auto\n' > "$HOME/.claude/.skill-compact-pending-${TOKEN}"
+touch -t 202601010000 "$HOME/.claude/.skill-compact-pending-${TOKEN}"
+_out="$(_payload | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "$PROMPT_HOOK" 2>/dev/null)"
+assert_equals "stale marker suppressed" "" "$_out"
+assert_equals "stale marker consumed" "no" \
+    "$([ -f "$HOME/.claude/.skill-compact-pending-${TOKEN}" ] && echo yes || echo no)"
 
 print_summary
