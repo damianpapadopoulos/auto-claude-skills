@@ -1,10 +1,10 @@
 #!/bin/bash
 # phase-evidence.sh — the ONE "is this chain step done" predicate, shared by
 # skill-gate.sh (C1) and openspec-guard.sh (C2) so the two boundaries cannot
-# drift. Evidence = composition .completed (invocation record) OR branch
-# ledger OR explicit attestation (gating milestones excluded by the attest
-# lib's reader lock). Fail-open: every leg degrades to "not satisfied";
-# callers deny only on positive violation evidence they establish themselves.
+# drift. Evidence = append-only invocation record OR branch ledger OR explicit
+# attestation (gating milestones excluded by the attest lib's reader lock).
+# Fail-open: every leg degrades to "not satisfied"; callers deny only on
+# positive violation evidence they establish themselves.
 # Spec: openspec/changes/phase-enforcement.
 
 _PHASE_EVID_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

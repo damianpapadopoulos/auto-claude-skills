@@ -205,4 +205,25 @@ rm -f "$HOME/.claude/skill-config.json"
 # events log got deny + allow lines
 assert_contains "telemetry log written" "gate=skill-seq" "$(cat "$HOME/.claude/.phase-gate-events.log" 2>/dev/null)"
 
+# --- config enum guard: out-of-enum value must NOT upgrade warn default to deny (RED test) ---
+printf '["brainstorming"]\n' > "$INVOC_FILE"
+printf '{"chain":["brainstorming","writing-plans","subagent-driven-development"],"completed":[],"current_index":0}\n' > "$COMP_FILE"
+printf '{"phase_enforcement":{"skill_sequencing":"advisory"}}\n' > "$HOME/.claude/skill-config.json"
+_ext_repo="$(mktemp -d /tmp/psg-ext-XXXXXX)"   # no .claude-plugin/plugin.json -> external default = warn
+_out="$(printf '{"tool_name":"Skill","tool_input":{"skill":"superpowers:subagent-driven-development"},"transcript_path":""}' \
+    | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" SKILL_PROJECT_ROOT="$_ext_repo" /bin/bash "$GATE_HOOK" 2>/dev/null)"
+assert_not_contains "enum guard: invalid config value does not yield deny in external repo" "permissionDecision" "$_out"
+assert_contains "enum guard: invalid config falls back to warn default" "PHASE GATE" "$_out"
+rm -f "$HOME/.claude/skill-config.json"; rm -rf "$_ext_repo"
+
+# --- off-mode telemetry: violation must be logged before off-mode exit (RED test) ---
+printf '["brainstorming"]\n' > "$INVOC_FILE"
+printf '{"chain":["brainstorming","writing-plans","subagent-driven-development"],"completed":[],"current_index":0}\n' > "$COMP_FILE"
+printf '{"phase_enforcement":{"skill_sequencing":"off"}}\n' > "$HOME/.claude/skill-config.json"
+rm -f "$HOME/.claude/.phase-gate-events.log"
+_out="$(_gate superpowers:subagent-driven-development)"
+assert_equals "off mode: no hook output" "" "$_out"
+assert_contains "off mode: violation telemetry logged before exit" "gate=skill-seq decision=off" "$(cat "$HOME/.claude/.phase-gate-events.log" 2>/dev/null)"
+rm -f "$HOME/.claude/skill-config.json"
+
 print_summary

@@ -88,7 +88,15 @@ if [ -z "$_MODE" ]; then
     _REPO_ID="$(jq -r '.name // empty' "${_PROJ_ROOT}/.claude-plugin/plugin.json" 2>/dev/null)" || _REPO_ID=""
     if [ "$_REPO_ID" = "auto-claude-skills" ]; then _MODE="deny"; else _MODE="warn"; fi
 fi
-[ "$_MODE" = "off" ] && exit 0
+# Validate enum: invalid config values fall back to default (computed above).
+case "$_MODE" in deny|warn|off) ;; *) _MODE=""; [ -f "${_PROJ_ROOT}/.claude-plugin/plugin.json" ] && \
+    _REPO_ID="$(jq -r '.name // empty' "${_PROJ_ROOT}/.claude-plugin/plugin.json" 2>/dev/null)" || _REPO_ID=""; \
+    if [ "$_REPO_ID" = "auto-claude-skills" ]; then _MODE="deny"; else _MODE="warn"; fi ;; esac
+
+if [ "$_MODE" = "off" ]; then
+    phase_gate_log "skill-seq" "off" "$_SKILL" "$_MISSING"
+    exit 0
+fi
 
 _MSG="PHASE GATE — Step '${_MISSING}' has no invocation evidence, but Skill(${_RAW_SKILL}) comes after it in the composition chain. Do now (one of): (1) invoke the missing step: Skill(${_MISSING}); (2) record an explicit, review-surfaced skip: source \"\$CLAUDE_PLUGIN_ROOT/hooks/lib/phase-attest.sh\" && phase_attest ${_MISSING} \"<reason>\"; (3) human bypass: run the action yourself with the ! prefix. Gating milestones (requesting-code-review, verification-before-completion) accept only real invocations."
 if [ "$_MODE" = "warn" ]; then
