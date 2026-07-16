@@ -185,7 +185,7 @@ diff_touches_routing() {
 # most-edited file in the repo, and listing it would make this advisory
 # near-constant noise. Consumed ONLY by the advisory path — this list must
 # never join a fail-closed deny (design D1, evaluator-surface-advisory).
-_EVALUATOR_SURFACES="hooks/openspec-guard.sh hooks/lib/verdict.sh hooks/lib/branch-ledger.sh hooks/lib/git-command.sh hooks/lib/session-token.sh hooks/skill-completion-hook.sh .verify.yml scripts/verify-and-record.sh skills/project-verification/scripts/gate-gaming-check.sh"
+_EVALUATOR_SURFACES="hooks/openspec-guard.sh hooks/skill-gate.sh hooks/lib/verdict.sh hooks/lib/branch-ledger.sh hooks/lib/git-command.sh hooks/lib/session-token.sh hooks/lib/phase-evidence.sh hooks/lib/phase-attest.sh hooks/skill-completion-hook.sh .verify.yml scripts/verify-and-record.sh skills/project-verification/scripts/gate-gaming-check.sh"
 
 # diff_touches_evaluator <proj_root> — 0 iff the branch diff (mainline
 # merge-base..HEAD) touches an evaluator surface; prints each touched surface
