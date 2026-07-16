@@ -31,7 +31,10 @@ phase_attest() {
     [ -z "$token" ] && { echo "[phase-attest] no session token" >&2; return 1; }
     local f="${HOME}/.claude/.skill-phase-attest-${token}" tmp
     local base="{}"
-    [ -f "$f" ] && jq empty "$f" >/dev/null 2>&1 && base="$(cat "$f")"
+    if [ -f "$f" ] && [ -s "$f" ] && jq empty "$f" >/dev/null 2>&1; then
+        base="$(cat "$f")"
+    fi
+    [ -z "$base" ] && base="{}"
     tmp="$(printf '%s' "$base" | jq --arg s "$step" --arg r "$reason" \
         '. + {($s): {reason: $r, ts: (now | todate)}}' 2>/dev/null)" || return 1
     [ -z "$tmp" ] && return 1

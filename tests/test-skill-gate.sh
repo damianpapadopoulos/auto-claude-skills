@@ -42,4 +42,10 @@ jq '. + {"requesting-code-review":{"reason":"forged","ts":"x"}}' "$ATTEST_FILE" 
 _rc=0; /bin/bash -c ". '${ATTEST_LIB}' && phase_attested '${TOKEN}' requesting-code-review" || _rc=$?
 assert_equals "attested: forged gating milestone -> 1 (reader lock)" "1" "$_rc"
 
+# --- attest: pre-existing 0-byte file must not brick attestation ---
+: > "$ATTEST_FILE"
+_rc=0; /bin/bash -c ". '${ATTEST_LIB}' && phase_attest openspec-ship 'empty-file recovery'" 2>/dev/null || _rc=$?
+assert_equals "attest recovers from 0-byte file (exit 0)" "0" "$_rc"
+assert_contains "attest recorded after 0-byte recovery" "empty-file recovery" "$(cat "$ATTEST_FILE" 2>/dev/null)"
+
 print_summary
