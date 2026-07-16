@@ -80,6 +80,19 @@ rather than a single-slug lookup. Filing the upstream regression (SessionStart
 source=compact no longer fired on auto-compaction) is worthwhile but out of
 scope here.
 
+## Implementation Notes (synced at ship time)
+- Carrier moved from a skill-activation-hook integration to the dedicated
+  `hooks/compact-recovery-prompt-hook.sh` (amendment b79beec): the activation
+  hook's early-exit paths would swallow recovery on short post-compaction
+  prompts. Spec/proposal synced in d0d6e2c.
+- Final review added: orphaned-marker GC joined the session-start state prune
+  (with an explicit current-token exclusion — the `*-state-<token>` pattern
+  cannot protect the marker name), and the prompt-carrier JSON emission is
+  guarded against jq failure (spec Scenario 4).
+- Renderer hardening from task review: confirmed-intent renders without jq;
+  negative `current_index` clamps to "unknown" (jq negative-index wraparound
+  was reachable via the walker's `-1` initialization).
+
 ## Out-of-Scope
 
 - Session-rules ledger for ad-hoc user directives (constraintguard item 3).
