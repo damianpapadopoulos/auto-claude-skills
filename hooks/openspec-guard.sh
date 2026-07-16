@@ -321,6 +321,11 @@ fi
 # advisory landed). Advisory channel only — no permissionDecision here (one
 # would auto-approve and suppress downstream warnings; documented bug shape).
 _flush_push_advisories() {
+    # PUSH-only: _STALE_MSG staleness text is computed from the LOCAL branch
+    # HEAD, which for `gh pr merge <other>` is the wrong delta — pre-flush
+    # behavior for gh-merge outside SHIP was silence, and that is preserved
+    # (SHIP-phase merges still get the _WARNINGS fold-in below, unchanged).
+    [ "${_gc_is_push:-false}" = "true" ] || return 0
     [ -n "${_STALE_MSG:-}" ] || return 0
     if command -v jq >/dev/null 2>&1; then
         jq -n --arg msg "PUSH GATE (advisory): ${_STALE_MSG}" \

@@ -95,7 +95,11 @@ if [ -f "${PLUGIN_ROOT}/hooks/lib/verdict.sh" ]; then
     command -v _routing_base >/dev/null 2>&1 && BASE="$(_routing_base "$ROOT" 2>/dev/null)" || BASE=""
 fi
 if [ -n "$BASE" ] && [ -f "$GGC" ]; then
-    if DIFF="$(git -C "$ROOT" diff "$BASE"...HEAD -- '*test*' '*spec*' '.verify.yml' 2>/dev/null)"; then
+    # Canonical a/-b/ prefixes pinned: the checker's file tracker parses diff
+    # headers, and a user diff.mnemonicPrefix/noprefix gitconfig would change
+    # them per-machine (the checker also tolerates variant prefixes — belt AND
+    # suspenders, this is gate evidence).
+    if DIFF="$(git -C "$ROOT" -c diff.mnemonicPrefix=false -c diff.noprefix=false diff "$BASE"...HEAD -- '*test*' '*spec*' '.verify.yml' 2>/dev/null)"; then
         GG="$(printf '%s' "$DIFF" | bash "$GGC" 2>/dev/null)"
         case "$GG" in clean) GG_STATUS="clean" ;; suspect*) GG_STATUS="suspect" ;; esac
     fi

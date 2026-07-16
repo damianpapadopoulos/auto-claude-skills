@@ -11,8 +11,9 @@
 # Known coverage gaps (extend the patterns, don't assume completeness): skip dialects not
 # yet matched include RSpec xit/pending, Rust #[ignore], and PHPUnit markTestSkipped(); and
 # the caller's `-- '*test*' '*spec*' '.verify.yml'` pathspec misses non-canonical test files
-# (conftest.py, __mocks__/, fixtures/). .verify.yml weakening is removal-only (a run:
-# rewritten to a no-op is not flagged). All acceptable for an advisory tripwire — see the
+# (conftest.py, __mocks__/, fixtures/). .verify.yml weakening is ENTRY-removal-only: a
+# `- name:` deleted and not re-added flags; run:-line rewrites (incl. to a no-op) and
+# renames that re-add a name do not. All acceptable for an advisory tripwire — see the
 # SKILL.md Limits note.
 set -u
 
@@ -34,14 +35,30 @@ _added_skip="$(printf '%s\n' "$_diff" \
   | grep -E '^\+.*(@pytest\.mark\.skip|@unittest\.skip|pytest\.skip|xfail|@Disabled|@Ignore|\.skip\(|\bxit\(|\bxdescribe\(|t\.Skip\(|t\.SkipNow)' \
   2>/dev/null || true)"
 
-# Removed .verify.yml gate entries: deletions of `- name:` / `run:` lines
-# inside a .verify.yml hunk — the gate DECLARATION shrinking is verification
-# weakening (evaluator-surface-advisory). File-tracked via +++ headers so
-# name:/run: removals in other YAML (e.g. workflow steps) cannot
-# false-positive. Removal-only by design, per the coverage-gaps note above.
+# Removed .verify.yml gate ENTRIES: a `- name:` line deleted and not re-added
+# with the same name — the gate DECLARATION shrinking is verification
+# weakening (evaluator-surface-advisory). Entry-level (not line-level) on
+# purpose: `suspect` is consumed by verdict_is_clean, which routing-governance
+# hard-requires, so a line-level pattern would turn a benign run:-rewrite into
+# a push DENY (review-caught false-block). File tracking uses BOTH diff
+# headers: `+++ /dev/null` (whole-file deletion — the maximal weakening) falls
+# back to the `---` side path, and any single-letter prefix (a/ b/ i/ w/ c/,
+# incl. none) is stripped so diff.mnemonicPrefix/noprefix gitconfigs cannot
+# silently disable detection. run:-line edits, additions, and entry renames
+# that re-add a name are NOT flagged, per the coverage-gaps note above.
 _removed_gate="$(printf '%s\n' "$_diff" | awk '
-  /^\+\+\+ / { f = $2; sub(/^b\//, "", f); next }
-  f == ".verify.yml" && /^-/ && !/^---/ && ($0 ~ /^-[[:space:]]*-[[:space:]]*name:/ || $0 ~ /^-[[:space:]]*run:/) { print }
+  /^--- /    { op = $2; sub(/^[a-zA-Z]\//, "", op); next }
+  /^\+\+\+ / { np = $2; sub(/^[a-zA-Z]\//, "", np); f = (np == "/dev/null" ? op : np); next }
+  f == ".verify.yml" && /^-[[:space:]]*-[[:space:]]*name:/  { rem[++nr] = $0 }
+  f == ".verify.yml" && /^\+[[:space:]]*-[[:space:]]*name:/ {
+      n = $0; sub(/^\+[[:space:]]*-[[:space:]]*name:[[:space:]]*/, "", n); added[n] = 1
+  }
+  END {
+      for (i = 1; i <= nr; i++) {
+          n = rem[i]; sub(/^-[[:space:]]*-[[:space:]]*name:[[:space:]]*/, "", n)
+          if (!(n in added)) print rem[i]
+      }
+  }
 ' 2>/dev/null || true)"
 
 [ -n "$_removed" ] && _hits="${_removed}"
