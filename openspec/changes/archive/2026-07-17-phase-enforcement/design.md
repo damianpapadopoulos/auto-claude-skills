@@ -141,6 +141,24 @@ thresholds (discovery brief): deny ships <10% FB; 10–20% narrow; >20% advisory
   DENY line is human-classified — full state replay rejected as
   disproportionate for a one-shot calibration instrument.
 
+## Implementation Notes (synced at ship time)
+
+- Backtest decision (2026-07-17, pre-registered thresholds): C2 outbound deny
+  NOT flipped — stays telemetry-warn; replay inconclusive (28/28
+  DESIGN/PLAN-missing sessions had sibling design/plan invocations within
+  ±3 days = ledger-covered continuations the replay cannot see). Revisit
+  2026-08-14 on live `gate=outbound` telemetry. C1 deny stands (dogfood)
+  under the >10% live false-block kill criterion. Full classification:
+  archived alongside the plan (superpowers/ subdir).
+- Final-review hardening beyond the plan: attest-reason rendering sanitized
+  (newline/tab flattening, 200-char cap, "agent-recorded, verify before
+  trusting" framing — prompt-injection surface closed with a red-first pin);
+  DESIGN-slot alias group (`brainstorming design-debate`) added to prevent a
+  predictable false-block; events log size-capped at session start; C2
+  telemetry uses space-free action tokens.
+- Spec delta-format conversion done pre-merge (validator-passing), not at
+  archive time.
+
 ## Out-of-Scope
 
 - Edit/Write PreToolUse deny (O3) — revival: backtest <10% FB AND ≥1 true catch.
@@ -157,3 +175,11 @@ thresholds (discovery brief): deny ships <10% FB; 10–20% narrow; >20% advisory
 
 See `specs/pdlc-safety/spec.md` (4 scenarios: sequencing deny + remedy,
 attestation path, gating-milestone exclusion, scoping/fail-open).
+
+## Divergences (auto-generated at ship time)
+
+**Acceptance Scenarios:** all four implemented as designed — [x] out-of-order deny + remedy + post-evidence allow; [x] attestation satisfies + surfaced (every prompt, sanitized render); [x] gating milestones never attestable (writer+reader locks, forged-file pin, push-gate regression); [x] scoping/fail-open.
+
+**Scope changes:** Added during review loops (all within design intent): DESIGN-slot alias group (design-debate), attest-render sanitization + framing, events-log size cap, config-enum guard, off-mode telemetry, invocation record decoupled from composition-state existence. Removed: nothing. Modified: attestation surfacing landed on every prompt under the composition block (stronger than the designed "gate-status/REVIEW surface").
+
+**Design decision changes:** evidence model finalized as invocation-record ∪ ledger ∪ attestation (sparring amendment, provenance split from walker `.completed`); C2 stays warn per backtest decision (see Implementation Notes).
