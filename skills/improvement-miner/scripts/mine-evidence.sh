@@ -80,14 +80,24 @@ json_memory_index() {
 }
 
 json_eval_reports() {
+    # github-actions is the CORRECT GraphQL author login for gh's `author`
+    # field — gh returns it WITHOUT the "[bot]" suffix. Do not "fix" this
+    # to "github-actions[bot]"; that value never matches and silently
+    # zeroes the eval-report intake (docs use the display form; this is
+    # the API form).
     local BOT_LOGIN="github-actions"
     local EVAL_TITLE_PREFIX="Behavioral eval regression"
     # NOTE: field list deliberately excludes comments — trust boundary.
-    local raw
+    local raw rc
     raw="$(gh issue list --state all --limit 50 \
             --search "\"${EVAL_TITLE_PREFIX}\" in:title" \
-            --json number,title,body,author 2>/dev/null)" || raw='[]'
-    # Guard against empty output (e.g., from testing fixtures)
+            --json number,title,body,author)"
+    rc=$?
+    if [ "${rc}" -ne 0 ]; then
+        echo "ERROR: gh issue list (eval reports) failed with exit ${rc} — improvement-miner is fail-loud, refusing to degrade to an empty bundle (see gh stderr above)" >&2
+        exit 5
+    fi
+    # Guard against empty-but-SUCCESSFUL output (e.g., no matching issues).
     [ -z "${raw}" ] && raw='[]'
     printf '%s' "${raw}" | jq --arg bot "${BOT_LOGIN}" --arg pfx "${EVAL_TITLE_PREFIX}" '[.[] | select((.author.login == $bot) and (.title | startswith($pfx))) | {number, title, body}]' 2>/dev/null || echo '[]'
 }
@@ -96,7 +106,14 @@ LABEL_RUN="improvement-miner-run"
 owner_login() {
     # fake-gh in tests ignores --jq and always emits the full JSON object,
     # so extract the login ourselves rather than relying on gh's --jq.
-    gh repo view --json owner 2>/dev/null | jq -r '.owner.login // empty' 2>/dev/null
+    local raw rc
+    raw="$(gh repo view --json owner)"
+    rc=$?
+    if [ "${rc}" -ne 0 ]; then
+        echo "ERROR: gh repo view failed with exit ${rc} — improvement-miner is fail-loud, refusing to degrade to an empty ledger (see gh stderr above)" >&2
+        exit 5
+    fi
+    printf '%s' "${raw}" | jq -r '.owner.login // empty' 2>/dev/null
 }
 
 json_ledger_items() {
@@ -106,11 +123,21 @@ json_ledger_items() {
     # run issue) — callers that need a flat stream should `flatten` it.
     # Counts must always be derived from these items, never from any
     # embedded counter in the ledger body.
-    local owner raw
+    local owner raw rc
     owner="$(owner_login)"
-    [ -n "${owner}" ] || { echo '[]'; return; }
+    rc=$?
+    [ "${rc}" -eq 0 ] || exit "${rc}"
+    if [ -z "${owner}" ]; then
+        echo "ERROR: gh repo view returned no owner login — cannot verify ledger authorship, refusing to degrade to an empty ledger" >&2
+        exit 5
+    fi
     raw="$(gh issue list --label "${LABEL_RUN}" --state all --limit 200 \
-            --json number,body,author 2>/dev/null)" || raw='[]'
+            --json number,body,author)"
+    rc=$?
+    if [ "${rc}" -ne 0 ]; then
+        echo "ERROR: gh issue list (ledger) failed with exit ${rc} — improvement-miner is fail-loud, refusing to degrade to an empty ledger (see gh stderr above)" >&2
+        exit 5
+    fi
     [ -z "${raw}" ] && raw='[]'
     printf '%s' "${raw}" | jq --arg o "${owner}" '
         [ .[] | select(.author.login == $o) ]
@@ -133,8 +160,10 @@ json_ledger_summary() {
     # tripped iff presented >= 5 AND the first 5 chronological items have
     # 0 approved. All counts are derived from `items`, never trusted from
     # any embedded counter in a ledger issue body.
-    local items runs
+    local items runs rc
     items="$(json_ledger_items)"
+    rc=$?
+    [ "${rc}" -eq 0 ] || exit "${rc}"
     runs="$(printf '%s' "${items}" | jq 'length')"
     printf '%s' "${items}" | jq --argjson runs "${runs}" '
         flatten as $flat
@@ -150,13 +179,26 @@ json_ledger_summary() {
 
 emit_bundle() {
     local head_sha; head_sha="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+    local baselines gate mem evals ledger rc
+    baselines="$(json_baselines)"
+    gate="$(json_gate_status)"
+    mem="$(json_memory_index)"
+    # gh-backed sources: capture separately and abort loudly on failure —
+    # a swallowed error here must never silently degrade into an
+    # empty-looking (falsely "clean") bundle (kill state, dedup).
+    evals="$(json_eval_reports)"
+    rc=$?
+    [ "${rc}" -eq 0 ] || exit "${rc}"
+    ledger="$(json_ledger_summary)"
+    rc=$?
+    [ "${rc}" -eq 0 ] || exit "${rc}"
     jq -n \
         --arg sha "${head_sha}" \
-        --argjson baselines "$(json_baselines)" \
-        --argjson gate "$(json_gate_status)" \
-        --argjson mem "$(json_memory_index)" \
-        --argjson evals "$(json_eval_reports)" \
-        --argjson ledger "$(json_ledger_summary)" \
+        --argjson baselines "${baselines}" \
+        --argjson gate "${gate}" \
+        --argjson mem "${mem}" \
+        --argjson evals "${evals}" \
+        --argjson ledger "${ledger}" \
         '{schema: 1, head_sha: $sha, baselines: $baselines, gate_status: $gate,
           memory_index: $mem, eval_reports: $evals, ledger: $ledger,
           kill: ($ledger.kill // {})}'
@@ -182,7 +224,10 @@ case "${MODE}" in
         cd "${REPO_ROOT}" || exit 2
         shift
         [ "$#" -ge 1 ] || usage
-        ITEMS="$(json_ledger_summary | jq '.items')"
+        SUMMARY="$(json_ledger_summary)"
+        RC=$?
+        [ "${RC}" -eq 0 ] || exit "${RC}"
+        ITEMS="$(printf '%s' "${SUMMARY}" | jq '.items')"
         for f in "$@"; do
             printf '%s' "${ITEMS}" | jq -r --arg fp "${f}" '
                 [ .[] | select(.fp == $fp) ] as $m

@@ -36,6 +36,51 @@ test_missing_gh_fails_loud() {
     teardown_test_env
 }
 
+test_gh_runtime_failure_fails_loud() {
+    echo "-- test: gh exits non-zero at runtime (e.g. unauthenticated) aborts bundle/dedup loudly, never a clean-looking empty bundle --"
+    setup_test_env
+    mkdir -p "${TEST_TMPDIR}/stub" "${TEST_TMPDIR}/repo"
+    (cd "${TEST_TMPDIR}/repo" && git init -q && git -c user.email="test@example.com" -c user.name="Test" commit -q --allow-empty -m init)
+    cat > "${TEST_TMPDIR}/stub/gh" <<'FAKEGH'
+#!/bin/bash
+echo "Not authenticated" >&2
+exit 4
+FAKEGH
+    chmod +x "${TEST_TMPDIR}/stub/gh"
+    local out rc
+    out="$(cd "${TEST_TMPDIR}/repo" && PATH="${TEST_TMPDIR}/stub:${PATH}" /bin/bash "${MINE}" bundle 2>&1)"; rc=$?
+    [ "$rc" -ne 0 ] && _record_pass "bundle: non-zero exit on gh runtime failure" || _record_fail "bundle: non-zero exit on gh runtime failure" "rc=$rc"
+    assert_contains "bundle: ERROR printed" "ERROR" "$out"
+    assert_contains "bundle: underlying gh failure surfaced (not swallowed)" "Not authenticated" "$out"
+
+    out="$(cd "${TEST_TMPDIR}/repo" && PATH="${TEST_TMPDIR}/stub:${PATH}" /bin/bash "${MINE}" dedup somefp 2>&1)"; rc=$?
+    [ "$rc" -ne 0 ] && _record_pass "dedup: non-zero exit on gh runtime failure" || _record_fail "dedup: non-zero exit on gh runtime failure" "rc=$rc"
+    assert_contains "dedup: ERROR printed" "ERROR" "$out"
+    teardown_test_env
+}
+
+test_empty_owner_login_fails_loud() {
+    echo "-- test: gh succeeds (rc 0) but returns no owner login aborts ledger read loudly, does not silently degrade --"
+    setup_test_env
+    mkdir -p "${TEST_TMPDIR}/stub" "${TEST_TMPDIR}/repo"
+    (cd "${TEST_TMPDIR}/repo" && git init -q && git -c user.email="test@example.com" -c user.name="Test" commit -q --allow-empty -m init)
+    cat > "${TEST_TMPDIR}/stub/gh" <<'FAKEGH'
+#!/bin/bash
+case "$1 $2" in
+    "repo view") echo '{"owner":{"login":""}}' ;;
+    "issue list") echo '[]' ;;
+    *) echo '{}' ;;
+esac
+exit 0
+FAKEGH
+    chmod +x "${TEST_TMPDIR}/stub/gh"
+    local out rc
+    out="$(cd "${TEST_TMPDIR}/repo" && PATH="${TEST_TMPDIR}/stub:${PATH}" /bin/bash "${MINE}" bundle 2>&1)"; rc=$?
+    [ "$rc" -ne 0 ] && _record_pass "bundle: non-zero exit on empty owner login" || _record_fail "bundle: non-zero exit on empty owner login" "rc=$rc"
+    assert_contains "bundle: ERROR mentions owner" "owner" "$out"
+    teardown_test_env
+}
+
 make_fake_gh() {
     # fake gh: logs argv, serves canned JSON per subcommand from env-pointed files
     mkdir -p "${TEST_TMPDIR}/stub"
@@ -335,6 +380,8 @@ test_skill_md_content() {
 
 test_fingerprint_stable_and_distinct
 test_missing_gh_fails_loud
+test_gh_runtime_failure_fails_loud
+test_empty_owner_login_fails_loud
 test_bundle_local_sources
 test_bundle_gate_status_present
 test_eval_reports_author_allowlist

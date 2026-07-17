@@ -641,7 +641,7 @@
       "role": "workflow",
       "phase": "LEARN",
       "triggers": [
-        "(improvement.miner|improvement.mining|mine (the repo for|for) (improvement|evidence)|mine improvements)"
+        "(improvement.miner|improvement.mining|(^|[^a-z])mine (the repo for|for) (improvement|evidence)|(^|[^a-z])mine improvements)"
       ],
       "keywords": [
         "mine improvements",
