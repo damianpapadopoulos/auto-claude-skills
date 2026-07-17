@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "discovery_path": null,
+  "design_path": null,
+  "plan_path": null,
+  "spec_path": null,
+  "sp_plan_path": null,
+  "sp_spec_path": null,
+  "change_slug": "phase-enforcement",
+  "capability_slug": null,
+  "source_branch": "feat/phase-enforcement",
+  "base_commit": "f07a41bf99a742fe003767b81554a38380bbed15",
+  "openspec_surface": "none",
+  "archived_at": "2026-07-17T19:22:43Z"
+}

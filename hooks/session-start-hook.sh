@@ -147,11 +147,28 @@ _STATE_RETENTION_SECS="${SKILL_STATE_RETENTION:-604800}"
 _STATE_RETENTION_DAYS=$(( _STATE_RETENTION_SECS / 86400 ))
 [ "${_STATE_RETENTION_DAYS}" -ge 1 ] || _STATE_RETENTION_DAYS=1
 find "${HOME}/.claude" -maxdepth 1 \
-    \( -name '.skill-composition-state-*' -o -name '.skill-openspec-state-*' -o -name '.skill-compact-pending-*' \) \
+    \( -name '.skill-composition-state-*' -o -name '.skill-openspec-state-*' \
+       -o -name '.skill-compact-pending-*' \
+       -o -name '.skill-invocation-evidence-*' -o -name '.skill-phase-attest-*' \) \
     -mtime +"${_STATE_RETENTION_DAYS}" \
     ! -name "*-state-${_SESSION_TOKEN}" \
     ! -name ".skill-compact-pending-${_SESSION_TOKEN}" \
+    ! -name ".skill-invocation-evidence-${_SESSION_TOKEN}" \
+    ! -name ".skill-phase-attest-${_SESSION_TOKEN}" \
     -exec rm -f {} + 2>/dev/null || true
+
+# Cap the phase-gate telemetry log (F6): every skill-gate.sh / openspec-guard.sh
+# phase-enforcement decision appends one line to this file and it was never
+# bounded, so it can grow unboundedly over a long-lived ~/.claude. Fail-open,
+# numeric-validated line count; tail-to-tmp-then-mv avoids truncating mid-line.
+_PGE_LOG="${HOME}/.claude/.phase-gate-events.log"
+if [ -f "$_PGE_LOG" ]; then
+    _PGE_LINES="$(wc -l < "$_PGE_LOG" 2>/dev/null | tr -d ' ')"
+    [[ "$_PGE_LINES" =~ ^[0-9]+$ ]] || _PGE_LINES=0
+    if [ "$_PGE_LINES" -gt 5000 ]; then
+        tail -n 2500 "$_PGE_LOG" > "${_PGE_LOG}.tmp" 2>/dev/null && mv "${_PGE_LOG}.tmp" "$_PGE_LOG" 2>/dev/null || true
+    fi
+fi
 
 # -----------------------------------------------------------------
 # Step 2: Check jq availability
@@ -596,6 +613,14 @@ if [ ! -f "${PLUGIN_ROOT}/hooks/openspec-guard.sh" ]; then
 elif ! /bin/bash -n "${PLUGIN_ROOT}/hooks/openspec-guard.sh" >/dev/null 2>&1; then
     _CANARY_BAD="openspec-guard.sh (unparseable)"
 fi
+# skill-gate.sh (phase-enforcement C1): same shape as openspec-guard.sh above
+# — it executes and reads stdin directly (PreToolUse ^Skill$), so parse-check
+# only, not source-probed like the libs below.
+if [ ! -f "${PLUGIN_ROOT}/hooks/skill-gate.sh" ]; then
+    _CANARY_BAD="${_CANARY_BAD}${_CANARY_BAD:+, }skill-gate.sh (missing)"
+elif ! /bin/bash -n "${PLUGIN_ROOT}/hooks/skill-gate.sh" >/dev/null 2>&1; then
+    _CANARY_BAD="${_CANARY_BAD}${_CANARY_BAD:+, }skill-gate.sh (unparseable)"
+fi
 # Gate libs: SOURCE-probe in a stdio-nulled subshell — parse-only (-n) misses
 # the documented Bash-3.2 expansion-time killer (quoted operand in $(( ))),
 # which aborts at source time; sourcing is exactly what the guard does, and
@@ -603,7 +628,7 @@ fi
 # Shared with the drift canary (Step 6a-ter) — extend this ONE list to cover a
 # new gate-enforcement lib in both canaries. Repo-relative literals, no spaces:
 # unquoted word-split expansion is intentional and Bash-3.2 safe.
-_GATE_ENFORCE_LIBS="hooks/lib/branch-ledger.sh hooks/lib/verdict.sh hooks/lib/git-command.sh hooks/lib/session-token.sh"
+_GATE_ENFORCE_LIBS="hooks/lib/branch-ledger.sh hooks/lib/verdict.sh hooks/lib/git-command.sh hooks/lib/session-token.sh hooks/lib/phase-evidence.sh hooks/lib/phase-attest.sh"
 for _cf in ${_GATE_ENFORCE_LIBS}; do
     if [ ! -f "${PLUGIN_ROOT}/${_cf}" ]; then
         _CANARY_BAD="${_CANARY_BAD}${_CANARY_BAD:+, }${_cf##*/} (missing)"
@@ -647,7 +672,7 @@ if [ -f "${_SRC_MANIFEST}" ] && [ -f "${_RUN_MANIFEST}" ]; then
         # Reuses the F5 canary's _GATE_ENFORCE_LIBS so the two lists cannot
         # diverge; the guard script itself is added here (F5 checks it apart).
         _DRIFT_FILES=""
-        for _df in "hooks/openspec-guard.sh" ${_GATE_ENFORCE_LIBS}; do
+        for _df in "hooks/openspec-guard.sh" "hooks/skill-gate.sh" ${_GATE_ENFORCE_LIBS}; do
             _SRC_SUM="$(cksum "${_DRIFT_CWD}/${_df}" 2>/dev/null | awk '{print $1, $2}')" || _SRC_SUM=""
             _RUN_SUM="$(cksum "${PLUGIN_ROOT}/${_df}" 2>/dev/null | awk '{print $1, $2}')" || _RUN_SUM=""
             [ "${_SRC_SUM}" = "${_RUN_SUM}" ] \

@@ -48,7 +48,7 @@
       "requires": [],
       "description": "Ask clarifying questions, explore options, and get user approval before planning. Activated for Build intents.",
       "invoke": "Skill(superpowers:brainstorming)",
-      "precondition": "PRECONDITION: if this is a new feature or initiative and no discovery brief with an Assumption Ledger exists (check session-state discovery_path or docs/plans/*-discovery.md), invoke Skill(auto-claude-skills:product-discovery) FIRST to surface and grade the load-bearing assumptions, then return to brainstorming. Skip for bugfixes, small changes, or work already covered by an approved brief.",
+      "precondition": "PRECONDITION: if this is a new feature or initiative and no discovery brief with an Assumption Ledger exists (check session-state discovery_path or docs/plans/*-discovery.md), invoke Skill(auto-claude-skills:product-discovery) FIRST to surface and grade the load-bearing assumptions, then return to brainstorming. Skip for bugfixes, small changes, or work already covered by an approved brief. TRIFECTA: classify private_data / untrusted_input / outbound_action from the candidate design's data flow. If >=2 are Present (or Unknowns could reach 2), invoke Skill(auto-claude-skills:agent-safety-review) before leaving DESIGN, or record the skip: phase_attest agent-safety-review \"<why the trifecta is <2>\".",
       "available": false,
       "enabled": true
     },
@@ -1213,10 +1213,6 @@
         },
         {
           "text": "EVAL STRATEGY: Before leaving DESIGN, classify how this feature is verified — ask the user if it is unclear. If it has probabilistic/AI/LLM/agent behavior (outputs cannot be exact-matched): plan an eval SET, not just unit tests — smoke + adversarial/safety subsets (jailbreak, injection, safety-routing-suppression), a pinned judge model+version, never-delete cases (deprecate with a dated rationale), and a pre-registered safety-stop (halt condition + who can call it); author the safety subset and have it failing (red) before implementation. If it is deterministic: standard test-driven-development plus the acceptance scenarios above are the bar. Safety dimensions are hard pass/fail gates, never averaged into a quality blend. See Skill(auto-claude-skills:runtime-validation) for running eval packs.",
-          "when": "always"
-        },
-        {
-          "text": "TRIFECTA CHECK: During DESIGN, classify private_data (secrets/PII/private repos/tokens), untrusted_input (external content: emails, web pages, uploads, third-party API responses, webhooks), and outbound_action (acts outside the sandbox: email, Slack, git push, API calls, PRs) from the proposed data flow as Present/Absent/Unknown. If 2 or more are Present, or Unknowns could make the count >=2, invoke Skill(auto-claude-skills:agent-safety-review) after brainstorming has a candidate design and before transitioning to PLAN. Judge from the actual data flow — do not wait for a keyword trigger.",
           "when": "always"
         },
         {
