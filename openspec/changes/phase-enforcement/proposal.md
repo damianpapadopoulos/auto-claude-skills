@@ -25,8 +25,9 @@ backtest-gated with pre-registered thresholds before it ships as a deny.
    gate. When a composition chain is active and the invoked skill is a chain
    member, invoking step *i* is DENIED (push-gate deny shape, remedy naming the
    exact predecessor `Skill(...)` to run) while any required predecessor *j<i*
-   lacks evidence. Evidence = `.completed` (completion-hook invocation record)
-   ∪ branch ledger ∪ explicit skip-attestation. Allow on: no active chain,
+   lacks evidence. Evidence = the append-only invocation record
+   (`.skill-invocation-evidence-<token>`) ∪ branch ledger ∪ explicit
+   skip-attestation — never the walker-writable `.completed`. Allow on: no active chain,
    non-chain skill, re-invocation of current/completed steps, unreadable or
    malformed state (deny only on positive violation evidence).
 2. **Skip-attestation** (`hooks/lib/phase-attest.sh`, new) — helper writes

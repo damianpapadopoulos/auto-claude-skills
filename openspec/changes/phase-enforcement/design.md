@@ -21,8 +21,9 @@ C1 decision procedure (deny only on positive violation evidence):
 2. `tool_input.skill` (bare name, strip plugin prefix — same normalization as
    the completion hook) not in `.chain` → ALLOW.
 3. Skill at chain index i: for each required predecessor j<i, satisfied if in
-   `.completed` OR `branch_ledger_has` OR attested in
-   `.skill-phase-attest-<token>`. First unsatisfied predecessor → DENY with
+   the append-only invocation record (`.skill-invocation-evidence-<token>`) OR
+   `branch_ledger_has` OR attested in `.skill-phase-attest-<token>` — never the
+   walker-writable `.completed`. First unsatisfied predecessor → DENY with
    remedy: "PHASE GATE — Step <j> (<skill>) has no invocation evidence. Do
    now: invoke Skill(<skill>), or record an explicit skip:
    `phase_attest <step> "<reason>"` (logged and surfaced at REVIEW). Human
@@ -89,10 +90,11 @@ thresholds (discovery brief): deny ships <10% FB; 10–20% narrow; >20% advisory
 
 ## Decisions
 
-- Evidence sources for "step done" are exactly the push gate's:
-  `.completed` ∪ branch ledger, plus the new attestation map — one shared
-  predicate helper (`hooks/lib/phase-evidence.sh`) consumed by C1 and C2 so
-  the two boundaries cannot drift.
+- Evidence sources for "step done" are exactly the push gate's: the
+  append-only invocation record (`.skill-invocation-evidence-<token>`) ∪
+  branch ledger ∪ attestation — never the walker-writable `.completed` — one
+  shared predicate helper (`hooks/lib/phase-evidence.sh`) consumed by C1 and
+  C2 so the two boundaries cannot drift.
 - Skill-name normalization reuses the completion hook's bare-name rule
   (strip `plugin:` prefix) — same skill, same name, both directions.
 - Review-embedding skills (subagent-driven-development,
