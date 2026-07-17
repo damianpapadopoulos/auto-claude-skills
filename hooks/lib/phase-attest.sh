@@ -11,6 +11,13 @@ PHASE_ATTEST_GATING_EXCLUDE="requesting-code-review verification-before-completi
 # _phase_attest_token: singleton read (attest is invoked from the model's
 # Bash turn, which has no hook payload; the singleton was re-stamped by the
 # activation hook this prompt — issue #51 narrowing applies).
+# CONCURRENCY NOTE (PR #120 review R3): under concurrent sessions the
+# singleton is last-writer-wins, so an attestation can land under the
+# sibling session's token within the one-prompt race window. Attestations
+# are therefore advisory evidence, not authoritative gating signals — the
+# reader-side lock already guarantees the gating milestones
+# (requesting-code-review, verification-before-completion) can never be
+# satisfied this way regardless of token mixups.
 _phase_attest_token() {
     cat "${HOME}/.claude/.skill-session-token" 2>/dev/null
 }

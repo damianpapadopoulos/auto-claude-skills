@@ -404,4 +404,26 @@ for _cfg in config/default-triggers.json config/fallback-registry.json; do
     assert_not_contains "DESIGN hints no longer contain superseded TRIFECTA CHECK (${_cfg})" "TRIFECTA CHECK" "$_design_hints"
 done
 
+# --- C2 mode enum validation (PR #120 review R2): invalid values fall to warn
+# (fail-open direction, unlike C1's pre-fix escalate-to-deny bug); "off"
+# skips the C2 block entirely including telemetry. Symmetric with C1's guard. ---
+_C2E_REPO="$(mktemp -d /tmp/psg-c2e-XXXXXX)"
+( cd "$_C2E_REPO" && git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m init )
+printf '{"chain":["brainstorming","writing-plans","requesting-code-review","verification-before-completion"],"completed":["requesting-code-review","verification-before-completion"],"current_index":0}\n' > "$COMP_FILE"
+printf '["requesting-code-review","verification-before-completion"]\n' > "$INVOC_FILE"
+# invalid enum ("DENY") -> warn, not deny
+printf '{"phase_enforcement":{"outbound":"DENY"}}\n' > "$HOME/.claude/skill-config.json"
+: > "$HOME/.claude/.phase-gate-events.log"
+_out="$(cd "$_C2E_REPO" && printf '{"tool_name":"Bash","tool_input":{"command":"git push"},"transcript_path":""}' \
+    | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "$GUARD" 2>/dev/null)"
+assert_not_contains "C2 enum: invalid 'DENY' does not hard-deny" '"permissionDecision": "deny"' "$_out"
+assert_contains "C2 enum: invalid 'DENY' logged as warn" "gate=outbound decision=warn" "$(cat "$HOME/.claude/.phase-gate-events.log" 2>/dev/null)"
+# off -> no telemetry, no output
+printf '{"phase_enforcement":{"outbound":"off"}}\n' > "$HOME/.claude/skill-config.json"
+: > "$HOME/.claude/.phase-gate-events.log"
+_out="$(cd "$_C2E_REPO" && printf '{"tool_name":"Bash","tool_input":{"command":"git push"},"transcript_path":""}' \
+    | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "$GUARD" 2>/dev/null)"
+assert_not_contains "C2 off: no outbound telemetry" "gate=outbound" "$(cat "$HOME/.claude/.phase-gate-events.log" 2>/dev/null)"
+rm -f "$HOME/.claude/skill-config.json"; rm -f "$COMP_FILE" "$INVOC_FILE"; rm -rf "$_C2E_REPO"
+
 print_summary

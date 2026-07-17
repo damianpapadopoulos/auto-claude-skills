@@ -305,6 +305,13 @@ if [ "${_gc_is_push}" = "true" ] || [ "${_gc_is_ghmerge}" = "true" ]; then
                 done
                 if [ -n "${_pe_missing}" ]; then
                     _pe_mode="$(jq -r '.phase_enforcement.outbound // "warn"' "${HOME}/.claude/skill-config.json" 2>/dev/null)" || _pe_mode="warn"
+                    # Enum guard (symmetric with skill-gate.sh's C1 guard): only the
+                    # exact strings deny|warn|off are honored; anything else falls to
+                    # warn — the fail-open direction here (a typo can only weaken to
+                    # advisory, never escalate to deny). "off" silences the C2 leg
+                    # entirely, including telemetry.
+                    case "${_pe_mode}" in deny|warn|off) ;; *) _pe_mode="warn" ;; esac
+                    if [ "${_pe_mode}" != "off" ]; then
                     _PE_MSG="PHASE GATE (outbound): this chain-covered ${_GATE_ACTION} has no evidence for '${_pe_missing}'. Invoke Skill(superpowers:${_pe_missing}) or record an explicit skip (phase_attest ${_pe_missing} \"<reason>\") before shipping."
                     command -v phase_gate_log >/dev/null 2>&1 && phase_gate_log "outbound" "${_pe_mode}" "${_pe_action}" "${_pe_missing}"
                     if [ "${_pe_mode}" = "deny" ]; then
@@ -319,6 +326,7 @@ if [ "${_gc_is_push}" = "true" ] || [ "${_gc_is_ghmerge}" = "true" ]; then
                     # check denies. Same constraint as the "Soft staleness is NOT
                     # emitted here" comment at ~line 221.
                     [ -n "${SKILL_EXPLAIN:-}" ] && printf '[openspec-guard] %s\n' "${_PE_MSG}" >&2
+                    fi
                 fi
             fi
         fi
