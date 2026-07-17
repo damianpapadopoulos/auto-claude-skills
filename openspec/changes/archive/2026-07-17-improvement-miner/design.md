@@ -118,6 +118,27 @@ GH Action automation (revival criterion), Stage 2/3, session-start nudge,
 live eval-pack/backtest execution, org-hub sources, web input, any factory
 code-writing. `.verify.yml` gate entries unchanged except test registration.
 
+## Implementation Notes (synced at ship time)
+
+- Dedup semantics refined during review: when a fingerprint appears in
+  multiple runs, the MOST RECENT decision governs (a fp rejected in run N
+  but approved in run N+2 reports `approved <issue>`, not the stale
+  rejection) — ratified as a correctness improvement over the design's
+  implicit first-match reading.
+- The fail-loud contract was initially under-implemented for gh RUNTIME
+  failures (present-but-failing gh silently degraded to an empty bundle,
+  faking `kill.state=alive`); final review caught it (C1) and bundle/dedup
+  now abort loudly on non-zero gh exit or empty owner, with red tests.
+- Trigger regex ships with `(^|[^a-z])` guards on the bare `mine`
+  alternations (final review I1: "determine improvements"/"examine for
+  evidence" substring-selected without them).
+- SKILL.md documents issue title AND body via files (`--body-file` +
+  `--title "$(cat ...)"`) — evidence-derived text is never pasted into a
+  quoted shell string (final review I2).
+- Kill-window permanence (a later approval never revives a tripped state)
+  is test-pinned (`test_kill_window_is_permanent`), as is malformed-fence
+  degradation.
+
 ## Acceptance Scenarios
 
 - A third-party-authored GitHub issue matching the eval-regression title
@@ -135,3 +156,22 @@ code-writing. `.verify.yml` gate entries unchanged except test registration.
 - Every run ends with an owner-authored `improvement-miner-run` ledger issue
   recording each presented item's fingerprint, rank, decision, and reason,
   plus cumulative counters.
+
+## Divergences (auto-generated at ship time)
+
+**Acceptance Scenarios:**
+- [x] Third-party-authored eval issue excluded — `test_eval_reports_author_allowlist` (mutation-tested in review)
+- [x] Previously presented fingerprint filtered (rejected=dead, approved=already-queued with issue number) — `test_dedup_decisions`
+- [x] Incomplete A/B contract withheld with missing fields, no issue — `select` mode `missing_contract`, `test_select_contract_gate_and_meta_cap`
+- [x] 3+ meta candidates → at most 2 highest-graded presented — `select` `meta_cap` tests
+- [x] 0-of-5 → "decommission recommended", refuse without override — script `kill.state=tripped` (`test_kill_math_tripped_and_alive`, `test_kill_window_is_permanent`); refusal itself is SKILL prose (model behavior, accepted for advise-only Stage 1)
+- [x] Approved item → labeled issue with grade/provenance/contract — SKILL Step 7 (model behavior, no automated coverage; accepted)
+- [x] Run ends with owner-authored ledger issue, ranks recorded — fence schema parsed by `json_ledger_items`, rank asserted in fixtures
+
+**Scope changes:**
+- Added: `select` mode in the script (anti-treadmill thresholds moved from SKILL prose into code — design amended during Task 5, consistent with the code/model boundary principle)
+- Removed: none
+- Modified: dedup most-recent-decision semantics; gh runtime-failure abort hardened post-review (C1)
+
+**Design decision changes:**
+- Trigger regex hardened with `(^|[^a-z])` guards (I1); issue title+body file-based (I2). See Implementation Notes above.
