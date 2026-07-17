@@ -6882,12 +6882,21 @@ install_registry_v4_with_real_phase_hints() {
     install_registry_v4
     local cache_file="${HOME}/.claude/.skill-registry-cache.json"
     local tmp_file; tmp_file="$(mktemp)"
+    # Pull the REAL brainstorming precondition from config/default-triggers.json so this
+    # mock registry's brainstorming entry carries it too. hooks/skill-activation-hook.sh
+    # (~line 902) renders a skill's `precondition` field under the CURRENT composition
+    # step — this harness's baked-in mock entry (install_registry_v4) lacked the field,
+    # which previously made the render path look untestable when it wasn't. Read the
+    # value live rather than hardcoding a copy that can drift from the real config.
+    local brainstorming_precondition
+    brainstorming_precondition="$(jq -r '.skills[] | select(.name=="brainstorming") | .precondition' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
     # Surface jq failures explicitly: a broken config/default-triggers.json would
     # otherwise leave the cache without phase hints, and the downstream assertion
     # would fail with a misleading "expected to contain 'TRIFECTA CHECK'" message
     # instead of pointing at the real (parse-error) root cause.
-    if jq --slurpfile cfg "${PROJECT_ROOT}/config/default-triggers.json" '
+    if jq --slurpfile cfg "${PROJECT_ROOT}/config/default-triggers.json" --arg precond "${brainstorming_precondition}" '
       .phase_compositions = ($cfg[0].phase_compositions // {})
+      | .skills = [.skills[] | if .name == "brainstorming" then . + {precondition: $precond} else . end]
     ' "${cache_file}" > "${tmp_file}"; then
         mv "${tmp_file}" "${cache_file}"
     else
@@ -6913,6 +6922,9 @@ test_trifecta_hint_present_at_design() {
     local ctx
     ctx="$(extract_context "$(run_hook "build something that reads customer support emails and posts replies to Slack")")"
     assert_contains "brainstorming invoked at DESIGN" "Skill(superpowers:brainstorming)" "${ctx}"
+    # And the precondition text is actually rendered under the CURRENT step in hook
+    # output — not just present in config. See hooks/skill-activation-hook.sh:902-907.
+    assert_contains "DESIGN renders the TRIFECTA precondition" "TRIFECTA" "${ctx}"
 
     teardown_test_env
 }
