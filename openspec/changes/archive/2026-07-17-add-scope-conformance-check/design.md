@@ -63,3 +63,18 @@ common path; nothing upstream needs to change.
    `tests/test-new.sh`, WHEN the script runs, THEN the file is covered.
 6. GIVEN an out-of-scope DELETED file, WHEN the script runs, THEN the
    deletion is reported as a violation (the recorded real incident class).
+
+## Implementation Notes (synced at ship time)
+
+- Plan-file self-exemption added: the manifest artifact itself is always
+  in-scope (`PLAN_REL`), so a plan outside `docs/plans/` doesn't self-violate.
+- Design decision 4 amended by review: ANY base (explicit or auto-resolved) is
+  merge-base-normalized against HEAD — an explicit `main` on a diverged
+  mainline false-violated in the reviewer's probe (red-validated pre-fix).
+- `core.quotePath=false` on both git listings (non-ASCII filenames).
+- Trailing-`/` directory entries normalize to `dir/*` (definitional fix
+  preferred over documenting the gap).
+- Drift-check exit-0 report row instructs flagging over-broad `Allow:` globs
+  (e.g. bare `*`) instead of reporting a meaningless clean.
+- Dogfooded on its own branch: first run caught a genuine under-declaration
+  (`config/fallback-registry.json` from a conditional mirror step).

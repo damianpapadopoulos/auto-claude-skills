@@ -36,11 +36,14 @@ warning partition; tri-state and fail-open shape per repo doctrine CLAUDE.md
 
 The script SHALL treat as manifest entries every line of the form
 `- Create:|Modify:|Test:|Delete:|Allow: `path``, SHALL strip trailing
-`:N[-M]` line ranges, and SHALL match changed files by exact path or bash
-case-glob. A built-in meta allowlist (`docs/plans/*`, `openspec/*`,
-`CHANGELOG.md`) SHALL always be covered.
+`:N[-M]` line ranges, SHALL normalize a trailing-`/` directory entry to
+`dir/*` so it covers contained files, and SHALL match changed files by exact
+path or bash case-glob. A built-in meta allowlist (`docs/plans/*`,
+`openspec/*`, `CHANGELOG.md`) and the plan file itself SHALL always be
+covered.
 [Provenance: superpowers writing-plans SKILL.md task template (Files block
-format, installed 6.1.1); Allow: is this change's extension.]
+format, installed 6.1.1); Allow: is this change's extension; dir-entry
+normalization and plan self-exemption added during implementation/review.]
 
 #### Scenario: line-range stripping
 
@@ -53,3 +56,20 @@ format, installed 6.1.1); Allow: is this change's extension.]
 - GIVEN `` - Allow: `tests/*` `` and a new untracked file `tests/t.sh`
 - WHEN the script runs
 - THEN `tests/t.sh` is covered
+
+### Requirement: Base normalization
+
+The script SHALL normalize any base ref — explicit argument or auto-resolved —
+to its merge-base with HEAD, so that mainline commits made after the branch
+point are never misattributed to the branch as violations. Non-ASCII
+filenames SHALL be compared unquoted (`core.quotePath=false`).
+[Provenance: REVIEW finding on this change — probed false violation
+(`main-only.txt`) with an explicit `main` base on a diverged mainline;
+red-validated against the pre-fix script.]
+
+#### Scenario: diverged mainline with explicit base
+
+- GIVEN a branch whose declared file is its only change, and a mainline that
+  gained commits after the branch point
+- WHEN the script runs with the mainline ref passed explicitly as base
+- THEN the verdict is clean (exit 0), not a violation for mainline-only files
