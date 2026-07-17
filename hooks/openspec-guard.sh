@@ -117,6 +117,11 @@ if [ "${_gc_is_push}" = "true" ] || [ "${_gc_is_ghmerge}" = "true" ]; then
         [ "${ACSM_SKIP_PUSH_GATE:-}" = "1" ] && _PUSHGATE_SKIP=true
         _GATE_ACTION="pushing this branch"
         [ "${_gc_is_push}" != "true" ] && [ "${_gc_is_ghmerge}" = "true" ] && _GATE_ACTION="merging this PR"
+        # Space-free action token for telemetry (F7): _GATE_ACTION is a
+        # human-readable phrase with spaces, which would break the space-delimited
+        # phase-gate-events.log line format (`skill=<...>`) if logged verbatim.
+        _pe_action="push"
+        [ "${_gc_is_push}" != "true" ] && [ "${_gc_is_ghmerge}" = "true" ] && _pe_action="gh-merge"
 
         # Compound mutate-then-push deny (audit F2). The gate evaluates PRE-EXEC
         # state: any evidence below describes the CURRENT HEAD, so a commit/merge/
@@ -266,6 +271,63 @@ if [ "${_gc_is_push}" = "true" ] || [ "${_gc_is_ghmerge}" = "true" ]; then
                 # jq presence is guaranteed by the block guard above.
                 jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
                 exit 0
+            fi
+        fi
+
+        # --- Phase-enforcement C2: DESIGN/PLAN evidence on chain-covered pushes ---
+        # (openspec/changes/phase-enforcement). WARN by default; DENY only when
+        # ~/.claude/skill-config.json .phase_enforcement.outbound == "deny" —
+        # that flip is gated on the replay backtest (<10% false-block), never
+        # hardcoded. Evidence = the same shared predicate as skill-gate.sh.
+        # Scoped to chain-covered work: an ACTIVE chain that includes
+        # brainstorming, OR durable branch-ledger records of DESIGN/PLAN steps
+        # (covers comp-state resets between sessions — codex #6). Ad-hoc
+        # pushes stay ungated (false-block discipline).
+        _pe_covered=false
+        if [ -f "${_COMP_STATE}" ] && jq -e '.chain | index("brainstorming")' "${_COMP_STATE}" >/dev/null 2>&1; then
+            _pe_covered=true
+        elif [ "${_LEDGER_OK}" = "true" ]; then
+            { branch_ledger_has "brainstorming" "${_proot}" || branch_ledger_has "writing-plans" "${_proot}"; } && _pe_covered=true
+        fi
+        if [ "${_PUSHGATE_SKIP}" != "true" ] && command -v jq >/dev/null 2>&1 \
+           && [ "${_pe_covered}" = "true" ]; then
+            if [ -f "${_PLUGIN_ROOT}/hooks/lib/phase-evidence.sh" ]; then
+                # shellcheck source=lib/phase-evidence.sh
+                . "${_PLUGIN_ROOT}/hooks/lib/phase-evidence.sh" 2>/dev/null || true
+            fi
+            if command -v phase_step_satisfied >/dev/null 2>&1; then
+                _pe_missing=""
+                for _pe_step in brainstorming writing-plans; do
+                    if ! phase_step_satisfied "${_SESSION_TOKEN}" "${_pe_step}" "${_proot}"; then
+                        _pe_missing="${_pe_step}"
+                        break
+                    fi
+                done
+                if [ -n "${_pe_missing}" ]; then
+                    _pe_mode="$(jq -r '.phase_enforcement.outbound // "warn"' "${HOME}/.claude/skill-config.json" 2>/dev/null)" || _pe_mode="warn"
+                    # Enum guard (symmetric with skill-gate.sh's C1 guard): only the
+                    # exact strings deny|warn|off are honored; anything else falls to
+                    # warn — the fail-open direction here (a typo can only weaken to
+                    # advisory, never escalate to deny). "off" silences the C2 leg
+                    # entirely, including telemetry.
+                    case "${_pe_mode}" in deny|warn|off) ;; *) _pe_mode="warn" ;; esac
+                    if [ "${_pe_mode}" != "off" ]; then
+                    _PE_MSG="PHASE GATE (outbound): this chain-covered ${_GATE_ACTION} has no evidence for '${_pe_missing}'. Invoke Skill(superpowers:${_pe_missing}) or record an explicit skip (phase_attest ${_pe_missing} \"<reason>\") before shipping."
+                    command -v phase_gate_log >/dev/null 2>&1 && phase_gate_log "outbound" "${_pe_mode}" "${_pe_action}" "${_pe_missing}"
+                    if [ "${_pe_mode}" = "deny" ]; then
+                        jq -n --arg msg "${_PE_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
+                        exit 0
+                    fi
+                    # warn mode: TELEMETRY ONLY (events log + SKILL_EXPLAIN stderr).
+                    # The guard emits at most ONE JSON object per run — every existing
+                    # systemMessage is paired with a deny + exit 0 (verified: no
+                    # warn-and-continue precedent exists). A mid-guard JSON warn that
+                    # falls through would put two objects on stdout when a later
+                    # check denies. Same constraint as the "Soft staleness is NOT
+                    # emitted here" comment at ~line 221.
+                    [ -n "${SKILL_EXPLAIN:-}" ] && printf '[openspec-guard] %s\n' "${_PE_MSG}" >&2
+                    fi
+                fi
             fi
         fi
 
