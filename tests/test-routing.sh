@@ -6903,30 +6903,37 @@ test_trifecta_hint_present_at_design() {
     setup_test_env
     install_registry_v4_with_real_phase_hints
 
+    # Verify the brainstorming skill's precondition contains TRIFECTA and agent-safety-review
+    local brainstorming_precondition
+    brainstorming_precondition="$(jq -r '.skills[] | select(.name == "brainstorming") | .precondition // empty' "${PROJECT_ROOT}/config/default-triggers.json" 2>/dev/null)"
+    assert_contains "brainstorming precondition contains TRIFECTA directive" "TRIFECTA" "${brainstorming_precondition}"
+    assert_contains "brainstorming precondition invokes agent-safety-review" "agent-safety-review" "${brainstorming_precondition}"
+
+    # Verify brainstorming (which carries the TRIFECTA precondition) reaches DESIGN
     local ctx
     ctx="$(extract_context "$(run_hook "build something that reads customer support emails and posts replies to Slack")")"
-    assert_contains "DESIGN carries TRIFECTA CHECK" "TRIFECTA CHECK" "${ctx}"
-    assert_contains "TRIFECTA CHECK names agent-safety-review" "Skill(auto-claude-skills:agent-safety-review)" "${ctx}"
+    assert_contains "brainstorming invoked at DESIGN" "Skill(superpowers:brainstorming)" "${ctx}"
 
     teardown_test_env
 }
 test_trifecta_hint_present_at_design
 
-# TRIFECTA CHECK is always-on at DESIGN even on a generic, keyword-free build prompt
+# TRIFECTA directive is always-on at DESIGN even on a generic, keyword-free build prompt (via precondition)
 test_trifecta_hint_present_on_generic_design() {
     echo "-- test: TRIFECTA CHECK hint present on generic DESIGN prompt --"
     setup_test_env
     install_registry_v4_with_real_phase_hints
 
+    # Verify brainstorming is invoked on generic prompt (carrying its precondition)
     local ctx
     ctx="$(extract_context "$(run_hook "let's add a new feature to the app")")"
-    assert_contains "generic DESIGN still carries TRIFECTA CHECK" "TRIFECTA CHECK" "${ctx}"
+    assert_contains "brainstorming present on generic DESIGN" "Skill(superpowers:brainstorming)" "${ctx}"
 
     teardown_test_env
 }
 test_trifecta_hint_present_on_generic_design
 
-# TRIFECTA CHECK absent outside its gate phases (SHIP)
+# TRIFECTA directive absent outside its gate phases (SHIP) — precondition only active at DESIGN
 test_trifecta_hint_absent_at_ship() {
     echo "-- test: TRIFECTA CHECK hint absent at SHIP --"
     setup_test_env
@@ -6934,7 +6941,7 @@ test_trifecta_hint_absent_at_ship() {
 
     local ctx
     ctx="$(extract_context "$(run_hook "ship the release and merge to main")")"
-    assert_not_contains "SHIP omits TRIFECTA CHECK" "TRIFECTA CHECK" "${ctx}"
+    assert_not_contains "SHIP omits TRIFECTA directive" "TRIFECTA" "${ctx}"
 
     teardown_test_env
 }
