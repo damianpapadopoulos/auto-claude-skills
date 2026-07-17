@@ -114,7 +114,10 @@ gh label create improvement-miner --color 1D76DB \
   --description "improvement-miner approved proposal" 2>/dev/null || true
 # body written to /tmp/mine-proposal.md via the Write tool:
 #   grade + provenance + A/B contract + fingerprint
-gh issue create --title "<proposal title>" --label improvement-miner \
+# title written to /tmp/mine-title.txt via the Write tool (one line) —
+# "$(cat ...)" is safe: substitution output is never re-parsed as shell,
+# unlike pasting title text literally into the quoted string
+gh issue create --title "$(cat /tmp/mine-title.txt)" --label improvement-miner \
   --body-file /tmp/mine-proposal.md
 ```
 
