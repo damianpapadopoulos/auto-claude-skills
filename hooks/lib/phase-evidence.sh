@@ -13,15 +13,27 @@ _PHASE_EVID_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Implementation-slot aliases: one canonical slot (codex #3).
 PHASE_IMPL_ALIASES="executing-plans subagent-driven-development agent-team-execution"
+# DESIGN-slot aliases: brainstorming and design-debate are the same canonical
+# DESIGN slot — evidence for either satisfies a requirement on the other (F4).
+PHASE_DESIGN_ALIASES="brainstorming design-debate"
+# Every alias group _phase_alias_candidates walks. Add new slot-alias groups
+# to this list (both here and in the fallback-registry/default-triggers
+# canary list if the group gates a new lib) rather than special-casing below.
+_PHASE_ALIAS_GROUPS="PHASE_IMPL_ALIASES PHASE_DESIGN_ALIASES"
 
-# _phase_alias_candidates <step> — prints <step> plus its slot siblings.
+# _phase_alias_candidates <step> — prints <step> plus its slot siblings,
+# across every alias group in $_PHASE_ALIAS_GROUPS.
 _phase_alias_candidates() {
-    local step="${1:-}" a is_impl=0
+    local step="${1:-}" a group_var group_members is_member
     printf '%s\n' "$step"
-    for a in $PHASE_IMPL_ALIASES; do [ "$a" = "$step" ] && is_impl=1; done
-    if [ "$is_impl" -eq 1 ]; then
-        for a in $PHASE_IMPL_ALIASES; do [ "$a" != "$step" ] && printf '%s\n' "$a"; done
-    fi
+    for group_var in $_PHASE_ALIAS_GROUPS; do
+        eval "group_members=\"\${${group_var}:-}\""
+        is_member=0
+        for a in $group_members; do [ "$a" = "$step" ] && is_member=1; done
+        if [ "$is_member" -eq 1 ]; then
+            for a in $group_members; do [ "$a" != "$step" ] && printf '%s\n' "$a"; done
+        fi
+    done
 }
 
 # phase_step_satisfied <token> <step> <proj_root> -> 0 if any evidence leg

@@ -153,6 +153,19 @@ find "${HOME}/.claude" -maxdepth 1 \
     ! -name ".skill-phase-attest-${_SESSION_TOKEN}" \
     -exec rm -f {} + 2>/dev/null || true
 
+# Cap the phase-gate telemetry log (F6): every skill-gate.sh / openspec-guard.sh
+# phase-enforcement decision appends one line to this file and it was never
+# bounded, so it can grow unboundedly over a long-lived ~/.claude. Fail-open,
+# numeric-validated line count; tail-to-tmp-then-mv avoids truncating mid-line.
+_PGE_LOG="${HOME}/.claude/.phase-gate-events.log"
+if [ -f "$_PGE_LOG" ]; then
+    _PGE_LINES="$(wc -l < "$_PGE_LOG" 2>/dev/null | tr -d ' ')"
+    [[ "$_PGE_LINES" =~ ^[0-9]+$ ]] || _PGE_LINES=0
+    if [ "$_PGE_LINES" -gt 5000 ]; then
+        tail -n 2500 "$_PGE_LOG" > "${_PGE_LOG}.tmp" 2>/dev/null && mv "${_PGE_LOG}.tmp" "$_PGE_LOG" 2>/dev/null || true
+    fi
+fi
+
 # -----------------------------------------------------------------
 # Step 2: Check jq availability
 # -----------------------------------------------------------------

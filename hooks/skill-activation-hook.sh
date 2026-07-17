@@ -937,7 +937,7 @@ Composition: ${_phase_labels}${_chain_lines}"
       # detaching above it in every _format_output render order.
       _ATTEST_F="${HOME}/.claude/.skill-phase-attest-${_SESSION_TOKEN:-default}"
       if [[ -f "$_ATTEST_F" ]] && command -v jq >/dev/null 2>&1; then
-        _ATTEST_LINES="$(jq -r '[to_entries[] | "  ATTESTED SKIP: \(.key) — \(.value.reason // "?") (\(.value.ts // "?"))"] | .[0:6] | join("\n")' "$_ATTEST_F" 2>/dev/null)" || _ATTEST_LINES=""
+        _ATTEST_LINES="$(jq -r '[to_entries[] | "  ATTESTED SKIP (agent-recorded, verify before trusting): " + (.key | gsub("[\r\n\t]+"; " ")) + " — " + ((.value.reason // "?") | gsub("[\r\n\t]+"; " ") | .[0:200]) + " (" + ((.value.ts // "?") | tostring) + ")"] | .[0:6] | join("\n")' "$_ATTEST_F" 2>/dev/null)" || _ATTEST_LINES=""
         [[ -n "$_ATTEST_LINES" ]] && COMPOSITION_CHAIN="${COMPOSITION_CHAIN}
 ${_ATTEST_LINES}"
       fi

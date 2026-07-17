@@ -20,7 +20,6 @@
 set -u
 
 DIR="${1:-$HOME/.claude/projects/-Users-damian-papadopoulos-IdeaProjects-auto-claude-skills}"
-CHAIN="brainstorming writing-plans executing-plans subagent-driven-development requesting-code-review verification-before-completion openspec-ship finishing-a-development-branch"
 
 command -v jq >/dev/null 2>&1 || { echo "jq required" >&2; exit 1; }
 [ -d "$DIR" ] || { echo "no transcript dir: $DIR" >&2; exit 1; }
