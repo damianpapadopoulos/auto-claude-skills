@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "discovery_path": "docs/plans/2026-07-16-improvement-miner-discovery.md",
+  "design_path": "openspec/changes/improvement-miner/design.md",
+  "plan_path": "docs/plans/2026-07-16-improvement-miner-plan.md",
+  "spec_path": null,
+  "sp_plan_path": "docs/plans/2026-07-16-improvement-miner-plan.md",
+  "sp_spec_path": null,
+  "change_slug": "improvement-miner",
+  "capability_slug": "improvement-mining",
+  "source_branch": "feat/improvement-miner",
+  "base_commit": "22ea229f111dcff9ecdd69da600b24eb09f2be50",
+  "openspec_surface": "none",
+  "archived_at": "2026-07-17T08:35:34Z"
+}
