@@ -1,0 +1,17 @@
+# Regex fixtures for skill: improvement-miner
+# Format: one directive per non-empty, non-comment line.
+#   MATCH: <prompt>     — regex from config/default-triggers.json must match
+#   NO_MATCH: <prompt>  — regex must NOT match
+# NO_MATCH decoys pin the LEARN boundary vs outcome-review (borrowed
+# verbatim from tests/fixtures/routing/outcome-review.txt) and general
+# mining/mineral prose.
+
+MATCH: mine improvements
+MATCH: run the improvement miner
+MATCH: mine the repo for improvement evidence
+MATCH: time for some improvement mining
+
+NO_MATCH: how did the experiment perform last week
+NO_MATCH: review the cohort retention numbers
+NO_MATCH: the dataset describes mineral improvements in soil samples
+NO_MATCH: what did we learn from the incident
