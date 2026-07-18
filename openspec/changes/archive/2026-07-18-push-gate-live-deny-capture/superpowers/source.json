@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "discovery_path": null,
+  "design_path": null,
+  "plan_path": null,
+  "spec_path": null,
+  "sp_plan_path": null,
+  "sp_spec_path": null,
+  "change_slug": "push-gate-live-deny-capture",
+  "capability_slug": null,
+  "source_branch": "bugfix/push-gate-live-deny-capture",
+  "base_commit": "052e80ae540d370baa2e916f5624b045ede10e29",
+  "openspec_surface": "none",
+  "archived_at": "2026-07-18T10:53:07Z"
+}

@@ -135,3 +135,23 @@ transcript, session token, guard path, plugin root, and the raw stdin `_INPUT`.
   (`tests/test-push-gate-*.sh`).
 - Capture script is diagnostic-only → **not** added to `_GATE_ENFORCE_LIBS`;
   a test asserts it stays off the canary manifest.
+
+## Implementation Notes (synced at ship time)
+
+Three review-driven deviations from the upfront design (3-reviewer pass —
+code-reviewer subagent, silent-failure-hunter, Codex second-opinion):
+
+- **Replay is now a POSITIVE three-way classification, not raw output.** The
+  upfront design logged raw `ondisk_replay` and read `empty = allow`. All three
+  reviewers flagged that the replayed guard is itself fail-open (`trap 'exit 0'
+  ERR`), so an empty replay conflated genuine-allow with crash/early-exit. Added
+  the `__PGC_EVALUATED__` sentinel (guard, under `PUSH_GATE_CAPTURE_REPLAY=1`)
+  and `ondisk_replay_decision` ∈ {deny, allow, incomplete} + `replay_stderr`.
+- **Raw command dropped by default.** The upfront design logged a
+  `command_redacted` by default; reviewers showed shell text can't be robustly
+  de-secreted (inline `-c http.extraHeader`, quoted suffixes). Default now logs
+  only `command_sha` + `command_len` + coarse `command_label`; full best-effort
+  text is opt-in via `PUSH_GATE_CAPTURE_FULL_CMD=1`.
+- **Log secured `0600` before the first write** (was chmod-after-append) and
+  `_DECISION` moved after the `jq` deny emit (a failed emit now stays `allow`);
+  `phase_gate_log` suppressed during replay.
