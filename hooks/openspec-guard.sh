@@ -123,6 +123,40 @@ if [ "${_gc_is_push}" = "true" ] || [ "${_gc_is_ghmerge}" = "true" ]; then
         _pe_action="push"
         [ "${_gc_is_push}" != "true" ] && [ "${_gc_is_ghmerge}" = "true" ] && _pe_action="gh-merge"
 
+        # --- Diagnostic capture (issue #127) — OFF the decision path -------
+        # Records which file ran + the live decision; on deny, a true on-disk
+        # replay. NEVER sources capture code (a source-time failure could trip
+        # the fail-open ERR trap and skip enforcement) — it fires an external
+        # subprocess ONLY from a hardened EXIT trap. PUSH_GATE_CAPTURE_DISABLE=1
+        # (set by the replay) prevents re-arming (recursion guard).
+        _DECISION="allow"
+        # Positive "reached the decision point" sentinel for the capture replay
+        # (issue #127). The on-disk replay re-runs this guard, which is itself
+        # fail-open (`trap 'exit 0' ERR`) — so an empty replay stdout cannot tell
+        # "genuine allow" from "crashed / early-exit before this block". Under the
+        # replay flag ONLY (never in live operation → no stdout impact), print a
+        # sentinel here so the capture script can classify allow vs incomplete.
+        [ "${PUSH_GATE_CAPTURE_REPLAY:-}" = "1" ] && printf '__PGC_EVALUATED__\n'
+        if [ "${PUSH_GATE_CAPTURE_DISABLE:-}" != "1" ]; then
+            _PG_CAPTURE_ACTIVE=true
+            _pg_capture_on_exit() {
+                trap - ERR    # a failing capture cmd must NOT re-fire `exit 0` ERR
+                trap - EXIT
+                [ "${_PG_CAPTURE_ACTIVE:-false}" = "true" ] || return 0
+                (
+                    exec </dev/null >/dev/null 2>&1   # never leak a byte to stdout
+                    PGC_DECISION="${_DECISION:-allow}" PGC_ACTION="${_pe_action:-push}" \
+                    PGC_COMMAND="${_COMMAND:-}" PGC_TRANSCRIPT="${_TRANSCRIPT:-}" \
+                    PGC_SESSION_TOKEN="${_SESSION_TOKEN:-}" \
+                    PGC_GUARD_PATH="${BASH_SOURCE:-$0}" \
+                    PGC_PLUGIN_ROOT="${_PLUGIN_ROOT:-}" PGC_INPUT="${_INPUT:-}" \
+                    "${_PLUGIN_ROOT}/scripts/push-gate-capture.sh"
+                ) || true
+                return 0
+            }
+            trap '_pg_capture_on_exit' EXIT
+        fi
+
         # Compound mutate-then-push deny (audit F2). The gate evaluates PRE-EXEC
         # state: any evidence below describes the CURRENT HEAD, so a commit/merge/
         # rebase created inline in the same command would push unverified content
@@ -136,6 +170,7 @@ if [ "${_gc_is_push}" = "true" ] || [ "${_gc_is_ghmerge}" = "true" ]; then
            && command_git_mutate_before_push "${_COMMAND}"; then
             _MSG="PUSH GATE: this command mutates history (commit/merge/rebase/cherry-pick/revert/am) and pushes in ONE command. The gate evaluates evidence for the CURRENT commit, so the pushed result would be unverified. Run the mutation first, re-run verification if content changed, then run git push as a separate command."
             jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
+            _DECISION="deny:mutate-then-push"
             exit 0
         fi
         _COMP_STATE="${HOME}/.claude/.skill-composition-state-${_SESSION_TOKEN}"
@@ -192,6 +227,7 @@ if [ "${_gc_is_push}" = "true" ] || [ "${_gc_is_ghmerge}" = "true" ]; then
             if [ "${_review_in_chain}" = "true" ] && [ "${_review_completed}" = "false" ]; then
                 _MSG="PUSH GATE — Expected: REVIEW → VERIFY → SHIP completed before push. Actual: requesting-code-review has not run on this chain. Do now: invoke Skill(superpowers:requesting-code-review), then retry the denied command."
                 jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
+                _DECISION="deny:chain-review"
                 exit 0
             fi
 
@@ -204,6 +240,7 @@ if [ "${_gc_is_push}" = "true" ] || [ "${_gc_is_ghmerge}" = "true" ]; then
             if [ "${_verif_in_chain}" = "true" ] && [ "${_verif_completed}" = "false" ]; then
                 _MSG="PUSH GATE — Expected: verification-before-completion completed before push. Actual: it has not run on this active chain. Do now: invoke Skill(superpowers:verification-before-completion), then retry the denied command."
                 jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
+                _DECISION="deny:chain-verify"
                 exit 0
             fi
 
@@ -220,6 +257,7 @@ if [ "${_gc_is_push}" = "true" ] || [ "${_gc_is_ghmerge}" = "true" ]; then
                 _gates="$(verdict_failing_gates "${_VERDICT_TOKEN}")" || true
                 _MSG="PUSH GATE: verification-before-completion is recorded, but the verification verdict at HEAD reports failing gate(s): ${_gates}. Fix and re-run Skill(auto-claude-skills:project-verification) before retrying."
                 jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
+                _DECISION="deny:verify-hardening"
                 exit 0
             fi
 
@@ -270,6 +308,7 @@ if [ "${_gc_is_push}" = "true" ] || [ "${_gc_is_ghmerge}" = "true" ]; then
                 _MSG="PUSH GATE (fail-closed): ${_GATE_ACTION} requires ${_need} to have run, but no record exists for it on this branch. Invoke the missing Skill(s) and let them complete, then retry. To bypass intentionally: run the command from your own terminal, or relaunch Claude Code with ACSM_SKIP_PUSH_GATE=1 set in its environment."
                 # jq presence is guaranteed by the block guard above.
                 jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
+                _DECISION="deny:global-failclosed"
                 exit 0
             fi
         fi
@@ -313,9 +352,10 @@ if [ "${_gc_is_push}" = "true" ] || [ "${_gc_is_ghmerge}" = "true" ]; then
                     case "${_pe_mode}" in deny|warn|off) ;; *) _pe_mode="warn" ;; esac
                     if [ "${_pe_mode}" != "off" ]; then
                     _PE_MSG="PHASE GATE (outbound): this chain-covered ${_GATE_ACTION} has no evidence for '${_pe_missing}'. Invoke Skill(superpowers:${_pe_missing}) or record an explicit skip (phase_attest ${_pe_missing} \"<reason>\") before shipping."
-                    command -v phase_gate_log >/dev/null 2>&1 && phase_gate_log "outbound" "${_pe_mode}" "${_pe_action}" "${_pe_missing}"
+                    [ "${PUSH_GATE_CAPTURE_REPLAY:-}" != "1" ] && command -v phase_gate_log >/dev/null 2>&1 && phase_gate_log "outbound" "${_pe_mode}" "${_pe_action}" "${_pe_missing}"
                     if [ "${_pe_mode}" = "deny" ]; then
                         jq -n --arg msg "${_PE_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
+                        _DECISION="deny:phase-enforcement"
                         exit 0
                     fi
                     # warn mode: TELEMETRY ONLY (events log + SKILL_EXPLAIN stderr).
@@ -356,6 +396,7 @@ if [ "${_gc_is_push}" = "true" ] || [ "${_gc_is_ghmerge}" = "true" ]; then
                     # routing files CHANGED after it (an unverified routing delta) — deny.
                     _MSG="PUSH GATE (routing governance): this push modifies routing files (skills/, config/, or hooks/) but no clean verification verdict covering these changes exists. Run Skill(auto-claude-skills:project-verification) until it reports a clean verdict, then push."
                     jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
+                    _DECISION="deny:routing-governance"
                     exit 0
                 fi
             fi
