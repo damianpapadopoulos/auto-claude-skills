@@ -93,6 +93,11 @@ assert_equals "disabled capture writes nothing" "0" "$(wc -l < "$GLOG" 2>/dev/nu
 _grun 'git status' '' >/dev/null
 assert_equals "non-push writes nothing" "0" "$(wc -l < "$GLOG" 2>/dev/null | tr -d ' ')"
 
+# (10) diagnostic-only: capture script MUST NOT be on the canary manifest.
+_hook="${PROJECT_ROOT}/hooks/session-start-hook.sh"
+assert_not_contains "capture excluded from _GATE_ENFORCE_LIBS canary" \
+  "push-gate-capture" "$(grep '_GATE_ENFORCE_LIBS=' "$_hook")"
+
 export HOME="$_OLDHOME"
 print_summary
 exit $?
