@@ -117,3 +117,22 @@ Provenance: issue #131 (fix directions), PR #130 live repro, memory
 5. **No over-acceptance (foreign session, unrelated skills)** — Given
    invocation evidence containing only non-gating skills, when the guard
    evaluates `git push`, then the fail-closed deny stands.
+
+## Implementation Notes (synced at ship time)
+
+All five acceptance scenarios implemented as designed
+(`tests/test-push-gate-status-bridge.sh`, 22 assertions). Review-driven
+refinements beyond the upfront design:
+
+- D2: `@{upstream}` moved to LAST in the mainline-base ref list — for a
+  feature branch it is normally `origin/<itself>` (`git push -u`), and
+  consulting it before mainline refs set the base to the branch's own pushed
+  tip, excluding legitimately branch-local commits (reviewer-reproduced
+  false-block; pinned by U7). The bridge also prints the matched SHA so the
+  guard's advisory can name it.
+- D3: acknowledged-divergence paragraph added (the invocation leg is
+  session-scoped, not branch-bound; never resets within a session); jq
+  `type=="array"` guard added (string `index()` is substring search);
+  SHA-binding follow-up filed as issue #133.
+- D4: widened to cover invocation-leg acceptances too — every non-primary
+  acceptance is advisory-noted.
