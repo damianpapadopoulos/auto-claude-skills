@@ -62,20 +62,51 @@ branch_ledger_sha() {
     cut -d' ' -f1 < "${dir}/${milestone}" 2>/dev/null || true
 }
 
+# _branch_ledger_mainline_base <proj_root> — prints the merge-base of HEAD
+# and the first resolvable mainline ref; prints nothing / returns 1 if none
+# resolves. Mainline names first; '@{upstream}' LAST — for a feature branch
+# the upstream is normally origin/<itself> (git push -u), so consulting it
+# before mainline refs would set base to the branch's own pushed tip and
+# exclude legitimately branch-local commits (review finding, U7).
+_branch_ledger_mainline_base() {
+    local proj_root="${1:-}" ref base=""
+    [ -z "$proj_root" ] && return 1
+    for ref in origin/HEAD origin/main main origin/master master '@{upstream}'; do
+        base="$(git -C "$proj_root" merge-base HEAD "$ref" 2>/dev/null)" && [ -n "$base" ] && { printf '%s' "$base"; return 0; }
+        base=""
+    done
+    return 1
+}
+
+# branch_ledger_sha_is_branch_local <sha> <proj_root> <head> <base> — 0 iff
+# <sha> is bound to THIS branch: sha == head, or an ancestor of head NOT
+# reachable from the mainline merge-base <base> (a commit of the branch's
+# local segment). Bare ancestor-of-head would over-accept mainline evidence
+# (an old main commit is an ancestor of every feature branch), so branch-
+# locality is required; empty <base> (no mainline resolvable) => exact-head
+# only. Extracted from the bridge scan (issue #133) so the guard's
+# invocation-evidence leg applies the SAME binding rule to sidecar records.
+branch_ledger_sha_is_branch_local() {
+    local sha="${1:-}" proj_root="${2:-}" head="${3:-}" base="${4:-}"
+    [ -n "$sha" ] && [ -n "$head" ] || return 1
+    [ "$sha" = "$head" ] && return 0
+    [ -n "$base" ] || return 1                        # no mainline base => exact-head only
+    [ "$sha" = "$base" ] && return 1                  # the base itself is mainline
+    git -C "$proj_root" merge-base --is-ancestor "$sha" "$head" 2>/dev/null || return 1
+    git -C "$proj_root" merge-base --is-ancestor "$sha" "$base" 2>/dev/null && return 1
+    return 0
+}
+
 # branch_ledger_bridge_has <milestone> <proj_root> — cross-location read
 # (issue #131): 0 iff some SIBLING ledger dir holds <milestone> whose recorded
-# SHA is bound to THIS branch — sha == HEAD, or an ancestor of HEAD that is
-# NOT reachable from the mainline merge-base (a commit of the branch's local
-# segment). Bare ancestor-of-HEAD would over-accept mainline evidence (an old
-# main commit is an ancestor of every feature branch), so branch-locality is
-# required; if no mainline base resolves, only sha == HEAD bridges. Keys are
+# SHA is branch-bound per branch_ledger_sha_is_branch_local above. Keys are
 # opaque hashes, so the scan needn't know which (repo, branch) a sibling dir
 # was for — the SHA binding does all the work (this also covers
 # remote-URL-variant key splits). Only called on the gate's would-deny path.
 # On success prints the matched SHA (for the caller's advisory).
 # Fail-open as "no bridge": the bridge can rescue, never deny.
 branch_ledger_bridge_has() {
-    local milestone="${1:-}" proj_root="${2:-}" own="" head base="" ref d f sha
+    local milestone="${1:-}" proj_root="${2:-}" own="" head base="" d f sha
     [ -z "$milestone" ] && return 1
     case "$milestone" in */*|*..*) return 1 ;; esac   # path-safe: milestone is a filename
     [ -z "$proj_root" ] && proj_root="$(git rev-parse --show-toplevel 2>/dev/null)"
@@ -83,14 +114,7 @@ branch_ledger_bridge_has() {
     head="$(git -C "$proj_root" rev-parse HEAD 2>/dev/null)" || return 1
     [ -z "$head" ] && return 1
     own="$(branch_ledger_dir "$proj_root")" || own=""
-    # Mainline names first; '@{upstream}' LAST — for a feature branch the
-    # upstream is normally origin/<itself> (git push -u), so consulting it
-    # before mainline refs would set base to the branch's own pushed tip and
-    # exclude legitimately branch-local commits (review finding, U7).
-    for ref in origin/HEAD origin/main main origin/master master '@{upstream}'; do
-        base="$(git -C "$proj_root" merge-base HEAD "$ref" 2>/dev/null)" && [ -n "$base" ] && break
-        base=""
-    done
+    base="$(_branch_ledger_mainline_base "$proj_root")" || base=""
     for d in "${HOME}/.claude/.skill-branch-ledger-"*; do
         [ -d "$d" ] || continue
         [ -n "$own" ] && [ "$d" = "$own" ] && continue
@@ -98,11 +122,7 @@ branch_ledger_bridge_has() {
         [ -f "$f" ] || continue
         sha="$(cut -d' ' -f1 < "$f" 2>/dev/null)" || continue
         [ -n "$sha" ] || continue
-        [ "$sha" = "$head" ] && { printf '%s' "$sha"; return 0; }
-        [ -n "$base" ] || continue                    # no mainline base => exact-HEAD only
-        [ "$sha" = "$base" ] && continue              # the base itself is mainline
-        git -C "$proj_root" merge-base --is-ancestor "$sha" "$head" 2>/dev/null || continue
-        git -C "$proj_root" merge-base --is-ancestor "$sha" "$base" 2>/dev/null && continue
+        branch_ledger_sha_is_branch_local "$sha" "$proj_root" "$head" "$base" || continue
         printf '%s' "$sha"
         return 0
     done

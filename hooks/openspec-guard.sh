@@ -244,11 +244,54 @@ if [ "${_gc_is_push}" = "true" ] || [ "${_gc_is_ghmerge}" = "true" ]; then
             esac
         }
         # _invoc_ok MILESTONE — _invoc_has + advisory note: this leg is
-        # session-scoped, not branch-bound (design D3 accepts the widening),
-        # so its acceptance is surfaced like the bridge's, never silent.
+        # session-scoped (design D3 accepts the widening), so its acceptance
+        # is surfaced like the bridge's, never silent. The advisory is
+        # appended ONCE per milestone even though both the chain block and
+        # the global gate consult this leg (issue #133 dedup; acceptance
+        # itself stays idempotent). Soft SHA-binding (issue #133): when the
+        # completion hook's sidecar holds a "<skill> <sha>" record for the
+        # milestone (or a review-embedding proxy — PAIRED with _invoc_has's
+        # case list) whose SHA is branch-bound by the SAME rule as the
+        # ledger bridge, the advisory upgrades to name the bound SHA.
+        # Binding NEVER gates acceptance — a hard SHA requirement would
+        # re-break the #130 repro, where the recording cwd's SHA is
+        # unrelated to the push branch. Fail-open: lib/file/SHA problems
+        # just leave the unbound advisory.
+        _INVOC_NOTED=""
+        _INVOC_BASE=""
+        _INVOC_BASE_RESOLVED=false
         _invoc_ok() {
+            local _sf="${HOME}/.claude/.skill-invocation-evidence-sha-${_SESSION_TOKEN}"
+            local _names="$1" _n _rskill _rsha _rest _bound=""
             _invoc_has "$1" || return 1
-            _STALE_MSG="${_STALE_MSG}${_STALE_MSG:+; }$1 accepted via session-local invocation evidence (real Skill return this session; not branch-bound — issue #131)."
+            case " ${_INVOC_NOTED} " in *" $1 "*) return 0 ;; esac
+            _INVOC_NOTED="${_INVOC_NOTED} $1"
+            case "$1" in requesting-code-review)
+                _names="$1 subagent-driven-development agent-team-execution agent-team-review" ;;
+            esac
+            if [ -f "${_sf}" ] && [ "${_LEDGER_OK}" = "true" ] && [ -n "${_HEAD_SHA}" ] \
+               && command -v branch_ledger_sha_is_branch_local >/dev/null 2>&1 \
+               && command -v _branch_ledger_mainline_base >/dev/null 2>&1; then
+                if [ "${_INVOC_BASE_RESOLVED}" != "true" ]; then
+                    _INVOC_BASE_RESOLVED=true
+                    _INVOC_BASE="$(_branch_ledger_mainline_base "${_proot}")" || _INVOC_BASE=""
+                fi
+                for _n in ${_names}; do
+                    while IFS=' ' read -r _rskill _rsha _rest; do
+                        [ "${_rskill}" = "${_n}" ] || continue
+                        [ -n "${_rsha}" ] || continue
+                        if branch_ledger_sha_is_branch_local "${_rsha}" "${_proot}" "${_HEAD_SHA}" "${_INVOC_BASE}"; then
+                            _bound="${_rsha}"
+                            break 2
+                        fi
+                    done < "${_sf}"
+                done
+            fi
+            if [ -n "${_bound}" ]; then
+                _STALE_MSG="${_STALE_MSG}${_STALE_MSG:+; }$1 accepted via session-local invocation evidence recorded at ${_bound} on this branch (real Skill return this session; SHA-bound — issue #133)."
+            else
+                _STALE_MSG="${_STALE_MSG}${_STALE_MSG:+; }$1 accepted via session-local invocation evidence (real Skill return this session; not branch-bound — issue #131)."
+            fi
             return 0
         }
         # _bridge_has MILESTONE — cross-location branch-ledger read (issue

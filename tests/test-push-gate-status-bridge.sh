@@ -14,6 +14,16 @@
 #      the recorded SHA is HEAD or a branch-local ancestor of HEAD — mainline
 #      or unrelated SHAs never bridge (no over-acceptance).
 #
+# Issue #133 follow-up (soft SHA-binding + advisory dedup), also under test:
+#   4. skill-completion-hook.sh records "<skill> <sha>" to the sidecar
+#      .skill-invocation-evidence-sha-<token> (the main JSON string array is
+#      shared with phase-evidence.sh and stays format-frozen).
+#   5. The guard's invocation-evidence leg PREFERS branch-bound sidecar
+#      records (same binding rule as the ledger bridge) but NEVER requires
+#      them — a hard SHA requirement would re-break the #130 repro.
+#   6. The invocation-evidence advisory is appended once per milestone even
+#      when both the chain block and the global gate consult the leg.
+#
 # Bash 3.2 compatible. Sources test-helpers.sh.
 set -u
 
@@ -311,6 +321,205 @@ printf '%s' '["requesting-code-review","verification-before-completion"]' \
     > "${HOME}/.claude/.skill-invocation-evidence-${_TOK}"
 G7="$(run_guard_in "${REPO}")"
 assert_not_contains "G7: chain block honors same-token invocation evidence" '"deny"' "${G7:-}"
+teardown_test_env
+
+# ---------------------------------------------------------------------------
+# U8: branch_ledger_sha_is_branch_local — extracted binding predicate
+# (issue #133). Same rules the bridge enforces, callable per-SHA so the
+# guard's invocation leg can reuse it without duplicating base resolution.
+# ---------------------------------------------------------------------------
+echo "--- U8: branch_ledger_sha_is_branch_local predicate ---"
+setup_test_env
+mkdir -p "${HOME}/.claude"
+REPO="${TEST_TMPDIR}/repo"
+_mk_repo "${REPO}"
+BASE_SHA="$(git -C "${REPO}" rev-parse main)"
+HEAD_SHA="$(git -C "${REPO}" rev-parse feature/x)"
+ANC_SHA="$(git -C "${REPO}" rev-parse feature/x~1)"
+# shellcheck disable=SC1090
+. "${LEDGER_LIB}"
+if ! command -v branch_ledger_sha_is_branch_local >/dev/null 2>&1; then
+    _record_fail "U8a: branch_ledger_sha_is_branch_local exists in branch-ledger.sh" "function not defined"
+else
+    _record_pass "U8a: branch_ledger_sha_is_branch_local exists in branch-ledger.sh"
+    _MB="$(_branch_ledger_mainline_base "${REPO}")" || _MB=""
+    if branch_ledger_sha_is_branch_local "${HEAD_SHA}" "${REPO}" "${HEAD_SHA}" "${_MB}"; then
+        _record_pass "U8b: exact HEAD is branch-local"
+    else
+        _record_fail "U8b: exact HEAD is branch-local" "returned non-zero"
+    fi
+    if branch_ledger_sha_is_branch_local "${ANC_SHA}" "${REPO}" "${HEAD_SHA}" "${_MB}"; then
+        _record_pass "U8c: branch-local NON-HEAD ancestor is branch-local"
+    else
+        _record_fail "U8c: branch-local NON-HEAD ancestor is branch-local" "returned non-zero"
+    fi
+    if branch_ledger_sha_is_branch_local "${BASE_SHA}" "${REPO}" "${HEAD_SHA}" "${_MB}"; then
+        _record_fail "U8d: mainline-base SHA is NOT branch-local" "over-accepted mainline SHA"
+    else
+        _record_pass "U8d: mainline-base SHA is NOT branch-local"
+    fi
+    if branch_ledger_sha_is_branch_local "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" "${REPO}" "${HEAD_SHA}" "${_MB}"; then
+        _record_fail "U8e: unknown SHA is NOT branch-local" "over-accepted unrelated SHA"
+    else
+        _record_pass "U8e: unknown SHA is NOT branch-local"
+    fi
+    # Empty base (no mainline resolvable) => exact-HEAD only, like the bridge.
+    if branch_ledger_sha_is_branch_local "${ANC_SHA}" "${REPO}" "${HEAD_SHA}" ""; then
+        _record_fail "U8f: empty base — ancestor NOT accepted (exact-HEAD only)" "over-accepted"
+    else
+        _record_pass "U8f: empty base — ancestor NOT accepted (exact-HEAD only)"
+    fi
+    if branch_ledger_sha_is_branch_local "${HEAD_SHA}" "${REPO}" "${HEAD_SHA}" ""; then
+        _record_pass "U8g: empty base — exact HEAD still accepted"
+    else
+        _record_fail "U8g: empty base — exact HEAD still accepted" "returned non-zero"
+    fi
+fi
+teardown_test_env
+
+# ---------------------------------------------------------------------------
+# H3: completion hook writes the "<skill> <sha>" sidecar (issue #133)
+# ---------------------------------------------------------------------------
+echo "--- H3: sidecar SHA record write ---"
+setup_test_env
+mkdir -p "${HOME}/.claude"
+REPO="${TEST_TMPDIR}/repo"
+_mk_repo "${REPO}"
+HEAD_SHA="$(git -C "${REPO}" rev-parse HEAD)"
+( cd "${REPO}" && printf '%s' '{"transcript_path":"/tmp/proj/conv-X.jsonl","tool_input":{"skill":"superpowers:requesting-code-review"},"tool_response":{"content":"ok"}}' | \
+    CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "${COMPLETION}" >/dev/null 2>&1 ) || true
+_SIDECAR="${HOME}/.claude/.skill-invocation-evidence-sha-${_TOK}"
+if [ -f "${_SIDECAR}" ] && grep -qxF "requesting-code-review ${HEAD_SHA}" "${_SIDECAR}" 2>/dev/null; then
+    _record_pass "H3a: sidecar records '<skill> <sha>' at the recording cwd's HEAD"
+else
+    _record_fail "H3a: sidecar records '<skill> <sha>' at the recording cwd's HEAD" \
+        "no 'requesting-code-review ${HEAD_SHA}' line in ${_SIDECAR}"
+fi
+# The main evidence file must stay a plain JSON string array (shared with
+# phase-evidence.sh) — the sidecar must never change its format.
+if jq -e 'type=="array" and (map(type=="string") | all)' \
+    "${HOME}/.claude/.skill-invocation-evidence-${_TOK}" >/dev/null 2>&1; then
+    _record_pass "H3b: main evidence file format unchanged (plain string array)"
+else
+    _record_fail "H3b: main evidence file format unchanged (plain string array)" \
+        "main file is no longer a plain string array"
+fi
+# Re-running the hook at the same HEAD must not duplicate the sidecar line.
+( cd "${REPO}" && printf '%s' '{"transcript_path":"/tmp/proj/conv-X.jsonl","tool_input":{"skill":"superpowers:requesting-code-review"},"tool_response":{"content":"ok"}}' | \
+    CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" /bin/bash "${COMPLETION}" >/dev/null 2>&1 ) || true
+_N="$(grep -cxF "requesting-code-review ${HEAD_SHA}" "${_SIDECAR}" 2>/dev/null || printf '0')"
+if [ "${_N}" = "1" ]; then
+    _record_pass "H3c: identical '<skill> <sha>' pair not duplicated"
+else
+    _record_fail "H3c: identical '<skill> <sha>' pair not duplicated" "count=${_N}, want 1"
+fi
+teardown_test_env
+
+# ---------------------------------------------------------------------------
+# D: advisory dedup — chain block + global gate both consult the invocation
+# leg; the advisory must appear ONCE per milestone (PR #134 review disposition)
+# ---------------------------------------------------------------------------
+echo "--- D: invocation-evidence advisory dedup ---"
+setup_test_env
+mkdir -p "${HOME}/.claude"
+REPO="${TEST_TMPDIR}/repo"
+_mk_repo "${REPO}"
+jq -n '{chain:["requesting-code-review","verification-before-completion"],completed:[],current_index:0}' \
+    > "${HOME}/.claude/.skill-composition-state-${_TOK}"
+printf '%s' '["requesting-code-review","verification-before-completion"]' \
+    > "${HOME}/.claude/.skill-invocation-evidence-${_TOK}"
+D1="$(run_guard_in "${REPO}")"
+assert_not_contains "D1a: chain + global gate both satisfied (allow)" '"deny"' "${D1:-}"
+_N="$(printf '%s' "${D1:-}" | grep -o 'requesting-code-review accepted via session-local invocation evidence' | wc -l | tr -d '[:space:]')"
+if [ "${_N}" = "1" ]; then
+    _record_pass "D1b: REVIEW invocation advisory appears exactly once"
+else
+    _record_fail "D1b: REVIEW invocation advisory appears exactly once" "count=${_N}, want 1"
+fi
+_N="$(printf '%s' "${D1:-}" | grep -o 'verification-before-completion accepted via session-local invocation evidence' | wc -l | tr -d '[:space:]')"
+if [ "${_N}" = "1" ]; then
+    _record_pass "D1c: VERIFY invocation advisory appears exactly once"
+else
+    _record_fail "D1c: VERIFY invocation advisory appears exactly once" "count=${_N}, want 1"
+fi
+teardown_test_env
+
+# ---------------------------------------------------------------------------
+# G8-G10: soft SHA-binding at the guard (issue #133)
+# ---------------------------------------------------------------------------
+echo "--- G8: bound sidecar record upgrades the advisory ---"
+setup_test_env
+mkdir -p "${HOME}/.claude"
+REPO="${TEST_TMPDIR}/repo"
+_mk_repo "${REPO}"
+LOCAL_SHA="$(git -C "${REPO}" rev-parse feature/x)"
+printf '%s' '["requesting-code-review","verification-before-completion"]' \
+    > "${HOME}/.claude/.skill-invocation-evidence-${_TOK}"
+printf 'requesting-code-review %s\nverification-before-completion %s\n' "${LOCAL_SHA}" "${LOCAL_SHA}" \
+    > "${HOME}/.claude/.skill-invocation-evidence-sha-${_TOK}"
+G8="$(run_guard_in "${REPO}")"
+assert_not_contains "G8a: bound invocation evidence satisfies the gate" '"deny"' "${G8:-}"
+assert_contains "G8b: advisory says the record is branch-bound" 'SHA-bound' "${G8:-<empty>}"
+assert_contains "G8c: advisory names the recorded SHA" "${LOCAL_SHA}" "${G8:-<empty>}"
+assert_not_contains "G8d: unbound-advisory text is replaced, not appended" 'not branch-bound' "${G8:-}"
+teardown_test_env
+
+# G9: sidecar SHA from the mainline base (a different-branch recording) must
+# NOT block — binding is SOFT: acceptance stands, the unbound advisory stays.
+# A hard SHA requirement here would re-break the #130 repro (the recording
+# cwd's SHA is unrelated to the push branch when session cwd != worktree).
+# The sidecar also carries garbage lines (extra fields, missing SHA, unknown
+# skill) — the reader must tolerate them without denying or crashing.
+echo "--- G9: unbound sidecar record still accepted (soft binding) ---"
+setup_test_env
+mkdir -p "${HOME}/.claude"
+REPO="${TEST_TMPDIR}/repo"
+_mk_repo "${REPO}"
+BASE_SHA="$(git -C "${REPO}" rev-parse main)"
+printf '%s' '["requesting-code-review","verification-before-completion"]' \
+    > "${HOME}/.claude/.skill-invocation-evidence-${_TOK}"
+{
+    printf 'not json at all\n'
+    printf 'requesting-code-review\n'
+    printf 'requesting-code-review %s trailing junk fields\n' "${BASE_SHA}"
+    printf 'verification-before-completion %s\n' "${BASE_SHA}"
+} > "${HOME}/.claude/.skill-invocation-evidence-sha-${_TOK}"
+G9="$(run_guard_in "${REPO}")"
+assert_not_contains "G9a: unbound sidecar SHA does NOT deny (soft binding)" '"deny"' "${G9:-}"
+assert_contains "G9b: unbound acceptance keeps the not-branch-bound advisory" 'not branch-bound' "${G9:-<empty>}"
+teardown_test_env
+
+# G11: red-team pin of the CRITICAL invariant — the sidecar alone (even with
+# a perfectly branch-bound SHA) must NEVER satisfy the gate. Acceptance
+# authority is the main string array only; the sidecar merely annotates.
+echo "--- G11: sidecar alone does not satisfy the gate ---"
+setup_test_env
+mkdir -p "${HOME}/.claude"
+REPO="${TEST_TMPDIR}/repo"
+_mk_repo "${REPO}"
+LOCAL_SHA="$(git -C "${REPO}" rev-parse feature/x)"
+# NO main invocation-evidence array — only the sidecar, bound to HEAD.
+printf 'requesting-code-review %s\nverification-before-completion %s\n' "${LOCAL_SHA}" "${LOCAL_SHA}" \
+    > "${HOME}/.claude/.skill-invocation-evidence-sha-${_TOK}"
+G11="$(run_guard_in "${REPO}")"
+assert_contains "G11: bound sidecar WITHOUT the main array still denies" '"deny"' "${G11:-<empty>}"
+teardown_test_env
+
+# G10: review-embedding proxy name in the sidecar binds the REVIEW leg —
+# the sidecar lookup honors the same proxy list as _invoc_has (PAIRED).
+echo "--- G10: proxy sidecar record binds the REVIEW leg ---"
+setup_test_env
+mkdir -p "${HOME}/.claude"
+REPO="${TEST_TMPDIR}/repo"
+_mk_repo "${REPO}"
+LOCAL_SHA="$(git -C "${REPO}" rev-parse feature/x)"
+printf '%s' '["agent-team-execution","verification-before-completion"]' \
+    > "${HOME}/.claude/.skill-invocation-evidence-${_TOK}"
+printf 'agent-team-execution %s\nverification-before-completion %s\n' "${LOCAL_SHA}" "${LOCAL_SHA}" \
+    > "${HOME}/.claude/.skill-invocation-evidence-sha-${_TOK}"
+G10="$(run_guard_in "${REPO}")"
+assert_not_contains "G10a: proxy-bound evidence satisfies the gate" '"deny"' "${G10:-}"
+assert_contains "G10b: REVIEW advisory is branch-bound via the proxy record" 'SHA-bound' "${G10:-<empty>}"
 teardown_test_env
 
 print_summary
