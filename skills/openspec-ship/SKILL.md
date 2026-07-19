@@ -204,8 +204,10 @@ Use RFC 2119 keywords in UPPERCASE: MUST, MUST NOT, SHALL, SHALL NOT, SHOULD, SH
 **Checkpoint stamping (issue #129):** while writing the completed-task lines, attribute commits from `git log --oneline --abbrev=7 <merge-base>..HEAD`. Append ` [checkpoint: <sha7>]` ONLY when exactly one in-range commit matches the task by task number or strong keyword — ambiguous or unattributable tasks stay bare (a missing stamp is honest; a guessed one is not). Then run the deterministic integrity floor:
 
 ```bash
-bash scripts/checkpoint-validate.sh openspec/changes/<feature-name>/tasks.md
+bash "${CLAUDE_PLUGIN_ROOT:-.}/scripts/checkpoint-validate.sh" openspec/changes/<feature-name>/tasks.md
 ```
+
+Do not stamp the no-plan placeholder variant of `tasks.md` — it has no per-task structure to attribute.
 
 - Exit 1 (malformed stamp, or SHA outside `merge-base..HEAD`): repair or remove the offending stamps and re-run until clean. Do not proceed to Step 4 with a failing validation.
 - Exit 2 (unrunnable): note it in the ship report and continue — never blocking.

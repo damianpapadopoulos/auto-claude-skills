@@ -75,6 +75,21 @@ printf -- '- [x] 1.1 x\n' > "$NOREPO/tasks.md"
 _o="$(cd "$NOREPO" && GIT_CEILING_DIRECTORIES=/private/tmp:/tmp /bin/bash "$VAL" tasks.md 2>/dev/null)"; _rc=$?
 assert_equals "outside git repo: exit 2" "2" "$_rc"
 
+# R1 (review fix): SKILL.md must invoke via plugin-root, not a bare repo path
+assert_contains "SKILL.md uses CLAUDE_PLUGIN_ROOT for the validator path" \
+    'CLAUDE_PLUGIN_ROOT:-.}/scripts/checkpoint-validate.sh' \
+    "$(cat "${PROJECT_ROOT}/skills/openspec-ship/SKILL.md" 2>/dev/null)"
+
+# R2 (review fix): no-space stamp is validated, not silently ignored
+printf -- '- [x] 1.1 nospace [checkpoint:%s]\n' "$BASESHA" > "$R/tasks.md"
+_run tasks.md
+assert_equals "no-space foreign stamp: still caught (exit 1)" "1" "$_rc"
+
+# R3 (review fix): indented completed subtasks count in the denominator
+printf -- '- [x] 1.1 top [checkpoint: %s]\n  - [x] 1.1.1 sub\n' "$C1" > "$R/tasks.md"
+_run tasks.md
+assert_contains "indented subtask counted" "1 stamped / 2 completed tasks" "$_out"
+
 # 7: zero stamps -> exit 0, 0 stamped
 printf -- '- [x] 1.1 bare\n- [x] 1.2 also bare\n' > "$R/tasks.md"
 _run tasks.md

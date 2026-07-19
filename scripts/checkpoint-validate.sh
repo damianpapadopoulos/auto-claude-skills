@@ -46,9 +46,10 @@ fi
 
 STAMPED=0
 VIOLATIONS=0
-# grep -o extracts EVERY stamp, including multiple on one line.
-STAMPS="$(grep -o '\[checkpoint: [^]]*\]' "$TASKS_FILE" 2>/dev/null \
-    | sed -e 's/^\[checkpoint: //' -e 's/\]$//')"
+# grep -o extracts EVERY stamp, including multiple on one line; the space
+# after the colon is optional so a hand-edited stamp cannot dodge validation.
+STAMPS="$(grep -o '\[checkpoint:[[:space:]]*[^]]*\]' "$TASKS_FILE" 2>/dev/null \
+    | sed -e 's/^\[checkpoint:[[:space:]]*//' -e 's/\]$//')"
 
 while IFS= read -r _sha || [ -n "$_sha" ]; do
     [ -z "$_sha" ] && continue
@@ -76,7 +77,7 @@ done <<EOF
 $STAMPS
 EOF
 
-COMPLETED="$(grep -c '^- \[x\]' "$TASKS_FILE" 2>/dev/null)" || COMPLETED=0
+COMPLETED="$(grep -c '^[[:space:]]*- \[x\]' "$TASKS_FILE" 2>/dev/null)" || COMPLETED=0
 echo "checkpoints: ${STAMPED} stamped / ${COMPLETED} completed tasks"
 [ "$VIOLATIONS" -eq 0 ] || exit 1
 exit 0
