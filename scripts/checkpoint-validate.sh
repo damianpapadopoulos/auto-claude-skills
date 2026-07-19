@@ -77,6 +77,16 @@ done <<EOF
 $STAMPS
 EOF
 
+# Guard against a silently-skipped loop (e.g. here-doc temp-file creation
+# failure under an unwritable TMPDIR): if fewer stamps were processed than
+# extracted, this run did NOT validate what it claims — that is "cannot run"
+# (exit 2), never a clean pass.
+EXPECTED="$(printf '%s\n' "$STAMPS" | grep -c '[^[:space:]]' 2>/dev/null)" || EXPECTED=0
+if [ "$STAMPED" -ne "$EXPECTED" ]; then
+    echo "checkpoint-validate: processed ${STAMPED} of ${EXPECTED} extracted stamps — validation loop did not run to completion" >&2
+    exit 2
+fi
+
 COMPLETED="$(grep -c '^[[:space:]]*- \[x\]' "$TASKS_FILE" 2>/dev/null)" || COMPLETED=0
 echo "checkpoints: ${STAMPED} stamped / ${COMPLETED} completed tasks"
 [ "$VIOLATIONS" -eq 0 ] || exit 1

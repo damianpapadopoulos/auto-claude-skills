@@ -90,6 +90,12 @@ printf -- '- [x] 1.1 top [checkpoint: %s]\n  - [x] 1.1.1 sub\n' "$C1" > "$R/task
 _run tasks.md
 assert_contains "indented subtask counted" "1 stamped / 2 completed tasks" "$_out"
 
+# R4 (codex review): unchecked tasks are not counted as completed
+printf -- '- [x] 1.1 done [checkpoint: %s]\n- [ ] 1.2 pending\n' "$C1" > "$R/tasks.md"
+_run tasks.md
+assert_equals "unchecked task: exit 0" "0" "$_rc"
+assert_contains "unchecked task: excluded from completed count" "1 stamped / 1 completed tasks" "$_out"
+
 # 7: zero stamps -> exit 0, 0 stamped
 printf -- '- [x] 1.1 bare\n- [x] 1.2 also bare\n' > "$R/tasks.md"
 _run tasks.md
