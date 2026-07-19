@@ -64,6 +64,20 @@ if [ -n "${_ITMP}" ]; then
         mv "${_INVOC}.tmp.$$" "${_INVOC}" 2>/dev/null || rm -f "${_INVOC}.tmp.$$" 2>/dev/null || true
 fi
 
+# Sidecar SHA record (issue #133): "<skill> <sha>" lines, one per pair, so
+# the push gate can PREFER records bound to the push branch. SOFT binding
+# only — the guard never requires a bound record (the #130 repro records in
+# a cwd whose SHA is unrelated to the push branch; a hard requirement would
+# re-break it), so an unresolvable HEAD here just skips the line. A sidecar
+# file, NOT an in-place change: the string array above is format-frozen for
+# phase-evidence.sh readers.
+_ISHA="$(git rev-parse HEAD 2>/dev/null)" || _ISHA=""
+if [ -n "${_ISHA}" ]; then
+    _ISHA_F="${HOME}/.claude/.skill-invocation-evidence-sha-${_SESSION_TOKEN}"
+    grep -qxF "${_BARE} ${_ISHA}" "${_ISHA_F}" 2>/dev/null || \
+        printf '%s %s\n' "${_BARE}" "${_ISHA}" >> "${_ISHA_F}" 2>/dev/null || true
+fi
+
 # ---- Durable gating-milestone ledger (push-gate readiness, branch-scoped) ----
 # Record review/verify completion to a per-(repo+branch) ledger so the push gate
 # survives composition chain re-anchors that reset .completed. Fail-open.

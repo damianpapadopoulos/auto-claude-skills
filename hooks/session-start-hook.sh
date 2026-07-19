@@ -154,6 +154,7 @@ find "${HOME}/.claude" -maxdepth 1 \
     ! -name "*-state-${_SESSION_TOKEN}" \
     ! -name ".skill-compact-pending-${_SESSION_TOKEN}" \
     ! -name ".skill-invocation-evidence-${_SESSION_TOKEN}" \
+    ! -name ".skill-invocation-evidence-sha-${_SESSION_TOKEN}" \
     ! -name ".skill-phase-attest-${_SESSION_TOKEN}" \
     -exec rm -f {} + 2>/dev/null || true
 

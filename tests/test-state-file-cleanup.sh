@@ -90,4 +90,32 @@ else
 fi
 teardown_test_env
 
+# ---------------------------------------------------------------------------
+# C5 — invocation-evidence SHA sidecar (issue #133): stale dead-token sidecars
+# are pruned with the family; the CURRENT session's sidecar is preserved.
+# ---------------------------------------------------------------------------
+echo "--- C5: invocation-evidence-sha sidecar GC ---"
+setup_test_env
+mkdir -p "${HOME}/.claude"
+STALE_SIDE="${HOME}/.claude/.skill-invocation-evidence-sha-session-deadbeef-old"
+printf 'requesting-code-review 0000\n' > "${STALE_SIDE}"
+backdate "${STALE_SIDE}"
+run_hook
+TOK="$(cat "${HOME}/.claude/.skill-session-token" 2>/dev/null)"
+if [ -f "${STALE_SIDE}" ]; then
+    _record_fail "C5a: stale dead-token sidecar pruned" "still present"
+else
+    _record_pass "C5a: stale dead-token sidecar pruned"
+fi
+CUR_SIDE="${HOME}/.claude/.skill-invocation-evidence-sha-${TOK}"
+printf 'requesting-code-review 0000\n' > "${CUR_SIDE}"
+backdate "${CUR_SIDE}"        # stale mtime, but it's the ACTIVE token
+run_hook
+if [ -f "${CUR_SIDE}" ]; then
+    _record_pass "C5b: current-session sidecar preserved despite stale mtime"
+else
+    _record_fail "C5b: current-session sidecar preserved despite stale mtime" "deleted"
+fi
+teardown_test_env
+
 print_summary
