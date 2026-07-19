@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "discovery_path": null,
+  "design_path": null,
+  "plan_path": null,
+  "spec_path": null,
+  "sp_plan_path": null,
+  "sp_spec_path": null,
+  "change_slug": "push-gate-invoc-sha-binding",
+  "capability_slug": null,
+  "source_branch": "worktree-issue-133-soft-sha-binding",
+  "base_commit": "aca34614aaeb0fa6222d28b12df22659df2de981",
+  "openspec_surface": "none",
+  "archived_at": "2026-07-19T15:39:45Z"
+}
