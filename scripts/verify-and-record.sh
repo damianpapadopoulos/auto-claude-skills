@@ -122,8 +122,20 @@ EXCERPT="$(tail -c 600 "$LOG" 2>/dev/null | tr -d '\000-\010\013-\037' | tr '\n'
 OUT="${HOME}/.claude/.skill-project-verified-${TOKEN}"
 
 # test_delta (advisory): does a material source change carry a test change?
-# docs = docs/**, openspec/**, *.md; test files = tests/*.sh (declared-gate default).
-_TD_BASE="$(git -C "$ROOT" rev-parse HEAD~1 2>/dev/null || echo "")"
+# docs = docs/**, openspec/**, *.md; test files = TOP-LEVEL tests/<name>.sh only
+# (a case glob like tests/*.sh crosses '/', so nested fixtures such as
+# tests/fixtures/routing/mock.sh would wrongly count as "the test" — the
+# tests/*/* arm below is checked FIRST and swallows anything nested).
+#
+# Diff range: the branch's mainline base, NOT HEAD~1 alone (a single-commit
+# window undercounts a multi-commit feature branch). Reuse the mainline
+# merge-base ($BASE) the gate-gaming check already computed above when
+# available; otherwise re-derive it directly; otherwise HEAD~1; otherwise
+# the root commit's own file list.
+_TD_BASE="$BASE"
+[ -n "$_TD_BASE" ] || _TD_BASE="$(git -C "$ROOT" merge-base origin/main HEAD 2>/dev/null)"
+[ -n "$_TD_BASE" ] || _TD_BASE="$(git -C "$ROOT" merge-base main HEAD 2>/dev/null)"
+[ -n "$_TD_BASE" ] || _TD_BASE="$(git -C "$ROOT" rev-parse HEAD~1 2>/dev/null)"
 if [ -n "$_TD_BASE" ]; then
     _TD_FILES="$(git -C "$ROOT" diff --name-only "$_TD_BASE"..HEAD 2>/dev/null)"
 else
@@ -132,9 +144,13 @@ fi
 _TD_SRC=0; _TD_TEST=0
 while IFS= read -r _f; do
     [ -n "$_f" ] || continue
-    case "$_f" in docs/*|openspec/*|*.md) continue ;; esac
-    _TD_SRC=1
-    case "$_f" in tests/*.sh) _TD_TEST=1 ;; esac
+    case "$_f" in
+        docs/*|openspec/*|*.md) continue ;;              # docs: ignored
+        tests/*/*) continue ;;                            # nested test scaffolding: ignored (neither material nor test)
+        tests/*.sh) _TD_TEST=1; continue ;;                # top-level test file: TEST change
+        tests/*) continue ;;                               # other tests/ direct children: ignored, never material
+        *) _TD_SRC=1 ;;                                    # everything else non-docs: MATERIAL SOURCE
+    esac
 done <<EOF
 $_TD_FILES
 EOF
