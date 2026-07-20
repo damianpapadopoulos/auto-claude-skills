@@ -122,6 +122,14 @@ verdict_is_clean() {
        and ((.gate_gaming_status // "") == "clean")' "$f" >/dev/null 2>&1
 }
 
+# verdict_test_delta <token> — echo the recorded test_delta (covered|missing|n/a|"").
+verdict_test_delta() {
+    local _t="${1:-}" _f
+    _f="${HOME}/.claude/.skill-project-verified-${_t}"
+    [ -f "$_f" ] || return 1
+    jq -r '.test_delta // ""' "$_f" 2>/dev/null
+}
+
 # verdict_failing_gates <token> — prints comma-joined .failed command names.
 verdict_failing_gates() {
     local token="${1:-}" f

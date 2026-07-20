@@ -121,16 +121,38 @@ TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 EXCERPT="$(tail -c 600 "$LOG" 2>/dev/null | tr -d '\000-\010\013-\037' | tr '\n' ' ')"
 OUT="${HOME}/.claude/.skill-project-verified-${TOKEN}"
 
+# test_delta (advisory): does a material source change carry a test change?
+# docs = docs/**, openspec/**, *.md; test files = tests/*.sh (declared-gate default).
+_TD_BASE="$(git -C "$ROOT" rev-parse HEAD~1 2>/dev/null || echo "")"
+if [ -n "$_TD_BASE" ]; then
+    _TD_FILES="$(git -C "$ROOT" diff --name-only "$_TD_BASE"..HEAD 2>/dev/null)"
+else
+    _TD_FILES="$(git -C "$ROOT" show --name-only --format= HEAD 2>/dev/null)"
+fi
+_TD_SRC=0; _TD_TEST=0
+while IFS= read -r _f; do
+    [ -n "$_f" ] || continue
+    case "$_f" in docs/*|openspec/*|*.md) continue ;; esac
+    _TD_SRC=1
+    case "$_f" in tests/*.sh) _TD_TEST=1 ;; esac
+done <<EOF
+$_TD_FILES
+EOF
+if [ "$_TD_SRC" -eq 0 ]; then TEST_DELTA="n/a"
+elif [ "$_TD_TEST" -eq 1 ]; then TEST_DELTA="covered"
+else TEST_DELTA="missing"; fi
+
 jq -n --arg sha "$SHA" --arg ts "$TS" --arg ex "$EXCERPT" --arg cmd "$CMDS" \
-      --arg p "$PASSED" --arg f "$FAILED" --arg c "$CNV" --arg gg "$GG_STATUS" '
+      --arg p "$PASSED" --arg f "$FAILED" --arg c "$CNV" --arg gg "$GG_STATUS" --arg td "$TEST_DELTA" '
   def csv($s): if $s == "" then [] else ($s | split(",")) end;
   {substrate:"local", discovery_source:"verify-yml",
    passed:csv($p), failed:csv($f), could_not_verify:csv($c),
    gate_gaming_status:$gg, coverage_adequacy_status:"unverified",
+   test_delta:$td,
    sha:$sha, command:$cmd, output_excerpt:$ex, ts:$ts,
    writer:"verify-and-record.sh"}
 ' > "${OUT}.tmp.$$" || { rm -f "${OUT}.tmp.$$"; echo "verify-and-record: verdict write failed" >&2; exit 1; }
 mv "${OUT}.tmp.$$" "$OUT" || { rm -f "${OUT}.tmp.$$"; echo "verify-and-record: verdict write failed" >&2; exit 1; }
 
 echo "verdict written: $OUT"
-jq -c '{passed,failed,could_not_verify,gate_gaming_status,sha}' "$OUT"
+jq -c '{passed,failed,could_not_verify,gate_gaming_status,test_delta,sha}' "$OUT"
