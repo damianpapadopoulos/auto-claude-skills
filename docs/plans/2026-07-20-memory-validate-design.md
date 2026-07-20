@@ -31,18 +31,24 @@ Generic plugin script `scripts/memory-validate.sh <memory-dir> [repo-root]`, Bas
 
 ## Checks
 
-### ERROR tier (structural)
-1. **Frontmatter shape** — every non-`MEMORY.md` `.md` has `metadata.type` ∈ `{feedback, project, reference, user}`. (Auto-memory nests `type:` under `metadata:`; extraction must read the nested field, unlike knowledge-validate's top-level `type:`.)
-2. **Dangling `[[slug]]` links** — every `[[slug]]` resolves to an existing `<slug>.md` in the memory dir.
-3. **Index sync (bidirectional)** — every memory file has a `MEMORY.md` entry, AND every `MEMORY.md` link `(<slug>.md)` points at an existing file. (knowledge-validate only checks the first direction; MEMORY.md is hand-maintained, so flag orphaned index entries too.)
+**Tiering principle (re-calibrated during REVIEW against the real 141-file store, user-approved):** corruption ⇒ ERROR (exit 1); drift and blessed-forward-references ⇒ WARN (exit 0). See As-Built Calibration below for why this differs from the first draft.
 
-### WARN tier (staleness — the #125 fix)
-4. **Dangling repo-path anchors** — backtick-wrapped `` `path.ext` `` / `` `path.ext:line` `` references in memory bodies that do NOT resolve at repo HEAD → WARN.
-   - Resolve via `git -C <repo-root> cat-file -e "HEAD:<path>"` (HEAD, not working tree — gitignored `docs/plans/` and uncommitted edits must not mask staleness).
-   - **Skip fenced code blocks** (``` ``` toggles) before extraction — code snippets contain non-anchor paths.
-   - **Ext allowlist** for the path shape: `sh|md|json|yml|yaml|txt|ts|js|py`. Prose like `` `--flag` `` or `` `some_var` `` cannot match.
+### ERROR tier (corruption)
+1. **Frontmatter type** — every non-`MEMORY.md` `.md` has a valid type ∈ `{feedback, project, reference, user}`. The store has **two schema variants**: top-level `type:` (42 files) and nested `metadata.type:` (99 files); the extractor accepts either (nested preferred).
+2. **Reverse index sync** — every `MEMORY.md` `(<file>.md)` link points at an existing file (a dead index link is corruption).
+
+### WARN tier (drift / stale — advisory, exit stays 0)
+3. **Forward index sync** — a memory file absent from `MEMORY.md` (drift; may be a new or intentionally-unlisted memory).
+4. **Dangling `[[name]]` links** — a `[[name]]` resolving to no memory. Auto-memory explicitly blesses forward-references ("marks something worth writing later, not an error"), so WARN not ERROR. Resolution accepts the store's **four interchangeable link conventions**: frontmatter `name:` slug; bare filename (underscores); filename underscores→hyphens; prefix-stripped (`feedback_`/`project_`/`reference_` removed) in underscore and hyphen forms.
+5. **Dangling repo-path anchors** — backtick-wrapped `` `path.ext` `` / `` `path.ext:line` `` references that do NOT resolve at repo HEAD → WARN.
+   - Resolve against `git -C <repo-root> ls-tree -r --name-only HEAD` (HEAD, not working tree — gitignored `docs/plans/` and uncommitted edits must not mask staleness).
+   - **Skip fenced code blocks** (``` ``` toggles) before extraction.
+   - **Ext allowlist** for the path shape: `sh|md|json|yml|yaml|txt|ts|js|py`.
    - Strip `:NN` line suffix before resolution.
-   - **Working-tree-only note:** if a path fails at HEAD but exists on disk, emit a distinct advisory NOTE ("exists in working tree, not at HEAD"), not a staleness WARN — it's a local draft, not rot.
+   - **Basename resolution** for bare-basename and absolute-path anchors (memories cite `openspec-guard.sh` for `hooks/openspec-guard.sh`, or absolute `/Users/.../CLAUDE.md`) — resolves if any HEAD file has that basename.
+   - **Suffix match** for partial-path anchors (`specs/skill-routing/spec.md` matches `openspec/specs/skill-routing/spec.md`).
+   - **Skip cross-memory-file references** — a backtick ref to a sibling `.md` memory belongs to the `[[link]]` namespace, not repo anchors.
+   - **Working-tree NOTE:** a path absent at HEAD but present on disk → advisory NOTE, not a staleness WARN.
 
 ## Anchor extraction & Bash 3.2 notes
 
@@ -53,11 +59,23 @@ Generic plugin script `scripts/memory-validate.sh <memory-dir> [repo-root]`, Bas
 
 ## Testing
 
-New `tests/test-memory-validate.sh` + fixtures under `tests/fixtures/memory-validate/`:
-- **Red:** memory citing a path absent at HEAD → WARN (reproduces #125); dangling `[[link]]`, missing `type`, index desync (both directions) → ERROR.
-- **Green:** valid memory passes; a path inside a fenced code block does NOT warn; a working-tree-only path emits the NOTE, not a WARN; exit code stays 0 when only WARNs are present.
-- Wired into `tests/run-tests.sh`.
+`tests/test-memory-validate.sh` — hermetic (builds a throwaway git repo + memory fixtures; no dependence on the real store or its HEAD). 12 assertions:
+- **ERROR:** missing type → exit 1; reverse index ghost → exit 1.
+- **WARN (exit 0):** dangling `[[link]]` (resolvable link stays silent); unindexed file; stale anchor (reproduces #125); bare-basename absent at HEAD.
+- **No-false-positive (silent):** both type schema variants accepted; live anchor with `:line`; bare basename of a nested HEAD file; absolute path whose basename is at HEAD; fenced-block anchor ignored.
+- **NOTE:** working-tree-only path.
+- Auto-discovered by `tests/run-tests.sh` (globs `test-*.sh`, no manual registration).
 - Not a skill → skill routing-fixture/content-coverage gates do not apply.
+
+## As-Built Calibration (REVIEW-phase, 2026-07-20)
+
+The Task-4 smoke run against the real 141-file store exposed that the first-draft ERROR tiering was wrong for this store's actual semantics — it produced ~80 false ERRORs. Corrections (all user-approved re-tiering + evidence-driven bug fixes):
+- **Type extraction** accepted only nested `metadata.type`; the store has 42 top-level + 99 nested + 1 genuinely missing. Fixed to accept both → 1 real ERROR.
+- **`[[link]]` resolution** assumed slug==filename; the store links by four interchangeable conventions (see check 4). Fixed → dangling-link WARNs 111 → 7, all genuine. Downgraded ERROR→WARN (spec blesses forward-refs).
+- **Anchor resolution** used root-only `git cat-file`; memories cite bare basenames, partial paths, absolute paths, and sibling memory files. Fixed with basename/suffix/absolute resolution + cross-memory skip → stale-anchor WARNs 130 → 29 (remaining are genuine relocations/deletions).
+- **Index sync** split: reverse (dead index link) = ERROR; forward (unindexed file, 20 on the store) = WARN.
+
+Final real-store output: **1 ERROR + 56 WARN** (7 dangling + 29 stale-anchor + 20 unindexed), all defensible. Lesson: prose path/link intent is not structurally knowable (codex (a)); calibration against the real store, not fixtures alone, was load-bearing.
 
 ## Integration (future, out of scope for this change)
 
