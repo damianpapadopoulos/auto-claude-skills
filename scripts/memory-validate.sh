@@ -104,6 +104,9 @@ for f in "${MEM}"/*.md; do
       | grep -oE "\`[A-Za-z0-9_./-]+\.(${_ANCHOR_EXT})(:[0-9]+)?\`" \
       | sed 's/`//g; s/:[0-9]*$//' \
       | sort -u)"
+    # Unquoted ${anchors} word-split is INTENTIONAL and safe: the grep ERE above
+    # restricts anchors to [A-Za-z0-9_./-] (no spaces, no glob metachars). Do NOT
+    # "fix" to "${anchors}" — that would iterate once over the whole newline blob.
     for a in ${anchors}; do
         # cross-memory-file reference (points at a sibling memory .md, not a repo
         # path) — out of scope for repo-staleness; the [[link]] check owns those.
