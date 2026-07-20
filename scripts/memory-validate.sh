@@ -32,7 +32,25 @@ for f in "${MEM}"/*.md; do
         *" ${t} "*) : ;;
         *) _err "${base}: missing or invalid metadata.type ('${t}')" ;;
     esac
+    # dangling [[slug]] links
+    for ref in $(grep -oE '\[\[[a-z0-9_-]+\]\]' "${f}" | sed 's/\[\[//;s/\]\]//' | sort -u); do
+        [ -e "${MEM}/${ref}.md" ] || _err "${base}: dangling link [[${ref}]]"
+    done
 done
+
+# bidirectional index sync
+if [ -e "${MEM}/MEMORY.md" ]; then
+    # forward: every memory file appears in the index
+    for f in "${MEM}"/*.md; do
+        [ -e "${f}" ] || continue
+        base="$(basename "${f}")"; [ "${base}" = "MEMORY.md" ] && continue
+        grep -qF "(${base})" "${MEM}/MEMORY.md" || _err "MEMORY.md missing entry for ${base}"
+    done
+    # reverse: every (<slug>.md) index link points at an existing file
+    for link in $(grep -oE '\([a-z0-9_-]+\.md\)' "${MEM}/MEMORY.md" | sed 's/[()]//g' | sort -u); do
+        [ -e "${MEM}/${link}" ] || _err "MEMORY.md links missing file (${link})"
+    done
+fi
 
 [ "${ERRORS}" -eq 0 ] || exit 1
 exit 0

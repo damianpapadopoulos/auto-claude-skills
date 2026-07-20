@@ -54,4 +54,62 @@ else
     _record_fail "missing metadata.type -> ERROR exit 1" "rc=${rc} out=${out}"
 fi
 
+# give bad_type.md a valid type now so later multi-defect assertions isolate cleanly
+_mem bad_type.md "---
+name: bad
+metadata:
+  type: project
+---
+body"
+
+# Fixture C: dangling [[link]] -> ERROR
+_mem dangling.md "---
+name: dangling
+metadata:
+  type: project
+---
+see [[nonexistent-slug]]"
+printf '%s\n' "- [Dangling](dangling.md) — x" >> "${MEM}/MEMORY.md"
+
+out="$("${VALIDATE}" "${MEM}" "${REPO}" 2>&1)"; rc=$?
+if [ "${rc}" -eq 1 ] && printf '%s' "${out}" | grep -qF "nonexistent-slug"; then
+    _record_pass "dangling [[link]] -> ERROR"
+else
+    _record_fail "dangling [[link]] -> ERROR" "rc=${rc} out=${out}"
+fi
+
+# Fixture D: file present on disk but absent from MEMORY.md -> ERROR (index sync)
+_mem orphan_file.md "---
+name: orphan
+metadata:
+  type: reference
+---
+body"
+out="$("${VALIDATE}" "${MEM}" "${REPO}" 2>&1)"; rc=$?
+if [ "${rc}" -eq 1 ] && printf '%s' "${out}" | grep -qF "orphan_file.md"; then
+    _record_pass "file missing from index -> ERROR"
+else
+    _record_fail "file missing from index -> ERROR" "rc=${rc} out=${out}"
+fi
+# add its index entry so later assertions aren't polluted by this defect
+printf '%s\n' "- [Orphan](orphan_file.md) — x" >> "${MEM}/MEMORY.md"
+
+# Fixture E: index links a file that does not exist -> ERROR (reverse index sync)
+printf '%s\n' "- [Ghost](ghost.md) — x" >> "${MEM}/MEMORY.md"
+out="$("${VALIDATE}" "${MEM}" "${REPO}" 2>&1)"; rc=$?
+if [ "${rc}" -eq 1 ] && printf '%s' "${out}" | grep -qF "ghost.md"; then
+    _record_pass "index entry for missing file -> ERROR"
+else
+    _record_fail "index entry for missing file -> ERROR" "rc=${rc} out=${out}"
+fi
+# remove the ghost line to clean state for later tasks
+grep -vF "ghost.md" "${MEM}/MEMORY.md" > "${MEM}/MEMORY.md.tmp" && mv "${MEM}/MEMORY.md.tmp" "${MEM}/MEMORY.md"
+# resolve the dangling link so downstream tasks start from a clean tree
+_mem dangling.md "---
+name: dangling
+metadata:
+  type: project
+---
+no link now"
+
 print_summary
