@@ -196,6 +196,13 @@ if [ "${_gc_is_push}" = "true" ] || [ "${_gc_is_ghmerge}" = "true" ]; then
         # bypass (`|| true` absorbs a non-zero source exit).
         [ -f "${_PLUGIN_ROOT}/hooks/lib/phase-attest.sh" ] && \
             . "${_PLUGIN_ROOT}/hooks/lib/phase-attest.sh" 2>/dev/null || true
+        # phase-evidence: defines phase_gate_log, used by the IMPLEMENT leg (Check 0)
+        # BELOW. Must be sourced here — the later source (~C2 block) is after Check 0,
+        # so without this the leg's telemetry call is a silent no-op and the
+        # IMPLEMENT-warn event log (the deny-flip backtest baseline) stays empty.
+        # Re-source there is idempotent. Source-guarded (no ERR-trap bypass).
+        [ -f "${_PLUGIN_ROOT}/hooks/lib/phase-evidence.sh" ] && \
+            . "${_PLUGIN_ROOT}/hooks/lib/phase-evidence.sh" 2>/dev/null || true
         _HEAD_SHA="$(git rev-parse HEAD 2>/dev/null || true)"
         # Bind the verdict to the COMMIT, not the session. The payload-less
         # project-verification SKILL writes under the shared singleton's token while
@@ -375,7 +382,7 @@ EOF
             done
             if [ "${_impl_in_chain}" = "true" ] && [ "${_gc_is_push}" = "true" ]; then
                 for _slot in executing-plans subagent-driven-development agent-team-execution; do
-                    _ledger_has "$_slot" && _impl_ok=true
+                    [ "${_impl_ok}" = "false" ] && _ledger_has "$_slot" && _impl_ok=true
                     [ "${_impl_ok}" = "false" ] && _invoc_ok "$_slot" && _impl_ok=true
                     [ "${_impl_ok}" = "false" ] && _bridge_has "$_slot" && _impl_ok=true
                     if [ "${_impl_ok}" = "false" ] && command -v phase_attested >/dev/null 2>&1; then

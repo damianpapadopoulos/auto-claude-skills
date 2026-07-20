@@ -75,6 +75,13 @@ assert_contains     "no impl evidence => IMPLEMENT advisory"     "IMPLEMENT:"  "
 assert_contains     "advisory surfaces as additionalContext"     "additionalContext" "${out:-<empty>}"
 assert_not_contains "IMPLEMENT leg does not deny"                 '"deny"'     "${out:-}"
 
+# (a2) The warn must ALSO write a telemetry line — phase_gate_log is defined in
+# phase-evidence.sh, which must be sourced BEFORE Check 0 (regression: it was
+# only sourced later, making the call a silent no-op and the deny-flip backtest
+# baseline empty). HOME is isolated (mktemp) so this reads the test's own log.
+_pglog="${HOME}/.claude/.phase-gate-events.log"
+assert_contains "IMPLEMENT warn writes a phase-gate telemetry line" "push-implement" "$(cat "${_pglog}" 2>/dev/null || echo '<no log>')"
+
 # (b) After phase_attest executing-plans "test" -> no IMPLEMENT advisory.
 # shellcheck disable=SC1090
 . "${PROJECT_ROOT}/hooks/lib/phase-attest.sh"
