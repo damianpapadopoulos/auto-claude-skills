@@ -232,4 +232,57 @@ else
     _record_fail "working-tree-only path -> NOTE not WARN" "rc=${rc} out=${out}"
 fi
 
+# ---- review #1: prose parenthetical in MEMORY.md is NOT a markdown link -> no ERROR ----
+_reset_mem
+printf '%s\n' "Note: supersedes an old draft (nonexistent-draft.md) from before." >> "${MEM}/MEMORY.md"
+out="$("${VALIDATE}" "${MEM}" "${REPO}" 2>&1)"; rc=$?
+if [ "${rc}" -eq 0 ] && ! printf '%s' "${out}" | grep -qF "nonexistent-draft.md"; then
+    _record_pass "prose parenthetical (foo.md) not treated as index link"
+else
+    _record_fail "prose parenthetical (foo.md) not treated as index link" "rc=${rc} out=${out}"
+fi
+
+# ---- review #2: absolute-path anchor to a working-tree-only file -> NOTE not WARN ----
+_reset_mem
+mkdir -p "${SBOX}/ext"; echo x > "${SBOX}/ext/wt-abs.md"   # on disk, not in REPO, not at HEAD
+_mem abswt.md "---
+name: abswt-slug
+metadata:
+  type: project
+---
+See \`${SBOX}/ext/wt-abs.md\` on disk."
+printf '%s\n' "- [AbsWT](abswt.md) — x" >> "${MEM}/MEMORY.md"
+out="$("${VALIDATE}" "${MEM}" "${REPO}" 2>&1)"; rc=$?
+if [ "${rc}" -eq 0 ] \
+   && printf '%s' "${out}" | grep -qF "[NOTE]" \
+   && printf '%s' "${out}" | grep -qF "wt-abs.md" \
+   && ! printf '%s' "${out}" | grep -qF "[WARN]"; then
+    _record_pass "absolute path present on disk -> NOTE not WARN"
+else
+    _record_fail "absolute path present on disk -> NOTE not WARN" "rc=${rc} out=${out}"
+fi
+
+# ---- review #3: prefix-stripped hyphenated link convention resolves ----
+_reset_mem
+_mem feedback_widget_thing.md "---
+name: Widget Thing Human Name
+metadata:
+  type: feedback
+---
+body"
+printf '%s\n' "- [Widget](feedback_widget_thing.md) — x" >> "${MEM}/MEMORY.md"
+_mem linker2.md "---
+name: linker2-slug
+metadata:
+  type: project
+---
+see [[widget-thing]]"
+printf '%s\n' "- [Linker2](linker2.md) — x" >> "${MEM}/MEMORY.md"
+out="$("${VALIDATE}" "${MEM}" "${REPO}" 2>&1)"; rc=$?
+if [ "${rc}" -eq 0 ] && ! printf '%s' "${out}" | grep -qF "widget-thing"; then
+    _record_pass "prefix-stripped hyphenated [[link]] resolves (no WARN)"
+else
+    _record_fail "prefix-stripped hyphenated [[link]] resolves (no WARN)" "rc=${rc} out=${out}"
+fi
+
 print_summary

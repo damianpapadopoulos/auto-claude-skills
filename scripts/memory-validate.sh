@@ -76,8 +76,10 @@ if [ -e "${MEM}/MEMORY.md" ]; then
         base="$(basename "${f}")"; [ "${base}" = "MEMORY.md" ] && continue
         grep -qF "(${base})" "${MEM}/MEMORY.md" || _warn "MEMORY.md missing entry for ${base}"
     done
-    # reverse (ERROR): every (<file>.md) index link points at an existing file
-    for link in $(grep -oE '\([a-z0-9_-]+\.md\)' "${MEM}/MEMORY.md" | sed 's/[()]//g' | sort -u); do
+    # reverse (ERROR): every markdown-link (<file>.md) index target exists. Require
+    # the `](` link syntax so a bare parenthetical in prose ("supersedes (x.md)")
+    # is not mistaken for an index link and does not false-trip exit 1.
+    for link in $(grep -oE '\]\([a-z0-9_-]+\.md\)' "${MEM}/MEMORY.md" | sed 's/^](//;s/)$//' | sort -u); do
         [ -e "${MEM}/${link}" ] || _err "MEMORY.md links missing file (${link})"
     done
 fi
@@ -115,7 +117,10 @@ for f in "${MEM}"/*.md; do
             *)   # bare basename: match any HEAD file's basename
                 printf '%s\n' "${HEADFILES}" | awk -F/ -v b="${a}" '$NF==b{hit=1} END{exit !hit}' && continue ;;
         esac
-        if [ -e "${REPO}/${a}" ]; then
+        # working-tree fallback: an absolute anchor is checked as-is; a repo-relative
+        # one is resolved under REPO (joining REPO to an absolute path double-roots).
+        case "${a}" in /*) wt="${a}" ;; *) wt="${REPO}/${a}" ;; esac
+        if [ -e "${wt}" ]; then
             _note "${base}: '${a}' exists in working tree but not at HEAD"
         else
             _warn "${base}: repo-path anchor '${a}' not found at HEAD"
