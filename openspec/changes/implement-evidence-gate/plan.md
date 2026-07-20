@@ -267,7 +267,7 @@ git commit -m "feat: IMPLEMENT-evidence leg on push gate (warn-first, attestatio
 ### Task 4: Validation — A/B eval (Unit B) + backtest (Unit A), prove-before-deny
 
 **Files:**
-- Create: `tests/fixtures/evals/implement-precondition-ab.json` (control + treatment pack)
+- Create: `tests/fixtures/implement-precondition/evals/behavioral.json` (control + treatment pack)
 - Create: `openspec/changes/implement-evidence-gate/validation-results.md` (recorded evidence)
 
 **Interfaces:** produces the pre-registered evidence that gates (a) precondition adoption and (b) the future deny-flip. No code deny-wiring in this task.
@@ -275,7 +275,7 @@ git commit -m "feat: IMPLEMENT-evidence leg on push gate (warn-first, attestatio
 - [ ] **Step 1: Author the A/B eval pack** — control arm = registry WITHOUT the precondition; treatment = WITH it. Pre-registered metric: fraction of implementation-phase prompts where the model invokes an implementation-slot skill BEFORE the first source Write/Edit. ≥5 prompts, pinned judge model+version, safety subset unchanged (no regression). Mirror `tests/fixtures/evals/routing-validation.json` shape; smoke 1 call first ([[reference_behavioral_eval_harness_gotchas]]).
 
 - [ ] **Step 2: Run the A/B** (quota permitting):
-Run: `bash tests/run-behavioral-evals.sh tests/fixtures/evals/implement-precondition-ab.json`
+Run: `bash tests/run-behavioral-evals.sh tests/fixtures/implement-precondition/evals/behavioral.json`
 Record control vs treatment rates in `validation-results.md`. Decision rule: adopt the precondition only if treatment materially beats control with no safety regression. If quota blocks the run, record BLOCKED + the harness-ready pack, and mark the precondition adoption pending (ship the config behind this evidence, revert if it fails).
 
 - [ ] **Step 3: Backtest the IMPLEMENT leg**
@@ -283,7 +283,7 @@ Run: `bash scripts/phase-gate-backtest.sh` (over local transcripts). Human-class
 
 - [ ] **Step 4: Commit the evidence**
 ```bash
-git add tests/fixtures/evals/implement-precondition-ab.json openspec/changes/implement-evidence-gate/validation-results.md
+git add tests/fixtures/implement-precondition/evals/behavioral.json openspec/changes/implement-evidence-gate/validation-results.md
 git commit -m "test: A/B eval pack + validation results for implement-evidence gate"
 ```
 
