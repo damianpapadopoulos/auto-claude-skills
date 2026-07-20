@@ -190,6 +190,19 @@ if [ "${_gc_is_push}" = "true" ] || [ "${_gc_is_ghmerge}" = "true" ]; then
             # shellcheck source=lib/verdict.sh
             . "${_PLUGIN_ROOT}/hooks/lib/verdict.sh" 2>/dev/null && _VERDICT_OK=true || true
         fi
+        # phase-attest: lets the IMPLEMENT leg (below) accept an explicit,
+        # logged skip attestation as evidence. Source-guarded like every other
+        # lib here — a bad source must not trip the fail-open ERR trap into a
+        # bypass (`|| true` absorbs a non-zero source exit).
+        [ -f "${_PLUGIN_ROOT}/hooks/lib/phase-attest.sh" ] && \
+            . "${_PLUGIN_ROOT}/hooks/lib/phase-attest.sh" 2>/dev/null || true
+        # phase-evidence: defines phase_gate_log, used by the IMPLEMENT leg (Check 0)
+        # BELOW. Must be sourced here — the later source (~C2 block) is after Check 0,
+        # so without this the leg's telemetry call is a silent no-op and the
+        # IMPLEMENT-warn event log (the deny-flip backtest baseline) stays empty.
+        # Re-source there is idempotent. Source-guarded (no ERR-trap bypass).
+        [ -f "${_PLUGIN_ROOT}/hooks/lib/phase-evidence.sh" ] && \
+            . "${_PLUGIN_ROOT}/hooks/lib/phase-evidence.sh" 2>/dev/null || true
         _HEAD_SHA="$(git rev-parse HEAD 2>/dev/null || true)"
         # Bind the verdict to the COMMIT, not the session. The payload-less
         # project-verification SKILL writes under the shared singleton's token while
@@ -308,6 +321,25 @@ if [ "${_gc_is_push}" = "true" ] || [ "${_gc_is_ghmerge}" = "true" ]; then
             _STALE_MSG="${_STALE_MSG}${_STALE_MSG:+; }$1 accepted via cross-location branch-ledger evidence recorded at ${_bsha:-unknown} on this branch (issue #131 bridge). Rerun if later commits changed reviewed content."
             return 0
         }
+        # _diff_touches_material_source <proj_root> — 0 iff the branch diff
+        # (mainline merge-base..HEAD) touches anything outside docs/openspec/*.md.
+        # Reuses _branch_diff_names (verdict.sh, sourced above) so the IMPLEMENT
+        # leg's diff base can never disagree with routing-governance/staleness's
+        # base resolution — no separate merge-base logic invented here. Fail-open:
+        # unresolvable base / verdict.sh unavailable => 1 (no advisory, never a
+        # false-fire).
+        _diff_touches_material_source() {
+            local _names _f
+            command -v _branch_diff_names >/dev/null 2>&1 || return 1
+            _names="$(_branch_diff_names "${1:-}")" || return 1
+            while IFS= read -r _f; do
+                [ -n "$_f" ] || continue
+                case "$_f" in docs/*|openspec/*|*.md) continue ;; *) return 0 ;; esac
+            done <<EOF
+$_names
+EOF
+            return 1
+        }
         if [ "${_PUSHGATE_SKIP}" != "true" ] && [ -f "${_COMP_STATE}" ] && command -v jq >/dev/null 2>&1; then
             # Check 1: REVIEW in chain but not completed — deny with REVIEW message
             _review_in_chain=false
@@ -337,6 +369,30 @@ if [ "${_gc_is_push}" = "true" ] || [ "${_gc_is_ghmerge}" = "true" ]; then
                 jq -n --arg msg "${_MSG}" '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":$msg}'
                 _DECISION="deny:chain-verify"
                 exit 0
+            fi
+
+            # Check 0 (IMPLEMENT, WARN-FIRST): an implementation-slot skill is in
+            # the chain but has no evidence, and the diff touches material source.
+            # Accepts attestation (IMPLEMENT is not a gating milestone). Advisory
+            # only — no permissionDecision. Deny-flip is a separate change gated on
+            # phase-gate-backtest (<10% false-block). .completed does NOT satisfy it.
+            _impl_in_chain=false; _impl_ok=false
+            for _slot in executing-plans subagent-driven-development agent-team-execution; do
+                jq -e --arg s "$_slot" '.chain | index($s)' "${_COMP_STATE}" >/dev/null 2>&1 && _impl_in_chain=true
+            done
+            if [ "${_impl_in_chain}" = "true" ] && [ "${_gc_is_push}" = "true" ]; then
+                for _slot in executing-plans subagent-driven-development agent-team-execution; do
+                    [ "${_impl_ok}" = "false" ] && _ledger_has "$_slot" && _impl_ok=true
+                    [ "${_impl_ok}" = "false" ] && _invoc_ok "$_slot" && _impl_ok=true
+                    [ "${_impl_ok}" = "false" ] && _bridge_has "$_slot" && _impl_ok=true
+                    if [ "${_impl_ok}" = "false" ] && command -v phase_attested >/dev/null 2>&1; then
+                        phase_attested "${_SESSION_TOKEN}" "$_slot" && _impl_ok=true
+                    fi
+                done
+                if [ "${_impl_ok}" = "false" ] && _diff_touches_material_source "${_proot}"; then
+                    _STALE_MSG="${_STALE_MSG}${_STALE_MSG:+; }IMPLEMENT: this push edits source but no implementation-slot skill (executing-plans / subagent-driven-development / agent-team-execution) has invocation evidence on this chain. Invoke it, or record a deliberate skip: phase_attest executing-plans \"<reason>\". (advisory; will become a deny after backtest)"
+                    command -v phase_gate_log >/dev/null 2>&1 && phase_gate_log "push-implement" "warn" "push" "executing-plans"
+                fi
             fi
 
             # Verify-verdict hardening (fail-open): status != verdict. A recorded
