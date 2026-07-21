@@ -67,9 +67,16 @@ mem_type() {
 mem_noise() {
     # advisory: true when a project body is dominated by past-tense
     # completion markers (>=2) AND has no forward-looking marker.
-    local body comp fwd
+    # Completion markers are WORD-anchored (grep -w) so substrings like
+    # "abandoned"/"disclosed"/"submerged" do not false-count; "PR #<n>" is
+    # matched separately because "#" is not a word char. The forward list is
+    # left unanchored on purpose — over-matching there biases AWAY from
+    # flagging, the safe direction for an advisory flag.
+    local body comp prc fwd
     body="$(cat "$1" 2>/dev/null)"
-    comp="$(printf '%s\n' "${body}" | grep -oiE 'shipped|merged|closed|done|landed|PR #[0-9]+' | grep -c .)"
+    comp="$(printf '%s\n' "${body}" | grep -oiwE 'shipped|merged|closed|done|landed' | grep -c .)"
+    prc="$(printf '%s\n' "${body}" | grep -oiE 'PR #[0-9]+' | grep -c .)"
+    comp=$((comp + prc))
     fwd="$(printf '%s\n' "${body}" | grep -oiE 'TODO|still|open|pending|revival|follow-up|should|needs|broken|next' | grep -c .)"
     if [ "${comp}" -ge 2 ] && [ "${fwd}" -eq 0 ]; then echo true; else echo false; fi
 }

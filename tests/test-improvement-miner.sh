@@ -413,11 +413,13 @@ test_project_noise_flag() {
     printf -- '---\nname: h\ndescription: d\nmetadata:\n  type: project\n---\nShipped X. PR #12 merged. Closed.\n' > "${TEST_TMPDIR}/memory/history.md"
     printf -- '---\nname: fwd\ndescription: d\nmetadata:\n  type: project\n---\nShipped X but Y still broken; follow-up needed.\n' > "${TEST_TMPDIR}/memory/forward.md"
     printf -- '---\nname: fb\ndescription: d\nmetadata:\n  type: feedback\n---\nShipped merged closed done landed.\n' > "${TEST_TMPDIR}/memory/feedback_noisy.md"
+    printf -- '---\nname: sub\ndescription: d\nmetadata:\n  type: project\n---\nThis was abandoned. The disclosed enclosed submerged approach was redone.\n' > "${TEST_TMPDIR}/memory/substring.md"
     local out; out="$(run_bundle)"
     assert_equals "status-history flagged noisy" "true" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="history.md") | .noise')"
     assert_equals "noisy row still present" "history.md" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="history.md") | .file')"
     assert_equals "forward-delta not noisy" "false" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="forward.md") | .noise')"
     assert_equals "feedback never noisy" "false" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="feedback_noisy.md") | .noise')"
+    assert_equals "substring markers (abandoned/disclosed/submerged) not counted" "false" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="substring.md") | .noise')"
     teardown_test_env
 }
 
