@@ -79,3 +79,8 @@ Deterministic feature — standard TDD against `tests/test-improvement-miner.sh`
 - Cross-repo aggregation / portfolio dashboard.
 - Auto-discovery of which repos to mine (the user names the cwd repo).
 - Any change to the plugin-self evidence legs (`eval_reports`, `gate_status`).
+
+## Implementation Notes (synced at ship time)
+
+- **Noise-marker anchoring (review refinement).** The upfront design specified completion markers as an unanchored set. Code review (Minor #1) found the unanchored ERE alternation counted substrings — `done` inside `abandoned`, `closed` inside `disclosed`, `merged` inside `submerged` — which would flag a body that is semantically the *opposite* of shipped work. The as-built `mem_noise` word-anchors the completion markers via `grep -oiwE` (and matches `PR #<n>` separately, since `#` is not a word char). The forward-marker list stays unanchored on purpose — over-matching there biases *away* from flagging, the safe direction for an advisory flag. Behaviour still matches the spec's requirement (dominated by ≥2 completion markers, 0 forward markers → `noise:true`); the anchoring only removes false positives. Regression: `tests/test-improvement-miner.sh::test_project_noise_flag` (substring case).
+- No other divergences from the upfront proposal/design/spec. All 4 ADDED requirements and 8 acceptance scenarios were implemented as written and are covered by passing tests (87/87 in `test-improvement-miner.sh`; full suite 105 files green).
