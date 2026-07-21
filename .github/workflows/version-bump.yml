@@ -60,7 +60,7 @@ jobs:
 
       - name: Update marketplace repo
         run: |
-          git clone https://x-access-token:${{ secrets.MARKETPLACE_PAT }}@github.com/damianpapadopoulos/auto-claude-skills-marketplace.git /tmp/marketplace
+          git clone https://x-access-token:${{ secrets.MARKETPLACE_PAT }}@github.com/dkpapadopoulos/auto-claude-skills-marketplace.git /tmp/marketplace
           cd /tmp/marketplace
 
           jq --arg v "${{ steps.version.outputs.new }}" \
