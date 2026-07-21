@@ -58,23 +58,65 @@ json_gate_status() {
     fi
 }
 
+mem_type() {
+    # "type:" value read ONLY from the leading --- frontmatter block, never a
+    # body line — a classifier must not let (untrusted) body content decide the
+    # type. Returns empty when there is no frontmatter type (file is skipped).
+    awk '
+        NR==1 && $0 !~ /^---[[:space:]]*$/ { exit }        # no frontmatter fence
+        /^---[[:space:]]*$/ { d++; if (d==2) exit; next }  # d: 1=inside, 2=closed
+        d==1 && /^[[:space:]]*type:/ {
+            sub(/^[[:space:]]*type:[[:space:]]*/, "")
+            gsub(/[[:space:]]/, "")
+            print; exit
+        }
+    ' "$1" 2>/dev/null
+}
+
+mem_noise() {
+    # advisory: true when a project body is dominated by past-tense
+    # completion markers (>=2) AND has no forward-looking marker.
+    # NOTE: reads the WHOLE file (frontmatter included) on purpose — a
+    # `description:` summarizing "shipped X / PR #NN merged" is legitimate
+    # status-history signal, so counting it is intended, not a leak (contrast
+    # mem_type, which is bounded to frontmatter because TYPE must not come from
+    # content). The flag is advisory and never drops a row.
+    # Completion markers are WORD-anchored (grep -w) so substrings like
+    # "abandoned"/"disclosed"/"submerged" do not false-count; "PR #<n>" is
+    # matched separately because "#" is not a word char. The forward list is
+    # left unanchored on purpose — over-matching there biases AWAY from
+    # flagging, the safe direction for an advisory flag.
+    local body comp prc fwd
+    body="$(cat "$1" 2>/dev/null)"
+    comp="$(printf '%s\n' "${body}" | grep -oiwE 'shipped|merged|closed|done|landed' | grep -c .)"
+    prc="$(printf '%s\n' "${body}" | grep -oiE 'PR #[0-9]+' | grep -c .)"
+    comp=$((comp + prc))
+    fwd="$(printf '%s\n' "${body}" | grep -oiE 'TODO|still|open|pending|revival|follow-up|should|needs|broken|next' | grep -c .)"
+    if [ "${comp}" -ge 2 ] && [ "${fwd}" -eq 0 ]; then echo true; else echo false; fi
+}
+
 json_memory_index() {
     local dir; dir="$(memory_dir)"
     [ -d "${dir}" ] || { echo '[]'; return; }
-    local f base name desc kind rows
+    local f base name desc typ kind revival noise rows
     rows='[]'
     for f in "${dir}"/*.md; do
         [ -f "${f}" ] || continue
         base="$(basename "${f}")"
         [ "${base}" = "MEMORY.md" ] && continue
+        typ="$(mem_type "${f}")"
+        case "${typ}" in
+            feedback|project) kind="${typ}" ;;
+            *) continue ;;   # reference, user, or unresolved type -> skip
+        esac
         name="$(grep -m1 '^name:' "${f}" | sed 's/^name:[[:space:]]*//')"
         desc="$(grep -m1 '^description:' "${f}" | sed 's/^description:[[:space:]]*//')"
-        kind=""
-        case "${base}" in feedback_*) kind="feedback" ;; esac
-        if [ -z "${kind}" ] && grep -qi 'revival' "${f}"; then kind="revival"; fi
-        [ -z "${kind}" ] && continue
+        desc="$(printf '%s' "${desc}" | cut -c1-300)"
+        if grep -qi 'revival' "${f}"; then revival=true; else revival=false; fi
+        if [ "${kind}" = "project" ]; then noise="$(mem_noise "${f}")"; else noise=false; fi
         rows="$(printf '%s' "${rows}" | jq --arg f "${base}" --arg n "${name}" \
-            --arg d "${desc}" --arg k "${kind}" '. + [{file:$f,name:$n,description:$d,kind:$k}]')"
+            --arg d "${desc}" --arg k "${kind}" --argjson rv "${revival}" --argjson ns "${noise}" \
+            '. + [{file:$f,name:$n,description:$d,kind:$k,revival:$rv,noise:$ns}]')"
     done
     printf '%s' "${rows}"
 }
@@ -191,8 +233,35 @@ json_ledger_summary() {
                   presented: $presented, approved: $approved}}'
 }
 
+json_repo_type() {
+    # {repo_type, repo_type_reason}. Detection = config/default-triggers.json
+    # at the repo root; IMPROVEMENT_MINER_REPO_TYPE overrides (invalid value
+    # ignored with a stderr notice). Never prints to stdout except the JSON.
+    local root override
+    root="$(git rev-parse --show-toplevel 2>/dev/null)" || root="."
+    override="${IMPROVEMENT_MINER_REPO_TYPE:-}"
+    if [ -n "${override}" ]; then
+        case "${override}" in
+            plugin_self|target)
+                jq -n --arg t "${override}" \
+                    '{repo_type:$t, repo_type_reason:"IMPROVEMENT_MINER_REPO_TYPE override"}'
+                return ;;
+            *)
+                echo "WARNING: invalid IMPROVEMENT_MINER_REPO_TYPE='${override}' ignored (expected plugin_self|target); falling back to file detection" >&2 ;;
+        esac
+    fi
+    if [ -f "${root}/config/default-triggers.json" ]; then
+        jq -n --arg r "config/default-triggers.json present at ${root}" \
+            '{repo_type:"plugin_self", repo_type_reason:$r}'
+    else
+        jq -n --arg r "config/default-triggers.json absent at ${root}" \
+            '{repo_type:"target", repo_type_reason:$r}'
+    fi
+}
+
 emit_bundle() {
     local head_sha; head_sha="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+    local repotype; repotype="$(json_repo_type)"
     local baselines gate mem evals ledger rc
     baselines="$(json_baselines)"
     gate="$(json_gate_status)"
@@ -206,14 +275,21 @@ emit_bundle() {
     ledger="$(json_ledger_summary)"
     rc=$?
     [ "${rc}" -eq 0 ] || exit "${rc}"
+    # bundle top-level fields (schema stays 1 — additive, no consumer keys off
+    # a version bump): schema, head_sha, repo_type, repo_type_reason, baselines,
+    # gate_status, memory_index[] (rows: file,name,description,kind,revival,noise),
+    # eval_reports, ledger, kill.
     jq -n \
         --arg sha "${head_sha}" \
+        --argjson repotype "${repotype}" \
         --argjson baselines "${baselines}" \
         --argjson gate "${gate}" \
         --argjson mem "${mem}" \
         --argjson evals "${evals}" \
         --argjson ledger "${ledger}" \
-        '{schema: 1, head_sha: $sha, baselines: $baselines, gate_status: $gate,
+        '{schema: 1, head_sha: $sha,
+          repo_type: $repotype.repo_type, repo_type_reason: $repotype.repo_type_reason,
+          baselines: $baselines, gate_status: $gate,
           memory_index: $mem, eval_reports: $evals, ledger: $ledger,
           kill: ($ledger.kill // {})}'
 }
