@@ -64,10 +64,20 @@ mem_type() {
         | sed -E 's/^[[:space:]]*type:[[:space:]]*//' | tr -d '[:space:]'
 }
 
+mem_noise() {
+    # advisory: true when a project body is dominated by past-tense
+    # completion markers (>=2) AND has no forward-looking marker.
+    local body comp fwd
+    body="$(cat "$1" 2>/dev/null)"
+    comp="$(printf '%s\n' "${body}" | grep -oiE 'shipped|merged|closed|done|landed|PR #[0-9]+' | grep -c .)"
+    fwd="$(printf '%s\n' "${body}" | grep -oiE 'TODO|still|open|pending|revival|follow-up|should|needs|broken|next' | grep -c .)"
+    if [ "${comp}" -ge 2 ] && [ "${fwd}" -eq 0 ]; then echo true; else echo false; fi
+}
+
 json_memory_index() {
     local dir; dir="$(memory_dir)"
     [ -d "${dir}" ] || { echo '[]'; return; }
-    local f base name desc typ kind revival rows
+    local f base name desc typ kind revival noise rows
     rows='[]'
     for f in "${dir}"/*.md; do
         [ -f "${f}" ] || continue
@@ -81,9 +91,10 @@ json_memory_index() {
         name="$(grep -m1 '^name:' "${f}" | sed 's/^name:[[:space:]]*//')"
         desc="$(grep -m1 '^description:' "${f}" | sed 's/^description:[[:space:]]*//')"
         if grep -qi 'revival' "${f}"; then revival=true; else revival=false; fi
+        if [ "${kind}" = "project" ]; then noise="$(mem_noise "${f}")"; else noise=false; fi
         rows="$(printf '%s' "${rows}" | jq --arg f "${base}" --arg n "${name}" \
-            --arg d "${desc}" --arg k "${kind}" --argjson rv "${revival}" \
-            '. + [{file:$f,name:$n,description:$d,kind:$k,revival:$rv}]')"
+            --arg d "${desc}" --arg k "${kind}" --argjson rv "${revival}" --argjson ns "${noise}" \
+            '. + [{file:$f,name:$n,description:$d,kind:$k,revival:$rv,noise:$ns}]')"
     done
     printf '%s' "${rows}"
 }
