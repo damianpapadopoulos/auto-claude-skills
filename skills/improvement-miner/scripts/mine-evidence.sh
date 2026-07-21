@@ -212,8 +212,35 @@ json_ledger_summary() {
                   presented: $presented, approved: $approved}}'
 }
 
+json_repo_type() {
+    # {repo_type, repo_type_reason}. Detection = config/default-triggers.json
+    # at the repo root; IMPROVEMENT_MINER_REPO_TYPE overrides (invalid value
+    # ignored with a stderr notice). Never prints to stdout except the JSON.
+    local root override
+    root="$(git rev-parse --show-toplevel 2>/dev/null)" || root="."
+    override="${IMPROVEMENT_MINER_REPO_TYPE:-}"
+    if [ -n "${override}" ]; then
+        case "${override}" in
+            plugin_self|target)
+                jq -n --arg t "${override}" \
+                    '{repo_type:$t, repo_type_reason:"IMPROVEMENT_MINER_REPO_TYPE override"}'
+                return ;;
+            *)
+                echo "WARNING: invalid IMPROVEMENT_MINER_REPO_TYPE='${override}' ignored (expected plugin_self|target); falling back to file detection" >&2 ;;
+        esac
+    fi
+    if [ -f "${root}/config/default-triggers.json" ]; then
+        jq -n --arg r "config/default-triggers.json present at ${root}" \
+            '{repo_type:"plugin_self", repo_type_reason:$r}'
+    else
+        jq -n --arg r "config/default-triggers.json absent at ${root}" \
+            '{repo_type:"target", repo_type_reason:$r}'
+    fi
+}
+
 emit_bundle() {
     local head_sha; head_sha="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+    local repotype; repotype="$(json_repo_type)"
     local baselines gate mem evals ledger rc
     baselines="$(json_baselines)"
     gate="$(json_gate_status)"
@@ -229,12 +256,15 @@ emit_bundle() {
     [ "${rc}" -eq 0 ] || exit "${rc}"
     jq -n \
         --arg sha "${head_sha}" \
+        --argjson repotype "${repotype}" \
         --argjson baselines "${baselines}" \
         --argjson gate "${gate}" \
         --argjson mem "${mem}" \
         --argjson evals "${evals}" \
         --argjson ledger "${ledger}" \
-        '{schema: 1, head_sha: $sha, baselines: $baselines, gate_status: $gate,
+        '{schema: 1, head_sha: $sha,
+          repo_type: $repotype.repo_type, repo_type_reason: $repotype.repo_type_reason,
+          baselines: $baselines, gate_status: $gate,
           memory_index: $mem, eval_reports: $evals, ledger: $ledger,
           kill: ($ledger.kill // {})}'
 }
