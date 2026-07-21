@@ -45,27 +45,50 @@ printf '%s' "${_TOK}" > "$HOME/.claude/.skill-session-token"
 printf '%s' '{"chain":["requesting-code-review","verification-before-completion","executing-plans"],"current_index":0,"completed":[]}' \
     > "${_COMP}"
 
-# Clean covering verdict at HEAD (same as test-push-gate-ledger.sh) — satisfies
-# routing-governance (this IS a routing repo) and, together with the ledger
-# records below, VERIFY, so only the IMPLEMENT leg's behavior is under test.
-_PVHEAD="$(git -C "${PROJECT_ROOT}" rev-parse HEAD 2>/dev/null)"
+# Self-contained fixture repo: a feature branch whose diff against its OWN
+# mainline (main) touches MATERIAL, non-routing source (src/app.py). The guard
+# runs with cwd = this repo (below), so its material-source gate is exercised
+# deterministically regardless of which branch the OUTER repo is on. The prior
+# version relied on the ambient repo's branch-diff-vs-mainline being non-empty,
+# so it silently failed when run from a clean `main` checkout (base==HEAD =>
+# empty diff => no material source => the advisory never fired). src/app.py is
+# NON-routing (not skills/|config/|hooks/), and the fixture repo has no
+# config/default-triggers.json, so routing-governance never fires and only the
+# IMPLEMENT leg is under test.
+_REPO="$(mktemp -d /tmp/pg-impl-repo-XXXXXX)"
+(
+  cd "${_REPO}" || exit 1
+  git init -q
+  git config user.email test@example.com
+  git config user.name  test
+  echo "# fixture" > README.md
+  git add README.md && git commit -qm "init"
+  git branch -M main
+  git checkout -qb feat/impl
+  mkdir -p src && echo "print('x')" > src/app.py
+  git add src/app.py && git commit -qm "feat: material source change"
+) || { echo "FATAL: fixture repo setup failed" >&2; export HOME="$_OLDHOME"; exit 1; }
+
+# Clean covering verdict at the FIXTURE repo's HEAD — satisfies verify-hardening
+# and, with the ledger records below, VERIFY; routing-governance does not fire
+# (no routing paths in the diff, no config/default-triggers.json in the repo),
+# so only the IMPLEMENT leg's behavior is under test.
+_PVHEAD="$(git -C "${_REPO}" rev-parse HEAD 2>/dev/null)"
 jq -nc --arg s "${_PVHEAD}" '{failed:[],could_not_verify:[],gate_gaming_status:"clean",sha:$s}' \
     > "$HOME/.claude/.skill-project-verified-${_TOK}"
 
 # shellcheck disable=SC1090
 . "${PROJECT_ROOT}/hooks/lib/branch-ledger.sh"
-branch_ledger_record "requesting-code-review"        "${PROJECT_ROOT}"
-branch_ledger_record "verification-before-completion" "${PROJECT_ROOT}"
+branch_ledger_record "requesting-code-review"        "${_REPO}"
+branch_ledger_record "verification-before-completion" "${_REPO}"
 
 _mkinput() {
     jq -n --arg tp "$_TPATH" \
         '{"transcript_path":$tp,"tool_input":{"command":"git push origin HEAD"}}'
 }
-run_guard() { _mkinput | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" bash "${GUARD}" 2>/dev/null; }
-
-# Sanity: the real repo's current branch diff against mainline touches material
-# (non-docs) source (hooks/lib/verdict.sh, config/*.json, etc. per git log on
-# this branch) — no fixture commit needed to exercise the material-source gate.
+# Guard runs with cwd = the fixture repo so _proot (git rev-parse --show-toplevel)
+# resolves to it and the material-source diff is computed against feat/impl..main.
+run_guard() { ( cd "${_REPO}" && _mkinput | CLAUDE_PLUGIN_ROOT="${PROJECT_ROOT}" bash "${GUARD}" 2>/dev/null ); }
 
 # (a) IMPLEMENT in chain, material source in diff, no impl evidence ->
 #     advisory present, and NOT a deny attributable to IMPLEMENT (no deny at
@@ -100,5 +123,6 @@ assert_not_contains "no impl-slot in chain => no IMPLEMENT advisory" "IMPLEMENT:
 assert_not_contains "no impl-slot in chain => no deny"                '"deny"'    "${out:-}"
 
 export HOME="$_OLDHOME"
+rm -rf "${_REPO}" 2>/dev/null
 print_summary
 exit $?
