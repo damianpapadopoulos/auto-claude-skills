@@ -90,6 +90,7 @@ json_memory_index() {
         esac
         name="$(grep -m1 '^name:' "${f}" | sed 's/^name:[[:space:]]*//')"
         desc="$(grep -m1 '^description:' "${f}" | sed 's/^description:[[:space:]]*//')"
+        desc="$(printf '%s' "${desc}" | cut -c1-300)"
         if grep -qi 'revival' "${f}"; then revival=true; else revival=false; fi
         if [ "${kind}" = "project" ]; then noise="$(mem_noise "${f}")"; else noise=false; fi
         rows="$(printf '%s' "${rows}" | jq --arg f "${base}" --arg n "${name}" \
