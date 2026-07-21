@@ -58,23 +58,32 @@ json_gate_status() {
     fi
 }
 
+mem_type() {
+    # first frontmatter "type:" line (indented under metadata: or bare), value only
+    grep -m1 -E '^[[:space:]]*type:' "$1" 2>/dev/null \
+        | sed -E 's/^[[:space:]]*type:[[:space:]]*//' | tr -d '[:space:]'
+}
+
 json_memory_index() {
     local dir; dir="$(memory_dir)"
     [ -d "${dir}" ] || { echo '[]'; return; }
-    local f base name desc kind rows
+    local f base name desc typ kind revival rows
     rows='[]'
     for f in "${dir}"/*.md; do
         [ -f "${f}" ] || continue
         base="$(basename "${f}")"
         [ "${base}" = "MEMORY.md" ] && continue
+        typ="$(mem_type "${f}")"
+        case "${typ}" in
+            feedback|project) kind="${typ}" ;;
+            *) continue ;;   # reference, user, or unresolved type -> skip
+        esac
         name="$(grep -m1 '^name:' "${f}" | sed 's/^name:[[:space:]]*//')"
         desc="$(grep -m1 '^description:' "${f}" | sed 's/^description:[[:space:]]*//')"
-        kind=""
-        case "${base}" in feedback_*) kind="feedback" ;; esac
-        if [ -z "${kind}" ] && grep -qi 'revival' "${f}"; then kind="revival"; fi
-        [ -z "${kind}" ] && continue
+        if grep -qi 'revival' "${f}"; then revival=true; else revival=false; fi
         rows="$(printf '%s' "${rows}" | jq --arg f "${base}" --arg n "${name}" \
-            --arg d "${desc}" --arg k "${kind}" '. + [{file:$f,name:$n,description:$d,kind:$k}]')"
+            --arg d "${desc}" --arg k "${kind}" --argjson rv "${revival}" \
+            '. + [{file:$f,name:$n,description:$d,kind:$k,revival:$rv}]')"
     done
     printf '%s' "${rows}"
 }

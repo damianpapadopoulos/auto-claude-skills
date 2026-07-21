@@ -150,7 +150,8 @@ test_bundle_local_sources() {
     assert_contains "baseline listed" "tests/baselines/x.baseline.json" "$out"
     assert_equals "gate-status absent noted" "false" "$(printf '%s' "$out" | jq -r '.gate_status.available')"
     assert_equals "feedback kind" "feedback" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="feedback_sample.md") | .kind')"
-    assert_equals "revival kind" "revival" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="project_parked_thing.md") | .kind')"
+    assert_equals "project kind by frontmatter" "project" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="project_parked_thing.md") | .kind')"
+    assert_equals "revival boolean set" "true" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="project_parked_thing.md") | .revival')"
     assert_equals "description extracted" "a sample feedback fact" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="feedback_sample.md") | .description')"
     teardown_test_env
 }
@@ -387,6 +388,79 @@ test_select_meta_tie_keeps_earlier() {
     teardown_test_env
 }
 
+test_frontmatter_classifier() {
+    echo "-- test: classify by frontmatter type — feedback+project in, reference+user out, revival orthogonal --"
+    setup_test_env; make_fake_gh; init_fixture_repo; mkdir -p "${TEST_TMPDIR}/memory"
+    printf -- '---\nname: fb\ndescription: d\nmetadata:\n  type: feedback\n---\nbody\n'  > "${TEST_TMPDIR}/memory/feedback_a.md"
+    printf -- '---\nname: pj\ndescription: d\nmetadata:\n  type: project\n---\nplain project body\n' > "${TEST_TMPDIR}/memory/plain_project.md"
+    printf -- '---\nname: rf\ndescription: d\nmetadata:\n  type: reference\n---\nbody\n' > "${TEST_TMPDIR}/memory/reference_thing.md"
+    printf -- '---\nname: us\ndescription: d\nmetadata:\n  type: user\n---\nbody\n'      > "${TEST_TMPDIR}/memory/user_thing.md"
+    printf -- '---\nname: pv\ndescription: d\nmetadata:\n  type: project\n---\nRevival criterion: X\n' > "${TEST_TMPDIR}/memory/parked.md"
+    local out; out="$(run_bundle)"
+    assert_equals "feedback classified by type" "feedback" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="feedback_a.md") | .kind')"
+    assert_equals "project (non-feedback filename) included" "project" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="plain_project.md") | .kind')"
+    assert_equals "reference excluded" "" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="reference_thing.md") | .kind')"
+    assert_equals "user excluded" "" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="user_thing.md") | .kind')"
+    assert_equals "revival is orthogonal boolean, kind stays project" "project" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="parked.md") | .kind')"
+    assert_equals "revival true on parked memory" "true" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="parked.md") | .revival')"
+    assert_equals "revival false on plain project" "false" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="plain_project.md") | .revival')"
+    teardown_test_env
+}
+
+test_project_noise_flag() {
+    echo "-- test: project-noise advisory flag — status-history true, forward-delta false, feedback never noisy --"
+    setup_test_env; make_fake_gh; init_fixture_repo; mkdir -p "${TEST_TMPDIR}/memory"
+    printf -- '---\nname: h\ndescription: d\nmetadata:\n  type: project\n---\nShipped X. PR #12 merged. Closed.\n' > "${TEST_TMPDIR}/memory/history.md"
+    printf -- '---\nname: fwd\ndescription: d\nmetadata:\n  type: project\n---\nShipped X but Y still broken; follow-up needed.\n' > "${TEST_TMPDIR}/memory/forward.md"
+    printf -- '---\nname: fb\ndescription: d\nmetadata:\n  type: feedback\n---\nShipped merged closed done landed.\n' > "${TEST_TMPDIR}/memory/feedback_noisy.md"
+    local out; out="$(run_bundle)"
+    assert_equals "status-history flagged noisy" "true" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="history.md") | .noise')"
+    assert_equals "noisy row still present" "history.md" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="history.md") | .file')"
+    assert_equals "forward-delta not noisy" "false" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="forward.md") | .noise')"
+    assert_equals "feedback never noisy" "false" "$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="feedback_noisy.md") | .noise')"
+    teardown_test_env
+}
+
+test_description_length_cap() {
+    echo "-- test: overlong description is truncated to the length cap (300) --"
+    setup_test_env; make_fake_gh; init_fixture_repo; mkdir -p "${TEST_TMPDIR}/memory"
+    local longdesc; longdesc="$(printf 'x%.0s' $(seq 1 500))"
+    printf -- '---\nname: big\ndescription: %s\nmetadata:\n  type: feedback\n---\nbody\n' "${longdesc}" > "${TEST_TMPDIR}/memory/feedback_big.md"
+    local out len; out="$(run_bundle)"
+    len="$(printf '%s' "$out" | jq -r '.memory_index[] | select(.file=="feedback_big.md") | .description | length')"
+    assert_equals "description capped at 300" "300" "${len}"
+    teardown_test_env
+}
+
+test_repo_type_detection() {
+    echo "-- test: repo_type — target without config, plugin_self with config, env override wins, invalid override ignored --"
+    setup_test_env; make_fake_gh; init_fixture_repo; mkdir -p "${TEST_TMPDIR}/memory"
+    # (a) no config/default-triggers.json -> target
+    local out; out="$(run_bundle)"
+    assert_equals "target when config absent" "target" "$(printf '%s' "$out" | jq -r '.repo_type')"
+    assert_contains "reason names the config file" "config/default-triggers.json" "$(printf '%s' "$out" | jq -r '.repo_type_reason')"
+    # (b) add config/default-triggers.json -> plugin_self
+    mkdir -p "${TEST_TMPDIR}/repo/config"; echo '{}' > "${TEST_TMPDIR}/repo/config/default-triggers.json"
+    out="$(run_bundle)"
+    assert_equals "plugin_self when config present" "plugin_self" "$(printf '%s' "$out" | jq -r '.repo_type')"
+    # (c) env override wins on a plugin_self repo
+    out="$(cd "${TEST_TMPDIR}/repo" && IMPROVEMENT_MINER_MEMORY_DIR="${TEST_TMPDIR}/memory" \
+        GH_LOG="${GH_LOG}" IMPROVEMENT_MINER_REPO_TYPE=target \
+        PATH="${TEST_TMPDIR}/stub:${PATH}" /bin/bash "${MINE}" bundle 2>/dev/null)"
+    assert_equals "override forces target" "target" "$(printf '%s' "$out" | jq -r '.repo_type')"
+    assert_contains "override reason recorded" "override" "$(printf '%s' "$out" | jq -r '.repo_type_reason')"
+    # (d) invalid override ignored -> falls back to file presence (plugin_self), warns on stderr
+    local err; err="$(cd "${TEST_TMPDIR}/repo" && IMPROVEMENT_MINER_MEMORY_DIR="${TEST_TMPDIR}/memory" \
+        GH_LOG="${GH_LOG}" IMPROVEMENT_MINER_REPO_TYPE=bogus \
+        PATH="${TEST_TMPDIR}/stub:${PATH}" /bin/bash "${MINE}" bundle 2>&1 >/dev/null)"
+    out="$(cd "${TEST_TMPDIR}/repo" && IMPROVEMENT_MINER_MEMORY_DIR="${TEST_TMPDIR}/memory" \
+        GH_LOG="${GH_LOG}" IMPROVEMENT_MINER_REPO_TYPE=bogus \
+        PATH="${TEST_TMPDIR}/stub:${PATH}" /bin/bash "${MINE}" bundle 2>/dev/null)"
+    assert_equals "invalid override falls back to file presence" "plugin_self" "$(printf '%s' "$out" | jq -r '.repo_type')"
+    assert_contains "invalid override warns" "IMPROVEMENT_MINER_REPO_TYPE" "${err}"
+    teardown_test_env
+}
+
 test_skill_md_content() {
     echo "-- test: SKILL.md exists with required contract anchors --"
     local skill="${REPO_ROOT}/skills/improvement-miner/SKILL.md"
@@ -410,6 +484,10 @@ test_gh_runtime_failure_fails_loud
 test_empty_owner_login_fails_loud
 test_garbage_json_fails_loud
 test_bundle_local_sources
+test_frontmatter_classifier
+test_project_noise_flag
+test_description_length_cap
+test_repo_type_detection
 test_bundle_gate_status_present
 test_eval_reports_author_allowlist
 test_comments_never_requested
