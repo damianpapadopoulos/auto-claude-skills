@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "discovery_path": null,
+  "design_path": "",
+  "plan_path": "",
+  "spec_path": "",
+  "sp_plan_path": "",
+  "sp_spec_path": "",
+  "change_slug": "improvement-miner-repo-agnostic",
+  "capability_slug": "improvement-mining",
+  "source_branch": "feat/improvement-miner-repo-agnostic",
+  "base_commit": "24e16693f4ba316d0debb5d15accd57ab8317e79",
+  "openspec_surface": "none",
+  "archived_at": "2026-07-21T09:40:45Z"
+}
