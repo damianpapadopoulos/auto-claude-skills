@@ -476,6 +476,11 @@ test_skill_md_content() {
     assert_contains "ledger fence contract documented" '```json' "${body}"
     assert_contains "run label documented" "improvement-miner-run" "${body}"
     assert_contains "no-push invariant stated" "no code, no pushes" "${body}"
+    assert_contains "report-only gate documented" "report-only" "${body}"
+    assert_contains "repo_type field consumed" "repo_type" "${body}"
+    assert_contains "env override documented" "IMPROVEMENT_MINER_REPO_TYPE" "${body}"
+    assert_contains "noise flag consumed in extraction" "noise" "${body}"
+    assert_contains "revival boolean consumed" "revival" "${body}"
 }
 
 test_fingerprint_stable_and_distinct
